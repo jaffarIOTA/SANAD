@@ -1,0 +1,267 @@
+{
+  "policyId": "wasl-distributor",
+  "version": "1.0.0",
+  "tenantId": "fintech-b",
+  "programmeScope": "ALL",
+  "currency": "SAR",
+
+  "effectiveFromEpochSeconds": "1790899200",
+
+  "approval": {
+    "creditApprovalRef": "CRC-B-2026-008",
+    "approvedByRole": "CREDIT_COMMITTEE",
+    "approvedOnEpochSeconds": "1790553600"
+  },
+
+  "notes": "Diverges from the bank's policy by design. A fintech underwrites a thinner file with a smaller balance sheet: shorter registration floor, bank cash-flow data required rather than bureau, lower multiples and a tighter absolute cap. The engine is identical; only this file differs.",
+
+  "dataRequirements": {
+    "requiredConsents": ["eInvoicing", "openBanking"],
+    "maximumSourceAgeSeconds": {
+      "registration.retrievedSecondsAgo": 1209600,
+      "screening.retrievedSecondsAgo": 1209600,
+      "tradeHistory.retrievedSecondsAgo": 259200,
+      "openBanking.retrievedSecondsAgo": 604800
+    },
+    "staleDataReasonCode": "R_STALE_DATA",
+    "missingConsentReasonCode": "R_MISSING_CONSENT"
+  },
+
+  "knockouts": [
+    {
+      "code": "KO_REGISTRATION_NOT_ACTIVE",
+      "when": { "op": "ne", "left": { "field": "registration.status" }, "right": { "const": "ACTIVE" } },
+      "outcome": "DECLINE",
+      "reasonCode": "R_REGISTRATION_NOT_ACTIVE"
+    },
+    {
+      "code": "KO_SIGNATORY_UNVERIFIED",
+      "when": { "op": "eq", "left": { "field": "signatory.authorityVerified" }, "right": { "const": false } },
+      "outcome": "REFER",
+      "reasonCode": "R_SIGNATORY_UNVERIFIED"
+    },
+    {
+      "code": "KO_SANCTIONS_HIT",
+      "when": { "op": "in", "left": { "field": "screening.sanctions" }, "right": ["HIT", "POTENTIAL_MATCH"] },
+      "outcome": "DECLINE",
+      "reasonCode": "R_SANCTIONS_MATCH"
+    },
+    {
+      "code": "KO_SCREENING_UNAVAILABLE",
+      "when": { "op": "eq", "left": { "field": "screening.sanctions" }, "right": { "const": "UNAVAILABLE" } },
+      "outcome": "REFER",
+      "reasonCode": "R_SCREENING_UNAVAILABLE"
+    },
+    {
+      "code": "KO_ACTIVITY_EXCLUDED",
+      "when": { "op": "in", "left": { "field": "screening.activityPermissibility" }, "right": ["EXCLUDED", "REVIEW"] },
+      "outcome": "DECLINE",
+      "reasonCode": "R_ACTIVITY_EXCLUDED"
+    },
+    {
+      "code": "KO_POLITICALLY_EXPOSED",
+      "when": { "op": "eq", "left": { "field": "screening.politicallyExposed" }, "right": { "const": "HIT" } },
+      "outcome": "REFER",
+      "reasonCode": "R_PEP_MATCH"
+    },
+    {
+      "code": "KO_TRADE_HISTORY_UNAVAILABLE",
+      "when": { "op": "ne", "left": { "field": "tradeHistory.availability" }, "right": { "const": "AVAILABLE" } },
+      "outcome": "REFER",
+      "reasonCode": "R_TRADE_HISTORY_UNAVAILABLE"
+    },
+    {
+      "code": "KO_REGISTRATION_TOO_RECENT",
+      "when": { "op": "lt", "left": { "field": "registration.ageMonths" }, "right": { "const": 12 } },
+      "outcome": "DECLINE",
+      "reasonCode": "R_REGISTRATION_TOO_RECENT"
+    },
+    {
+      "code": "KO_INSUFFICIENT_ANCHOR_TRADE",
+      "when": { "op": "lt", "left": { "field": "tradeHistory.withAnchor.monthsTrading" }, "right": { "const": 3 } },
+      "outcome": "DECLINE",
+      "reasonCode": "R_INSUFFICIENT_ANCHOR_TRADE"
+    },
+    {
+      "code": "KO_RETURNED_PAYMENTS",
+      "when": { "op": "gt", "left": { "field": "openBanking.returnedPaymentsLast6Months" }, "right": { "const": 2 } },
+      "outcome": "DECLINE",
+      "reasonCode": "R_RETURNED_PAYMENTS"
+    }
+  ],
+
+  "scorecard": {
+    "baseScore": 5,
+    "characteristics": [
+      {
+        "code": "CH_ANCHOR_TENURE",
+        "maxPoints": 20,
+        "defaultPoints": 0,
+        "defaultReasonCode": "R_LIMITED_ANCHOR_TENURE",
+        "bands": [
+          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.monthsTrading" }, "right": { "const": 24 } }, "points": 20 },
+          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.monthsTrading" }, "right": { "const": 12 } }, "points": 15 },
+          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.monthsTrading" }, "right": { "const": 6 } }, "points": 10 },
+          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.monthsTrading" }, "right": { "const": 3 } }, "points": 5 }
+        ]
+      },
+      {
+        "code": "CH_ANCHOR_VOLUME",
+        "maxPoints": 25,
+        "defaultPoints": 0,
+        "defaultReasonCode": "R_LIMITED_ANCHOR_VOLUME",
+        "bands": [
+          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" }, "right": { "constMoneyMinorUnits": "30000000" } }, "points": 25 },
+          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" }, "right": { "constMoneyMinorUnits": "10000000" } }, "points": 18 },
+          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" }, "right": { "constMoneyMinorUnits": "4000000" } }, "points": 10 },
+          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" }, "right": { "constMoneyMinorUnits": "1500000" } }, "points": 5 }
+        ]
+      },
+      {
+        "code": "CH_PAYMENT_BEHAVIOUR",
+        "maxPoints": 20,
+        "defaultPoints": 0,
+        "defaultReasonCode": "R_PAYMENT_BEHAVIOUR",
+        "bands": [
+          { "when": { "op": "lte", "left": { "field": "tradeHistory.withAnchor.latePaymentPerTenThousand" }, "right": { "const": 1000 } }, "points": 20 },
+          { "when": { "op": "lte", "left": { "field": "tradeHistory.withAnchor.latePaymentPerTenThousand" }, "right": { "const": 2500 } }, "points": 12 },
+          { "when": { "op": "lte", "left": { "field": "tradeHistory.withAnchor.latePaymentPerTenThousand" }, "right": { "const": 4000 } }, "points": 5 }
+        ]
+      },
+      {
+        "code": "CH_CASH_FLOW_COVER",
+        "maxPoints": 25,
+        "defaultPoints": 0,
+        "defaultReasonCode": "R_CASH_FLOW_COVER",
+        "bands": [
+          { "when": { "op": "gte", "left": { "field": "openBanking.averageMonthlyInflowMinorUnits" }, "right": { "constMoneyMinorUnits": "40000000" } }, "points": 25 },
+          { "when": { "op": "gte", "left": { "field": "openBanking.averageMonthlyInflowMinorUnits" }, "right": { "constMoneyMinorUnits": "15000000" } }, "points": 17 },
+          { "when": { "op": "gte", "left": { "field": "openBanking.averageMonthlyInflowMinorUnits" }, "right": { "constMoneyMinorUnits": "5000000" } }, "points": 9 }
+        ]
+      },
+      {
+        "code": "CH_BUYER_CONCENTRATION",
+        "maxPoints": 10,
+        "defaultPoints": 2,
+        "defaultReasonCode": "R_BUYER_CONCENTRATION",
+        "bands": [
+          { "when": { "op": "lte", "left": { "field": "tradeHistory.largestBuyerSharePerTenThousand" }, "right": { "const": 6000 } }, "points": 10 },
+          { "when": { "op": "lte", "left": { "field": "tradeHistory.largestBuyerSharePerTenThousand" }, "right": { "const": 8000 } }, "points": 6 }
+        ]
+      }
+    ]
+  },
+
+  "grades": [
+    { "grade": "A", "minScore": 80, "outcome": "APPROVE" },
+    { "grade": "B", "minScore": 62, "outcome": "APPROVE" },
+    { "grade": "C", "minScore": 45, "outcome": "REFER", "reasonCode": "R_GRADE_REFER" },
+    { "grade": "D", "minScore": 0, "outcome": "DECLINE", "reasonCode": "R_GRADE_DECLINE" }
+  ],
+
+  "limit": {
+    "basisByGrade": {
+      "A": {
+        "op": "min",
+        "args": [
+          { "op": "scaleBasisPoints", "arg": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" }, "basisPoints": 20000 },
+          { "op": "scaleBasisPoints", "arg": { "field": "openBanking.averageMonthlyInflowMinorUnits" }, "basisPoints": 15000 }
+        ]
+      },
+      "B": {
+        "op": "min",
+        "args": [
+          { "op": "scaleBasisPoints", "arg": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" }, "basisPoints": 12500 },
+          { "op": "scaleBasisPoints", "arg": { "field": "openBanking.averageMonthlyInflowMinorUnits" }, "basisPoints": 10000 }
+        ]
+      }
+    },
+    "roundDownToMultipleOfMinorUnits": "100000",
+    "minimumViableMinorUnits": "2000000",
+    "caps": [
+      { "code": "CAP_ABSOLUTE", "kind": "ABSOLUTE", "maxMoneyMinorUnits": "150000000" },
+      { "code": "CAP_PROGRAMME_HEADROOM", "kind": "PROGRAMME_HEADROOM" },
+      { "code": "CAP_CONCENTRATION_SHARE", "kind": "SHARE_OF_PROGRAMME_LIMIT", "shareBasisPoints": 1000 },
+      { "code": "CAP_NET_OF_EXPOSURE", "kind": "NET_OF_EXISTING_EXPOSURE" }
+    ]
+  },
+
+  "reasons": {
+    "R_REGISTRATION_NOT_ACTIVE": {
+      "ar": "السجل التجاري غير ساري المفعول.",
+      "en": "The commercial registration is not currently valid."
+    },
+    "R_SIGNATORY_UNVERIFIED": {
+      "ar": "لم يتم التحقق من صلاحية المفوّض بالتوقيع نيابة عن المنشأة.",
+      "en": "The signatory's authority to act for the entity could not be verified."
+    },
+    "R_SANCTIONS_MATCH": {
+      "ar": "تعذّر إتمام الطلب بناءً على نتيجة الفحص ضد القوائم الرقابية.",
+      "en": "The request cannot proceed based on the outcome of regulatory list screening."
+    },
+    "R_SCREENING_UNAVAILABLE": {
+      "ar": "خدمة الفحص غير متاحة حالياً؛ سيُراجَع الطلب من قبل مختص.",
+      "en": "The screening service is currently unavailable; a specialist will review the application."
+    },
+    "R_ACTIVITY_EXCLUDED": {
+      "ar": "نشاط المنشأة غير مؤهل وفق ضوابط الهيئة الشرعية.",
+      "en": "The business activity is not eligible under the Shariah Board's criteria."
+    },
+    "R_PEP_MATCH": {
+      "ar": "يتطلب الطلب مراجعة إضافية وفق متطلبات العناية الواجبة المشددة.",
+      "en": "The application requires enhanced due diligence review."
+    },
+    "R_TRADE_HISTORY_UNAVAILABLE": {
+      "ar": "تعذّر الحصول على سجل الفوترة الإلكترونية؛ سيُراجَع الطلب من قبل مختص.",
+      "en": "The e-invoicing history could not be retrieved; a specialist will review the application."
+    },
+    "R_REGISTRATION_TOO_RECENT": {
+      "ar": "عمر السجل التجاري أقل من الحد المطلوب لهذا البرنامج.",
+      "en": "The commercial registration is younger than this programme requires."
+    },
+    "R_INSUFFICIENT_ANCHOR_TRADE": {
+      "ar": "مدة التعامل التجاري مع المشتري الرئيسي أقل من الحد المطلوب.",
+      "en": "The trading relationship with the anchor buyer is shorter than required."
+    },
+    "R_RETURNED_PAYMENTS": {
+      "ar": "تعدّد مرات ارتجاع المدفوعات خلال الستة أشهر الماضية.",
+      "en": "There have been repeated returned payments over the last six months."
+    },
+    "R_LIMITED_ANCHOR_TENURE": {
+      "ar": "مدة التعامل مع المشتري الرئيسي محدودة مقارنةً بالمستوى المطلوب للحد الكامل.",
+      "en": "The length of trading with the anchor buyer is limited relative to the level required for a full limit."
+    },
+    "R_LIMITED_ANCHOR_VOLUME": {
+      "ar": "حجم التعامل الشهري مع المشتري الرئيسي أقل من المستوى المطلوب للحد الكامل.",
+      "en": "Monthly trading volume with the anchor buyer is below the level required for a full limit."
+    },
+    "R_PAYMENT_BEHAVIOUR": {
+      "ar": "سجل السداد يتضمّن تأخيرات تتجاوز المستوى المفضّل.",
+      "en": "The payment record includes delays beyond the preferred level."
+    },
+    "R_CASH_FLOW_COVER": {
+      "ar": "التدفقات النقدية الواردة أقل من المستوى المطلوب لتغطية الحد الكامل.",
+      "en": "Incoming cash flow is below the level required to support a full limit."
+    },
+    "R_BUYER_CONCENTRATION": {
+      "ar": "تركّز المبيعات لدى عدد محدود من المشترين أثّر على التقييم.",
+      "en": "Concentration of sales among a small number of buyers affected the assessment."
+    },
+    "R_GRADE_REFER": {
+      "ar": "لم يبلغ التقييم الحد المطلوب للموافقة الآلية؛ سيُراجَع الطلب من قبل مختص.",
+      "en": "The assessment did not reach the threshold for automated approval; a specialist will review the application."
+    },
+    "R_GRADE_DECLINE": {
+      "ar": "لم يبلغ التقييم الحد الأدنى المطلوب للموافقة على هذا البرنامج.",
+      "en": "The assessment did not reach the minimum threshold for approval on this programme."
+    },
+    "R_STALE_DATA": {
+      "ar": "البيانات المستخدمة في التقييم تجاوزت مدة الصلاحية؛ سيُعاد تحديثها ومراجعة الطلب.",
+      "en": "The data used for the assessment is older than permitted; it will be refreshed and the application reviewed."
+    },
+    "R_MISSING_CONSENT": {
+      "ar": "لم تُمنح الموافقة اللازمة للوصول إلى البيانات المطلوبة لتقييم الطلب.",
+      "en": "The consent required to access the data needed to assess the application has not been given."
+    }
+  }
+}

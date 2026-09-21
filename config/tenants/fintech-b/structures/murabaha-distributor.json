@@ -1,0 +1,48 @@
+{
+  "definitionId": "MURABAHA_DISTRIBUTOR",
+  "structureCode": "MURABAHA",
+  "version": 2,
+  "shariahApprovalRef": "SSB-B-2026-007",
+
+  "legs": [
+    { "type": "WAAD", "seq": 1, "document": "waad_promise" },
+    { "type": "PURCHASE", "seq": 2, "document": "purchase_contract" },
+    { "type": "SALE_OFFER", "seq": 3, "document": "murabaha_offer" },
+    { "type": "ACCEPTANCE", "seq": 4, "document": "murabaha_acceptance" }
+  ],
+
+  "gates": [
+    {
+      "id": "GATE_1_OWNERSHIP",
+      "kind": "EVIDENCE",
+      "after": { "leg": "PURCHASE" },
+      "requires": { "anyOf": ["OWNERSHIP_INVOICE", "TITLE_RECORD"] },
+      "validation": {
+        "recipientIsInstitution": true,
+        "clearanceStatus": "CLEARED"
+      },
+      "requireThirdPartySource": true
+    },
+    {
+      "id": "GATE_2_POSSESSION",
+      "kind": "EVIDENCE",
+      "after": { "gate": "GATE_1_OWNERSHIP" },
+      "requires": { "anyOf": ["DELIVERY_NOTE", "WAREHOUSE_RECEIPT"] },
+      "minimumExtractionConfidencePerTenThousand": 9500
+    },
+    {
+      "id": "GATE_3_RISK_PERIOD",
+      "kind": "ELAPSE",
+      "after": { "gate": "GATE_2_POSSESSION" },
+      "minimumSeconds": 86400,
+      "clock": "TRUSTED_TIMESTAMP_AUTHORITY",
+      "startBasis": "LATEST_DISCHARGING_EVIDENCE"
+    }
+  ],
+
+  "constraints": {
+    "distinctParties": [["PURCHASE.seller", "ACCEPTANCE.buyer"]],
+    "oneDocumentPerLeg": true,
+    "monotonicTimestamps": true
+  }
+}
