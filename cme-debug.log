@@ -1,0 +1,7 @@
+[2026-09-21T15:04:25.295Z] Extension activating. WorkspaceFolders found: ["/Users/jaffar/Projects/Sanad"]
+[2026-09-21T15:04:25.296Z] runFullScan started
+[2026-09-21T15:04:25.296Z] Discovering files...
+[2026-09-21T15:04:25.968Z] Scan complete: 0 files found, 0 cached, 0 freshly parsed, 671ms
+[2026-09-21T15:04:25.968Z] runPostScanAnalysis started. Current nodes count: 0
+[2026-09-21T15:04:25.984Z] No active DependencyGraphPanel webview open.
+[2026-09-21T15:04:25.984Z] runFullScan finished
