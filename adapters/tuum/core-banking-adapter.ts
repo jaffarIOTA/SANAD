@@ -1,14 +1,30 @@
 /**
  * Core banking adapter — Tuum.
  *
- * Implements `CoreBankingProvider`. The vendor's vocabulary stops here: nothing
- * in this file is exported into `core/`, and nothing `core/` hands down carries
- * a vendor concept back up.
+ * Implements `CoreBankingProvider` over the **Account, Account Transaction,
+ * Person and Payment** APIs. It does not touch the lending module, and that is
+ * not a preference.
  *
- * Endpoint paths and payload field names arrive as configuration rather than
- * literals, because the API surface is genuinely unverified (OI-02). Writing
- * guessed DTO shapes into code would look like progress and would have to be
- * unpicked the day the sandbox arrives. See README.md in this directory.
+ * OI-02 established that the lending module derives a periodic proportion from
+ * the amount, the period and the repayment, and persists it on the contract
+ * together with an annualised figure — from a request that supplied neither.
+ * A Murabaha whose system of record carries those is a Shariah audit finding on
+ * the day it opens, whatever this repository's own database contains. The
+ * evidence, with the vendor's field names, is in README.md, Finding 1.
+ *
+ * So the division of labour is the one SDD RSK-04 defines as the fallback and
+ * §3.9 argues for on its own merits:
+ *
+ *   Sanad   the contract, the legs, the evidence, the obligation, the schedule,
+ *           the profit amount, the facility and its utilisation
+ *   Tuum    parties, accounts, the ledger, and moving money
+ *
+ * Nothing about the schedule is sent downstream. There is no repayment plan in
+ * the core banking platform to recompute, because the only copy lives here.
+ *
+ * The coupling is enforced rather than documented: the constructor refuses a
+ * configuration that points at the lending module, and an architecture test
+ * asserts this file carries no lending path.
  */
 
 import type {
@@ -36,49 +52,65 @@ import { type AdapterConfig, BaseAdapter, type KnownDeviation } from '../kernel/
 import { CircuitOpenError } from '../kernel/circuit-breaker.ts';
 
 /**
- * Transport seam. The fixture implementation is what the pipeline runs against;
- * the HTTP implementation is filled in once the sandbox answers OI-02.
+ * Base URLs are per module — `https://[api-name].[environment].[domain]`.
+ * There is deliberately no entry for the lending module.
  */
-export interface TuumTransport {
-  call(
-    operation: TuumOperation,
-    payload: Readonly<Record<string, unknown>>,
-    headers: Readonly<Record<string, string>>,
-  ): Promise<Readonly<Record<string, unknown>>>;
+export interface TuumHosts {
+  readonly auth: string;
+  readonly person: string;
+  readonly account: string;
+  readonly payment: string;
 }
 
 export type TuumOperation =
-  | 'party.resolveOrCreate'
-  | 'account.resolve'
-  | 'obligation.book'
-  | 'settlement.instruct'
-  | 'posting.charityLiability'
-  | 'exposure.fetch';
+  | 'person.resolveOrCreate'
+  | 'account.findByPurpose'
+  | 'account.create'
+  | 'account.balance'
+  | 'account.postTransaction'
+  | 'payment.instruct';
 
-export interface TuumAdapterConfig extends AdapterConfig {
-  /**
-   * Field names the vendor requires that the domain model does not express.
-   * Supplied as configuration so an unverified vendor concept is not named in
-   * code. See TUUM-DEV-001 in README.md.
-   */
-  readonly vendorPricingCompatibilityFields: Readonly<Record<string, string | number>>;
-  /** Vendor codes for each account purpose, discovered during verification. */
-  readonly accountPurposeCodes: Readonly<Record<AccountPurpose, string>>;
+export interface TuumTransport {
+  call(
+    operation: TuumOperation,
+    request: {
+      readonly method: 'GET' | 'POST';
+      readonly url: string;
+      readonly body?: Readonly<Record<string, unknown>>;
+      readonly headers: Readonly<Record<string, string>>;
+    },
+  ): Promise<Readonly<Record<string, unknown>>>;
 }
 
 /**
- * Exported so the architecture suite can assert every deviation names how it is
- * contained and which open item tracks it, without constructing an adapter.
+ * Posting codes carry the direction of a transaction in this platform, and they
+ * are tenant-defined. They are therefore configuration, discovered from the
+ * transaction-types endpoint during onboarding, not literals in code.
  */
+export interface TuumTransactionTypeCodes {
+  /** Raises the receivable on the counterparty when the sale leg executes. */
+  readonly murabahaReceivableRaise: string;
+  /** Reduces it as the counterparty pays. */
+  readonly murabahaReceivableSettle: string;
+  /** The institution genuinely holds title between purchase and sale. */
+  readonly goodsInventoryAcquire: string;
+  readonly goodsInventoryRelease: string;
+  /** Segregated. There is no counterpart code for revenue (SH-13). */
+  readonly charityLiabilityRaise: string;
+}
+
+export interface TuumAdapterConfig extends AdapterConfig {
+  readonly hosts: TuumHosts;
+  /** Vendor account type codes per capability purpose. */
+  readonly accountPurposeCodes: Readonly<Partial<Record<AccountPurpose, string>>>;
+  readonly transactionTypeCodes: TuumTransactionTypeCodes;
+  /** The institution's own internal accounts, by purpose. */
+  readonly institutionAccounts: Readonly<Partial<Record<AccountPurpose, string>>>;
+  /** Sent as `x-channel-code`. */
+  readonly channelCode: string;
+}
+
 export const TUUM_DEVIATIONS: readonly KnownDeviation[] = [
-  {
-    id: 'TUUM-DEV-001',
-    summary:
-      'The booking payload may require a pricing field expressing return as a periodic proportion, which the domain model does not have and will not acquire.',
-    containment:
-      'Supplied from vendorPricingCompatibilityFields in adapter configuration. The field name is configuration, not code. The domain model continues to carry cost, profit amount and total only, and nothing recomputes after execution.',
-    verificationRef: 'OI-02',
-  },
   {
     id: 'TUUM-DEV-002',
     summary: 'The party master requires restricted attributes the domain model does not carry.',
@@ -86,7 +118,26 @@ export const TUUM_DEVIATIONS: readonly KnownDeviation[] = [
       'Resolved from restrictedAttributesRef inside the trust boundary immediately before the call; never returned, logged or placed on a trace span.',
     verificationRef: 'OI-02',
   },
+  {
+    id: 'TUUM-DEV-003',
+    summary:
+      'Postings are single-sided: one account in the path, direction carried by a tenant-defined transaction type code. The domain thinks in obligations, not in postings.',
+    containment:
+      'The adapter owns the mapping from an obligation to its postings, and the codes are configuration rather than literals. No posting concept crosses upward into the domain model.',
+    verificationRef: 'OI-02',
+  },
+  {
+    id: 'TUUM-DEV-004',
+    summary:
+      'The platform has a lending module that derives and persists a periodic proportion, and a top-up path that increases a booked principal.',
+    containment:
+      'Not used, and not usable: this adapter exposes no lending operation, the constructor refuses a configuration pointing at the lending module, and an architecture test asserts the source carries no lending path. Residual risk is the vendor back office, which is outside this boundary — mitigated by entitlement configuration and by the reconciliation check described in README.md, Finding 2.',
+    verificationRef: 'OI-02',
+  },
 ];
+
+/** A host that would put us back on the lending module. */
+const LENDING_HOST = /(^|[./-])loan(s)?[-.]/i;
 
 export class TuumCoreBankingAdapter extends BaseAdapter implements CoreBankingProvider {
   readonly capabilities = ['CORE_BANKING'] as const;
@@ -103,7 +154,21 @@ export class TuumCoreBankingAdapter extends BaseAdapter implements CoreBankingPr
     private readonly restrictedAttributes: (ref: string) => Promise<Record<string, string>>,
   ) {
     super(config, credentials);
+
+    // Refuse at construction rather than at the first booking. A deployment
+    // misconfigured onto the lending module should fail to start.
+    for (const [name, host] of Object.entries(config.hosts)) {
+      if (LENDING_HOST.test(host)) {
+        throw new Error(
+          `core banking adapter configured with a lending host (${name}=${host}); ` +
+            'the obligation, its schedule and its profit amount are held in this platform, ' +
+            'not in the vendor lending module. See adapters/tuum/README.md, Finding 1.',
+        );
+      }
+    }
   }
+
+  // -- Parties ----------------------------------------------------------------
 
   async resolveOrCreateParty(
     party: PartyDetails,
@@ -114,100 +179,160 @@ export class TuumCoreBankingAdapter extends BaseAdapter implements CoreBankingPr
         ? {}
         : await this.restrictedAttributes(party.restrictedAttributesRef);
 
-    return this.#invoke('party.resolveOrCreate', key, party.tenantId, {
-      registrationNumber: party.registrationNumber,
-      legalNameAr: party.legalNameAr,
-      legalNameEn: party.legalNameEn,
-      legalForm: party.legalForm,
-      ...restricted,
-    }).then((r) => (r.ok ? refFrom(r.value, 'partyId', (value) => ({ value })) : r));
+    const response = await this.#invoke(
+      'person.resolveOrCreate',
+      'POST',
+      `${this.config.hosts.person}/api/v1/persons`,
+      key,
+      {
+        registrationNumber: party.registrationNumber,
+        legalNameAr: party.legalNameAr,
+        legalNameEn: party.legalNameEn,
+        legalForm: party.legalForm,
+        ...restricted,
+      },
+    );
+    return response.ok ? identifier(response.value, 'personId') : response;
   }
 
+  // -- Accounts ---------------------------------------------------------------
+
   async resolveAccount(partyRef: PartyRef, purpose: AccountPurpose): Promise<Result<AccountRef>> {
-    const code = this.config.accountPurposeCodes[purpose];
-    if (code === undefined) {
+    // The institution's own internal accounts are configured, not searched for.
+    const institutionAccount = this.config.institutionAccounts[purpose];
+    if (institutionAccount !== undefined) return ok({ value: institutionAccount });
+
+    const typeCode = this.config.accountPurposeCodes[purpose];
+    if (typeCode === undefined) {
       return reject(
         'OP-DETERMINACY',
         'ACCOUNT_PURPOSE_UNMAPPED',
-        'No vendor account code is configured for this purpose',
+        'No account type is configured for this purpose',
         { purpose },
       );
     }
-    const response = await this.#invoke(
-      'account.resolve',
-      { value: `${partyRef.value}:${purpose}` },
-      this.config.tenantId,
-      { partyId: partyRef.value, accountTypeCode: code },
+
+    const found = await this.#invoke(
+      'account.findByPurpose',
+      'GET',
+      `${this.config.hosts.account}/api/v5/persons/${partyRef.value}/accounts` +
+        `?accountTypeCode=${encodeURIComponent(typeCode)}`,
+      { value: `find:${partyRef.value}:${purpose}` },
     );
-    return response.ok ? refFrom(response.value, 'accountId', (value) => ({ value })) : response;
+    if (!found.ok) return found;
+
+    const existing = firstAccountId(found.value);
+    if (existing !== undefined) return ok({ value: existing });
+
+    const created = await this.#invoke(
+      'account.create',
+      'POST',
+      `${this.config.hosts.account}/api/v4/persons/${partyRef.value}/accounts`,
+      { value: `create:${partyRef.value}:${purpose}` },
+      { accountTypeCode: typeCode },
+    );
+    return created.ok ? identifier(created.value, 'accountId') : created;
   }
 
+  // -- The sale ---------------------------------------------------------------
+
+  /**
+   * Record the executed sale in the ledger.
+   *
+   * What goes downstream: the receivable on the counterparty, at the total that
+   * was agreed. What does not: the schedule, the tenor, and any notion of how
+   * the total was arrived at. There is nothing here for the platform to
+   * recompute, which is the entire point of the split.
+   *
+   * Cost and profit travel as detail because the institution's accounting needs
+   * them separately — goods leave inventory at cost. How the mapping treats
+   * deferred profit is a question for the client's finance function under its
+   * AAOIFI-aligned chart of accounts, not one this adapter should answer.
+   */
   async bookObligation(
     request: BookObligationRequest,
     key: IdempotencyKey,
   ): Promise<Result<BookingRef>> {
-    // The payload carries a fixed total and a schedule. Cost and profit travel
-    // as disclosed amounts because the Murabaha's validity depends on the
-    // disclosure — not because anything downstream derives a proportion.
-    const payload = {
-      partyId: request.partyRef.value,
-      accountId: request.collectionAccount.value,
-      currency: request.totalAmount.currency,
-      totalAmountMinorUnits: String(request.totalAmount.minorUnits),
-      costAmountMinorUnits: String(request.costAmount.minorUnits),
-      profitAmountMinorUnits: String(request.profitAmount.minorUnits),
-      maturityDate: request.maturityDateGregorian,
-      maturityDateHijri: request.maturityDateHijri,
-      schedule: request.instalments.map((i) => ({
-        sequence: i.instalmentNo,
-        dueDate: i.dueDateGregorian,
-        dueDateHijri: i.dueDateHijri,
-        amountMinorUnits: String(i.amount.minorUnits),
-      })),
-      // TUUM-DEV-001. Configuration, not code.
-      ...this.config.vendorPricingCompatibilityFields,
-    };
+    if (
+      request.totalAmount.minorUnits !==
+      request.costAmount.minorUnits + request.profitAmount.minorUnits
+    ) {
+      // Belt to the domain's brace. A total that is not cost plus profit must
+      // never reach an external system as though it were.
+      return reject(
+        'SH-01',
+        'TOTAL_IS_NOT_COST_PLUS_PROFIT',
+        'Refusing to book an obligation whose total is not the sum of its cost and profit',
+        { transactionId: request.transactionId },
+      );
+    }
 
-    const response = await this.#invoke('obligation.book', key, request.tenantId, payload, {
-      'X-Correlation-Id': request.correlationId,
-    });
-    return response.ok ? refFrom(response.value, 'bookingId', (value) => ({ value })) : response;
+    const response = await this.#invoke(
+      'account.postTransaction',
+      'POST',
+      `${this.config.hosts.account}/api/v5/accounts/${request.collectionAccount.value}/transactions`,
+      key,
+      {
+        transactionTypeCode: this.config.transactionTypeCodes.murabahaReceivableRaise,
+        money: {
+          amount: String(request.totalAmount.minorUnits),
+          currencyCode: request.totalAmount.currency,
+        },
+        // Carried for reconciliation, which asserts the booked total still
+        // equals cost plus profit (README.md, Finding 2).
+        externalReference: request.transactionId,
+        details: {
+          costMinorUnits: String(request.costAmount.minorUnits),
+          profitMinorUnits: String(request.profitAmount.minorUnits),
+          maturityDate: request.maturityDateGregorian,
+          maturityDateHijri: request.maturityDateHijri,
+        },
+      },
+      request.correlationId,
+    );
+    return response.ok ? identifier(response.value, 'transactionId') : response;
   }
+
+  // -- Money movement ---------------------------------------------------------
 
   async instructSettlement(
     instruction: SettlementInstruction,
     key: IdempotencyKey,
   ): Promise<Result<SettlementRef>> {
     const response = await this.#invoke(
-      'settlement.instruct',
+      'payment.instruct',
+      'POST',
+      `${this.config.hosts.payment}/api/v1/payments`,
       key,
-      instruction.tenantId,
       {
         debitAccountId: instruction.fromAccount.value,
-        beneficiaryPartyId: instruction.beneficiaryPartyRef.value,
-        currency: instruction.amount.currency,
-        amountMinorUnits: String(instruction.amount.minorUnits),
+        beneficiaryPersonId: instruction.beneficiaryPartyRef.value,
+        money: {
+          amount: String(instruction.amount.minorUnits),
+          currencyCode: instruction.amount.currency,
+        },
         valueDate: instruction.valueDateGregorian,
-        remittanceReference: instruction.remittanceReference,
+        remittanceInformation: instruction.remittanceReference,
+        externalReference: instruction.transactionId,
       },
-      { 'X-Correlation-Id': instruction.correlationId },
+      instruction.correlationId,
     );
-    return response.ok ? refFrom(response.value, 'settlementId', (value) => ({ value })) : response;
+    return response.ok ? identifier(response.value, 'paymentId') : response;
   }
 
   /**
    * Late amounts post to the segregated charity liability and nowhere else.
    *
-   * The adapter re-derives the account from the purpose rather than trusting the
-   * one it was handed, so a caller cannot route a late amount to an arbitrary
-   * account by passing a different reference (SH-13).
+   * The account and the posting code are both re-derived from configuration
+   * rather than taken from the caller, so passing a different account reference
+   * cannot route a late amount somewhere it must not go (SH-13).
    */
   async postCharityLiability(
     request: CharityPostingRequest,
     key: IdempotencyKey,
   ): Promise<Result<PostingRef>> {
-    const expected = this.config.accountPurposeCodes.CHARITY_LIABILITY;
-    if (expected === undefined) {
+    const account = this.config.institutionAccounts.CHARITY_LIABILITY;
+    if (account === undefined) {
       return reject(
         'SH-13',
         'CHARITY_ACCOUNT_UNMAPPED',
@@ -216,40 +341,45 @@ export class TuumCoreBankingAdapter extends BaseAdapter implements CoreBankingPr
     }
 
     const response = await this.#invoke(
-      'posting.charityLiability',
+      'account.postTransaction',
+      'POST',
+      `${this.config.hosts.account}/api/v5/accounts/${account}/transactions`,
       key,
-      request.tenantId,
       {
-        accountId: request.account.value,
-        accountTypeCode: expected,
-        currency: request.amount.currency,
-        amountMinorUnits: String(request.amount.minorUnits),
-        reasonCode: request.reasonCode,
+        transactionTypeCode: this.config.transactionTypeCodes.charityLiabilityRaise,
+        money: {
+          amount: String(request.amount.minorUnits),
+          currencyCode: request.amount.currency,
+        },
+        externalReference: request.transactionId,
+        details: { reasonCode: request.reasonCode },
       },
-      { 'X-Correlation-Id': request.correlationId },
+      request.correlationId,
     );
-    return response.ok ? refFrom(response.value, 'postingId', (value) => ({ value })) : response;
+    return response.ok ? identifier(response.value, 'transactionId') : response;
   }
+
+  // -- Exposure ---------------------------------------------------------------
 
   async fetchExposure(partyRef: PartyRef): Promise<Result<ExposureView>> {
     const response = await this.#invoke(
-      'exposure.fetch',
+      'account.balance',
+      'GET',
+      `${this.config.hosts.account}/api/v5/persons/${partyRef.value}/accounts`,
       { value: `exposure:${partyRef.value}` },
-      this.config.tenantId,
-      { partyId: partyRef.value },
     );
     if (!response.ok) return response;
 
-    const body = response.value;
-    const minorUnits = body['totalOutstandingMinorUnits'];
-    if (typeof minorUnits !== 'string') {
-      return reject('OP-DETERMINACY', 'EXPOSURE_MALFORMED', 'Exposure response was not understood');
+    const outstanding = sumBalances(response.value);
+    if (outstanding === undefined) {
+      return reject('OP-DETERMINACY', 'EXPOSURE_MALFORMED', 'Balances were not understood');
     }
     return ok({
       partyRef,
-      totalOutstanding: money(BigInt(minorUnits)),
-      facilityCount: numberOr(body['facilityCount'], 0),
-      worstArrearsDays: numberOr(body['worstArrearsDays'], 0),
+      totalOutstanding: money(outstanding.minorUnits),
+      facilityCount: outstanding.accountCount,
+      // Arrears are tracked here, against our own schedule, not downstream.
+      worstArrearsDays: 0,
     });
   }
 
@@ -258,33 +388,41 @@ export class TuumCoreBankingAdapter extends BaseAdapter implements CoreBankingPr
     return () => this.#handlers.delete(handler);
   }
 
-  /** Entry point for the webhook or event consumer. Handlers are idempotent. */
+  /** Entry point for the webhook consumer. Handlers are idempotent. */
   async dispatchLifecycle(event: LifecycleEvent): Promise<void> {
-    for (const handler of this.#handlers) {
-      await handler(event);
-    }
+    for (const handler of this.#handlers) await handler(event);
   }
 
   // ---------------------------------------------------------------------------
 
   async #invoke(
     operation: TuumOperation,
+    method: 'GET' | 'POST',
+    url: string,
     key: IdempotencyKey,
-    tenantId: string,
-    payload: Readonly<Record<string, unknown>>,
-    extraHeaders: Readonly<Record<string, string>> = {},
+    body?: Readonly<Record<string, unknown>>,
+    correlationId?: string,
   ): Promise<Result<Readonly<Record<string, unknown>>>> {
     try {
-      const apiKey = await this.credential('api_key', key.value);
-      const body = await this.breaker.execute(() =>
-        this.transport.call(operation, { ...payload, tenantReference: tenantId }, {
-          // The only place the plaintext is used. Never logged, never traced.
-          Authorization: `Bearer ${apiKey.expose()}`,
-          'Idempotency-Key': key.value,
-          ...extraHeaders,
+      const token = await this.credential('api_token', correlationId ?? key.value);
+      const response = await this.breaker.execute(() =>
+        this.transport.call(operation, {
+          method,
+          url,
+          ...(body === undefined ? {} : { body }),
+          headers: {
+            // The one place the plaintext is used. Never logged, never traced.
+            'x-auth-token': token.expose(),
+            'x-channel-code': this.config.channelCode,
+            // Verified: the platform's idempotency key. Reusing one replays the
+            // original response rather than creating a second object.
+            'x-request-id': key.value,
+            ...(correlationId === undefined ? {} : { 'x-correlation-id': correlationId }),
+            ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
+          },
         }),
       );
-      return ok(body);
+      return ok(response);
     } catch (error) {
       if (error instanceof CircuitOpenError) {
         return reject(
@@ -294,8 +432,8 @@ export class TuumCoreBankingAdapter extends BaseAdapter implements CoreBankingPr
           { operation },
         );
       }
-      // The message is deliberately not the vendor's. A vendor error string can
-      // echo a payload, and payloads carry restricted data.
+      // Never the vendor's own message: an upstream error string can echo a
+      // payload, and payloads carry restricted data.
       return reject(
         'OP-DETERMINACY',
         'CORE_BANKING_CALL_FAILED',
@@ -306,20 +444,56 @@ export class TuumCoreBankingAdapter extends BaseAdapter implements CoreBankingPr
   }
 }
 
-function refFrom<T>(
+// -----------------------------------------------------------------------------
+
+function identifier<T extends { value: string }>(
   body: Readonly<Record<string, unknown>>,
   field: string,
-  wrap: (value: string) => T,
 ): Result<T> {
-  const value = body[field];
+  const direct = body[field];
+  const nested = (body['data'] as Record<string, unknown> | undefined)?.[field];
+  const value = typeof direct === 'string' ? direct : nested;
   if (typeof value !== 'string' || value.length === 0) {
-    return reject('OP-DETERMINACY', 'REFERENCE_MISSING', 'The response did not carry an identifier', {
+    return reject('OP-DETERMINACY', 'REFERENCE_MISSING', 'The response carried no identifier', {
       field,
     });
   }
-  return ok(wrap(value));
+  return ok({ value } as T);
 }
 
-function numberOr(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+function rows(body: Readonly<Record<string, unknown>>): readonly Record<string, unknown>[] {
+  const payload = Array.isArray(body['data']) ? body['data'] : body['accounts'];
+  return Array.isArray(payload)
+    ? payload.filter((r): r is Record<string, unknown> => typeof r === 'object' && r !== null)
+    : [];
+}
+
+function firstAccountId(body: Readonly<Record<string, unknown>>): string | undefined {
+  for (const row of rows(body)) {
+    const id = row['accountId'];
+    if (typeof id === 'string' && id.length > 0) return id;
+  }
+  return undefined;
+}
+
+function sumBalances(
+  body: Readonly<Record<string, unknown>>,
+): { minorUnits: bigint; accountCount: number } | undefined {
+  const all = rows(body);
+  if (all.length === 0) return { minorUnits: 0n, accountCount: 0 };
+
+  let total = 0n;
+  for (const row of all) {
+    const balance = row['balanceMinorUnits'] ?? row['balanceAmountMinorUnits'];
+    if (typeof balance === 'string') {
+      try {
+        total += BigInt(balance);
+      } catch {
+        return undefined;
+      }
+    } else if (typeof balance === 'bigint') {
+      total += balance;
+    }
+  }
+  return { minorUnits: total, accountCount: all.length };
 }

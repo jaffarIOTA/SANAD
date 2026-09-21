@@ -1,19 +1,17 @@
 /**
  * Partner integrations.
  *
- * Two things are under test here, and the second matters more than the first.
+ * Two things are under test, and the second matters more than the first.
  *
  * The first is that the adapters map correctly. The second is that they hold
- * the line at the boundary: nothing rate-shaped goes down to the core banking
- * platform from a domain object that has no such concept; no credential can
- * reach a log; a document render cannot substitute into a Board-approved
- * clause; a signature over a different rendition than the one presented is
- * refused; and an extraction's confidence is floored rather than rounded.
+ * the line at the boundary: the core banking adapter cannot be pointed at the
+ * vendor's lending module, no credential can reach a log, a document render
+ * cannot substitute into a Board-approved clause, a signature over a different
+ * rendition than the one presented is refused, and an extraction's confidence
+ * is floored rather than rounded.
  *
  * Every call runs against recorded fixtures, so the suite is deterministic and
- * needs no network. The fixtures encode what we currently believe the vendor
- * contracts to be — both are unverified, tracked as OI-02 and OI-05 — and will
- * be re-recorded from a sandbox when one is available.
+ * needs no network.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -46,8 +44,7 @@ class RecordingCredentials implements CredentialProvider {
   }
 }
 
-const CLOCK = { seconds: 1_800_000_000 };
-const now = () => CLOCK.seconds;
+const now = () => 1_800_000_000;
 
 const baseConfig: AdapterConfig = {
   tenantId: 'bank-a',
@@ -61,17 +58,31 @@ const baseConfig: AdapterConfig = {
 };
 
 // =============================================================================
-// Core banking
+// Core banking — accounts and postings, never the lending module
 // =============================================================================
+
+const ACCOUNT_HOST = 'https://account-api.sandbox.example.com';
 
 const tuumConfig: TuumAdapterConfig = {
   ...baseConfig,
-  vendorPricingCompatibilityFields: {},
-  accountPurposeCodes: {
-    SETTLEMENT: 'CA-SETTLE',
-    COLLECTION: 'CA-COLLECT',
-    CHARITY_LIABILITY: 'CA-CHARITY',
-    GOODS_INVENTORY: 'CA-INVENTORY',
+  channelCode: 'system',
+  hosts: {
+    auth: 'https://auth-api.sandbox.example.com',
+    person: 'https://person-api.sandbox.example.com',
+    account: ACCOUNT_HOST,
+    payment: 'https://payment-api.sandbox.example.com',
+  },
+  accountPurposeCodes: { COLLECTION: 'CURRENCY', SETTLEMENT: 'CURRENCY' },
+  institutionAccounts: {
+    CHARITY_LIABILITY: 'acct-charity-liability',
+    GOODS_INVENTORY: 'acct-goods-inventory',
+  },
+  transactionTypeCodes: {
+    murabahaReceivableRaise: 'MRB_RECV_RAISE',
+    murabahaReceivableSettle: 'MRB_RECV_SETTLE',
+    goodsInventoryAcquire: 'GOODS_IN',
+    goodsInventoryRelease: 'GOODS_OUT',
+    charityLiabilityRaise: 'CHARITY_RAISE',
   },
 };
 
@@ -90,8 +101,8 @@ function tuum(fixtures: readonly Fixture[], config: Partial<TuumAdapterConfig> =
 const bookingRequest = {
   tenantId: 'bank-a',
   transactionId: 'txn-0001',
-  partyRef: { value: 'party-1' },
-  collectionAccount: { value: 'acct-1' },
+  partyRef: { value: 'person-1' },
+  collectionAccount: { value: 'acct-collect-1' },
   totalAmount: money(18_962_500n),
   costAmount: money(18_500_000n),
   profitAmount: money(462_500n),
@@ -108,172 +119,184 @@ const bookingRequest = {
   correlationId: 'cor-0001',
 } as const;
 
-describe('core banking adapter', () => {
-  const bookFixture: Fixture = {
-    operation: 'obligation.book',
-    match: { partyId: 'party-1' },
-    response: { bookingId: 'bkg-0001' },
-  };
+const postingFixture: Fixture = {
+  operation: 'account.postTransaction',
+  match: { url: `${ACCOUNT_HOST}/api/v5/accounts/acct-collect-1/transactions` },
+  response: { transactionId: 'pst-0001' },
+};
 
-  it('sends a fixed total and a schedule, and nothing that could be recomputed', async () => {
-    const { adapter, transport } = tuum([bookFixture]);
-    const ref = expectOk(await adapter.bookObligation(bookingRequest, { value: 'idem-1' }));
-    expect(ref.value).toBe('bkg-0001');
+describe('core banking adapter — cannot be pointed at the lending module', () => {
+  it('refuses a lending host at construction', () => {
+    // A deployment misconfigured onto the lending module should fail to start,
+    // not fail at the first booking (OI-02, Finding 1).
+    expect(() =>
+      tuum([], {
+        hosts: { ...tuumConfig.hosts, account: 'https://loan-api.sandbox.example.com' },
+      }),
+    ).toThrow(/lending host/);
+  });
 
-    const sent = transport.calls[0]!.request;
-    expect(sent['totalAmountMinorUnits']).toBe('18962500');
-    expect(sent['costAmountMinorUnits']).toBe('18500000');
-    expect(sent['profitAmountMinorUnits']).toBe('462500');
-
-    // Cost plus profit is the total, on the wire as well as in the domain.
-    expect(BigInt(sent['costAmountMinorUnits'] as string) + BigInt(sent['profitAmountMinorUnits'] as string)).toBe(
-      BigInt(sent['totalAmountMinorUnits'] as string),
-    );
-
-    // Amounts travel as integer strings. No floating point leaves the boundary.
-    for (const key of ['totalAmountMinorUnits', 'costAmountMinorUnits', 'profitAmountMinorUnits']) {
-      expect(typeof sent[key]).toBe('string');
-      expect(String(sent[key])).toMatch(/^\d+$/);
+  it('exposes no lending operation at all', () => {
+    const operations = Object.getOwnPropertyNames(TuumCoreBankingAdapter.prototype);
+    for (const name of operations) {
+      expect(/loan|contract|offer|disburse|topUp/i.test(name), `method ${name}`).toBe(false);
     }
   });
 
-  it('carries a vendor pricing compatibility field only when configuration supplies one', async () => {
-    // TUUM-DEV-001. The field name is configuration, not code, because the
-    // vendor's requirement here is unverified and the concept must not be named
-    // in the repository outside the adapter's README.
-    const { adapter, transport } = tuum([bookFixture], {
-      vendorPricingCompatibilityFields: { legacyPricingMode: 'FIXED_PRICE_NO_ACCRUAL' },
-    });
-    expectOk(await adapter.bookObligation(bookingRequest, { value: 'idem-1' }));
-
-    expect(transport.calls[0]!.request['legacyPricingMode']).toBe('FIXED_PRICE_NO_ACCRUAL');
-  });
-
-  it('declares that deviation, how it is contained, and what tracks it', () => {
-    const deviation = TUUM_DEVIATIONS.find((d) => d.id === 'TUUM-DEV-001');
+  it('records why, and what still needs watching', () => {
+    const deviation = TUUM_DEVIATIONS.find((d) => d.id === 'TUUM-DEV-004');
     expect(deviation?.verificationRef).toBe('OI-02');
-    expect(deviation?.containment).toContain('configuration');
+    // The residual risk is the vendor back office, which is outside our boundary.
+    expect(deviation?.containment).toContain('reconciliation');
+  });
+});
+
+describe('core banking adapter — the sale', () => {
+  it('books the total as a receivable posting and sends no schedule', async () => {
+    const { adapter, transport } = tuum([postingFixture]);
+    const ref = expectOk(await adapter.bookObligation(bookingRequest, { value: 'idem-1' }));
+    expect(ref.value).toBe('pst-0001');
+
+    const call = transport.calls[0]!;
+    expect(call.url).toBe(`${ACCOUNT_HOST}/api/v5/accounts/acct-collect-1/transactions`);
+
+    const sent = call.request;
+    expect(sent['transactionTypeCode']).toBe('MRB_RECV_RAISE');
+    expect((sent['money'] as Record<string, unknown>)['amount']).toBe('18962500');
+
+    // The schedule is ours. There is nothing downstream to recompute.
+    expect(JSON.stringify(sent)).not.toContain('instalment');
+    expect(sent['schedule']).toBeUndefined();
+
+    // Cost and profit travel as detail, for the institution's accounting.
+    const details = sent['details'] as Record<string, unknown>;
+    expect(details['costMinorUnits']).toBe('18500000');
+    expect(details['profitMinorUnits']).toBe('462500');
+    expect(
+      BigInt(details['costMinorUnits'] as string) + BigInt(details['profitMinorUnits'] as string),
+    ).toBe(18_962_500n);
   });
 
-  it('sends the idempotency key on every write, so a retry is safe', async () => {
-    const { adapter, transport } = tuum([bookFixture]);
+  it('refuses to book a total that is not cost plus profit', async () => {
+    const { adapter } = tuum([postingFixture]);
+    const result = await adapter.bookObligation(
+      { ...bookingRequest, totalAmount: money(18_962_501n) },
+      { value: 'idem-1' },
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.control).toBe('SH-01');
+  });
+
+  it('carries the idempotency key the platform actually honours', async () => {
+    const { adapter, transport } = tuum([postingFixture]);
     expectOk(await adapter.bookObligation(bookingRequest, { value: 'idem-1' }));
 
     const { headers } = transport.calls[0]!;
-    expect(headers['Idempotency-Key']).toBe('idem-1');
-    expect(headers['X-Correlation-Id']).toBe('cor-0001');
+    // Verified against the vendor's documentation: reusing this replays the
+    // original response rather than creating a second object.
+    expect(headers['x-request-id']).toBe('idem-1');
+    expect(headers['x-channel-code']).toBe('system');
+    expect(headers['x-correlation-id']).toBe('cor-0001');
   });
 
   it('uses the credential on the wire and redacts it everywhere else', async () => {
-    const { adapter, transport } = tuum([bookFixture]);
+    const { adapter, transport } = tuum([postingFixture]);
     expectOk(await adapter.bookObligation(bookingRequest, { value: 'idem-1' }));
 
     const { headers } = transport.calls[0]!;
-    // The one place the plaintext legitimately appears.
-    expect(headers['Authorization']).toContain('a-provider-credential-value');
-    // And the one thing that must happen to it before it goes anywhere else.
-    const forLog = redactForLogging(headers) as Record<string, unknown>;
-    expect(forLog['Authorization']).toBe('[redacted]');
-    expect(forLog['Idempotency-Key']).toBe('idem-1');
-  });
+    expect(headers['x-auth-token']).toBe('a-provider-credential-value');
 
-  it('re-derives the charity account rather than trusting the caller', async () => {
+    const forLog = redactForLogging(headers) as Record<string, unknown>;
+    expect(forLog['x-auth-token']).toBe('[redacted]');
+    expect(forLog['x-request-id']).toBe('idem-1');
+  });
+});
+
+describe('core banking adapter — late amounts', () => {
+  const charityRequest = {
+    tenantId: 'bank-a',
+    transactionId: 'txn-0001',
+    account: { value: 'acct-anything-the-caller-chose' },
+    amount: money(50_000n),
+    reasonCode: 'LATE_PAYMENT',
+    correlationId: 'cor-0001',
+  } as const;
+
+  it('re-derives the segregated account and code rather than trusting the caller', async () => {
     const { adapter, transport } = tuum([
       {
-        operation: 'posting.charityLiability',
-        match: { accountId: 'acct-anything' },
-        response: { postingId: 'pst-0001' },
+        operation: 'account.postTransaction',
+        match: { url: `${ACCOUNT_HOST}/api/v5/accounts/acct-charity-liability/transactions` },
+        response: { transactionId: 'pst-0002' },
       },
     ]);
 
-    expectOk(
-      await adapter.postCharityLiability(
-        {
-          tenantId: 'bank-a',
-          transactionId: 'txn-0001',
-          account: { value: 'acct-anything' },
-          amount: money(50_000n),
-          reasonCode: 'LATE_PAYMENT',
-          correlationId: 'cor-0001',
-        },
-        { value: 'idem-2' },
-      ),
-    );
+    expectOk(await adapter.postCharityLiability(charityRequest, { value: 'idem-2' }));
 
-    // Whatever account reference came in, the posting is typed to the
-    // segregated charity account the tenant configured (SH-13).
-    expect(transport.calls[0]!.request['accountTypeCode']).toBe('CA-CHARITY');
+    // The caller's account reference is ignored; SH-13 is not delegated.
+    const call = transport.calls[0]!;
+    expect(call.url).toContain('acct-charity-liability');
+    expect(call.url).not.toContain('acct-anything-the-caller-chose');
+    expect(call.request['transactionTypeCode']).toBe('CHARITY_RAISE');
   });
 
-  it('refuses to post a late amount when no segregated account is configured', async () => {
-    const { adapter } = tuum([], {
-      accountPurposeCodes: {
-        SETTLEMENT: 'CA-SETTLE',
-        COLLECTION: 'CA-COLLECT',
-        GOODS_INVENTORY: 'CA-INVENTORY',
-      } as TuumAdapterConfig['accountPurposeCodes'],
-    });
-
-    const result = await adapter.postCharityLiability(
-      {
-        tenantId: 'bank-a',
-        transactionId: 'txn-0001',
-        account: { value: 'acct-1' },
-        amount: money(50_000n),
-        reasonCode: 'LATE_PAYMENT',
-        correlationId: 'cor-0001',
-      },
-      { value: 'idem-3' },
-    );
+  it('refuses when no segregated account is configured', async () => {
+    const { adapter } = tuum([], { institutionAccounts: { GOODS_INVENTORY: 'acct-goods' } });
+    const result = await adapter.postCharityLiability(charityRequest, { value: 'idem-3' });
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.control).toBe('SH-13');
   });
 
-  it('queues rather than failing the journey when the core is unavailable', async () => {
-    const { adapter } = tuum([
-      { operation: 'obligation.book', match: { partyId: 'party-1' }, failsWith: 'upstream 503', response: {} },
-    ]);
+  it('has no posting code for revenue', () => {
+    expect(Object.keys(tuumConfig.transactionTypeCodes).join(',').toLowerCase()).not.toContain(
+      'revenue',
+    );
+  });
+});
 
-    const first = await adapter.bookObligation(bookingRequest, { value: 'idem-1' });
-    const second = await adapter.bookObligation(bookingRequest, { value: 'idem-2' });
+describe('core banking adapter — failure posture', () => {
+  const failing: Fixture = {
+    operation: 'account.postTransaction',
+    match: { url: `${ACCOUNT_HOST}/api/v5/accounts/acct-collect-1/transactions` },
+    failsWith: 'upstream 503',
+    response: {},
+  };
+
+  it('queues rather than failing the journey when the core is unavailable', async () => {
+    const { adapter } = tuum([failing]);
+    await adapter.bookObligation(bookingRequest, { value: 'idem-1' });
+    await adapter.bookObligation(bookingRequest, { value: 'idem-2' });
     const third = await adapter.bookObligation(bookingRequest, { value: 'idem-3' });
 
-    expect(first.ok).toBe(false);
-    expect(second.ok).toBe(false);
     expect(third.ok).toBe(false);
     if (third.ok) return;
-    // Two failures open the circuit; the third never reaches the vendor.
     expect(third.error.reason).toBe('CORE_BANKING_CIRCUIT_OPEN');
     expect(third.error.detail).toContain('queued');
   });
 
   it('never repeats the vendor’s own error text, which can echo a payload', async () => {
     const { adapter } = tuum([
-      {
-        operation: 'obligation.book',
-        match: { partyId: 'party-1' },
-        failsWith: 'validation failed for nationalId 1234567890',
-        response: {},
-      },
+      { ...failing, failsWith: 'validation failed for nationalId 1234567890' },
     ]);
-
     const result = await adapter.bookObligation(bookingRequest, { value: 'idem-1' });
+
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(JSON.stringify(result.error)).not.toContain('1234567890');
   });
 
-  it('caches the credential for a bounded period rather than refetching per call', async () => {
-    const { adapter, credentials } = tuum([bookFixture, { ...bookFixture, match: { partyId: 'party-1' } }]);
+  it('caches the credential for a bounded period and clears it on disposal', async () => {
+    const { adapter, credentials } = tuum([postingFixture]);
     expectOk(await adapter.bookObligation(bookingRequest, { value: 'idem-1' }));
     expectOk(await adapter.bookObligation(bookingRequest, { value: 'idem-2' }));
     expect(credentials.resolved).toHaveLength(1);
 
     adapter.dispose();
     expectOk(await adapter.bookObligation(bookingRequest, { value: 'idem-3' }));
-    // Disposal clears it: a credential does not outlive the adapter that needed it.
     expect(credentials.resolved).toHaveLength(2);
   });
 });
@@ -358,16 +381,12 @@ describe('document platform adapter', () => {
     expect(rendered.documentId).toBe('doc-0001');
 
     const sent = transport.calls[1]!.request;
-    // Arabic governs, and the request says so explicitly rather than by default.
     expect(sent['governingLocale']).toBe('ar-SA');
     expect(sent['templateVersionId']).toBe('tpl-v3');
   });
 
   it('refuses to substitute into anything the approved template did not declare', async () => {
-    // NUTR-DEV-002. A Board-approved clause is not a merge field, and the
-    // adapter enforces that before the call rather than trusting the engine.
     const { adapter } = nutrient([templateFixture]);
-
     const result = await adapter.render(
       renderRequest({ 'clause.governing_law': 'somewhere else entirely' }),
     );
@@ -433,7 +452,6 @@ describe('document platform adapter', () => {
   });
 
   it('refuses to execute a leg with no verifiable timestamp', async () => {
-    // A compliance dependency never degrades. No trusted time, no leg.
     const { adapter } = nutrient([
       {
         operation: 'signature.seal',
@@ -489,8 +507,6 @@ describe('document platform adapter', () => {
   });
 
   it('floors extraction confidence rather than rounding it', async () => {
-    // NUTR-DEV-001. 0.94999 is not 95%, and treating it as such is how a
-    // borderline extraction quietly discharges a gate it should not.
     const { adapter } = nutrient([
       {
         operation: 'intelligence.extract',
@@ -515,9 +531,10 @@ describe('document platform adapter', () => {
       }),
     );
 
+    // 0.94999 is not 95%, and treating it as such is how a borderline
+    // extraction quietly discharges a gate it should not.
     expect(outcome.fields[0]?.confidencePerTenThousand).toBe(9499);
     expect(outcome.lowestConfidencePerTenThousand).toBe(9499);
-    // Integers all the way, so a gate's floor is never a float comparison.
     for (const field of outcome.fields) {
       expect(Number.isInteger(field.confidencePerTenThousand)).toBe(true);
     }
@@ -535,7 +552,6 @@ describe('document platform adapter', () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    // An empty rule set is not a decision to disclose everything.
     expect(result.error.reason).toBe('NO_REDACTION_RULES');
   });
 });
@@ -572,7 +588,6 @@ describe('credentials never reach a log, a trace or an error', () => {
     // Business data is not personal data, and stays legible for support.
     expect(redacted['transactionId']).toBe('txn-0001');
     expect((redacted['party'] as Record<string, unknown>)['legalNameEn']).toBe('A Company');
-    // bigint survives serialisation as a string rather than throwing.
     expect(redacted['amountMinorUnits']).toBe('18962500');
   });
 });

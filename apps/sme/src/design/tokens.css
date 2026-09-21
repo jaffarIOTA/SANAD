@@ -1,0 +1,102 @@
+/*
+ * Design tokens.
+ *
+ * Client branding is a token override, never a component fork — that is what
+ * makes the product re-skinnable per institution without a code change (SDD
+ * §7.6). A second client changes this file and nothing else.
+ *
+ * Every spacing and border declaration below uses logical properties. Not
+ * `margin-left` but `margin-inline-start`; not `border-right` but
+ * `border-inline-end`. Arabic is the design default and English is the
+ * mirror, so a physical direction in a stylesheet is a bug waiting for the
+ * first RTL review (FP-01, AP-10). A test enforces this.
+ */
+
+:root {
+  /* Brand — overridden per tenant */
+  --colour-accent: #0f7b6c;
+  --colour-accent-strong: #0a5a4f;
+  --colour-accent-quiet: #e6f2f0;
+
+  /* Surface */
+  --colour-page: #ffffff;
+  --colour-surface: #ffffff;
+  --colour-surface-sunken: #f6f7f8;
+  --colour-border: #d9dde1;
+  --colour-border-strong: #aeb6bd;
+
+  /* Text */
+  --colour-text: #10181f;
+  --colour-text-quiet: #5a646d;
+  --colour-text-on-accent: #ffffff;
+
+  /* Meaning. Never carried by colour alone — every status also has a label. */
+  --colour-positive: #1a7f4b;
+  --colour-attention: #8a5a00;
+  --colour-blocked: #a3271f;
+  --colour-blocked-quiet: #fdecea;
+
+  /* Type. Arabic and Latin are tuned independently: matching point sizes do
+     not produce matching perceived weight. */
+  --font-arabic: 'Noto Kufi Arabic', 'Segoe UI', system-ui, sans-serif;
+  --font-latin: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-numeric: 'Inter', system-ui, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.625rem;
+  --text-amount: 1.5rem;
+
+  /* Space */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  --radius: 0.625rem;
+  --radius-sm: 0.375rem;
+
+  /* Touch targets sized for the mid-range device that is the SME's primary
+     hardware, not for a desktop pointer (NFR-10, FP-05). */
+  --tap-target: 2.75rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --colour-page: #0e1317;
+    --colour-surface: #161d23;
+    --colour-surface-sunken: #11171c;
+    --colour-border: #2a343d;
+    --colour-border-strong: #3d4a55;
+    --colour-text: #eef2f5;
+    --colour-text-quiet: #a3aeb8;
+    --colour-accent: #3fbfa9;
+    --colour-accent-strong: #63d3c0;
+    --colour-accent-quiet: #13312c;
+    --colour-positive: #4ec27f;
+    --colour-attention: #d9a441;
+    --colour-blocked: #e8796f;
+    --colour-blocked-quiet: #331916;
+  }
+}
+
+:root[data-theme='dark'] {
+  --colour-page: #0e1317;
+  --colour-surface: #161d23;
+  --colour-surface-sunken: #11171c;
+  --colour-border: #2a343d;
+  --colour-border-strong: #3d4a55;
+  --colour-text: #eef2f5;
+  --colour-text-quiet: #a3aeb8;
+  --colour-accent: #3fbfa9;
+  --colour-accent-strong: #63d3c0;
+  --colour-accent-quiet: #13312c;
+  --colour-positive: #4ec27f;
+  --colour-attention: #d9a441;
+  --colour-blocked: #e8796f;
+  --colour-blocked-quiet: #331916;
+}

@@ -304,6 +304,7 @@ create constraint trigger trg_reservation_capacity
 do $$
 declare
   t record;
+  r text;
 begin
   for t in
     select schemaname, tablename
@@ -315,8 +316,10 @@ begin
   loop
     execute format('alter table %I.%I enable row level security', t.schemaname, t.tablename);
     execute format('alter table %I.%I force row level security', t.schemaname, t.tablename);
-    execute format('revoke all on %I.%I from anon, authenticated, public',
-                   t.schemaname, t.tablename);
+    execute format('revoke all on %I.%I from public', t.schemaname, t.tablename);
+    foreach r in array core.hosted_platform_roles() loop
+      execute format('revoke all on %I.%I from %I', t.schemaname, t.tablename, r);
+    end loop;
     execute format('drop policy if exists tenant_isolation on %I.%I', t.schemaname, t.tablename);
     execute format(
       'create policy tenant_isolation on %I.%I using (tenant_id = core.current_tenant_id()) '

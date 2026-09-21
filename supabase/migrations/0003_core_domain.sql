@@ -26,7 +26,35 @@
 
 create schema if not exists evidence;
 
-revoke all on schema core, config, evidence, audit from anon, authenticated;
+-- -----------------------------------------------------------------------------
+-- Portability: revoking from a role that does not exist is an ERROR in
+-- PostgreSQL, not a no-op. `anon` and `authenticated` are created by the hosted
+-- development platform and are absent on the self-hosted in-Kingdom deployment
+-- this is destined for (ADR 0001), so every revoke against them is guarded.
+--
+-- `public` always exists and needs no guard.
+-- -----------------------------------------------------------------------------
+create or replace function core.hosted_platform_roles() returns text[]
+language sql stable
+set search_path = ''
+as $$
+  select coalesce(array_agg(rolname::text order by rolname), '{}'::text[])
+  from pg_catalog.pg_roles
+  where rolname in ('anon', 'authenticated')
+$$;
+
+comment on function core.hosted_platform_roles is
+  'Platform-created roles present on this deployment. Empty on self-hosted '
+  'PostgreSQL, which is why every revoke against them is conditional.';
+
+do $$
+declare r text;
+begin
+  foreach r in array core.hosted_platform_roles() loop
+    execute format('revoke all on schema core, config, evidence, audit from %I', r);
+  end loop;
+end;
+$$;
 
 -- -----------------------------------------------------------------------------
 -- Tenant scoping.
@@ -734,6 +762,7 @@ create trigger trg_audit_event_append_only
 do $$
 declare
   t record;
+  r text;
 begin
   for t in
     select schemaname, tablename
@@ -747,8 +776,10 @@ begin
   loop
     execute format('alter table %I.%I enable row level security', t.schemaname, t.tablename);
     execute format('alter table %I.%I force row level security', t.schemaname, t.tablename);
-    execute format('revoke all on %I.%I from anon, authenticated, public',
-                   t.schemaname, t.tablename);
+    execute format('revoke all on %I.%I from public', t.schemaname, t.tablename);
+    foreach r in array core.hosted_platform_roles() loop
+      execute format('revoke all on %I.%I from %I', t.schemaname, t.tablename, r);
+    end loop;
     execute format('drop policy if exists tenant_isolation on %I.%I', t.schemaname, t.tablename);
     execute format(
       'create policy tenant_isolation on %I.%I using (tenant_id = core.current_tenant_id()) '

@@ -206,6 +206,28 @@ describe('AP-04 — vendor concepts stop at the adapter', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('the core banking adapter carries no lending path', () => {
+    // OI-02 Finding 1: the vendor's lending module derives and persists a
+    // periodic proportion. The obligation, its schedule and its profit amount
+    // live here instead. A lending URL appearing in this adapter would be the
+    // first step back onto it, so it fails the build.
+    const LENDING_PATHS = [/\/api\/v\d+\/(loans|contracts|offers)\b/, /loan-api/];
+    const offenders: string[] = [];
+
+    for (const file of filesUnder('adapters/tuum')) {
+      if (!file.endsWith('.ts')) continue;
+      for (const line of codeOnly(read(file)).split('\n')) {
+        for (const pattern of LENDING_PATHS) {
+          // The guard regex that rejects such a host is itself allowed.
+          if (pattern.test(line) && !line.includes('LENDING_HOST')) {
+            offenders.push(`${rel(file)}: ${line.trim()}`);
+          }
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('each adapter declares its deviations and names its verification item', async () => {
     const { TUUM_DEVIATIONS } = await import('../../adapters/tuum/core-banking-adapter.ts');
     const { NUTRIENT_DEVIATIONS } = await import('../../adapters/nutrient/document-adapter.ts');
@@ -222,6 +244,54 @@ describe('AP-04 — vendor concepts stop at the adapter', () => {
 });
 
 // -- §3.1: no domain table is reachable through the auto-generated REST API ----
+
+// -- ADR 0001: the schema stays portable PostgreSQL ---------------------------
+
+describe('ADR 0001 — platform coupling stays quarantined', () => {
+  /**
+   * The production deployment is self-hosted PostgreSQL in-Kingdom, because
+   * NFR-05 admits no exception. The development platform is a convenience, and
+   * a convenience that quietly becomes a dependency is how a migration turns
+   * into a rewrite. These two migrations are allowed to know about it. Nothing
+   * else is.
+   */
+  const QUARANTINED = ['0001_integration_credentials.sql', '0005_vault_extension_guard.sql'];
+
+  const otherMigrations = () =>
+    filesUnder('supabase/migrations').filter((f) => !QUARANTINED.some((q) => f.endsWith(q)));
+
+  it('the secret store is referenced only in the quarantined migrations', () => {
+    const offenders: string[] = [];
+    for (const file of otherMigrations()) {
+      const content = read(file);
+      for (const token of ['vault.', 'supabase_vault']) {
+        if (content.includes(token)) offenders.push(`${rel(file)}: ${token}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('no migration revokes from a platform role without guarding its existence', () => {
+    // Revoking from a role that does not exist is an error, not a no-op, so an
+    // unguarded revoke fails the whole migration on a self-hosted deployment.
+    const offenders: string[] = [];
+    for (const file of otherMigrations()) {
+      for (const line of read(file).split('\n')) {
+        if (/^\s*(--)/.test(line)) continue;
+        if (/revoke[^;]*\bfrom\b[^;]*\b(anon|authenticated|service_role)\b/.test(line)) {
+          offenders.push(`${rel(file)}: ${line.trim()}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('records the decision rather than leaving it implicit', () => {
+    const adr = read(join(ROOT, 'docs/adr/0001-data-residency-and-datastore.md'));
+    expect(adr).toContain('Status:** Accepted');
+    expect(adr.toLowerCase()).toContain('in-kingdom');
+  });
+});
 
 describe('no domain table lives in the exposed schema', () => {
   it('migrations create nothing in the schema PostgREST exposes', () => {
