@@ -211,6 +211,11 @@ describe('the pre-commit hook is installed and bites', () => {
     ['a.txt', pemOpen, 'a PEM block'],
     ['a.ts', credentialLiteral, 'an opaque credential'],
     ['server.key', 'anything', 'key material by filename'],
+    ['credentials.json', '{}', 'a credential bundle by filename'],
+    // The JSON shape specifically: a quoted key puts a `"` between the name
+    // and the colon, which an unanchored pattern misses. Every vendor
+    // credentials file looks like this.
+    ['notes.md', `{ "client_secret": "${['9f8e7d6c5b4a3928', '1706f5e4d3c2b1a0'].join('')}" }`, 'a JSON-quoted secret'],
   ])('refuses %s — %s', (path, content) => {
     const findings = scan(path, content);
     expect(findings.length).toBeGreaterThan(0);

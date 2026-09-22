@@ -646,8 +646,38 @@ document it can parse, and the two cannot drift silently. Downgrading the
 source instead would quietly delete a constraint from the system of record in
 order to satisfy a tool.
 
-**Confirm the API Connect version first** — if it accepts 3.1, none of this is
-needed.
+### Settled by experiment, not by release notes
+
+**API Connect v10.0.11.0 does not support OpenAPI 3.1.** Tested directly
+against the toolkit with three minimal documents identical but for their
+version:
+
+| Version | `apic validate` |
+|---|---|
+| `openapi: 3.1.0` | `Invalid file type provided` — not recognised as an API definition at all |
+| `openapi: 3.0.3` | Recognised; validates clean with `--no-extensions` |
+| `swagger: "2.0"` | Recognised |
+
+The 3.1 rejection is not about IBM extensions — it fails identically with
+`--no-extensions`. The toolkit simply does not parse 3.1.
+
+**A second requirement found at the same time:** every API definition needs an
+`x-ibm-configuration` extension block. Without it, validation fails with
+`x-ibm-configuration.(root) is of incorrect type`. That block is where the
+gateway type and the assembly live, so it is not boilerplate — it is the
+gateway behaviour, and it belongs in `gateway/ibm/` under version control like
+everything else.
+
+**So the recommendation above stands, now on evidence.** Keep 3.1 as the
+source of truth; generate a 3.0 publication artefact carrying
+`x-ibm-configuration`; assert by test that the two agree on paths, operations,
+required fields and closed schemas. The two genuinely lossy constructs — the
+`if`/`then` conditional on `TradeReference` and `webhooks` — become
+service-enforced only, and that gap should be written down rather than
+absorbed silently.
+
+The dev instance is **SaaS in the Asia-Pacific South zone**, which is fine for
+synthetic data and must not become the production path (E-22).
 
 Ans:
 

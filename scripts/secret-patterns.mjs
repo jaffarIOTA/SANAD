@@ -15,9 +15,28 @@
 export const SECRET_SHAPED =
   /(token|secret|password|passwd|api[_-]?key|credential|private[_-]?key)/i;
 
-/** A long opaque value assigned to a secret-named thing. */
+/**
+ * A long opaque value assigned to a secret-named thing.
+ *
+ * The `['"`]?` after the name is load-bearing. Without it the pattern matches
+ * `clientSecret: "…"` but **not** `"client_secret": "…"`, because the closing
+ * quote sits between the name and the colon. That is the shape of every JSON
+ * credentials file — including the API Connect toolkit's `credentials.json` —
+ * so the omission would have let exactly the files most worth catching
+ * through.
+ */
 export const OPAQUE_ASSIGNMENT =
-  /(token|secret|password|api[_-]?key|credential)\w*\s*[:=]\s*['"`]?([A-Za-z0-9_\-+/=.]{24,})['"`]?/gi;
+  /(token|secret|password|api[_-]?key|credential)\w*['"`]?\s*[:=]\s*['"`]?([A-Za-z0-9_\-+/=.]{24,})['"`]?/gi;
+
+/**
+ * Files that are credential bundles by name, whatever is inside them.
+ *
+ * A vendor toolkit hands you one of these and the natural place to put it is
+ * the project root. Catching the name is more reliable than catching every
+ * field a vendor might choose to call its secret.
+ */
+export const CREDENTIAL_FILE =
+  /(^|\/)(credentials|toolkit-credentials|service-account|sa|gha|kubeconfig)[-.\w]*\.(json|ya?ml|conf)$/i;
 
 /** Values that are obviously not secrets. */
 export const PLACEHOLDER = /^(development|example|placeholder|redacted|changeme|test|fixture|your[_-])/i;
@@ -46,6 +65,10 @@ export function findSecrets(path, content) {
 
   if (KEY_FILE.test(path)) {
     findings.push(`${path}: key or certificate material must not be committed`);
+  }
+
+  if (CREDENTIAL_FILE.test(path)) {
+    findings.push(`${path}: looks like a credential bundle and must not be committed`);
   }
 
   if (PEM_BLOCK.test(content)) {

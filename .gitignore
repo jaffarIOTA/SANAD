@@ -23,3 +23,14 @@ core/**/*.js
 adapters/**/*.js
 config/**/*.js
 test/**/*.js
+
+# Vendor credential bundles.
+#
+# The API Connect toolkit hands you a `credentials.json`; other tools hand you
+# something similarly named. The natural place to drop one is the project root.
+credentials.json
+*-credentials.json
+toolkit-credentials*
+kubeconfig
+*.kubeconfig
+apic-inventory.txt
