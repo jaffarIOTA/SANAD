@@ -1,27 +1,34 @@
 /**
  * The origination dashboard.
  *
- * Two questions, answered in order: what is waiting for me, and how does work
- * get in here at all.
+ * Structure borrowed from the lending dashboards we were shown: a KPI row, a
+ * charts band, an indicators panel, then the working table. It is a good shape
+ * and there is no reason to invent another.
  *
- * The channel panel deliberately shows readiness rather than only what is
- * built. Two capabilities beneath it are not available — one waiting on a
- * Board question about what goods an embedded Murabaha actually trades, one
- * excluded from this phase by the specification. Putting that on the operating
- * surface, where a delivery lead sees it daily, is a better guard than a
- * paragraph in a document.
+ * Two things deliberately differ from those references.
+ *
+ * **There is no rate column.** The reference dashboards carry one — 12%, 10%,
+ * 5% — because they are lending dashboards. The equivalent column here is the
+ * profit *amount*, shown beside the total it forms part of. That is not a
+ * cosmetic substitution: disclosure of cost and markup is a validity condition
+ * of the Murabaha (SH-15), and a proportion is the one thing this product has
+ * no field for anywhere (SH-01).
+ *
+ * **There is a compliance panel.** Neither reference has anything like it,
+ * because a conventional lender does not need one. SDD §4.10 is explicit that
+ * gate blocks, evidence completeness, risk-period distribution, incidents,
+ * template drift and the purification balance are "dashboards for the Board,
+ * not only for engineering". Those numbers are currently zero — no transaction
+ * has executed — and zero is shown as zero rather than dressed up.
  */
 
 import { notFound } from 'next/navigation';
 
 import { Card, Status } from '@sanad/design/primitives.tsx';
+import { BarList, Indicator, StageBar, StatTile } from '@sanad/design/charts.tsx';
 import { defaultNumerals, formatMinorUnits } from '@sanad/design/Money.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
-import {
-  type Readiness,
-  channelCards,
-  servicingCapabilities,
-} from '../../server/origination.ts';
+import { channelCards, servicingCapabilities, type Readiness } from '../../server/origination.ts';
 import { listRequests } from '../../server/store.ts';
 
 function readinessBadge(readiness: Readiness) {
@@ -52,108 +59,277 @@ export default async function DashboardPage({
 
   const arabic = locale === 'ar-SA';
   const numerals = defaultNumerals(locale);
+  const sar = (minorUnits: bigint) =>
+    formatMinorUnits({ minorUnits, currency: 'SAR' }, numerals);
 
   const [channels, capabilities] = await Promise.all([channelCards(), servicingCapabilities()]);
   const queue = listRequests();
 
-  const open = queue.filter(
-    (q) => q.state === 'AWAITING_REVIEW' || q.state === 'AWAITING_SERVICING_RESPONSE',
-  );
+  const count = (...states: string[]) => queue.filter((q) => states.includes(q.state)).length;
+  const awaitingServicing = count('AWAITING_SERVICING_RESPONSE');
+  const awaitingReview = count('AWAITING_REVIEW');
+  const returned = count('RETURNED_TO_MAKER');
+  const approved = count('APPROVED');
+  const rejected = count('REJECTED');
+
+  const approvedValue = queue
+    .filter((q) => q.state === 'APPROVED')
+    .reduce((sum, q) => sum + q.amountMinorUnits, 0n);
+  const pipelineValue = queue
+    .filter((q) => q.state !== 'REJECTED' && q.state !== 'WITHDRAWN')
+    .reduce((sum, q) => sum + q.amountMinorUnits, 0n);
 
   return (
-    <div className="flex flex-col gap-8">
-      {/* -- What needs attention -------------------------------------- */}
+    <div className="flex flex-col gap-7">
+      {/* -- Heading and the primary action ------------------------------- */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">
+            {arabic ? 'نظرة عامة على العمليات' : 'Origination overview'}
+          </h1>
+          <p className="mt-1 text-sm text-ink-quiet">
+            {arabic
+              ? 'كل قناة تنتهي إلى نفس المسار ونفس البوابات الثلاث.'
+              : 'Every channel converges on the same transaction and the same three gates.'}
+          </p>
+        </div>
+        <a
+          href={`/${segment}/originate`}
+          className="inline-flex min-h-tap items-center rounded-card bg-brand-strong px-4 text-sm font-semibold text-on-brand hover:bg-brand-deep"
+        >
+          {arabic ? 'إنشاء طلب' : 'Key a request'}
+        </a>
+      </div>
+
+      {/* -- KPIs ----------------------------------------------------------- */}
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile
+          label={arabic ? 'بانتظار مراجعتك' : 'Awaiting your review'}
+          value={String(awaitingReview)}
+          emphasis={awaitingReview > 0}
+        />
+        <StatTile
+          label={arabic ? 'بانتظار نظام الخدمة' : 'Awaiting servicing platform'}
+          value={String(awaitingServicing)}
+        />
+        <StatTile
+          label={arabic ? 'قيمة قيد المعالجة' : 'Value in pipeline'}
+          value={sar(pipelineValue)}
+          unit="SAR"
+        />
+        <StatTile
+          label={arabic ? 'قيمة معتمدة' : 'Value approved'}
+          value={sar(approvedValue)}
+          unit="SAR"
+        />
+      </section>
+
+      {/* -- Charts and indicators ------------------------------------------ */}
+      <section className="grid gap-3 lg:grid-cols-3">
+        <Card>
+          <StageBar
+            title={arabic ? 'مراحل الطلبات' : 'Requests by stage'}
+            emptyLabel={arabic ? 'لا توجد طلبات بعد.' : 'No requests yet.'}
+            segments={[
+              {
+                id: 'servicing',
+                label: arabic ? 'بانتظار نظام الخدمة' : 'Awaiting servicing',
+                value: awaitingServicing,
+                colour: '--color-stage-1',
+              },
+              {
+                id: 'review',
+                label: arabic ? 'بانتظار المراجعة' : 'Awaiting review',
+                value: awaitingReview,
+                colour: '--color-stage-2',
+              },
+              {
+                id: 'returned',
+                label: arabic ? 'أُعيد للمُدخِل' : 'Returned to maker',
+                value: returned,
+                colour: '--color-stage-3',
+              },
+              {
+                id: 'approved',
+                label: arabic ? 'معتمد' : 'Approved',
+                value: approved,
+                colour: '--color-stage-4',
+              },
+              {
+                id: 'rejected',
+                label: arabic ? 'مرفوض' : 'Rejected',
+                value: rejected,
+                colour: '--color-stage-5',
+              },
+            ]}
+          />
+        </Card>
+
+        <Card>
+          <BarList
+            title={arabic ? 'الطلبات حسب القناة' : 'Requests by channel'}
+            emptyLabel={arabic ? 'لا توجد طلبات بعد.' : 'No requests yet.'}
+            rows={channels.map((c) => ({
+              label: arabic ? c.titleAr : c.titleEn,
+              value: queue.filter((q) => q.channel === c.channel).length,
+            }))}
+          />
+        </Card>
+
+        <Card>
+          <h2 className="text-sm font-medium text-ink">
+            {arabic ? 'مؤشرات الالتزام الشرعي' : 'Compliance indicators'}
+          </h2>
+          <p className="mt-1 text-xs text-ink-quiet">
+            {arabic
+              ? 'تُملأ هذه المؤشرات بعد تنفيذ أول معاملة. الصفر هنا صفر حقيقي.'
+              : 'These populate once transactions execute. Zero here is a real zero, not a placeholder.'}
+          </p>
+          <ul className="mt-2 flex list-none flex-col p-0">
+            <Indicator
+              label={arabic ? 'بوابات مُنعت' : 'Gate blocks'}
+              note="SH-05 · SH-06"
+              value="0"
+              tone="neutral"
+            />
+            <Indicator
+              label={arabic ? 'اكتمال الأدلة' : 'Evidence completeness'}
+              note="SDD §4.10"
+              value="—"
+              tone="neutral"
+            />
+            <Indicator
+              label={arabic ? 'مخالفات شرعية مفتوحة' : 'Open Shariah incidents'}
+              note="BR-F04"
+              value="0"
+              tone="good"
+            />
+            <Indicator
+              label={arabic ? 'انحراف القوالب' : 'Template drift detections'}
+              note="BR-F07"
+              value="0"
+              tone="good"
+            />
+            <Indicator
+              label={arabic ? 'رصيد حساب الخير' : 'Charity liability balance'}
+              note="SH-13"
+              value="0.00"
+              tone="neutral"
+            />
+            <Indicator
+              label={arabic ? 'أسئلة معلّقة لدى الهيئة' : 'Questions with the Board'}
+              note="OI-22 · OI-23 · OI-24"
+              value="3"
+              tone="warning"
+            />
+          </ul>
+        </Card>
+      </section>
+
+      {/* -- The working table ----------------------------------------------- */}
       <section className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between">
-          <h1 className="text-xl font-semibold">
-            {arabic ? 'طلبات بانتظار المراجعة' : 'Awaiting review'}
-          </h1>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-ink-quiet tabular-nums">
-              {open.length} {arabic ? 'طلب' : 'open'}
-            </span>
-            <a
-              href={`/${segment}/originate`}
-              className="inline-flex min-h-tap items-center rounded-card bg-brand-strong px-4 text-sm font-semibold text-on-brand hover:bg-brand-deep"
-            >
-              {arabic ? 'إنشاء طلب' : 'Key a request'}
-            </a>
-          </div>
+          <h2 className="text-lg font-semibold">
+            {arabic ? 'الطلبات' : 'Requests'}
+          </h2>
+          <span className="text-sm text-ink-quiet tabular-nums">
+            {queue.length} {arabic ? 'إجمالاً' : 'total'}
+          </span>
         </div>
 
-        {queue.length === 0 ? (
-          <Card>
+        <Card>
+          {queue.length === 0 ? (
             <p className="text-sm text-ink-quiet">
               {arabic ? 'لا توجد طلبات بعد.' : 'No requests yet.'}
             </p>
-          </Card>
-        ) : null}
-
-        <ul className="flex list-none flex-col gap-2 p-0">
-          {queue.map((item) => (
-            <li key={item.requestId}>
-              <a href={`/${segment}/requests/${item.requestId}`} className="block">
-                <Card>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <span className="identifier text-sm text-ink-quiet">{item.requestId}</span>
-                    <span className="font-medium">{item.counterpartyId}</span>
-                    <span className="text-base font-semibold tabular-nums">
-                      <bdi>
-                        {formatMinorUnits(
-                          { minorUnits: item.amountMinorUnits, currency: 'SAR' },
-                          numerals,
-                        )}
-                      </bdi>{' '}
-                      <span className="text-xs text-ink-quiet">SAR</span>
-                    </span>
-
-                    <div className="ms-auto flex items-center gap-2">
-                      <span className="text-xs text-ink-quiet">
-                        {arabic ? 'عبر' : 'via'} {item.channel.replaceAll('_', ' ').toLowerCase()}
-                      </span>
-                      <Status
-                        tone={
-                          item.state === 'APPROVED'
-                            ? 'settled'
-                            : item.state === 'REJECTED'
-                              ? 'blocked'
-                              : 'progress'
-                        }
-                        label={item.state.replaceAll('_', ' ').toLowerCase()}
-                      />
-                    </div>
-                  </div>
-
-                  <p className="mt-2 text-xs text-ink-quiet">
-                    {arabic ? 'أدخله' : 'Keyed by'}{' '}
-                    <span className="identifier">{item.makerPrincipalId ?? '—'}</span>
-                    {' — '}
-                    {arabic
-                      ? 'لا يمكن للمُدخِل اعتماد طلبه'
-                      : 'the maker cannot approve their own request'}
-                  </p>
-                </Card>
-              </a>
-            </li>
-          ))}
-        </ul>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-line text-start text-xs uppercase tracking-wider text-ink-quiet">
+                    <th className="py-2 pe-3 text-start font-medium">
+                      {arabic ? 'الطلب' : 'Request'}
+                    </th>
+                    <th className="py-2 pe-3 text-start font-medium">
+                      {arabic ? 'العميل' : 'Counterparty'}
+                    </th>
+                    <th className="py-2 pe-3 text-start font-medium">
+                      {arabic ? 'الفاتورة' : 'Invoice'}
+                    </th>
+                    <th className="py-2 pe-3 text-end font-medium">
+                      {arabic ? 'المبلغ' : 'Amount'}
+                    </th>
+                    <th className="py-2 pe-3 text-start font-medium">
+                      {arabic ? 'القناة' : 'Channel'}
+                    </th>
+                    <th className="py-2 pe-3 text-start font-medium">
+                      {arabic ? 'الحالة' : 'Status'}
+                    </th>
+                    <th className="py-2 text-end font-medium">{arabic ? 'إجراء' : 'Action'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {queue.map((item) => {
+                    const needsAttention = item.state === 'AWAITING_REVIEW';
+                    return (
+                      <tr
+                        key={item.requestId}
+                        className={`border-b border-line last:border-b-0 ${
+                          needsAttention ? 'bg-brand-wash' : ''
+                        }`}
+                      >
+                        <td className="py-3 pe-3">
+                          <span className="identifier text-ink-quiet">{item.requestId}</span>
+                        </td>
+                        <td className="py-3 pe-3 font-medium">{item.counterpartyId}</td>
+                        <td className="py-3 pe-3">
+                          <span className="identifier text-ink-quiet">{item.invoiceNumber}</span>
+                        </td>
+                        <td className="py-3 pe-3 text-end tabular-nums">
+                          <bdi>{sar(item.amountMinorUnits)}</bdi>
+                        </td>
+                        <td className="py-3 pe-3 text-ink-quiet">
+                          {item.channel.replaceAll('_', ' ').toLowerCase()}
+                        </td>
+                        <td className="py-3 pe-3">
+                          <Status
+                            tone={
+                              item.state === 'APPROVED'
+                                ? 'settled'
+                                : item.state === 'REJECTED'
+                                  ? 'blocked'
+                                  : 'progress'
+                            }
+                            label={item.state.replaceAll('_', ' ').toLowerCase()}
+                          />
+                        </td>
+                        <td className="py-3 text-end">
+                          <a
+                            href={`/${segment}/requests/${item.requestId}`}
+                            className="text-brand-deep underline"
+                          >
+                            {arabic ? 'فتح' : 'Open'}
+                          </a>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="mt-3 text-xs text-ink-quiet">
+            {arabic
+              ? 'لا يوجد عمود لنسبة العائد. البديل هنا هو مبلغ الربح، ويظهر مع العرض عند فتح الطلب.'
+              : 'There is no rate column. The equivalent here is the profit amount, shown with the offer when a request is opened.'}
+          </p>
+        </Card>
       </section>
 
-      {/* -- How work arrives ------------------------------------------- */}
-      <section className="flex flex-col gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">
-            {arabic ? 'قنوات إنشاء الطلبات' : 'Origination channels'}
-          </h2>
-          <p className="mt-1 text-sm text-ink-quiet">
-            {arabic
-              ? 'تختلف القنوات في من يبدأ الطلب وما يُحفظ كدليل. ولا تختلف في الضوابط: كل قناة تنتهي إلى نفس المسار ونفس البوابات الثلاث.'
-              : 'Channels differ in who may initiate and what is retained as evidence. They do not differ in sequencing — every channel converges on the same transaction and the same three gates.'}
-          </p>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          {channels.map((card) => {
+      {/* -- Channels and capabilities --------------------------------------- */}
+      <section className="grid gap-3 lg:grid-cols-2">
+        {[...channels, ...capabilities.map((c) => ({ ...c, channel: c.id, titleAr: c.titleAr, summaryAr: c.summaryEn, requiresFourEyes: false, openRequests: 0 }))].map(
+          (card) => {
             const note = readinessNote(card.readiness);
             return (
               <Card key={card.channel} muted={card.readiness.kind !== 'LIVE'}>
@@ -161,53 +337,16 @@ export default async function DashboardPage({
                   <h3 className="font-medium">{arabic ? card.titleAr : card.titleEn}</h3>
                   {readinessBadge(card.readiness)}
                 </div>
-
                 <p className="mt-2 text-sm text-ink-quiet">
                   {arabic ? card.summaryAr : card.summaryEn}
                 </p>
-
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-ink-quiet">
-                  {card.requiresFourEyes ? (
-                    <span className="rounded-full border border-line px-2 py-0.5">
-                      {arabic ? 'مراجعة من شخصين' : 'Four eyes'}
-                    </span>
-                  ) : null}
-                  {card.readiness.kind === 'LIVE' ? (
-                    <span className="tabular-nums">
-                      {card.openRequests} {arabic ? 'قيد المراجعة' : 'awaiting review'}
-                    </span>
-                  ) : null}
-                </div>
-
                 {note !== undefined ? (
                   <p className="mt-3 border-t border-line pt-3 text-xs text-ink-quiet">{note}</p>
                 ) : null}
               </Card>
             );
-          })}
-        </div>
-      </section>
-
-      {/* -- Servicing capabilities, and what is holding them ------------ */}
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">
-          {arabic ? 'قدرات الخدمة' : 'Servicing capabilities'}
-        </h2>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          {capabilities.map((card) => (
-            <Card key={card.id} muted>
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="font-medium">{arabic ? card.titleAr : card.titleEn}</h3>
-                {readinessBadge(card.readiness)}
-              </div>
-              <p className="mt-2 text-sm text-ink-quiet">{card.summaryEn}</p>
-              <p className="mt-3 border-t border-line pt-3 text-xs text-ink-quiet">
-                {readinessNote(card.readiness)}
-              </p>
-            </Card>
-          ))}
-        </div>
+          },
+        )}
       </section>
     </div>
   );

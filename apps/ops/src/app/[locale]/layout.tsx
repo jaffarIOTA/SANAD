@@ -18,6 +18,7 @@ import {
   localeFromSegment,
   type LocaleSegment,
 } from '@sanad/i18n/strings.ts';
+import { SideNav } from './SideNav.tsx';
 import '../globals.css';
 
 export const metadata = {
@@ -40,22 +41,26 @@ export default async function OpsLayout({
   const locale = localeFromSegment(segment);
   if (locale === undefined) notFound();
 
+  const arabic = locale === 'ar-SA';
+
   return (
     <html lang={htmlLang(locale)} dir={isRtl(locale) ? 'rtl' : 'ltr'}>
       <body className="min-h-dvh bg-sunken text-ink antialiased">
         <header className="border-b border-line bg-surface">
-          <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-3">
+          <div className="flex items-center gap-3 px-5 py-3">
             <BrandMark size={26} />
-            <span className="text-base font-semibold">Sanad</span>
-            <span className="text-sm text-ink-quiet">
-              {locale === 'ar-SA' ? 'العمليات' : 'Operations'}
-            </span>
+            <span className="text-base font-semibold tracking-[0.15em]">SANAD</span>
+            <span className="text-sm text-ink-quiet">{arabic ? 'العمليات' : 'Operations'}</span>
             <div className="ms-auto">
               <LanguageSwitch current={segment as LocaleSegment} />
             </div>
           </div>
         </header>
-        <main className="mx-auto max-w-5xl px-5 py-6">{children}</main>
+
+        <div className="flex min-h-[calc(100dvh-3.5rem)]">
+          <SideNav segment={segment} arabic={arabic} current={`/${segment}`} />
+          <main className="min-w-0 flex-1 px-6 py-6">{children}</main>
+        </div>
       </body>
     </html>
   );

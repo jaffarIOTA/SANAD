@@ -27,11 +27,25 @@ import {
 /**
  * The Sanad mark.
  *
- * Hand-traced from the supplied raster at low fidelity — the curve of the
- * ribbon is an approximation. Replace with the original vector before anything
- * ships; a brand mark redrawn by eye is close, not right.
+ * Two interlocking angular hooks around a square void, reading as an S.
+ * Traced from the supplied raster: the geometry is straight edges and
+ * 45-degree diagonals, so this is close — but it is still a trace, and the
+ * original vector should replace it before anything is printed or sent
+ * outside the team.
+ *
+ * Drawn in `currentColor` rather than a fixed fill, so the same mark serves
+ * the orange and the mono lockups without a second copy.
  */
-export function BrandMark({ size = 32 }: { readonly size?: number }): ReactElement {
+export function BrandMark({
+  size = 32,
+  tone = 'brand',
+}: {
+  readonly size?: number;
+  readonly tone?: 'brand' | 'ink' | 'inherit';
+}): ReactElement {
+  const colour =
+    tone === 'brand' ? 'var(--color-brand)' : tone === 'ink' ? 'var(--color-ink)' : 'currentColor';
+
   return (
     <svg
       width={size}
@@ -39,15 +53,43 @@ export function BrandMark({ size = 32 }: { readonly size?: number }): ReactEleme
       viewBox="0 0 100 100"
       role="img"
       aria-label="Sanad"
-      data-placeholder="awaiting original vector"
+      fill={colour}
+      data-placeholder="traced from raster; awaiting original vector"
     >
-      <path d="M50 8 h42 v42 a42 42 0 0 1 -42 42 a42 42 0 0 1 0 -84 z" fill="var(--color-brand)" />
-      <path d="M50 8 h42 v42 h-42 a21 21 0 0 1 0 -42 z" fill="var(--color-cream)" />
-      <path
-        d="M64 22 q-24 4 -18 22 q6 16 12 24 q6 12 -12 16 h22 q18 -6 10 -24 q-6 -14 -12 -22 q-6 -10 12 -16 z"
-        fill="var(--color-taupe)"
-      />
+      {/* Upper hook: top bar, chamfered at the top right, turning down the left. */}
+      <path d="M6 6 H70 L94 30 H64 V36 H36 V64 H6 Z" />
+      {/* Lower hook: the same form rotated about the centre. */}
+      <path d="M94 94 H30 L6 70 H36 V64 H64 V36 H94 Z" />
     </svg>
+  );
+}
+
+/**
+ * The full lockup: mark, wordmark, and the endorsement rule beneath it.
+ *
+ * Used where the product introduces itself — a sign-in screen, an exported
+ * audit pack cover. The header uses the mark alone, because a wordmark
+ * repeated on every screen is noise rather than branding.
+ */
+export function BrandLockup({
+  size = 96,
+  tone = 'brand',
+}: {
+  readonly size?: number;
+  readonly tone?: 'brand' | 'ink';
+}): ReactElement {
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <BrandMark size={size} tone={tone} />
+      <div className="flex flex-col items-center gap-1">
+        <span className="text-2xl font-light tracking-[0.35em] text-ink-quiet">SANAD</span>
+        <span className="flex items-center gap-3 text-[0.625rem] tracking-[0.2em] text-ink-quiet">
+          <span aria-hidden className="h-px w-8 bg-line-strong" />
+          AN IOTA PRODUCT
+          <span aria-hidden className="h-px w-8 bg-line-strong" />
+        </span>
+      </div>
+    </div>
   );
 }
 

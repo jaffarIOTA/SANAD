@@ -17,10 +17,23 @@ import { notFound } from 'next/navigation';
 
 import { Card, ControlRejection } from '@sanad/design/primitives.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
-import {
-  CHANNEL_POLICIES,
-  ORIGINATION_CHANNELS,
-} from '@sanad/core/origination/channel.ts';
+import { CHANNEL_POLICIES } from '@sanad/core/origination/channel.ts';
+
+/**
+ * The channels an operator can actually key.
+ *
+ * `PARTNER_API` and `COUNTERPARTY_SELF` are absent on purpose. Each channel
+ * declares the identification it accepts, and neither of those accepts a staff
+ * principal — a partner system authenticates as itself, a counterparty as a
+ * verified signatory. Offering them in this dropdown would let an operator
+ * choose a channel the domain then refuses, which is a worse experience than
+ * not offering it and tells them nothing about why.
+ *
+ * `EMBEDDED_AGGREGATOR` stays, because operations keying a nomination on an
+ * aggregator's behalf is a real fallback — the identification recorded is
+ * still the aggregator's, with the merchant's mandate.
+ */
+const KEYABLE_CHANNELS = ['MAKER_CHECKER', 'EMBEDDED_AGGREGATOR'] as const;
 
 import { keyAndSubmitAction } from '../../../server/actions.ts';
 
@@ -56,6 +69,11 @@ export default async function OriginatePage({
             ? 'يبدأ كل طلب من صفقة حقيقية. الإرسال لا ينشئ تمويلًا — بل طلبًا يراجعه شخص آخر.'
             : 'Every request starts from a real trade. Submitting does not create credit — it creates a request that a second person reviews.'}
         </p>
+        <p className="mt-1 text-xs text-ink-quiet">
+          {arabic
+            ? 'طلبات الشركاء تصل عبر الواجهة البرمجية، وطلبات العملاء عبر بوابتهم. لا تُدخَل من هنا.'
+            : 'Partner requests arrive over the API and counterparty requests through their own portal. Neither is keyed here.'}
+        </p>
       </div>
 
       {control !== undefined ? (
@@ -75,7 +93,7 @@ export default async function OriginatePage({
               {arabic ? 'القناة' : 'Channel'}
             </label>
             <select id="channel" name="channel" className={INPUT} defaultValue="MAKER_CHECKER">
-              {ORIGINATION_CHANNELS.map((channel) => (
+              {KEYABLE_CHANNELS.map((channel) => (
                 <option key={channel} value={channel}>
                   {channel.replaceAll('_', ' ').toLowerCase()}
                   {CHANNEL_POLICIES[channel].requiresServicingDecision

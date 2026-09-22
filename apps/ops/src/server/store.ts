@@ -48,12 +48,40 @@ function developmentAttestation(): TsaInstant {
   });
 }
 
-const REQUESTS = new Map<string, OriginationRequest>();
-let sequence = 0;
+/**
+ * Held on `globalThis`, not in a module-level `const`.
+ *
+ * A server action and the page that reads its result are compiled into
+ * separate module graphs, and a module-level Map is therefore instantiated
+ * more than once — the write lands in one copy and the read misses it. Hanging
+ * the state off the global keeps one copy per process, and survives hot reload
+ * in development too.
+ *
+ * This is a symptom of the store being in memory at all. It goes away with the
+ * database (ADR 0001), and so does this comment.
+ */
+interface DevelopmentState {
+  readonly requests: Map<string, OriginationRequest>;
+  readonly invoiceNumbers: Map<string, string>;
+  sequence: number;
+  seeded: boolean;
+}
+
+const GLOBAL_KEY = Symbol.for('sanad.ops.developmentStore');
+const globalScope = globalThis as unknown as Record<symbol, DevelopmentState | undefined>;
+
+const state: DevelopmentState = (globalScope[GLOBAL_KEY] ??= {
+  requests: new Map<string, OriginationRequest>(),
+  invoiceNumbers: new Map<string, string>(),
+  sequence: 0,
+  seeded: false,
+});
+
+const REQUESTS = state.requests;
 
 function nextRequestId(): string {
-  sequence += 1;
-  return `req_${String(sequence).padStart(5, '0')}`;
+  state.sequence += 1;
+  return `req_${String(state.sequence).padStart(5, '0')}`;
 }
 
 export interface KeyRequestInput {
@@ -88,7 +116,7 @@ export interface RequestRow {
   readonly contraryJustification?: string;
 }
 
-const INVOICE_NUMBERS = new Map<string, string>();
+const INVOICE_NUMBERS = state.invoiceNumbers;
 
 export function toRow(requestId: string, request: OriginationRequest): RequestRow {
   const core = request.core;
@@ -263,7 +291,8 @@ function notInState(requestId: string, expected: string): Result<RequestRow> {
 
 const MAKER_ONE: Principal = { principalId: 'stf-maker-01', tenantId: 'bank-a' };
 
-if (REQUESTS.size === 0) {
+if (!state.seeded) {
+  state.seeded = true;
   const seeded = keyRequest({
     tenantId: 'bank-a',
     programmeId: 'prg-0001',

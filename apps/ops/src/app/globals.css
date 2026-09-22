@@ -17,24 +17,34 @@
 
 @theme {
   /* -- Brand, from the mark ------------------------------------------------ */
-  --color-brand: #e96c33; /* decorative and large text only: 3.1:1 on white */
-  --color-brand-strong: #b85320; /* interactive; white text on this is 4.9:1 */
-  --color-brand-deep: #98421a; /* pressed and hover */
-  --color-brand-wash: #fdf1ea; /* tinted surface */
-  --color-cream: #f6f0e7;
-  --color-taupe: #c9c0b3;
-  --color-taupe-deep: #8a8177;
+  --color-brand: #f47b20; /* the mark. 2.7:1 on white — decorative and large only */
+  --color-brand-strong: #b05512; /* interactive; white text on this is 5.0:1 */
+  --color-brand-deep: #8f440d; /* pressed and hover */
+  --color-brand-wash: #fef2e8; /* tinted surface */
+  /* The mono lockup's grey, for print and for single-colour contexts. */
+  --color-mark-mono: #4d4d4d;
+
+  /* -- Ordinal ramp for charts --------------------------------------------
+     One hue, monotone lightness, the step nearest the surface clearing 2:1.
+     Validated against this surface rather than assumed — five steps, light
+     mode on #ffffff. Not a categorical palette: these encode stages of one
+     thing, so they must never be used to distinguish unrelated series. */
+  --color-stage-1: #f0a05e;
+  --color-stage-2: #e88427;
+  --color-stage-3: #c86a10;
+  --color-stage-4: #a65310;
+  --color-stage-5: #83400c;
 
   /* -- Surface ------------------------------------------------------------- */
   --color-page: #ffffff;
   --color-surface: #ffffff;
-  --color-sunken: #faf8f5;
-  --color-line: #e5e0d8;
-  --color-line-strong: #c2bab0;
+  --color-sunken: #f8f7f5;
+  --color-line: #e4e2df;
+  --color-line-strong: #bdbab6;
 
   /* -- Text ---------------------------------------------------------------- */
-  --color-ink: #1a1614;
-  --color-ink-quiet: #5e574f;
+  --color-ink: #1c1b1a;
+  --color-ink-quiet: #58595b; /* the wordmark grey */
   --color-on-brand: #ffffff;
 
   /* -- Meaning. Never carried by colour alone; every status has a label too. */
@@ -67,11 +77,17 @@
     --color-line-strong: #4a3f37;
     --color-ink: #f4efe9;
     --color-ink-quiet: #b3a99e;
-    --color-brand: #f2884f;
-    --color-brand-strong: #f2884f;
-    --color-brand-deep: #ffa472;
-    --color-brand-wash: #3a2115;
-    --color-cream: #2a231e;
+    --color-brand: #ff9448;
+    --color-brand-strong: #ff9448;
+    --color-brand-deep: #ffb078;
+    --color-brand-wash: #3a2313;
+    --color-mark-mono: #b8b6b3;
+    /* Re-stepped for the dark surface, not flipped. */
+    --color-stage-1: #8f4a10;
+    --color-stage-2: #b05f14;
+    --color-stage-3: #d3791b;
+    --color-stage-4: #ee9436;
+    --color-stage-5: #ffb877;
     --color-positive: #55b586;
     --color-attention: #d9a441;
     --color-blocked: #e8796f;
@@ -87,11 +103,16 @@
   --color-line-strong: #4a3f37;
   --color-ink: #f4efe9;
   --color-ink-quiet: #b3a99e;
-  --color-brand: #f2884f;
-  --color-brand-strong: #f2884f;
-  --color-brand-deep: #ffa472;
-  --color-brand-wash: #3a2115;
-  --color-cream: #2a231e;
+  --color-brand: #ff9448;
+  --color-brand-strong: #ff9448;
+  --color-brand-deep: #ffb078;
+  --color-brand-wash: #3a2313;
+  --color-mark-mono: #b8b6b3;
+  --color-stage-1: #8f4a10;
+  --color-stage-2: #b05f14;
+  --color-stage-3: #d3791b;
+  --color-stage-4: #ee9436;
+  --color-stage-5: #ffb877;
   --color-positive: #55b586;
   --color-attention: #d9a441;
   --color-blocked: #e8796f;
