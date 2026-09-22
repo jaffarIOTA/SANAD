@@ -62,6 +62,18 @@ export type InitiatorIdentification =
 export interface ChannelPolicy {
   readonly channel: OriginationChannel;
   /**
+   * Whether the servicing platform is consulted before a human reviews the
+   * request.
+   *
+   * Two stages, in order: the servicing platform responds on limits, exposure
+   * and account standing, and the institution then decides with that answer in
+   * front of it. The servicing response is an input to the decision, never the
+   * decision itself — and emphatically not a sequencing gate. A platform that
+   * says yes has told us about credit capacity; it has said nothing about
+   * whether goods were bought, possessed and held at risk.
+   */
+  readonly requiresServicingDecision: boolean;
+  /**
    * Whether a second, different principal must approve before the request
    * becomes a transaction. This governs the *request*, never a gate.
    */
@@ -79,24 +91,30 @@ export interface ChannelPolicy {
 export const CHANNEL_POLICIES: Readonly<Record<OriginationChannel, ChannelPolicy>> = {
   MAKER_CHECKER: {
     channel: 'MAKER_CHECKER',
+    requiresServicingDecision: false,
     requiresFourEyes: true,
     acceptableIdentification: ['STAFF_PRINCIPAL'],
     requiresMerchantMandate: false,
   },
   COUNTERPARTY_SELF: {
     channel: 'COUNTERPARTY_SELF',
+    requiresServicingDecision: false,
     requiresFourEyes: false,
     acceptableIdentification: ['VERIFIED_SIGNATORY'],
     requiresMerchantMandate: false,
   },
   PARTNER_API: {
     channel: 'PARTNER_API',
+    // An external system asked. The institution's own platform answers before
+    // anyone signs anything off.
+    requiresServicingDecision: true,
     requiresFourEyes: false,
     acceptableIdentification: ['PARTNER_SYSTEM'],
     requiresMerchantMandate: false,
   },
   EMBEDDED_AGGREGATOR: {
     channel: 'EMBEDDED_AGGREGATOR',
+    requiresServicingDecision: true,
     // Someone who is not the borrower is asking for credit in the borrower's
     // name. A second pair of eyes is the least of it.
     requiresFourEyes: true,

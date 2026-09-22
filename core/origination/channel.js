@@ -8,24 +8,30 @@ const ORIGINATION_CHANNELS = [
 const CHANNEL_POLICIES = {
   MAKER_CHECKER: {
     channel: "MAKER_CHECKER",
+    requiresServicingDecision: false,
     requiresFourEyes: true,
     acceptableIdentification: ["STAFF_PRINCIPAL"],
     requiresMerchantMandate: false
   },
   COUNTERPARTY_SELF: {
     channel: "COUNTERPARTY_SELF",
+    requiresServicingDecision: false,
     requiresFourEyes: false,
     acceptableIdentification: ["VERIFIED_SIGNATORY"],
     requiresMerchantMandate: false
   },
   PARTNER_API: {
     channel: "PARTNER_API",
+    // An external system asked. The institution's own platform answers before
+    // anyone signs anything off.
+    requiresServicingDecision: true,
     requiresFourEyes: false,
     acceptableIdentification: ["PARTNER_SYSTEM"],
     requiresMerchantMandate: false
   },
   EMBEDDED_AGGREGATOR: {
     channel: "EMBEDDED_AGGREGATOR",
+    requiresServicingDecision: true,
     // Someone who is not the borrower is asking for credit in the borrower's
     // name. A second pair of eyes is the least of it.
     requiresFourEyes: true,

@@ -19,7 +19,7 @@ import {
   ORIGINATION_CHANNELS,
   type OriginationChannel,
 } from '@sanad/core/origination/channel.ts';
-import type { RequestState } from '@sanad/core/origination/request.ts';
+import { listRequests } from './store.ts';
 
 export type Readiness =
   | { readonly kind: 'LIVE' }
@@ -39,49 +39,6 @@ export interface ChannelCard {
   readonly openRequests: number;
 }
 
-export interface QueueItem {
-  readonly requestId: string;
-  readonly channel: OriginationChannel;
-  readonly counterpartyEn: string;
-  readonly counterpartyAr: string;
-  readonly amountMinorUnits: bigint;
-  readonly state: RequestState;
-  readonly makerPrincipalId: string;
-  readonly waitingHours: number;
-}
-
-const QUEUE: readonly QueueItem[] = [
-  {
-    requestId: 'req_01J2A7',
-    channel: 'MAKER_CHECKER',
-    counterpartyEn: 'Al-Ufuq Materials Company Limited',
-    counterpartyAr: 'شركة الأفق للمواد المحدودة',
-    amountMinorUnits: 18_500_000n,
-    state: 'AWAITING_REVIEW',
-    makerPrincipalId: 'stf-maker-01',
-    waitingHours: 2,
-  },
-  {
-    requestId: 'req_01J2A9',
-    channel: 'PARTNER_API',
-    counterpartyEn: 'Modern Construction Establishment',
-    counterpartyAr: 'مؤسسة البناء الحديث',
-    amountMinorUnits: 7_400_000n,
-    state: 'AWAITING_REVIEW',
-    makerPrincipalId: 'ptr-erp-north',
-    waitingHours: 6,
-  },
-  {
-    requestId: 'req_01J2B1',
-    channel: 'MAKER_CHECKER',
-    counterpartyEn: 'Al-Nahda Trading Company',
-    counterpartyAr: 'شركة النهضة التجارية',
-    amountMinorUnits: 3_150_000n,
-    state: 'RETURNED_TO_MAKER',
-    makerPrincipalId: 'stf-maker-02',
-    waitingHours: 26,
-  },
-];
 
 const COPY: Readonly<
   Record<
@@ -128,15 +85,12 @@ export async function channelCards(): Promise<readonly ChannelCard[]> {
     channel,
     ...COPY[channel],
     requiresFourEyes: CHANNEL_POLICIES[channel].requiresFourEyes,
-    openRequests: QUEUE.filter(
+    openRequests: listRequests().filter(
       (q) => q.channel === channel && q.state === 'AWAITING_REVIEW',
     ).length,
   }));
 }
 
-export async function reviewQueue(): Promise<readonly QueueItem[]> {
-  return [...QUEUE].sort((a, b) => b.waitingHours - a.waitingHours);
-}
 
 // -- Capabilities that are not intake channels --------------------------------
 

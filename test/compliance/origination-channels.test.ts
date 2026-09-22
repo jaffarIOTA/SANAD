@@ -23,11 +23,14 @@ import {
   verifyIdentification,
 } from '../../core/origination/channel.ts';
 import {
+  type AwaitingReview,
   type OriginationRequestCore,
   type Principal,
+  type ServicingOutcome,
   approve,
   openTransaction,
   raise,
+  recordServicingOutcome,
   rejectRequest,
   returnToMaker,
   submitForReview,
@@ -75,10 +78,31 @@ function requestCore(channel: OriginationChannel): OriginationRequestCore {
   };
 }
 
-function approvedRequest(channel: OriginationChannel) {
+const SERVICING_APPROVED: ServicingOutcome = {
+  decision: 'APPROVED',
+  reference: 'svc-0001',
+  respondedAt: at(1_000_070),
+};
+
+/**
+ * Advance a request to the point a human can act on it, taking the servicing
+ * stage where the channel requires one.
+ */
+function readyForReview(
+  channel: OriginationChannel,
+  outcome: ServicingOutcome = SERVICING_APPROVED,
+): AwaitingReview {
   const keyed = expectOk(raise({ core: requestCore(channel), maker: MAKER }));
   const submitted = expectOk(submitForReview(keyed, at(1_000_050)));
-  return expectOk(approve(submitted, CHECKER, at(1_000_100)));
+
+  if (submitted.state === 'AWAITING_SERVICING_RESPONSE') {
+    return expectOk(recordServicingOutcome(submitted, outcome));
+  }
+  return submitted;
+}
+
+function approvedRequest(channel: OriginationChannel) {
+  return expectOk(approve(readyForReview(channel), CHECKER, at(1_000_100)));
 }
 
 describe.each(ORIGINATION_CHANNELS)('adversarial: origination via %s', (channel) => {
@@ -159,10 +183,7 @@ describe.each(ORIGINATION_CHANNELS)('adversarial: origination via %s', (channel)
 
 describe('adversarial: four eyes', () => {
   it('refuses the maker approving their own request', () => {
-    const keyed = expectOk(raise({ core: requestCore('MAKER_CHECKER'), maker: MAKER }));
-    const submitted = expectOk(submitForReview(keyed, at(1_000_050)));
-
-    const result = approve(submitted, MAKER, at(1_000_100));
+    const result = approve(readyForReview('MAKER_CHECKER'), MAKER, at(1_000_100));
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -170,11 +191,10 @@ describe('adversarial: four eyes', () => {
   });
 
   it('refuses it on the embedded channel too, where someone else is borrowing', () => {
-    const keyed = expectOk(raise({ core: requestCore('EMBEDDED_AGGREGATOR'), maker: MAKER }));
-    const submitted = expectOk(submitForReview(keyed, at(1_000_050)));
+    const ready = readyForReview('EMBEDDED_AGGREGATOR');
 
-    expect(approve(submitted, MAKER, at(1_000_100)).ok).toBe(false);
-    expect(approve(submitted, CHECKER, at(1_000_100)).ok).toBe(true);
+    expect(approve(ready, MAKER, at(1_000_100)).ok).toBe(false);
+    expect(approve(ready, CHECKER, at(1_000_100)).ok).toBe(true);
   });
 
   it('requires a mandate from the party who will owe the money', () => {
@@ -192,19 +212,17 @@ describe('adversarial: four eyes', () => {
   });
 
   it('refuses a return to maker with no explanation', () => {
-    const keyed = expectOk(raise({ core: requestCore('MAKER_CHECKER'), maker: MAKER }));
-    const submitted = expectOk(submitForReview(keyed, at(1_000_050)));
+    const ready = readyForReview('MAKER_CHECKER');
 
-    expect(returnToMaker(submitted, CHECKER, '  ').ok).toBe(false);
-    expect(returnToMaker(submitted, CHECKER, 'Delivery note is illegible').ok).toBe(true);
+    expect(returnToMaker(ready, CHECKER, '  ').ok).toBe(false);
+    expect(returnToMaker(ready, CHECKER, 'Delivery note is illegible').ok).toBe(true);
   });
 
   it('refuses a rejection with no reason code', () => {
-    const keyed = expectOk(raise({ core: requestCore('MAKER_CHECKER'), maker: MAKER }));
-    const submitted = expectOk(submitForReview(keyed, at(1_000_050)));
+    const ready = readyForReview('MAKER_CHECKER');
 
-    expect(rejectRequest(submitted, CHECKER, '').ok).toBe(false);
-    expect(rejectRequest(submitted, CHECKER, 'R_GOODS_NOT_ELIGIBLE').ok).toBe(true);
+    expect(rejectRequest(ready, CHECKER, '').ok).toBe(false);
+    expect(rejectRequest(ready, CHECKER, 'R_GOODS_NOT_ELIGIBLE').ok).toBe(true);
   });
 });
 
@@ -228,5 +246,117 @@ describe('the channel changes the door, never the gates', () => {
     for (const transition of SEQUENCING_TRANSITIONS) {
       expect(Object.keys(module)).not.toContain(transition);
     }
+  });
+});
+
+// -- The two-stage decision ---------------------------------------------------
+
+describe('two stages: the servicing platform answers, then the institution decides', () => {
+  const servicing = (
+    decision: ServicingOutcome['decision'],
+    reasonCode?: string,
+  ): ServicingOutcome => ({
+    decision,
+    reference: 'svc-0001',
+    ...(reasonCode === undefined ? {} : { reasonCode }),
+    respondedAt: at(1_000_070),
+  });
+
+  function submitted(channel: OriginationChannel) {
+    const keyed = expectOk(raise({ core: requestCore(channel), maker: MAKER }));
+    return expectOk(submitForReview(keyed, at(1_000_050)));
+  }
+
+  it('holds an external request for the servicing platform before any human sees it', () => {
+    expect(submitted('PARTNER_API').state).toBe('AWAITING_SERVICING_RESPONSE');
+    expect(submitted('EMBEDDED_AGGREGATOR').state).toBe('AWAITING_SERVICING_RESPONSE');
+  });
+
+  it('sends an internally keyed request straight to review', () => {
+    expect(submitted('MAKER_CHECKER').state).toBe('AWAITING_REVIEW');
+  });
+
+  it('refuses to approve before the servicing platform has answered', () => {
+    const waiting = submitted('EMBEDDED_AGGREGATOR');
+    if (waiting.state !== 'AWAITING_SERVICING_RESPONSE') throw new Error('expected to be waiting');
+
+    // There is no transition from AWAITING_SERVICING_RESPONSE to approved, so
+    // the attempt does not typecheck. Coming at it through a cast — which is
+    // what a determined caller would do — still fails.
+    const forced = waiting as unknown as AwaitingReview;
+    const result = approve(forced, CHECKER, at(1_000_100));
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.reason).toBe('SERVICING_RESPONSE_NOT_RECEIVED');
+  });
+
+  it('does not approve the request just because the servicing platform approved', () => {
+    const waiting = submitted('PARTNER_API');
+    if (waiting.state !== 'AWAITING_SERVICING_RESPONSE') throw new Error('expected to be waiting');
+
+    const next = expectOk(recordServicingOutcome(waiting, servicing('APPROVED')));
+
+    // Two stages stay two stages. A yes from the platform puts the request in
+    // front of a person; it does not stand in for them.
+    expect(next.state).toBe('AWAITING_REVIEW');
+    expect(next.servicing?.decision).toBe('APPROVED');
+  });
+
+  it('does not reject the request just because the servicing platform declined', () => {
+    const waiting = submitted('PARTNER_API');
+    if (waiting.state !== 'AWAITING_SERVICING_RESPONSE') throw new Error('expected to be waiting');
+
+    const next = expectOk(recordServicingOutcome(waiting, servicing('DECLINED', 'R_LIMIT')));
+    expect(next.state).toBe('AWAITING_REVIEW');
+  });
+
+  it('requires the platform to say why it declined', () => {
+    const waiting = submitted('PARTNER_API');
+    if (waiting.state !== 'AWAITING_SERVICING_RESPONSE') throw new Error('expected to be waiting');
+
+    expect(recordServicingOutcome(waiting, servicing('DECLINED')).ok).toBe(false);
+    expect(recordServicingOutcome(waiting, servicing('REFERRED')).ok).toBe(false);
+    expect(recordServicingOutcome(waiting, servicing('DECLINED', 'R_LIMIT')).ok).toBe(true);
+  });
+
+  it('requires a reference the two systems can be reconciled on', () => {
+    const waiting = submitted('PARTNER_API');
+    if (waiting.state !== 'AWAITING_SERVICING_RESPONSE') throw new Error('expected to be waiting');
+
+    const noReference: ServicingOutcome = { ...servicing('APPROVED'), reference: '  ' };
+    expect(recordServicingOutcome(waiting, noReference).ok).toBe(false);
+  });
+
+  it('lets the institution approve against a decline, in writing', () => {
+    const ready = readyForReview('PARTNER_API', servicing('DECLINED', 'R_LIMIT'));
+
+    // Unjustified: refused.
+    expect(approve(ready, CHECKER, at(1_000_100)).ok).toBe(false);
+    expect(approve(ready, CHECKER, at(1_000_100), '   ').ok).toBe(false);
+
+    // Justified: permitted, and recorded on the request rather than in an inbox.
+    const approved = expectOk(
+      approve(ready, CHECKER, at(1_000_100), 'Anchor recourse covers the shortfall; CRC-2026-114'),
+    );
+    expect(approved.contraryToServicing?.justification).toContain('CRC-2026-114');
+    expect(approved.servicing?.decision).toBe('DECLINED');
+  });
+
+  it('refuses a contrary justification where nothing was contrary', () => {
+    const ready = readyForReview('PARTNER_API', servicing('APPROVED'));
+    const result = approve(ready, CHECKER, at(1_000_100), 'not needed');
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.reason).toBe('CONTRARY_JUSTIFICATION_NOT_APPLICABLE');
+  });
+
+  it('still only reaches DRAFT, even approved against a decline', () => {
+    // The override is of a credit recommendation. It buys nothing at the gates.
+    const ready = readyForReview('PARTNER_API', servicing('DECLINED', 'R_LIMIT'));
+    const approved = expectOk(approve(ready, CHECKER, at(1_000_100), 'CRC-2026-114'));
+
+    expect(expectOk(openTransaction(approved, transactionCore('bank-a'))).state).toBe('DRAFT');
   });
 });

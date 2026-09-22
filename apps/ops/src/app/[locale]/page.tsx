@@ -20,9 +20,9 @@ import { localeFromSegment } from '@sanad/i18n/strings.ts';
 import {
   type Readiness,
   channelCards,
-  reviewQueue,
   servicingCapabilities,
 } from '../../server/origination.ts';
+import { listRequests } from '../../server/store.ts';
 
 function readinessBadge(readiness: Readiness) {
   switch (readiness.kind) {
@@ -53,13 +53,12 @@ export default async function DashboardPage({
   const arabic = locale === 'ar-SA';
   const numerals = defaultNumerals(locale);
 
-  const [channels, queue, capabilities] = await Promise.all([
-    channelCards(),
-    reviewQueue(),
-    servicingCapabilities(),
-  ]);
+  const [channels, capabilities] = await Promise.all([channelCards(), servicingCapabilities()]);
+  const queue = listRequests();
 
-  const awaiting = queue.filter((q) => q.state === 'AWAITING_REVIEW');
+  const open = queue.filter(
+    (q) => q.state === 'AWAITING_REVIEW' || q.state === 'AWAITING_SERVICING_RESPONSE',
+  );
 
   return (
     <div className="flex flex-col gap-8">
@@ -69,54 +68,72 @@ export default async function DashboardPage({
           <h1 className="text-xl font-semibold">
             {arabic ? 'طلبات بانتظار المراجعة' : 'Awaiting review'}
           </h1>
-          <span className="text-sm text-ink-quiet tabular-nums">
-            {awaiting.length} {arabic ? 'طلب' : 'open'}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-ink-quiet tabular-nums">
+              {open.length} {arabic ? 'طلب' : 'open'}
+            </span>
+            <a
+              href={`/${segment}/originate`}
+              className="inline-flex min-h-tap items-center rounded-card bg-brand-strong px-4 text-sm font-semibold text-on-brand hover:bg-brand-deep"
+            >
+              {arabic ? 'إنشاء طلب' : 'Key a request'}
+            </a>
+          </div>
         </div>
+
+        {queue.length === 0 ? (
+          <Card>
+            <p className="text-sm text-ink-quiet">
+              {arabic ? 'لا توجد طلبات بعد.' : 'No requests yet.'}
+            </p>
+          </Card>
+        ) : null}
 
         <ul className="flex list-none flex-col gap-2 p-0">
           {queue.map((item) => (
             <li key={item.requestId}>
-              <Card>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <span className="identifier text-sm text-ink-quiet">{item.requestId}</span>
-                  <span className="font-medium">
-                    {arabic ? item.counterpartyAr : item.counterpartyEn}
-                  </span>
-                  <span className="text-base font-semibold tabular-nums">
-                    <bdi>
-                      {formatMinorUnits(
-                        { minorUnits: item.amountMinorUnits, currency: 'SAR' },
-                        numerals,
-                      )}
-                    </bdi>{' '}
-                    <span className="text-xs text-ink-quiet">SAR</span>
-                  </span>
-
-                  <div className="ms-auto flex items-center gap-2">
-                    <span className="text-xs text-ink-quiet">
-                      {arabic ? 'عبر' : 'via'} {item.channel.replaceAll('_', ' ').toLowerCase()}
+              <a href={`/${segment}/requests/${item.requestId}`} className="block">
+                <Card>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <span className="identifier text-sm text-ink-quiet">{item.requestId}</span>
+                    <span className="font-medium">{item.counterpartyId}</span>
+                    <span className="text-base font-semibold tabular-nums">
+                      <bdi>
+                        {formatMinorUnits(
+                          { minorUnits: item.amountMinorUnits, currency: 'SAR' },
+                          numerals,
+                        )}
+                      </bdi>{' '}
+                      <span className="text-xs text-ink-quiet">SAR</span>
                     </span>
-                    <Status
-                      tone={item.state === 'AWAITING_REVIEW' ? 'progress' : 'blocked'}
-                      label={
-                        item.state === 'AWAITING_REVIEW'
-                          ? `${String(item.waitingHours)}h waiting`
-                          : 'Returned to maker'
-                      }
-                    />
-                  </div>
-                </div>
 
-                <p className="mt-2 text-xs text-ink-quiet">
-                  {arabic ? 'أدخله' : 'Keyed by'}{' '}
-                  <span className="identifier">{item.makerPrincipalId}</span>
-                  {' — '}
-                  {arabic
-                    ? 'لا يمكن للمُدخِل اعتماد طلبه'
-                    : 'the maker cannot approve their own request'}
-                </p>
-              </Card>
+                    <div className="ms-auto flex items-center gap-2">
+                      <span className="text-xs text-ink-quiet">
+                        {arabic ? 'عبر' : 'via'} {item.channel.replaceAll('_', ' ').toLowerCase()}
+                      </span>
+                      <Status
+                        tone={
+                          item.state === 'APPROVED'
+                            ? 'settled'
+                            : item.state === 'REJECTED'
+                              ? 'blocked'
+                              : 'progress'
+                        }
+                        label={item.state.replaceAll('_', ' ').toLowerCase()}
+                      />
+                    </div>
+                  </div>
+
+                  <p className="mt-2 text-xs text-ink-quiet">
+                    {arabic ? 'أدخله' : 'Keyed by'}{' '}
+                    <span className="identifier">{item.makerPrincipalId ?? '—'}</span>
+                    {' — '}
+                    {arabic
+                      ? 'لا يمكن للمُدخِل اعتماد طلبه'
+                      : 'the maker cannot approve their own request'}
+                  </p>
+                </Card>
+              </a>
             </li>
           ))}
         </ul>

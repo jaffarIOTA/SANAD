@@ -24,6 +24,15 @@ function raise(params) {
   return ok({ state: "KEYING", core, maker });
 }
 function submitForReview(request, at) {
+  const policy = CHANNEL_POLICIES[request.core.channel];
+  if (policy.requiresServicingDecision) {
+    return ok({
+      state: "AWAITING_SERVICING_RESPONSE",
+      core: request.core,
+      maker: request.maker,
+      submittedAt: at
+    });
+  }
   return ok({
     state: "AWAITING_REVIEW",
     core: request.core,
@@ -31,7 +40,32 @@ function submitForReview(request, at) {
     submittedAt: at
   });
 }
-function approve(request, checker, at) {
+function recordServicingOutcome(request, outcome) {
+  if (outcome.reference.trim().length === 0) {
+    return reject(
+      "OP-DETERMINACY",
+      "SERVICING_REFERENCE_MISSING",
+      "A servicing response must carry the platform\u2019s own reference, so the two records can be reconciled",
+      { requestId: request.core.requestId }
+    );
+  }
+  if (outcome.decision !== "APPROVED" && (outcome.reasonCode ?? "").trim().length === 0) {
+    return reject(
+      "OP-DETERMINACY",
+      "SERVICING_REASON_MISSING",
+      "A servicing decline or referral must say why; the reviewer needs it and so does the counterparty",
+      { requestId: request.core.requestId, decision: outcome.decision }
+    );
+  }
+  return ok({
+    state: "AWAITING_REVIEW",
+    core: request.core,
+    maker: request.maker,
+    submittedAt: request.submittedAt,
+    servicing: outcome
+  });
+}
+function approve(request, checker, at, contraryJustification) {
   if (checker.tenantId !== request.core.tenantId) {
     return reject(
       "OP-DETERMINACY",
@@ -49,12 +83,41 @@ function approve(request, checker, at) {
       { requestId: request.core.requestId, channel: request.core.channel }
     );
   }
+  const policy2 = CHANNEL_POLICIES[request.core.channel];
+  if (policy2.requiresServicingDecision && request.servicing === void 0) {
+    return reject(
+      "OP-DETERMINACY",
+      "SERVICING_RESPONSE_NOT_RECEIVED",
+      "This channel consults the servicing platform before a human decides, and no response has been recorded",
+      { requestId: request.core.requestId, channel: request.core.channel }
+    );
+  }
+  const declined = request.servicing?.decision === "DECLINED";
+  const justification = (contraryJustification ?? "").trim();
+  if (declined && justification.length === 0) {
+    return reject(
+      "OP-DETERMINACY",
+      "CONTRARY_APPROVAL_UNJUSTIFIED",
+      "The servicing platform declined. Approving anyway is permitted, and requires a recorded justification",
+      { requestId: request.core.requestId }
+    );
+  }
+  if (!declined && justification.length > 0) {
+    return reject(
+      "OP-DETERMINACY",
+      "CONTRARY_JUSTIFICATION_NOT_APPLICABLE",
+      "A contrary justification was supplied but the servicing platform did not decline",
+      { requestId: request.core.requestId }
+    );
+  }
   return ok({
     state: "APPROVED",
     core: request.core,
     maker: request.maker,
     checker,
-    approvedAt: at
+    approvedAt: at,
+    ...request.servicing === void 0 ? {} : { servicing: request.servicing },
+    ...declined ? { contraryToServicing: { justification } } : {}
   });
 }
 function returnToMaker(request, reviewer, note) {
@@ -122,6 +185,7 @@ export {
   approve,
   openTransaction,
   raise,
+  recordServicingOutcome,
   rejectRequest,
   reopen,
   returnToMaker,

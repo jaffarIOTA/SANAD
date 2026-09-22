@@ -37,6 +37,7 @@ import type { Draft, TradeReference, TransactionCore } from '../sequencing/state
 
 export type RequestState =
   | 'KEYING'
+  | 'AWAITING_SERVICING_RESPONSE'
   | 'AWAITING_REVIEW'
   | 'RETURNED_TO_MAKER'
   | 'APPROVED'
@@ -69,11 +70,37 @@ export interface Keying {
   readonly maker: Principal;
 }
 
+/**
+ * What the servicing platform said.
+ *
+ * An input to the institution's decision, recorded verbatim. It speaks to
+ * credit capacity — limits, exposure, account standing — and to nothing else.
+ * It has no view on whether goods were bought, possessed and held at risk,
+ * and it is not consulted about that, because those are gates rather than
+ * opinions.
+ */
+export interface ServicingOutcome {
+  readonly decision: 'APPROVED' | 'DECLINED' | 'REFERRED';
+  /** The servicing platform's own reference, for reconciliation. */
+  readonly reference: string;
+  readonly reasonCode?: string;
+  readonly respondedAt: TsaInstant;
+}
+
+export interface AwaitingServicingResponse {
+  readonly state: 'AWAITING_SERVICING_RESPONSE';
+  readonly core: OriginationRequestCore;
+  readonly maker: Principal;
+  readonly submittedAt: TsaInstant;
+}
+
 export interface AwaitingReview {
   readonly state: 'AWAITING_REVIEW';
   readonly core: OriginationRequestCore;
   readonly maker: Principal;
   readonly submittedAt: TsaInstant;
+  /** Absent where the channel does not consult the servicing platform. */
+  readonly servicing?: ServicingOutcome;
 }
 
 export interface ReturnedToMaker {
@@ -91,6 +118,17 @@ export interface Approved {
   /** Necessarily a different principal from the maker. */
   readonly checker: Principal;
   readonly approvedAt: TsaInstant;
+  readonly servicing?: ServicingOutcome;
+  /**
+   * Set where the institution approved despite the servicing platform
+   * declining. A credit judgement the institution is entitled to make, and
+   * one it has to own in writing — so the justification is recorded on the
+   * request rather than in someone's inbox.
+   *
+   * This overrides a *recommendation*. No field here, and no field anywhere,
+   * overrides a sequencing gate.
+   */
+  readonly contraryToServicing?: { readonly justification: string };
 }
 
 export interface Rejected {
@@ -107,6 +145,7 @@ export interface Withdrawn {
 
 export type OriginationRequest =
   | Keying
+  | AwaitingServicingResponse
   | AwaitingReview
   | ReturnedToMaker
   | Approved
@@ -144,12 +183,75 @@ export function raise(params: {
   return ok({ state: 'KEYING', core, maker });
 }
 
-export function submitForReview(request: Keying, at: TsaInstant): Result<AwaitingReview> {
+/**
+ * Submit.
+ *
+ * Where the channel consults the servicing platform, this lands in
+ * `AWAITING_SERVICING_RESPONSE` and a human sees nothing yet. Where it does
+ * not, it goes straight to review. The return type is the union, so a caller
+ * has to handle both rather than assuming the shorter path.
+ */
+export function submitForReview(
+  request: Keying,
+  at: TsaInstant,
+): Result<AwaitingServicingResponse | AwaitingReview> {
+  const policy = CHANNEL_POLICIES[request.core.channel];
+
+  if (policy.requiresServicingDecision) {
+    return ok({
+      state: 'AWAITING_SERVICING_RESPONSE',
+      core: request.core,
+      maker: request.maker,
+      submittedAt: at,
+    });
+  }
+
   return ok({
     state: 'AWAITING_REVIEW',
     core: request.core,
     maker: request.maker,
     submittedAt: at,
+  });
+}
+
+/**
+ * Record what the servicing platform said, and put the request in front of a
+ * human.
+ *
+ * Note what this does *not* do. A servicing approval does not approve the
+ * request, and a servicing decline does not reject it. Both outcomes land in
+ * the same place — `AWAITING_REVIEW` — because the institution decides, with
+ * the platform's answer in front of it. Auto-approving on a servicing yes
+ * would collapse two stages into one and remove the institution from its own
+ * credit decision.
+ */
+export function recordServicingOutcome(
+  request: AwaitingServicingResponse,
+  outcome: ServicingOutcome,
+): Result<AwaitingReview> {
+  if (outcome.reference.trim().length === 0) {
+    return reject(
+      'OP-DETERMINACY',
+      'SERVICING_REFERENCE_MISSING',
+      'A servicing response must carry the platform’s own reference, so the two records can be reconciled',
+      { requestId: request.core.requestId },
+    );
+  }
+  if (outcome.decision !== 'APPROVED' && (outcome.reasonCode ?? '').trim().length === 0) {
+    return reject(
+      'OP-DETERMINACY',
+      'SERVICING_REASON_MISSING',
+      'A servicing decline or referral must say why; the reviewer needs it and so does the counterparty',
+      { requestId: request.core.requestId, decision: outcome.decision },
+    );
+  }
+
+  return ok({
+    state: 'AWAITING_REVIEW',
+    core: request.core,
+    maker: request.maker,
+    submittedAt: request.submittedAt,
+    servicing: outcome,
   });
 }
 
@@ -167,6 +269,12 @@ export function approve(
   request: AwaitingReview,
   checker: Principal,
   at: TsaInstant,
+  /**
+   * Required only where the servicing platform declined. Approving against a
+   * decline is a credit judgement the institution may make and must own in
+   * writing.
+   */
+  contraryJustification?: string,
 ): Result<Approved> {
   if (checker.tenantId !== request.core.tenantId) {
     return reject(
@@ -187,12 +295,44 @@ export function approve(
     );
   }
 
+  const policy2 = CHANNEL_POLICIES[request.core.channel];
+  if (policy2.requiresServicingDecision && request.servicing === undefined) {
+    return reject(
+      'OP-DETERMINACY',
+      'SERVICING_RESPONSE_NOT_RECEIVED',
+      'This channel consults the servicing platform before a human decides, and no response has been recorded',
+      { requestId: request.core.requestId, channel: request.core.channel },
+    );
+  }
+
+  const declined = request.servicing?.decision === 'DECLINED';
+  const justification = (contraryJustification ?? '').trim();
+
+  if (declined && justification.length === 0) {
+    return reject(
+      'OP-DETERMINACY',
+      'CONTRARY_APPROVAL_UNJUSTIFIED',
+      'The servicing platform declined. Approving anyway is permitted, and requires a recorded justification',
+      { requestId: request.core.requestId },
+    );
+  }
+  if (!declined && justification.length > 0) {
+    return reject(
+      'OP-DETERMINACY',
+      'CONTRARY_JUSTIFICATION_NOT_APPLICABLE',
+      'A contrary justification was supplied but the servicing platform did not decline',
+      { requestId: request.core.requestId },
+    );
+  }
+
   return ok({
     state: 'APPROVED',
     core: request.core,
     maker: request.maker,
     checker,
     approvedAt: at,
+    ...(request.servicing === undefined ? {} : { servicing: request.servicing }),
+    ...(declined ? { contraryToServicing: { justification } } : {}),
   });
 }
 
