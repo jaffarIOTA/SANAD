@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": 1790061809301,
+  "timestamp": 1790061825356,
   "files": {
     "/Users/jaffar/Projects/Sanad/adapters/kernel/circuit-breaker.ts": {
       "mtime": 1790004465701,
@@ -11992,7 +11992,7 @@
         "classes": [],
         "exports": [],
         "routes": [],
-        "healthScore": 100
+        "healthScore": 85
       }
     },
     "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.48ee08541098a488.hot-update.js": {
@@ -12009,7 +12009,7 @@
         "classes": [],
         "exports": [],
         "routes": [],
-        "healthScore": 100
+        "healthScore": 85
       }
     },
     "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.48ee08541098a488.hot-update.js": {
@@ -12026,7 +12026,7 @@
         "classes": [],
         "exports": [],
         "routes": [],
-        "healthScore": 100
+        "healthScore": 85
       }
     },
     "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.b329d73ebff9a61e.hot-update.js": {
@@ -12036,6 +12036,2454 @@
         "relativePath": "apps/ops/.next/static/webpack/webpack.b329d73ebff9a61e.hot-update.js",
         "fileType": "generic",
         "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.7707def24a9e8d75.hot-update.js": {
+      "mtime": 1790061807869,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.7707def24a9e8d75.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.7707def24a9e8d75.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.0e29b0581b3ce591.hot-update.js": {
+      "mtime": 1790061807868,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.0e29b0581b3ce591.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.0e29b0581b3ce591.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.7707def24a9e8d75.hot-update.js": {
+      "mtime": 1790061807869,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.7707def24a9e8d75.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.7707def24a9e8d75.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.0e29b0581b3ce591.hot-update.js": {
+      "mtime": 1790061807868,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.0e29b0581b3ce591.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.0e29b0581b3ce591.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.9c7da497889e21a4.hot-update.js": {
+      "mtime": 1790061808352,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.9c7da497889e21a4.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.9c7da497889e21a4.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.9c7da497889e21a4.hot-update.js": {
+      "mtime": 1790061808352,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.9c7da497889e21a4.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.9c7da497889e21a4.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.f2f1ef187ceb5692.hot-update.js": {
+      "mtime": 1790061808352,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.f2f1ef187ceb5692.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.f2f1ef187ceb5692.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.f2f1ef187ceb5692.hot-update.js": {
+      "mtime": 1790061808352,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.f2f1ef187ceb5692.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.f2f1ef187ceb5692.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.49f7e4b1bfa76e90.hot-update.js": {
+      "mtime": 1790061809346,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.49f7e4b1bfa76e90.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.49f7e4b1bfa76e90.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.775c806aad56e8d4.hot-update.js": {
+      "mtime": 1790061809345,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.775c806aad56e8d4.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.775c806aad56e8d4.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.49f7e4b1bfa76e90.hot-update.js": {
+      "mtime": 1790061809346,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.49f7e4b1bfa76e90.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.49f7e4b1bfa76e90.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.775c806aad56e8d4.hot-update.js": {
+      "mtime": 1790061809345,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.775c806aad56e8d4.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.775c806aad56e8d4.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.dcee6b9ab1872a54.hot-update.js": {
+      "mtime": 1790061809592,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.dcee6b9ab1872a54.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.dcee6b9ab1872a54.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.dcee6b9ab1872a54.hot-update.js": {
+      "mtime": 1790061809592,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.dcee6b9ab1872a54.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.dcee6b9ab1872a54.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.23a8f0669b94bb07.hot-update.js": {
+      "mtime": 1790061809592,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.23a8f0669b94bb07.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.23a8f0669b94bb07.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.23a8f0669b94bb07.hot-update.js": {
+      "mtime": 1790061809592,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.23a8f0669b94bb07.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.23a8f0669b94bb07.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.7bb89e78e7c1a158.hot-update.js": {
+      "mtime": 1790061810103,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.7bb89e78e7c1a158.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.7bb89e78e7c1a158.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.354254f7dc3f6f0e.hot-update.js": {
+      "mtime": 1790061810111,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.354254f7dc3f6f0e.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.354254f7dc3f6f0e.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.354254f7dc3f6f0e.hot-update.js": {
+      "mtime": 1790061810111,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.354254f7dc3f6f0e.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.354254f7dc3f6f0e.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.7bb89e78e7c1a158.hot-update.js": {
+      "mtime": 1790061810103,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.7bb89e78e7c1a158.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.7bb89e78e7c1a158.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.241005be77559907.hot-update.js": {
+      "mtime": 1790061811044,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.241005be77559907.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.241005be77559907.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.241005be77559907.hot-update.js": {
+      "mtime": 1790061811044,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.241005be77559907.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.241005be77559907.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.9da53b6b77c097e9.hot-update.js": {
+      "mtime": 1790061811043,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.9da53b6b77c097e9.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.9da53b6b77c097e9.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.9da53b6b77c097e9.hot-update.js": {
+      "mtime": 1790061811043,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.9da53b6b77c097e9.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.9da53b6b77c097e9.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.5ac5381e6eb56c7c.hot-update.js": {
+      "mtime": 1790061811276,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.5ac5381e6eb56c7c.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.5ac5381e6eb56c7c.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.5ac5381e6eb56c7c.hot-update.js": {
+      "mtime": 1790061811276,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.5ac5381e6eb56c7c.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.5ac5381e6eb56c7c.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.0a87c682a437c7bd.hot-update.js": {
+      "mtime": 1790061811324,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.0a87c682a437c7bd.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.0a87c682a437c7bd.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.113f3322152ef111.hot-update.js": {
+      "mtime": 1790061811324,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.113f3322152ef111.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.113f3322152ef111.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.113f3322152ef111.hot-update.js": {
+      "mtime": 1790061811324,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.113f3322152ef111.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.113f3322152ef111.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.a18d1151e2a13d5b.hot-update.js": {
+      "mtime": 1790061811276,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.a18d1151e2a13d5b.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.a18d1151e2a13d5b.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.0a87c682a437c7bd.hot-update.js": {
+      "mtime": 1790061811324,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.0a87c682a437c7bd.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.0a87c682a437c7bd.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.a18d1151e2a13d5b.hot-update.js": {
+      "mtime": 1790061811276,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.a18d1151e2a13d5b.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.a18d1151e2a13d5b.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.a63a105bc2a5024a.hot-update.js": {
+      "mtime": 1790061811788,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.a63a105bc2a5024a.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.a63a105bc2a5024a.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.577b8a2c6a64c8c5.hot-update.js": {
+      "mtime": 1790061811787,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.577b8a2c6a64c8c5.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.577b8a2c6a64c8c5.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.577b8a2c6a64c8c5.hot-update.js": {
+      "mtime": 1790061811787,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.577b8a2c6a64c8c5.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.577b8a2c6a64c8c5.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.a63a105bc2a5024a.hot-update.js": {
+      "mtime": 1790061811788,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.a63a105bc2a5024a.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.a63a105bc2a5024a.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.ef55d3a52042098b.hot-update.js": {
+      "mtime": 1790061812735,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.ef55d3a52042098b.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.ef55d3a52042098b.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.8aaee5c1a17bf9cc.hot-update.js": {
+      "mtime": 1790061812786,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.8aaee5c1a17bf9cc.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.8aaee5c1a17bf9cc.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.5208666f13feced8.hot-update.js": {
+      "mtime": 1790061812736,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.5208666f13feced8.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.5208666f13feced8.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.5208666f13feced8.hot-update.js": {
+      "mtime": 1790061812736,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.5208666f13feced8.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.5208666f13feced8.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.ef55d3a52042098b.hot-update.js": {
+      "mtime": 1790061812735,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.ef55d3a52042098b.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.ef55d3a52042098b.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.719be7c48b98aa3c.hot-update.js": {
+      "mtime": 1790061812786,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.719be7c48b98aa3c.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.719be7c48b98aa3c.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.719be7c48b98aa3c.hot-update.js": {
+      "mtime": 1790061812786,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.719be7c48b98aa3c.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.719be7c48b98aa3c.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.8aaee5c1a17bf9cc.hot-update.js": {
+      "mtime": 1790061812786,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.8aaee5c1a17bf9cc.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.8aaee5c1a17bf9cc.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.c0c2062e43a3c8bd.hot-update.js": {
+      "mtime": 1790061813003,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.c0c2062e43a3c8bd.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.c0c2062e43a3c8bd.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.fcc0b0ba8a628bb3.hot-update.js": {
+      "mtime": 1790061813002,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.fcc0b0ba8a628bb3.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.fcc0b0ba8a628bb3.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.c0c2062e43a3c8bd.hot-update.js": {
+      "mtime": 1790061813003,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.c0c2062e43a3c8bd.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.c0c2062e43a3c8bd.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.fcc0b0ba8a628bb3.hot-update.js": {
+      "mtime": 1790061813003,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.fcc0b0ba8a628bb3.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.fcc0b0ba8a628bb3.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.c005df6e6b453bdd.hot-update.js": {
+      "mtime": 1790061813473,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.c005df6e6b453bdd.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.c005df6e6b453bdd.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.c005df6e6b453bdd.hot-update.js": {
+      "mtime": 1790061813473,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.c005df6e6b453bdd.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.c005df6e6b453bdd.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.e4024fc47f76338a.hot-update.js": {
+      "mtime": 1790061813474,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.e4024fc47f76338a.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.e4024fc47f76338a.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.e4024fc47f76338a.hot-update.js": {
+      "mtime": 1790061813474,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.e4024fc47f76338a.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.e4024fc47f76338a.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.707e5d75f6fb568f.hot-update.js": {
+      "mtime": 1790061814529,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.707e5d75f6fb568f.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.707e5d75f6fb568f.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.1ffa57785ea38d8a.hot-update.js": {
+      "mtime": 1790061814484,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.1ffa57785ea38d8a.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.1ffa57785ea38d8a.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.707e5d75f6fb568f.hot-update.js": {
+      "mtime": 1790061814529,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.707e5d75f6fb568f.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.707e5d75f6fb568f.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.2079d9aa9527fa64.hot-update.js": {
+      "mtime": 1790061814484,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.2079d9aa9527fa64.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.2079d9aa9527fa64.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.2079d9aa9527fa64.hot-update.js": {
+      "mtime": 1790061814484,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.2079d9aa9527fa64.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.2079d9aa9527fa64.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.e1d0046f12b81e18.hot-update.js": {
+      "mtime": 1790061814528,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.e1d0046f12b81e18.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.e1d0046f12b81e18.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.e1d0046f12b81e18.hot-update.js": {
+      "mtime": 1790061814528,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.e1d0046f12b81e18.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.e1d0046f12b81e18.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.1ffa57785ea38d8a.hot-update.js": {
+      "mtime": 1790061814484,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.1ffa57785ea38d8a.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.1ffa57785ea38d8a.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.8c55c3b2cc0ef01c.hot-update.js": {
+      "mtime": 1790061814697,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.8c55c3b2cc0ef01c.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.8c55c3b2cc0ef01c.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.b76d6a7ef27afeb5.hot-update.js": {
+      "mtime": 1790061814697,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.b76d6a7ef27afeb5.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.b76d6a7ef27afeb5.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.b76d6a7ef27afeb5.hot-update.js": {
+      "mtime": 1790061814697,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.b76d6a7ef27afeb5.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.b76d6a7ef27afeb5.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.8c55c3b2cc0ef01c.hot-update.js": {
+      "mtime": 1790061814697,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.8c55c3b2cc0ef01c.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.8c55c3b2cc0ef01c.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.b1b343504662e858.hot-update.js": {
+      "mtime": 1790061815168,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.b1b343504662e858.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.b1b343504662e858.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.9b700e4b68731779.hot-update.js": {
+      "mtime": 1790061815168,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.9b700e4b68731779.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.9b700e4b68731779.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.b1b343504662e858.hot-update.js": {
+      "mtime": 1790061815168,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.b1b343504662e858.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.b1b343504662e858.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.9b700e4b68731779.hot-update.js": {
+      "mtime": 1790061815168,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.9b700e4b68731779.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.9b700e4b68731779.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.84f84c445de9d30f.hot-update.js": {
+      "mtime": 1790061816273,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.84f84c445de9d30f.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.84f84c445de9d30f.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.d2e6f255f1e6c594.hot-update.js": {
+      "mtime": 1790061816224,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.d2e6f255f1e6c594.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.d2e6f255f1e6c594.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.d2e6f255f1e6c594.hot-update.js": {
+      "mtime": 1790061816224,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.d2e6f255f1e6c594.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.d2e6f255f1e6c594.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.84f84c445de9d30f.hot-update.js": {
+      "mtime": 1790061816273,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.84f84c445de9d30f.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.84f84c445de9d30f.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.23097cf80f7c62d2.hot-update.js": {
+      "mtime": 1790061816224,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.23097cf80f7c62d2.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.23097cf80f7c62d2.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.23097cf80f7c62d2.hot-update.js": {
+      "mtime": 1790061816224,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.23097cf80f7c62d2.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.23097cf80f7c62d2.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.be5852f8d1ec4b55.hot-update.js": {
+      "mtime": 1790061816273,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.be5852f8d1ec4b55.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.be5852f8d1ec4b55.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.be5852f8d1ec4b55.hot-update.js": {
+      "mtime": 1790061816273,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.be5852f8d1ec4b55.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.be5852f8d1ec4b55.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.3492f6d51bbc75cb.hot-update.js": {
+      "mtime": 1790061816389,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.3492f6d51bbc75cb.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.3492f6d51bbc75cb.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.ffb67bb32744f072.hot-update.js": {
+      "mtime": 1790061816389,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.ffb67bb32744f072.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.ffb67bb32744f072.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.3492f6d51bbc75cb.hot-update.js": {
+      "mtime": 1790061816389,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.3492f6d51bbc75cb.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.3492f6d51bbc75cb.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.ffb67bb32744f072.hot-update.js": {
+      "mtime": 1790061816389,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.ffb67bb32744f072.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.ffb67bb32744f072.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.d5b4509a5f823ad1.hot-update.js": {
+      "mtime": 1790061816860,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.d5b4509a5f823ad1.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.d5b4509a5f823ad1.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.7e8bdb5f4c8c473f.hot-update.js": {
+      "mtime": 1790061816858,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.7e8bdb5f4c8c473f.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.7e8bdb5f4c8c473f.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.d5b4509a5f823ad1.hot-update.js": {
+      "mtime": 1790061816860,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.d5b4509a5f823ad1.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.d5b4509a5f823ad1.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.7e8bdb5f4c8c473f.hot-update.js": {
+      "mtime": 1790061816858,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.7e8bdb5f4c8c473f.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.7e8bdb5f4c8c473f.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.2e7a1c62c4e2b4b4.hot-update.js": {
+      "mtime": 1790061817964,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.2e7a1c62c4e2b4b4.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.2e7a1c62c4e2b4b4.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.2e7a1c62c4e2b4b4.hot-update.js": {
+      "mtime": 1790061817964,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.2e7a1c62c4e2b4b4.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.2e7a1c62c4e2b4b4.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.481f750b7e0b8241.hot-update.js": {
+      "mtime": 1790061817963,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.481f750b7e0b8241.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.481f750b7e0b8241.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.481f750b7e0b8241.hot-update.js": {
+      "mtime": 1790061817963,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.481f750b7e0b8241.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.481f750b7e0b8241.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.144306a1871de4fb.hot-update.js": {
+      "mtime": 1790061818080,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.144306a1871de4fb.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.144306a1871de4fb.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.473121ed4229cc72.hot-update.js": {
+      "mtime": 1790061818080,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.473121ed4229cc72.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.473121ed4229cc72.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.144306a1871de4fb.hot-update.js": {
+      "mtime": 1790061818080,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.144306a1871de4fb.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.144306a1871de4fb.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.473121ed4229cc72.hot-update.js": {
+      "mtime": 1790061818080,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.473121ed4229cc72.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.473121ed4229cc72.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.f4d6d580f07ac2f6.hot-update.js": {
+      "mtime": 1790061818588,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.f4d6d580f07ac2f6.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.f4d6d580f07ac2f6.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.823af1760b6c6e37.hot-update.js": {
+      "mtime": 1790061818590,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.823af1760b6c6e37.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.823af1760b6c6e37.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.f4d6d580f07ac2f6.hot-update.js": {
+      "mtime": 1790061818588,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.f4d6d580f07ac2f6.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.f4d6d580f07ac2f6.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.823af1760b6c6e37.hot-update.js": {
+      "mtime": 1790061818590,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.823af1760b6c6e37.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.823af1760b6c6e37.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.157a4ca52b5960f8.hot-update.js": {
+      "mtime": 1790061819267,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.157a4ca52b5960f8.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.157a4ca52b5960f8.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.04d5ee0a2b1fa13b.hot-update.js": {
+      "mtime": 1790061819268,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.04d5ee0a2b1fa13b.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.04d5ee0a2b1fa13b.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.157a4ca52b5960f8.hot-update.js": {
+      "mtime": 1790061819267,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.157a4ca52b5960f8.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.157a4ca52b5960f8.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.04d5ee0a2b1fa13b.hot-update.js": {
+      "mtime": 1790061819267,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.04d5ee0a2b1fa13b.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.04d5ee0a2b1fa13b.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.e618596bc56bcb2a.hot-update.js": {
+      "mtime": 1790061819666,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.e618596bc56bcb2a.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.e618596bc56bcb2a.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.8ca8d90716bfa2d2.hot-update.js": {
+      "mtime": 1790061819666,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.8ca8d90716bfa2d2.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.8ca8d90716bfa2d2.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.8ca8d90716bfa2d2.hot-update.js": {
+      "mtime": 1790061819666,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.8ca8d90716bfa2d2.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.8ca8d90716bfa2d2.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.e618596bc56bcb2a.hot-update.js": {
+      "mtime": 1790061819666,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.e618596bc56bcb2a.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.e618596bc56bcb2a.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.053af8e89762f258.hot-update.js": {
+      "mtime": 1790061819815,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.053af8e89762f258.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.053af8e89762f258.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.64f2076514743eeb.hot-update.js": {
+      "mtime": 1790061819813,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.64f2076514743eeb.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.64f2076514743eeb.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.64f2076514743eeb.hot-update.js": {
+      "mtime": 1790061819813,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.64f2076514743eeb.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.64f2076514743eeb.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.053af8e89762f258.hot-update.js": {
+      "mtime": 1790061819815,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.053af8e89762f258.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.053af8e89762f258.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.c7a603c29b30e4bd.hot-update.js": {
+      "mtime": 1790061820278,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.c7a603c29b30e4bd.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.c7a603c29b30e4bd.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.c7a603c29b30e4bd.hot-update.js": {
+      "mtime": 1790061820278,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.c7a603c29b30e4bd.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.c7a603c29b30e4bd.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.ef1f0bc22bb74141.hot-update.js": {
+      "mtime": 1790061820278,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.ef1f0bc22bb74141.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.ef1f0bc22bb74141.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.ef1f0bc22bb74141.hot-update.js": {
+      "mtime": 1790061820278,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.ef1f0bc22bb74141.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.ef1f0bc22bb74141.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.1c57edce9651a9e7.hot-update.js": {
+      "mtime": 1790061820995,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.1c57edce9651a9e7.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.1c57edce9651a9e7.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.1c57edce9651a9e7.hot-update.js": {
+      "mtime": 1790061820995,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.1c57edce9651a9e7.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.1c57edce9651a9e7.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.1dcb371c1d4ad3d5.hot-update.js": {
+      "mtime": 1790061820995,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.1dcb371c1d4ad3d5.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.1dcb371c1d4ad3d5.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.1dcb371c1d4ad3d5.hot-update.js": {
+      "mtime": 1790061820995,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.1dcb371c1d4ad3d5.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.1dcb371c1d4ad3d5.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.79fae06c363da690.hot-update.js": {
+      "mtime": 1790061821392,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.79fae06c363da690.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.79fae06c363da690.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.79fae06c363da690.hot-update.js": {
+      "mtime": 1790061821392,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.79fae06c363da690.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.79fae06c363da690.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.c1c67a7f5a2c14f9.hot-update.js": {
+      "mtime": 1790061821396,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.c1c67a7f5a2c14f9.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.c1c67a7f5a2c14f9.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.c1c67a7f5a2c14f9.hot-update.js": {
+      "mtime": 1790061821396,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.c1c67a7f5a2c14f9.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.c1c67a7f5a2c14f9.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.b04ff85c52f8dbac.hot-update.js": {
+      "mtime": 1790061821538,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.b04ff85c52f8dbac.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.b04ff85c52f8dbac.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.c76e7bdfba45d728.hot-update.js": {
+      "mtime": 1790061821546,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.c76e7bdfba45d728.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.c76e7bdfba45d728.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.c76e7bdfba45d728.hot-update.js": {
+      "mtime": 1790061821546,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.c76e7bdfba45d728.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.c76e7bdfba45d728.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.b04ff85c52f8dbac.hot-update.js": {
+      "mtime": 1790061821538,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.b04ff85c52f8dbac.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.b04ff85c52f8dbac.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.f989d11445f1da7c.hot-update.js": {
+      "mtime": 1790061821984,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.f989d11445f1da7c.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.f989d11445f1da7c.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.f989d11445f1da7c.hot-update.js": {
+      "mtime": 1790061821984,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.f989d11445f1da7c.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.f989d11445f1da7c.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.ecba367167b26379.hot-update.js": {
+      "mtime": 1790061821985,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.ecba367167b26379.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.ecba367167b26379.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.ecba367167b26379.hot-update.js": {
+      "mtime": 1790061821986,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.ecba367167b26379.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.ecba367167b26379.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.510c7311f3e24a24.hot-update.js": {
+      "mtime": 1790061822681,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.510c7311f3e24a24.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.510c7311f3e24a24.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.510c7311f3e24a24.hot-update.js": {
+      "mtime": 1790061822681,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.510c7311f3e24a24.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.510c7311f3e24a24.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.a568ca7d3973713e.hot-update.js": {
+      "mtime": 1790061822683,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.a568ca7d3973713e.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.a568ca7d3973713e.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.a568ca7d3973713e.hot-update.js": {
+      "mtime": 1790061822683,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.a568ca7d3973713e.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.a568ca7d3973713e.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.4fc3868d031e6199.hot-update.js": {
+      "mtime": 1790061823083,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.4fc3868d031e6199.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.4fc3868d031e6199.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.0037e0b259eeed3f.hot-update.js": {
+      "mtime": 1790061823082,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.0037e0b259eeed3f.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.0037e0b259eeed3f.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.0037e0b259eeed3f.hot-update.js": {
+      "mtime": 1790061823082,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.0037e0b259eeed3f.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.0037e0b259eeed3f.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.4fc3868d031e6199.hot-update.js": {
+      "mtime": 1790061823083,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.4fc3868d031e6199.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.4fc3868d031e6199.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.9a5a3ee96f315869.hot-update.js": {
+      "mtime": 1790061823234,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.9a5a3ee96f315869.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.9a5a3ee96f315869.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.6fc91de1fcae71c0.hot-update.js": {
+      "mtime": 1790061823235,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.6fc91de1fcae71c0.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.6fc91de1fcae71c0.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.6fc91de1fcae71c0.hot-update.js": {
+      "mtime": 1790061823235,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.6fc91de1fcae71c0.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.6fc91de1fcae71c0.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.9a5a3ee96f315869.hot-update.js": {
+      "mtime": 1790061823234,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.9a5a3ee96f315869.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.9a5a3ee96f315869.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 85
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.c7c7f1718553132d.hot-update.js": {
+      "mtime": 1790061823707,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/webpack.c7c7f1718553132d.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/webpack.c7c7f1718553132d.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 100
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.19062e884d9f9f8a.hot-update.js": {
+      "mtime": 1790061823707,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/app/[locale]/layout.19062e884d9f9f8a.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/app/[locale]/layout.19062e884d9f9f8a.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 100
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.19062e884d9f9f8a.hot-update.js": {
+      "mtime": 1790061823707,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/sme/.next/static/webpack/webpack.19062e884d9f9f8a.hot-update.js",
+        "relativePath": "apps/sme/.next/static/webpack/webpack.19062e884d9f9f8a.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 12,
+        "imports": [],
+        "importedBy": [],
+        "importInfos": [],
+        "functions": [],
+        "classes": [],
+        "exports": [],
+        "routes": [],
+        "healthScore": 100
+      }
+    },
+    "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.c7c7f1718553132d.hot-update.js": {
+      "mtime": 1790061823707,
+      "node": {
+        "filePath": "/Users/jaffar/Projects/Sanad/apps/ops/.next/static/webpack/app/[locale]/layout.c7c7f1718553132d.hot-update.js",
+        "relativePath": "apps/ops/.next/static/webpack/app/[locale]/layout.c7c7f1718553132d.hot-update.js",
+        "fileType": "generic",
+        "lineCount": 22,
         "imports": [],
         "importedBy": [],
         "importInfos": [],
