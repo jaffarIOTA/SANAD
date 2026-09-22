@@ -1,0 +1,123 @@
+# Gateway definitions: validate on every change, publish on merge.
+#
+# This is the whole of the "connection" between the repository and API
+# Connect. There is no GitHub integration in API Connect and nothing pulls
+# from here — the direction is **push**, and this job is what pushes.
+#
+# That direction is the point, not an implementation detail. `gateway/` is the
+# source of truth (§5); the console is a view of what was pushed. The moment
+# someone edits an API in the API Manager UI, this repository stops describing
+# what is deployed, and the next merge silently reverts their change. If that
+# ever needs to happen in an incident, it should be followed by a commit, not
+# left in place.
+#
+# Credentials never appear here. They are GitHub repository secrets, read at
+# run time, and nothing in this file prints them.
+
+name: gateway
+
+on:
+  pull_request:
+    paths: ['gateway/**', 'api/openapi/**', '.github/workflows/gateway.yml']
+  push:
+    branches: [main]
+    paths: ['gateway/**', 'api/openapi/**']
+
+# Two concurrent publishes to one catalog is a race with a gateway on the
+# other end of it.
+concurrency:
+  group: gateway-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    # Runs on every pull request, including from people without access to the
+    # instance. It needs no credential, because `apic validate` is offline —
+    # which is exactly why it is worth having as a gate.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the API Connect toolkit
+        run: |
+          set -euo pipefail
+          # The toolkit is not on npm for v10+. `apiconnect` on npm is the v5
+          # toolkit, last published 2023, and it cannot talk to a v10
+          # instance — installing it is a convincing way to lose an hour.
+          curl -fsSL "${TOOLKIT_URL}" -o toolkit.zip
+          unzip -q toolkit.zip -d toolkit
+          find toolkit -type f -name 'apic*' -exec chmod +x {} \;
+          find toolkit -type f -name 'apic*' -exec mv {} /usr/local/bin/apic \;
+          apic --accept-license --live-help=false
+          apic version
+        env:
+          # A URL, not a credential — but it is instance-specific, so it lives
+          # in repository configuration rather than in this file.
+          TOOLKIT_URL: ${{ vars.APIC_TOOLKIT_URL }}
+
+      - name: Validate every gateway definition
+        run: |
+          set -euo pipefail
+          failed=0
+          for file in gateway/ibm/*_*.yaml; do
+            echo "── $file"
+            apic validate "$file" || failed=1
+          done
+          exit $failed
+
+      - name: The published definition must stay in step with the contract
+        run: npm ci && npx vitest run test/architecture/gateway
+
+  publish:
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    # A GitHub environment, so publishing to a catalog can require a reviewer
+    # once this points at anything other than development.
+    environment: apic-dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the API Connect toolkit
+        run: |
+          set -euo pipefail
+          curl -fsSL "${TOOLKIT_URL}" -o toolkit.zip
+          unzip -q toolkit.zip -d toolkit
+          find toolkit -type f -name 'apic*' -exec chmod +x {} \;
+          find toolkit -type f -name 'apic*' -exec mv {} /usr/local/bin/apic \;
+          apic --accept-license --live-help=false
+        env:
+          TOOLKIT_URL: ${{ vars.APIC_TOOLKIT_URL }}
+
+      - name: Log in
+        run: |
+          set -euo pipefail
+          # `--apiKey` rather than `--sso`: there is no browser here. Nothing
+          # below echoes the key, and `set -x` is deliberately not used in
+          # this step.
+          apic login \
+            --server "$APIC_SERVER" \
+            --realm "$APIC_REALM" \
+            --apiKey "$APIC_API_KEY"
+        env:
+          APIC_SERVER: ${{ vars.APIC_SERVER }}
+          APIC_REALM: ${{ vars.APIC_REALM }}
+          APIC_API_KEY: ${{ secrets.APIC_API_KEY }}
+
+      - name: Publish
+        run: |
+          set -euo pipefail
+          apic products:publish \
+            --server "$APIC_SERVER" \
+            --org "$APIC_ORG" \
+            --catalog "$APIC_CATALOG" \
+            --scope catalog \
+            gateway/ibm/health-product_1.0.0.yaml
+        env:
+          APIC_SERVER: ${{ vars.APIC_SERVER }}
+          APIC_ORG: ${{ vars.APIC_ORG }}
+          APIC_CATALOG: ${{ vars.APIC_CATALOG }}
+
+      - name: Log out
+        if: always()
+        run: apic logout --server "${{ vars.APIC_SERVER }}" || true
