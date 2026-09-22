@@ -1,0 +1,10 @@
+{
+  "name": "@sanad/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Domain, structures, sequencing, decisioning. No vendor names, no client names.",
+  "exports": {
+    "./*": "./*"
+  }
+}

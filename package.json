@@ -3,7 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Sanad — Shariah-compliant origination platform. Wasl — SME supply chain finance.",
+  "workspaces": [
+    "core"
+  ],
+  "description": "Sanad \u2014 Shariah-compliant origination platform. Wasl \u2014 SME supply chain finance.",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=20"
