@@ -3,13 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Sanad — Shariah-compliant origination platform. Wasl — SME supply chain finance.",
+  "description": "Sanad \u2014 Shariah-compliant origination platform. Wasl \u2014 SME supply chain finance.",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web-test.json && tsc --noEmit -p apps/sme && tsc --noEmit -p apps/ops",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web-test.json && tsc --noEmit -p services/origination && tsc --noEmit -p apps/sme && tsc --noEmit -p apps/ops",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:compliance": "vitest run test/compliance",
@@ -17,7 +17,8 @@
     "dev": "next dev apps/sme",
     "build:sme": "next build apps/sme",
     "dev:ops": "next dev apps/ops --port 3001",
-    "build:ops": "next build apps/ops"
+    "build:ops": "next build apps/ops",
+    "dev:api": "node --experimental-strip-types services/origination/src/index.ts"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
@@ -31,6 +32,7 @@
     "yaml": "^2.9.1"
   },
   "dependencies": {
+    "ajv": "^8.20.0",
     "next": "^15.5.25",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"

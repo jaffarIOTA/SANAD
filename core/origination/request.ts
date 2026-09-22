@@ -378,7 +378,23 @@ export function reopen(request: ReturnedToMaker): Keying {
   return { state: 'KEYING', core: request.core, maker: request.maker };
 }
 
-export function withdraw(request: Keying | AwaitingReview | ReturnedToMaker): Withdrawn {
+/**
+ * Withdraw a request.
+ *
+ * Accepts every state in which a request is still open, including
+ * `AWAITING_SERVICING_RESPONSE` — a counterparty or partner may change its
+ * mind while an external platform is still deliberating, and having to wait
+ * for an answer you no longer want is a worse outcome than a late withdrawal.
+ *
+ * The states it does *not* accept are the decided ones, and that is the whole
+ * control: `Approved`, `Rejected` and `Withdrawn` are absent from the
+ * parameter type, so "withdraw an approved request" does not typecheck.
+ * Reversing a decision is a different act with different evidence, and it is
+ * not this function.
+ */
+export function withdraw(
+  request: Keying | AwaitingServicingResponse | AwaitingReview | ReturnedToMaker,
+): Withdrawn {
   return { state: 'WITHDRAWN', core: request.core };
 }
 

@@ -379,3 +379,25 @@ describe("adversarial: no gate-bypass entitlement can be defined (SH-05, BR-D10)
     expect(entitlement.actions).toHaveLength(3);
   });
 });
+describe("withdrawal cannot reverse a decision", () => {
+  it("accepts only states in which a request is still open", async () => {
+    const source = await import("node:fs").then(
+      (fs) => fs.readFileSync(
+        new URL("../../core/origination/request.ts", import.meta.url),
+        "utf8"
+      )
+    );
+    const signature = /export function withdraw\(\s*request:\s*([^)]+)\)/.exec(source);
+    expect(signature, "withdraw() is declared").not.toBeNull();
+    const accepted = (signature?.[1] ?? "").split("|").map((t) => t.trim().replace(/,$/, "")).filter((t) => t.length > 0);
+    expect(accepted.sort()).toEqual([
+      "AwaitingReview",
+      "AwaitingServicingResponse",
+      "Keying",
+      "ReturnedToMaker"
+    ]);
+    for (const decided of ["Approved", "Rejected", "Withdrawn"]) {
+      expect(accepted).not.toContain(decided);
+    }
+  });
+});
