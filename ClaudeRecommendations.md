@@ -569,21 +569,9 @@ idempotency works.
 
 Ans:
 
-## R-05 — Compiled `.js` files are committed · **Hygiene**
+## R-05 — Compiled `.js` files are committed · ✅ **Done**
 
-40 compiled `.js` files are tracked, produced by `"compilets.autoStart": true` in
-`.vscode/settings.json`.
-
-**Correcting something I said earlier in the session:** I initially implied this
-was a compliance hole. It is not. `test/architecture/absences.test.ts` skips a
-`.js` sitting beside a `.ts` of the same name, deliberately and with a comment
-explaining why. So the absence scan is not evaded. It is redundant committed
-build output and nothing worse.
-
-**Recommendation.** Turn off `compilets.autoStart`, `git rm --cached` the 40
-files, add them to `.gitignore`. Your editor config, so your call.
-
-Ans:
+*Moved to Closed. See C-07.*
 
 ## R-06 — Commits are being made that I did not make · **Material**
 
@@ -598,21 +586,39 @@ has more than one contributor.
 
 Ans:
 
-## R-07 — Toolchain advisories, one critical · **Material**
+## R-07 — Toolchain advisories · **Mostly done — 2 remain**
 
-`npm audit`: 7 advisories, all pre-existing toolchain, none from application
-dependencies.
+Was 7 advisories including one critical. Now **2**, both the same root cause.
 
-| Severity | Package | Path |
-|---|---|---|
-| critical | `vitest` | via `@vitest/mocker` |
-| high | `vite`, `postcss` | |
-| moderate | `esbuild`, `next`, `vite-node`, `@vitest/mocker` | |
+**Fixed** by upgrading vitest 2.1.9 → 5.0.1 and vite 5.4 → 8.3: the critical
+`vitest`/`@vitest/mocker` advisory, the high on `vite`, and the moderates on
+`esbuild` and `vite-node`. All 390 tests pass on the new major with one config
+change — vitest 5 transforms with oxc rather than esbuild, so the
+`esbuild: { jsx }` option was silently ignored and has been removed.
 
-All are dev-time except the `next`→`postcss` path. Upgrading `vitest` from 2.1.9
-clears most of them but may disturb the suite, so I have not done it unasked.
-Worth doing as its own change before anyone runs a supply-chain review — and a
-bank will run one (SDD §6.12).
+**Remaining**, and deliberately not fixed:
+
+| Severity | Package | Path | Fix |
+|---|---|---|---|
+| high | `postcss` | bundled inside `next` | Next 16 (major) |
+| moderate | `next` | the same `postcss` | Next 16 (major) |
+
+Both are the same advisory: *PostCSS XSS via unescaped `</style>` in CSS
+stringify output*. Two reasons to leave it for now rather than take a major
+framework upgrade as part of a hygiene batch:
+
+1. **It is a build-time path we do not expose.** PostCSS runs during our build,
+   over our own stylesheets. Exploiting this needs attacker-controlled CSS
+   entering the build, which would already be a supply-chain compromise of a
+   different order. The practical risk here is close to nil.
+2. **Next 15 → 16 is a major** touching both applications and the App Router
+   surface. It deserves its own change with its own verification, not a line
+   in a batch about `.gitignore`.
+
+**It will still show up on a bank's supply-chain review** (SDD §6.12) as a
+*high*, and "we assessed it as not exploitable" is an answer that needs to be
+written down before it is asked for. This paragraph is that answer; the
+upgrade should be scheduled regardless.
 
 Ans:
 
@@ -667,6 +673,45 @@ Ans:
 ---
 
 # E. Closed
+
+## C-06 — Secrets pre-commit hook
+
+The guard written earlier caught a live Upstash token — one commit **after** it
+had been committed and pushed. Same patterns, now wired to `pre-commit` so it
+blocks instead of reporting.
+
+- `scripts/secret-patterns.mjs` — one source of patterns, so the hook and the
+  architecture test cannot drift.
+- `scripts/scan-staged.mjs` — scans the **index**, not the working tree,
+  because the file on disk may already have been cleaned while the staged
+  content still carries the value.
+- `.githooks/pre-commit` — versioned, because a hook only one person has is not
+  a control. Enabled with `git config core.hooksPath .githooks`.
+
+Kept under a second: the staged scan plus one test file, not the suite. A hook
+that takes ten seconds is a hook that gets bypassed.
+
+Verified by attempting four real commits, all refused: a token pasted into
+`.env.example`, a staged `.env.local`, a `NEXT_PUBLIC_` secret, and a PEM
+block. A clean commit still passes. Ten further cases are asserted in
+`test/architecture/secrets.test.ts` by invoking the scanner the hook calls —
+behaviour, not source, so the test cannot pass while the hook is broken.
+
+**This does not undo the exposed token.** Rotation is still the fix.
+
+## C-07 — Compiled JavaScript untracked *(was R-05)*
+
+48 tracked `.js` files, every one shadowing a `.ts` of the same name, none
+hand-written. Untracked with `git rm --cached` and ignored.
+
+The ignore is scoped to the four trees the output appears in — `core/`,
+`adapters/`, `config/`, `test/` — rather than a blanket `*.js`, so genuinely
+hand-written JavaScript elsewhere stays tracked. Config files are `.mjs` and
+unaffected.
+
+`.vscode/settings.json` still has `compilets.autoStart`, and I have left it
+alone: it is your editor. The files still appear on disk and git now ignores
+them, which is a fine outcome either way.
 
 ## C-01 — Front-end test harness *(was R-09)*
 

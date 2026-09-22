@@ -1,0 +1,18 @@
+#!/bin/sh
+# Refuse a commit that carries a secret.
+#
+# Versioned in `.githooks/` rather than `.git/hooks/`, because a hook nobody
+# else gets is not a control. Enable with:
+#
+#   git config core.hooksPath .githooks
+#
+# Kept fast. A hook that takes ten seconds is a hook that gets bypassed, so
+# this scans the staged content and runs one test file — not the suite.
+
+set -e
+
+node scripts/scan-staged.mjs
+
+# The repository-wide absences, which catch what a staged-content scan cannot:
+# a NEXT_PUBLIC_ prefix, a plaintext column, a tracked key file.
+npx vitest run test/architecture/secrets --silent --reporter=dot

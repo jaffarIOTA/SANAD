@@ -16,11 +16,16 @@ export default defineConfig({
     },
   },
   /*
-   * JSX is compiled for the automatic runtime rather than read from a
-   * tsconfig, because the root tsconfig deliberately has no `jsx` setting —
-   * see `tsconfig.web-test.json` for why.
+   * No explicit JSX setting.
+   *
+   * Vitest 5 transforms with oxc rather than esbuild, and oxc compiles `.tsx`
+   * for the automatic runtime by default. An `esbuild: { jsx }` block here is
+   * silently ignored and warns on every run. The `.tsx` tests in `test/ui/`
+   * are what prove this is actually working.
+   *
+   * The root tsconfig deliberately has no `jsx` setting either — see
+   * `tsconfig.web-test.json` for why.
    */
-  esbuild: { jsx: 'automatic' },
   test: {
     include: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
     /*

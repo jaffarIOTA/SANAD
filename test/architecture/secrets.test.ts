@@ -15,7 +15,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -153,6 +153,93 @@ describe('§4 — no secret reaches the browser', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+// -- The hook, which is what runs when someone is in a hurry -----------------
+
+describe('the pre-commit hook is installed and bites', () => {
+  /**
+   * The repository-wide tests above run in CI and in `npm run verify`. The
+   * hook is what runs at the moment a secret would actually enter the
+   * history — and this repository has already lost a token to a commit that
+   * happened before anyone ran a test.
+   */
+  it('is versioned, so everyone gets it', () => {
+    expect(existsSync(join(ROOT, '.githooks/pre-commit'))).toBe(true);
+  });
+
+  it('is executable', () => {
+    // eslint-disable-next-line no-bitwise
+    expect(statSync(join(ROOT, '.githooks/pre-commit')).mode & 0o111).toBeGreaterThan(0);
+  });
+
+  it('is the configured hooks path', () => {
+    const configured = execFileSync('git', ['config', '--get', 'core.hooksPath'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    }).trim();
+    expect(configured).toBe('.githooks');
+  });
+
+  /**
+   * Behaviour, not source. Duplicating the patterns into this file would let
+   * the two drift; running the scanner proves the thing the hook actually
+   * calls refuses what it should.
+   */
+  /*
+   * The fixtures below are assembled at runtime rather than written out.
+   *
+   * A test that proves the scanner refuses secret-shaped strings has to
+   * contain secret-shaped strings, so written literally it refuses its own
+   * commit — which is the scanner working, not failing. `absences.test.ts`
+   * builds the forbidden rate identifiers the same way and for the same
+   * reason: naming the thing to search for it is the one place the rule
+   * genuinely needs care, and assembling at runtime is cheaper than carving
+   * an exemption into the guard.
+   *
+   * An allowlist would have been the easy fix and the wrong one. Every
+   * allowlist entry is a hole someone later widens.
+   */
+  const opaque = ['AX8sASQgN2Y2ZjQ4', 'NmEtYjM0NS00ZGRl'].join('');
+  const browserPrefix = ['NEXT', 'PUBLIC'].join('_') + '_';
+  const pemOpen = `-----BEGIN ${['PRIVATE', 'KEY'].join(' ')}-----`;
+  const credentialLiteral = `const apiKey = '${['sk', 'live', '8fJ2mQx7Lp0RvT4nZaB6wYcE'].join('_')}';`;
+
+  it.each([
+    ['.env.example', `TOKEN=${opaque}`, 'a value in the tracked example'],
+    ['.env.local', 'ANYTHING=1', 'an environment file'],
+    ['a.ts', `process.env.${browserPrefix}API_KEY`, 'a browser-inlined secret'],
+    ['a.txt', pemOpen, 'a PEM block'],
+    ['a.ts', credentialLiteral, 'an opaque credential'],
+    ['server.key', 'anything', 'key material by filename'],
+  ])('refuses %s — %s', (path, content) => {
+    const findings = scan(path, content);
+    expect(findings.length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['a.ts', "const token = process.env['PARTNER_API_DEV_TOKEN'];", 'reading from the environment'],
+    ['.env.example', 'UPSTASH_REDIS_REST_TOKEN=', 'a name with no value'],
+    ['a.ts', "const tokenDigest = 'development-substitute';", 'a named placeholder'],
+    ['a.md', 'Set TUUM_CLIENT_SECRET in .env.local', 'prose about a credential'],
+  ])('allows %s — %s', (path, content) => {
+    expect(scan(path, content)).toEqual([]);
+  });
+});
+
+/** Invoke the same module the hook uses, so this tests behaviour not source. */
+function scan(path: string, content: string): string[] {
+  const script = `
+    import { findSecrets } from ${JSON.stringify(join(ROOT, 'scripts/secret-patterns.mjs'))};
+    process.stdout.write(JSON.stringify(findSecrets(
+      ${JSON.stringify(path)},
+      ${JSON.stringify(content)}
+    )));
+  `;
+  const out = execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+    encoding: 'utf8',
+  });
+  return JSON.parse(out) as string[];
+}
 
 describe('§4 — the credential store has no plaintext column', () => {
   it('never adds a value column to config.integration_credential', () => {

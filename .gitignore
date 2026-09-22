@@ -8,3 +8,18 @@ dist/
 *.p12
 *.key
 .DS_Store
+
+# Compiled output.
+#
+# The editor's `compilets.autoStart` (.vscode/settings.json) emits a `.js`
+# beside every `.ts` in these trees. That output is build product: it is
+# regenerated on every save, it is never imported — every import in this
+# codebase names a `.ts` — and committing it doubles every diff.
+#
+# Scoped to the four trees it appears in rather than a blanket `*.js`, so a
+# genuinely hand-written JavaScript file elsewhere is still tracked. Config
+# files are `.mjs` and unaffected; `scripts/` is `.mjs` and unaffected.
+core/**/*.js
+adapters/**/*.js
+config/**/*.js
+test/**/*.js
