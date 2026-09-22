@@ -47,6 +47,16 @@ export const ENTITLEMENT_ACTIONS = [
   'limit.approve_change', // four-eyes; the proposer cannot approve
   'limit.suspend',
 
+  // Origination intake. These govern a *request to originate*, never a gate.
+  // An approval here buys a transaction in DRAFT and nothing further.
+  'origination.key',
+  'origination.submit_for_review',
+  'origination.review',
+  'origination.approve', // four-eyes; the maker cannot be the approver
+  'origination.return_to_maker',
+  'origination.reject',
+  'origination.channel.configure',
+
   // Transaction and evidence
   'transaction.read',
   'transaction.initiate',

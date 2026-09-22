@@ -17,10 +17,10 @@
  * swapping the source is a change to this file alone.
  */
 
-import { money } from '../../../../core/kernel/money.ts';
-import { expectOk } from '../../../../core/kernel/result.ts';
-import { type MurabahaPricing, priceMurabaha } from '../../../../core/pricing/murabaha.ts';
-import type { ControlCode } from '../../../../core/kernel/result.ts';
+import { money } from '@sanad/core/kernel/money.ts';
+import { expectOk } from '@sanad/core/kernel/result.ts';
+import { type MurabahaPricing, priceMurabaha } from '@sanad/core/pricing/murabaha.ts';
+import type { ControlCode } from '@sanad/core/kernel/result.ts';
 
 export interface TradeSummary {
   readonly transactionId: string;
@@ -41,7 +41,18 @@ export interface TradeSummary {
    */
   readonly availability:
     | { readonly kind: 'AVAILABLE' }
-    | { readonly kind: 'BLOCKED'; readonly control: ControlCode; readonly reason: string };
+    | {
+        readonly kind: 'BLOCKED';
+        readonly control: ControlCode;
+        /**
+         * Both languages, always. Parity of content is a requirement rather
+         * than an aspiration (NFR-07), and a refusal is the worst possible
+         * place to fall back to the other language. The wording belongs to the
+         * institution's control catalogue, so it arrives here already
+         * approved in both — a developer never writes a decline.
+         */
+        readonly reason: { readonly ar: string; readonly en: string };
+      };
 }
 
 export interface OfferView {
@@ -76,9 +87,10 @@ const CLEARED_TRADES: readonly TradeSummary[] = [
     availability: {
       kind: 'BLOCKED',
       control: 'SH-10',
-      // Wording belongs to the institution's control catalogue, not to a
-      // developer. Carried through from the server with its control code.
-      reason: 'تم تمويل هذه الفاتورة مسبقًا ولا يمكن تمويلها مرة أخرى.',
+      reason: {
+        ar: 'تم تمويل هذه الفاتورة مسبقًا ولا يمكن تمويلها مرة أخرى.',
+        en: 'This invoice has already been financed and cannot be financed again.',
+      },
     },
   },
   {
@@ -93,7 +105,10 @@ const CLEARED_TRADES: readonly TradeSummary[] = [
     availability: {
       kind: 'BLOCKED',
       control: 'SH-11',
-      reason: 'تحتوي الفاتورة على أصناف خارج سجل البضائع المعتمد لهذا البرنامج.',
+      reason: {
+        ar: 'تحتوي الفاتورة على أصناف خارج سجل البضائع المعتمد لهذا البرنامج.',
+        en: 'The invoice contains items outside the goods register approved for this programme.',
+      },
     },
   },
 ];

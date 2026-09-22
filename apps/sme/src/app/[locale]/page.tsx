@@ -12,17 +12,27 @@
  * system is broken, or worse, tries to work around it.
  */
 
-import { Card, ControlRejection, DualDate, Status } from '../design/primitives.tsx';
-import { formatMinorUnits } from '../design/Money.tsx';
-import { STRINGS, isRtl } from '../i18n/strings.ts';
-import { availableLimitMinorUnits, listTrades } from '../server/trades.ts';
+import { notFound } from 'next/navigation';
 
-const LOCALE = 'ar-SA' as const;
+import { Card, ControlRejection, DualDate, Status } from '@sanad/design/primitives.tsx';
+import { defaultNumerals, formatMinorUnits } from '@sanad/design/Money.tsx';
+import { STRINGS, localeFromSegment } from '@sanad/i18n/strings.ts';
+import { availableLimitMinorUnits, listTrades } from '../../server/trades.ts';
 
-export default async function ChooseTheTradePage() {
-  const t = STRINGS[LOCALE];
+export default async function ChooseTheTradePage({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}) {
+  const { locale: segment } = await params;
+  const locale = localeFromSegment(segment);
+  if (locale === undefined) notFound();
+
+  const t = STRINGS[locale];
+  const numerals = defaultNumerals(locale);
+  const arabic = locale === 'ar-SA';
+
   const [limit, trades] = await Promise.all([availableLimitMinorUnits(), listTrades()]);
-  const numerals = isRtl(LOCALE) ? 'arabic-indic' : 'latin';
 
   return (
     <div className="flex flex-col gap-5">
@@ -59,11 +69,13 @@ export default async function ChooseTheTradePage() {
                       <span className="text-sm text-ink-quiet">
                         {t.invoice} <span className="identifier">{trade.invoiceNumber}</span>
                       </span>
-                      <span className="font-medium">{trade.buyerNameAr}</span>
+                      <span className="font-medium">
+                        {arabic ? trade.buyerNameAr : trade.buyerNameEn}
+                      </span>
                       <DualDate
                         gregorian={trade.issuedGregorian}
                         hijri={trade.issuedHijri}
-                        locale={LOCALE}
+                        locale={locale}
                       />
                     </div>
 
@@ -88,13 +100,17 @@ export default async function ChooseTheTradePage() {
                     <div className="mt-3">
                       <ControlRejection
                         control={trade.availability.control}
-                        explanation={trade.availability.reason}
+                        explanation={
+                          arabic
+                            ? trade.availability.reason.ar
+                            : trade.availability.reason.en
+                        }
                         controlLabel={t.blockedBy}
                       />
                     </div>
                   ) : (
                     <a
-                      href={`/finance/${trade.transactionId}`}
+                      href={`/${segment}/finance/${trade.transactionId}`}
                       className="mt-3 inline-flex min-h-tap w-full items-center justify-center rounded-card border border-brand-strong px-4 text-base font-semibold text-brand-deep hover:bg-brand-wash"
                     >
                       {t.murabahaOffer}

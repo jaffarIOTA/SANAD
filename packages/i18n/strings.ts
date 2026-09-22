@@ -84,3 +84,38 @@ export const STRINGS: Readonly<Record<Locale, Strings>> = { 'ar-SA': ar, 'en-SA'
 
 export const isRtl = (locale: Locale): boolean => locale === 'ar-SA';
 export const htmlLang = (locale: Locale): string => (locale === 'ar-SA' ? 'ar' : 'en');
+
+/**
+ * URL segments.
+ *
+ * Both languages are routes, not a toggle over one route. English is a mirror
+ * of the Arabic rather than an afterthought on top of it, and giving each its
+ * own URL is what makes "complete parity of content" (NFR-07) something you
+ * can actually check — you can open both and compare.
+ *
+ * Arabic is first in this list, and it is the default anything unrecognised
+ * resolves to.
+ */
+export const LOCALE_SEGMENTS = ['ar', 'en'] as const;
+export type LocaleSegment = (typeof LOCALE_SEGMENTS)[number];
+
+export const DEFAULT_SEGMENT: LocaleSegment = 'ar';
+
+export function localeFromSegment(segment: string): Locale | undefined {
+  if (segment === 'ar') return 'ar-SA';
+  if (segment === 'en') return 'en-SA';
+  return undefined;
+}
+
+export const segmentFromLocale = (locale: Locale): LocaleSegment =>
+  locale === 'ar-SA' ? 'ar' : 'en';
+
+/** The other language, for the switch in the header. */
+export const otherSegment = (segment: LocaleSegment): LocaleSegment =>
+  segment === 'ar' ? 'en' : 'ar';
+
+/** Always written in its own language, never translated (العربية, not "Arabic"). */
+export const LANGUAGE_NAME: Readonly<Record<LocaleSegment, string>> = {
+  ar: 'العربية',
+  en: 'English',
+};

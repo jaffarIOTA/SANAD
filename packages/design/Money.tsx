@@ -17,8 +17,8 @@
 
 import type { ReactElement } from 'react';
 
-import type { Money as DomainMoney } from '../../../../core/kernel/money.ts';
-import type { MurabahaPricing } from '../../../../core/pricing/murabaha.ts';
+import type { Money as DomainMoney } from '@sanad/core/kernel/money.ts';
+import type { MurabahaPricing } from '@sanad/core/pricing/murabaha.ts';
 
 export type NumeralSystem = 'arabic-indic' | 'latin';
 

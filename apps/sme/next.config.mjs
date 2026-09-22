@@ -10,6 +10,13 @@ const config = {
   outputFileTracingRoot: new URL('../..', import.meta.url).pathname,
   reactStrictMode: true,
   eslint: { ignoreDuringBuilds: true },
+
+  // Arabic is the default, so the bare root goes there. Not permanent: the
+  // landing locale should follow the authenticated principal's preference, and
+  // a 308 would be cached by browsers long after that changes.
+  async redirects() {
+    return [{ source: '/', destination: '/ar', permanent: false }];
+  },
 };
 
 export default config;

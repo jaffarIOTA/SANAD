@@ -7,7 +7,8 @@
  * one could be passed (FP-03, SH-15).
  *
  * Both calendars appear because the maturity date has contractual effect
- * (NFR-08). Both values come from storage; neither is converted here.
+ * (NFR-08). Both values come from storage; neither is converted here, so a
+ * stored contractual date cannot shift between two renders.
  *
  * The contract itself is then read in an embedded viewer — never downloaded,
  * never summarised (SDD §7.7). That viewer is not built yet: it needs the
@@ -18,20 +19,21 @@
 
 import { notFound } from 'next/navigation';
 
-import { Money } from '../../../design/Money.tsx';
-import { Card, DualDate } from '../../../design/primitives.tsx';
-import { STRINGS } from '../../../i18n/strings.ts';
-import { findOffer } from '../../../server/trades.ts';
-
-const LOCALE = 'ar-SA' as const;
+import { Money } from '@sanad/design/Money.tsx';
+import { Card, DualDate } from '@sanad/design/primitives.tsx';
+import { STRINGS, localeFromSegment } from '@sanad/i18n/strings.ts';
+import { findOffer } from '../../../../server/trades.ts';
 
 export default async function OfferPage({
   params,
 }: {
-  readonly params: Promise<{ readonly transactionId: string }>;
+  readonly params: Promise<{ readonly locale: string; readonly transactionId: string }>;
 }) {
-  const { transactionId } = await params;
-  const t = STRINGS[LOCALE];
+  const { locale: segment, transactionId } = await params;
+  const locale = localeFromSegment(segment);
+  if (locale === undefined) notFound();
+
+  const t = STRINGS[locale];
 
   // The server decides whether an offer exists. The browser does not infer it
   // from a gate, a state name or anything else it happens to hold.
@@ -41,7 +43,7 @@ export default async function OfferPage({
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <a href="/" className="text-sm text-brand-deep underline">
+        <a href={`/${segment}`} className="text-sm text-brand-deep underline">
           {t.back}
         </a>
         <h1 className="mt-2 text-lg font-semibold">{t.murabahaOffer}</h1>
@@ -53,7 +55,7 @@ export default async function OfferPage({
       <Card>
         <Money
           pricing={offer.pricing}
-          locale={LOCALE}
+          locale={locale}
           labels={{ cost: t.cost, profit: t.profit, total: t.total }}
         />
         <p className="mt-3 text-xs text-ink-quiet">{t.disclosureNote}</p>
@@ -65,7 +67,7 @@ export default async function OfferPage({
           <DualDate
             gregorian={offer.maturityGregorian}
             hijri={offer.maturityHijri}
-            locale={LOCALE}
+            locale={locale}
           />
         </div>
       </Card>

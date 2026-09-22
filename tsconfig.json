@@ -1,7 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2023",
-    "lib": ["ES2023"],
+    "lib": [
+      "ES2023"
+    ],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
@@ -9,22 +11,37 @@
     "noEmit": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
-
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "noPropertyAccessFromIndexSignature": true,
-
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-
     "baseUrl": ".",
     "paths": {
-      "@core/*": ["core/*"],
-      "@config/*": ["config/*"]
+      "@core/*": [
+        "core/*"
+      ],
+      "@config/*": [
+        "config/*"
+      ],
+      "@sanad/core/*": [
+        "core/*"
+      ],
+      "@sanad/design/*": [
+        "packages/design/*"
+      ],
+      "@sanad/i18n/*": [
+        "packages/i18n/*"
+      ]
     }
   },
-  "include": ["core/**/*", "config/**/*", "adapters/**/*", "test/**/*"]
+  "include": [
+    "core/**/*",
+    "config/**/*",
+    "adapters/**/*",
+    "test/**/*"
+  ]
 }

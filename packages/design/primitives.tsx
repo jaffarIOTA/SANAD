@@ -16,6 +16,12 @@
 
 import type { ReactElement, ReactNode } from 'react';
 
+import {
+  LANGUAGE_NAME,
+  otherSegment,
+  type LocaleSegment,
+} from '@sanad/i18n/strings.ts';
+
 // -- The mark -----------------------------------------------------------------
 
 /**
@@ -194,6 +200,40 @@ export function PrimaryAction({
       className="inline-flex min-h-tap w-full items-center justify-center rounded-card bg-brand-strong px-5 text-base font-semibold text-on-brand hover:bg-brand-deep"
     >
       {children}
+    </a>
+  );
+}
+
+// -- Language ----------------------------------------------------------------
+
+/**
+ * The language switch.
+ *
+ * Each language is named in its own script — العربية, not "Arabic" — because
+ * the person who needs this control is by definition not reading the language
+ * currently on screen.
+ *
+ * It links to the other locale's root rather than the same path translated.
+ * Preserving the exact position across a language change needs the router, and
+ * a switch that silently lands you somewhere unexpected is worse than one that
+ * obviously returns you home. Worth revisiting once there are deeper journeys.
+ */
+export function LanguageSwitch({
+  current,
+}: {
+  readonly current: LocaleSegment;
+}): ReactElement {
+  const other = otherSegment(current);
+
+  return (
+    <a
+      href={`/${other}`}
+      hrefLang={other}
+      lang={other}
+      className="inline-flex min-h-tap items-center rounded-card border border-line px-3 text-sm font-medium text-ink hover:bg-sunken"
+      data-testid="language-switch"
+    >
+      {LANGUAGE_NAME[other]}
     </a>
   );
 }
