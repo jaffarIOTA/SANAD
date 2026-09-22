@@ -92,15 +92,21 @@ jobs:
       - name: Log in
         run: |
           set -euo pipefail
-          # `--apiKey` rather than `--sso`: there is no browser here. Nothing
-          # below echoes the key, and `set -x` is deliberately not used in
-          # this step.
+          # `--apiKey` rather than `--sso`: the provider identity provider is
+          # IBM Verify (OIDC), which is browser-based and cannot work here.
+          #
+          # If this instance expects an IBM Cloud API key, `apic iam-apikey`
+          # is the purpose-built command and should replace this step — see
+          # gateway/ibm/INSTANCE.md.
+          #
+          # Nothing below echoes the key, and `set -x` is deliberately absent.
           apic login \
             --server "$APIC_SERVER" \
             --realm "$APIC_REALM" \
             --apiKey "$APIC_API_KEY"
         env:
           APIC_SERVER: ${{ vars.APIC_SERVER }}
+          # provider/ibm-verify on this instance — see gateway/ibm/INSTANCE.md
           APIC_REALM: ${{ vars.APIC_REALM }}
           APIC_API_KEY: ${{ secrets.APIC_API_KEY }}
 
