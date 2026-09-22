@@ -681,6 +681,65 @@ synthetic data and must not become the production path (E-22).
 
 Ans:
 
+## E-26 — API discovery collectors: not the GitHub one, and not yet · **Material**
+
+API Connect's discovery microservice can pull APIs from three kinds of source
+— GitHub, a DataPower gateway proxy, and OpenTelemetry — and surface them in
+API Connect as discovered drafts for curation.
+
+It runs on a **different host** from the platform API:
+`ap-south-a.apiconnect.automation.ibm.com`, not
+`api.ap-south-a.apiconnect.ibmappdomain.cloud`. Two services, two
+entitlements; do not assume the platform API's plan problem affects this one,
+or the reverse.
+
+### The GitHub collector: decline
+
+Four reasons, in order of weight.
+
+1. **It inverts the direction we chose on purpose.** Our model is push: the
+   repository is authoritative, CI pushes, the console is a view (§5,
+   `gateway/README.md`). Discovery pulls from GitHub and creates drafts that
+   someone then curates, which is a second authoring surface — and a second
+   authoring surface is exactly the drift the push model exists to prevent.
+
+2. **It would discover the wrong file.** The source of truth is
+   `api/openapi/origination.v1.yaml`, OpenAPI **3.1**, which this API Connect
+   cannot parse (E-25). The publishable artefact is the *generated* 3.0 file
+   in `gateway/ibm/`. A crawler pointed at the repository would either fail on
+   the 3.1 document or ingest both, leaving two "discovered" versions of one
+   API and no signal about which is real.
+
+3. **It needs read access to the repository.** That repository is the product
+   — the domain model, the sequencing engine, the compliance controls, the
+   schema. Granting a SaaS service in Asia-Pacific standing read access to it
+   is a supply-chain decision (SDD §6.12) and deserves the same scrutiny as
+   any other third-party processor, even though it holds no customer data.
+
+4. **We have two APIs, both authored contract-first.** Discovery earns its
+   keep where an organisation has dozens of undocumented APIs scattered across
+   repositories and needs an inventory. That is a real problem; it is not ours.
+
+### What IS worth revisiting later
+
+The **OpenTelemetry** and **DataPower proxy** collectors are a different
+proposition, because they discover from *traffic* rather than from source.
+That answers a governance question we will eventually need answered:
+
+> Is anything serving on our gateway that we did not declare?
+
+An endpoint appearing in traffic but not in `gateway/ibm/` is either a
+mistake, a stale deployment, or something published outside the pipeline —
+and all three are worth knowing about. That is a **detective control over the
+push model**, not a replacement for it, and it complements the discipline
+rather than undermining it.
+
+**Recommendation.** Do not configure the GitHub collector. Revisit the traffic
+collectors once there is real traffic and the on-premises gateway exists, and
+treat them then as governance rather than as an authoring path.
+
+Ans:
+
 ## E-08 — ADR 0001 contains a factual error about role revocation · **Hygiene**
 
 [ADR 0001](docs/adr/0001-data-residency-and-datastore.md#L45) says revoking a

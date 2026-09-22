@@ -73,15 +73,52 @@ to option 1 if that is what the instance expects.
 - **Whether the Developer Portal is enabled** on the sandbox catalog.
 - **TLS profiles** available for the invoke to upstream.
 
-## Blocked
+## Blocked — and the evidence narrows it considerably
 
-The platform API returns `403 {"Error":"Plan limit reached"}` **on every path,
-including unauthenticated ones**. The UI works; the platform API does not.
-Since those take different paths, the instance is not broken — this looks like
-an entitlement on the management API rather than consumed quota.
+The platform API returns `403 {"Error":"Plan limit reached"}`.
 
-Nothing can be published until that clears. It is an IBM Cloud console check
-(Plan / Usage) and, failing that, a support ticket.
+| Probe | Result | What it rules out |
+|---|---|---|
+| `GET /api/cloud`, **no credential** | `403 Plan limit reached` | Not authentication, not permissions — it answers before any identity is read |
+| `GET /definitely/not/a/real/path` | **`404`** | Routing works and the service is up; it distinguishes real paths from bogus ones |
+| Response headers | `x-envoy-upstream-service-time: 2` | An upstream answered in 2 ms. Nothing is down or timing out |
+| API Manager UI | works normally | Different path, different entitlement |
+| Account created | **today**, ~19:26 UTC | — |
+| Total users | 1 | — |
+
+**A brand-new account cannot have exhausted a quota.** "Plan limit reached" on
+an account hours old with no prior usage is not consumed capacity; it is an
+entitlement that has not been applied, or a plan tier that does not include
+platform API access at all. Some trial tiers are UI-only.
+
+So there are two candidates, and they need different actions:
+
+1. **Provisioning has not finished propagating.** Common in the first hours
+   after an account is created. This resolves by waiting, and costs nothing to
+   test — re-run `sh scripts/apic-publish.sh`, which probes before doing
+   anything.
+2. **The plan does not include Platform API / toolkit access.** Then no amount
+   of waiting helps and the plan needs changing.
+
+### For the support ticket
+
+> Account `20260922-1926-5593-809a-cbc498188fce`, instance `iota-api-dev`,
+> region `ap-south-a`. The platform API at
+> `api.ap-south-a.apiconnect.ibmappdomain.cloud` returns
+> `403 {"Error":"Plan limit reached"}` on every valid path **including
+> unauthenticated requests**, while a non-existent path correctly returns 404
+> and the API Manager UI functions normally. The account was created the same
+> day and has no usage. Please confirm whether the plan includes platform API
+> access and whether entitlement provisioning has completed.
+
+## Two realms, do not confuse them
+
+| | |
+|---|---|
+| `www.ibm.com` | The **IBM Cloud account** realm, on the Access Management page |
+| `provider/ibm-verify` | The **API Connect provider org** realm, for `apic login` |
+
+The second is the one the toolkit needs.
 
 ## Reachability, once it does clear
 
