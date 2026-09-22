@@ -80,7 +80,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         id: 'review-queue',
         titleEn: 'Review queue',
         titleAr: 'قائمة المراجعة',
-        href: '',
+        href: '/queue',
         readiness: live(),
         reference: 'Four eyes · SDD §7.4.3',
       },

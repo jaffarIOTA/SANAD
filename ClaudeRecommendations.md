@@ -314,14 +314,9 @@ bank will run one (SDD §6.12).
 
 Ans:
 
-## R-08 — The "Review queue" nav entry overstates itself · **Hygiene**
+## R-08 — The "Review queue" nav entry overstates itself · **Hygiene** · ✅ **Done**
 
-`modules.ts` marks it `LIVE` with `href: ''`, so it lands on the dashboard rather
-than a review queue. The whole point of showing unbuilt modules with a readiness
-badge is that the badges are honest. Either build the screen or downgrade the
-entry; I would downgrade it now and build it next.
-
-Ans:
+*Moved to Closed. See C-03.*
 
 ## R-09 — Front-end tests cannot run at all · **Material** · ✅ **Done**
 
@@ -411,6 +406,39 @@ Mutation-tested: `ml-4`, `sm:text-left`, `margin-left` in CSS, `text-align:
 right` in CSS, `aria-hidden` removed from an icon, a component hardcoding
 `dir`, an Arabic string left in English, a drifted alias, and a rate prop —
 all nine caught.
+
+## C-03 — Review queue *(was R-08)*
+
+The nav marked it `LIVE` with `href: ''`, so it landed on the dashboard. Built
+at `/[locale]/queue`, four views (needs your decision · with the servicing
+platform · with the maker · decided), and the nav now points at it.
+
+Four design decisions, each the opposite of a conventional lending queue:
+
+- **Oldest first, with no control to reverse it.** A newest-first queue
+  starves its tail, and the tail is where a counterparty has waited longest.
+- **Your own work is shown and blocked, not hidden.** Hiding it would be
+  tidier and worse — someone would assume the request was lost. It appears,
+  marked "your own work · needs another reviewer", with no action.
+- **No bulk approve.** Reviewing means looking at the trade; a checkbox column
+  is a way of not looking at it. If volume makes this painful the answer is
+  more reviewers, or a straight-through policy explicit about what it skips.
+- **Ageing is operational only.** Display and ordering, never a gate. Gate
+  timing comes from the TSA through `core/sequencing`, which `apps/` cannot
+  reach.
+
+**A real bug this surfaced.** The queue rendered newest-first despite sorting
+oldest-first. Attested timestamps have one-second granularity, so a batch
+arriving together ties, and the tie fell through to the repository's
+descending order — silently inverting a FIFO queue. Fixed with a request-id
+tie-break and a test that pins it. This will happen in production too: an
+aggregator posting overnight arrives in one second.
+
+Also added `apps/ops/src/server/session.ts`. A `'use server'` module may only
+export async functions, so the principals could not live in `actions.ts` once
+a screen needed to *read* who it is acting as. `canReview()` is a convenience
+for the queue and explicitly **not** the control — `test/ui/review-queue.test.ts`
+asserts the domain still refuses a self-approval when the screen is bypassed.
 
 ## C-02 — Partner origination API contract
 

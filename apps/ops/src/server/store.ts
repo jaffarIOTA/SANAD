@@ -109,6 +109,16 @@ export interface RequestRow {
   readonly counterpartyId: string;
   readonly invoiceNumber: string;
   readonly amountMinorUnits: bigint;
+  /**
+   * When the request was raised, and when it entered the queue, as attested
+   * seconds.
+   *
+   * Exposed so a work queue can be ordered and aged. **Operational display
+   * only.** No gate is evaluated from these — gate timing comes from the TSA
+   * adapter through `core/sequencing`, and nothing in `apps/` can reach it.
+   */
+  readonly raisedAtEpochSeconds: bigint;
+  readonly submittedAtEpochSeconds?: bigint;
   readonly makerPrincipalId?: string;
   readonly servicing?: ServicingOutcome;
   readonly note?: string;
@@ -127,6 +137,10 @@ export function toRow(requestId: string, request: OriginationRequest): RequestRo
     counterpartyId: core.counterpartyId,
     invoiceNumber: INVOICE_NUMBERS.get(requestId) ?? '—',
     amountMinorUnits: core.requestedAmount.minorUnits,
+    raisedAtEpochSeconds: core.raisedAt.epochSeconds,
+    ...('submittedAt' in request
+      ? { submittedAtEpochSeconds: request.submittedAt.epochSeconds }
+      : {}),
     ...('maker' in request ? { makerPrincipalId: request.maker.principalId } : {}),
     ...('servicing' in request && request.servicing !== undefined
       ? { servicing: request.servicing }
@@ -290,21 +304,117 @@ function notInState(requestId: string, expected: string): Result<RequestRow> {
 // -- Seed ---------------------------------------------------------------------
 
 const MAKER_ONE: Principal = { principalId: 'stf-maker-01', tenantId: 'bank-a' };
+/**
+ * A second maker, and deliberately the same principal the workbench reviews
+ * as. One seeded request is therefore this reviewer's own work, so the queue
+ * demonstrates the four-eyes block instead of only claiming to enforce it.
+ */
+const MAKER_TWO: Principal = { principalId: 'stf-checker-01', tenantId: 'bank-a' };
+
+interface Seed {
+  readonly counterpartyId: string;
+  readonly invoiceNumber: string;
+  readonly invoiceUuid: string;
+  readonly amountMinorUnits: bigint;
+  readonly tenorDays: number;
+  readonly channel: OriginationChannel;
+  readonly maker: Principal;
+  readonly merchantMandateRef?: string;
+  readonly aggregatorId?: string;
+  /** Left in `AWAITING_SERVICING_RESPONSE` when false. */
+  readonly servicingResponded?: ServicingOutcome['decision'];
+}
+
+const SEEDS: readonly Seed[] = [
+  {
+    counterpartyId: 'Al-Ufuq Materials Company Limited',
+    invoiceNumber: '452100',
+    invoiceUuid: '3cf5d9a2-0000-4000-8000-000000000001',
+    amountMinorUnits: 18_500_000n,
+    tenorDays: 90,
+    channel: 'MAKER_CHECKER',
+    maker: MAKER_ONE,
+  },
+  {
+    counterpartyId: 'Rawabi Industrial Supplies Establishment',
+    invoiceNumber: '452114',
+    invoiceUuid: '3cf5d9a2-0000-4000-8000-000000000002',
+    amountMinorUnits: 7_250_000n,
+    tenorDays: 60,
+    channel: 'MAKER_CHECKER',
+    maker: MAKER_ONE,
+  },
+  {
+    // Keyed by the principal the workbench reviews as. Not reviewable here.
+    counterpartyId: 'Najd Logistics Company',
+    invoiceNumber: '452130',
+    invoiceUuid: '3cf5d9a2-0000-4000-8000-000000000003',
+    amountMinorUnits: 42_000_000n,
+    tenorDays: 120,
+    channel: 'MAKER_CHECKER',
+    maker: MAKER_TWO,
+  },
+  {
+    counterpartyId: 'Tamam Foodstuff Trading Company',
+    invoiceNumber: 'AGG-88120',
+    invoiceUuid: '3cf5d9a2-0000-4000-8000-000000000004',
+    amountMinorUnits: 3_400_000n,
+    tenorDays: 45,
+    channel: 'EMBEDDED_AGGREGATOR',
+    maker: MAKER_ONE,
+    merchantMandateRef: 'mnd_dev_0001',
+    aggregatorId: 'agg-dev-01',
+    servicingResponded: 'DECLINED',
+  },
+  {
+    counterpartyId: 'Bahr Al-Khaleej Shipping Establishment',
+    invoiceNumber: 'AGG-88147',
+    invoiceUuid: '3cf5d9a2-0000-4000-8000-000000000005',
+    amountMinorUnits: 11_900_000n,
+    tenorDays: 30,
+    channel: 'EMBEDDED_AGGREGATOR',
+    maker: MAKER_ONE,
+    merchantMandateRef: 'mnd_dev_0002',
+    aggregatorId: 'agg-dev-01',
+    // No servicing response yet: sits with the external platform.
+  },
+];
 
 if (!state.seeded) {
   state.seeded = true;
-  const seeded = keyRequest({
-    tenantId: 'bank-a',
-    programmeId: 'prg-0001',
-    counterpartyId: 'Al-Ufuq Materials Company Limited',
-    channel: 'MAKER_CHECKER',
-    invoiceUuid: '3cf5d9a2-0000-4000-8000-000000000001',
-    invoiceNumber: '452100',
-    issuerCr: '1010000002',
-    recipientCr: '7001000001',
-    amountMinorUnits: 18_500_000n,
-    tenorDays: 90,
-    maker: MAKER_ONE,
-  });
-  if (seeded.ok) submit(seeded.value.requestId);
+
+  for (const seed of SEEDS) {
+    const keyed = keyRequest({
+      tenantId: 'bank-a',
+      programmeId: 'prg-0001',
+      counterpartyId: seed.counterpartyId,
+      channel: seed.channel,
+      invoiceUuid: seed.invoiceUuid,
+      invoiceNumber: seed.invoiceNumber,
+      issuerCr: '1010000002',
+      recipientCr: '7001000001',
+      amountMinorUnits: seed.amountMinorUnits,
+      tenorDays: seed.tenorDays,
+      maker: seed.maker,
+      ...(seed.merchantMandateRef === undefined
+        ? {}
+        : { merchantMandateRef: seed.merchantMandateRef }),
+      ...(seed.aggregatorId === undefined ? {} : { aggregatorId: seed.aggregatorId }),
+    });
+    if (!keyed.ok) continue;
+
+    const submitted = submit(keyed.value.requestId);
+    if (!submitted.ok) continue;
+
+    if (seed.servicingResponded !== undefined) {
+      applyServicingOutcome(keyed.value.requestId, {
+        decision: seed.servicingResponded,
+        reference: `svc_${keyed.value.requestId}`,
+        ...(seed.servicingResponded === 'APPROVED'
+          ? {}
+          : { reasonCode: 'EXPOSURE_ABOVE_PROGRAMME_LIMIT' }),
+        respondedAt: developmentAttestation(),
+      });
+    }
+  }
 }

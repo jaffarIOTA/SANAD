@@ -6,21 +6,19 @@
  * Thin. Every one of these parses the form, hands it to the domain, and turns
  * a rejection into something a person can read. None of them contains a rule.
  *
- * Two things worth noting about the principals below. They are hard-coded to
- * development identities because there is no authentication yet — and they are
- * hard-coded *on the server*, never taken from the form, because "who is
- * approving this" must not be something the browser can assert (BE-09). When
- * enterprise SSO arrives, these become the authenticated principal and nothing
- * else changes.
+ * The principals come from `session.ts` and are resolved on the server, never
+ * taken from the form, because "who is approving this" must not be something
+ * the browser can assert (BE-09).
  */
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-import type { Principal, ServicingOutcome } from '@sanad/core/origination/request.ts';
+import type { ServicingOutcome } from '@sanad/core/origination/request.ts';
 import type { OriginationChannel } from '@sanad/core/origination/channel.ts';
 import { tsaInstant } from '@sanad/core/time/tsa.ts';
 
+import { CHECKER, MAKER } from './session.ts';
 import {
   applyServicingOutcome,
   approveRequest,
@@ -29,10 +27,6 @@ import {
   returnRequest,
   submit,
 } from './store.ts';
-
-/** Development identities. Replaced by the authenticated principal. */
-const MAKER: Principal = { principalId: 'stf-maker-01', tenantId: 'bank-a' };
-const CHECKER: Principal = { principalId: 'stf-checker-01', tenantId: 'bank-a' };
 
 const field = (form: FormData, name: string): string => String(form.get(name) ?? '').trim();
 

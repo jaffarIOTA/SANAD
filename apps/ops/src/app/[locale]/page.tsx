@@ -256,9 +256,13 @@ export default async function DashboardPage({
       {/* -- The working table ----------------------------------------------- */}
       <section className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-lg font-semibold">
-            {arabic ? 'الطلبات' : 'Requests'}
-          </h2>
+          <div className="flex items-baseline gap-3">
+            <h2 className="text-lg font-semibold">{arabic ? 'الطلبات' : 'Requests'}</h2>
+            {/* The dashboard lists everything; the queue is where work is done. */}
+            <a href={`/${segment}/queue`} className="text-sm text-brand-deep underline">
+              {arabic ? 'فتح قائمة المراجعة' : 'Open the review queue'}
+            </a>
+          </div>
           {term === '' ? (
             <span className="text-sm text-ink-quiet tabular-nums">
               {queue.length} {arabic ? 'إجمالاً' : 'total'}
