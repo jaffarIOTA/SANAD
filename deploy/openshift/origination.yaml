@@ -1,0 +1,188 @@
+# Origination service — OpenShift Container Platform.
+#
+# Written for the bank's cluster, which will apply the `restricted-v2` security
+# context constraint. Everything below either satisfies that constraint or
+# states why it is set.
+#
+# Nothing here carries a secret. Credentials are referenced from a Secret the
+# cluster's own tooling populates — see CLAUDE.md §4 — and this file names the
+# Secret without ever containing a value.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: origination
+  labels:
+    app.kubernetes.io/name: origination
+    app.kubernetes.io/part-of: sanad
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: origination
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0        # Never fewer than `replicas` serving during a
+      maxSurge: 1              # deploy. A state-changing API should not lose
+                               # capacity to a routine rollout.
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: origination
+    spec:
+      # Must exceed DRAIN_MS plus the longest request, or the kubelet sends
+      # SIGKILL while a request is still in flight.
+      terminationGracePeriodSeconds: 45
+
+      securityContext:
+        # No `runAsUser`. OpenShift assigns one from the namespace's range,
+        # and pinning a UID here is the usual reason an image will not start
+        # under `restricted-v2`.
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: origination
+          image: image-registry.openshift-image-registry.svc:5000/sanad/origination:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 3002       # Above 1024: the container holds no
+                                        # capability to bind a privileged port.
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+          env:
+            - name: PORT
+              value: "3002"
+            - name: DRAIN_MS
+              value: "5000"
+            # Credentials are referenced, never inlined. This manifest is in
+            # git; the Secret is not.
+            - name: PARTNER_API_DEV_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: origination-credentials
+                  key: partner-api-token
+                  optional: true
+
+          # Liveness asks "is this process wedged"; readiness asks "should it
+          # receive traffic". Conflating them means a draining pod gets
+          # restarted instead of drained, and a slow dependency restarts a
+          # process that was fine.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30       # Up to 60s to start before liveness
+                                       # begins, so a slow start is not a
+                                       # restart loop.
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              # No CPU limit, deliberately. A CPU limit throttles rather than
+              # evicts, and a throttled request path shows up as latency that
+              # looks like a downstream problem. The request reserves the
+              # floor; the namespace quota bounds the ceiling.
+              memory: 512Mi
+
+          volumeMounts:
+            # The root filesystem is read-only, so the one writable path is an
+            # explicit, size-bounded emptyDir.
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: origination
+  labels:
+    app.kubernetes.io/name: origination
+spec:
+  selector:
+    app.kubernetes.io/name: origination
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+# Deliberately NOT a Route.
+#
+# A Route publishes this service at the cluster edge. The gateway — DataPower
+# — is the edge, and it reaches this Service inside the cluster. Publishing a
+# Route as well would create a second, ungoverned path to a state-changing API
+# that bypasses every gateway policy.
+#
+# The service authenticates every request itself, so a stray Route would not be
+# an authentication hole. It would still be an unmonitored, unrate-limited one,
+# and it would make the gateway optional in practice while remaining mandatory
+# on paper.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: origination-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: origination
+  policyTypes: [Ingress]
+  ingress:
+    # Only the gateway's namespace may reach this service. Default-deny
+    # otherwise, so a compromised workload elsewhere in the cluster cannot
+    # call the origination API directly.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: datapower
+      ports:
+        - protocol: TCP
+          port: 3002
+    # The kubelet's probes come from the node, not from a pod, and are not
+    # matched by a namespaceSelector. Probe traffic is exempt from
+    # NetworkPolicy on OpenShift's default CNI; if the cluster's CNI does not
+    # exempt it, this needs an explicit allow and the cluster team will know.
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: origination
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: origination

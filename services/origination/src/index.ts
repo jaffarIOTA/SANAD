@@ -31,3 +31,34 @@ server.listen(port, () => {
     `origination service listening on http://127.0.0.1:${String(port)}${BASE_PATH}\n`,
   );
 });
+
+/*
+ * Graceful shutdown, in the order OpenShift needs.
+ *
+ * On SIGTERM: fail readiness first so the router stops sending new work, wait
+ * long enough for endpoint removal to propagate, then close the listener and
+ * let in-flight requests finish. Closing immediately would drop requests the
+ * platform still believes this pod is serving.
+ *
+ * `terminationGracePeriodSeconds` in the Deployment must exceed the drain
+ * delay plus the longest request, or the kubelet sends SIGKILL mid-flight.
+ */
+const DRAIN_MS = Number.parseInt(process.env['DRAIN_MS'] ?? '5000', 10);
+
+let shuttingDown = false;
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+
+    server.beginDraining();
+    process.stdout.write('draining\n');
+
+    setTimeout(() => {
+      server.close(() => {
+        process.stdout.write('closed\n');
+        process.exit(0);
+      });
+    }, DRAIN_MS).unref();
+  });
+}

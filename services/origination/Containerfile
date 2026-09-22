@@ -1,0 +1,49 @@
+# Origination service.
+#
+# Built for OpenShift's `restricted-v2` security context constraint, which is
+# what a bank's cluster will apply. That constraint is stricter than plain
+# Kubernetes in one way that breaks most images: **the container runs as an
+# arbitrary, unpredictable UID**, assigned per namespace, not as the UID the
+# image declares.
+#
+# So this image:
+#   - never assumes a UID, and declares a non-root one only to fail closed if
+#     it is ever run somewhere without an assigned range;
+#   - gives group 0 the access the runtime UID needs, because an arbitrary UID
+#     is always a member of group 0;
+#   - binds a port above 1024, since it holds no capability to bind below;
+#   - writes nothing outside /tmp, so the root filesystem can be read-only.
+
+FROM registry.access.redhat.com/ubi9/nodejs-22-minimal:latest AS base
+
+WORKDIR /opt/app-root/src
+
+# Dependencies first, so a source change does not re-resolve the tree.
+COPY --chown=0:0 package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts
+
+# Only what the service needs at runtime. The apps, the tests and the
+# migrations are not part of this image.
+COPY --chown=0:0 core ./core
+COPY --chown=0:0 services/origination ./services/origination
+COPY --chown=0:0 api/openapi ./api/openapi
+COPY --chown=0:0 tsconfig.json ./
+
+# An arbitrary UID is a member of group 0 and nothing else. Group-write on the
+# working tree is what makes that UID able to run at all.
+RUN chgrp -R 0 /opt/app-root && chmod -R g=u /opt/app-root
+
+# Declared, not relied upon: OpenShift overrides it with an assigned UID. It is
+# here so that running this image anywhere else still refuses to be root.
+USER 1001
+
+ENV NODE_ENV=production \
+    PORT=3002 \
+    DRAIN_MS=5000
+
+EXPOSE 3002
+
+# `--experimental-strip-types` runs the TypeScript sources directly. For a
+# production image this should become a build step that emits JavaScript; it is
+# noted rather than hidden. See ClaudeRecommendations.md.
+CMD ["node", "--experimental-strip-types", "services/origination/src/index.ts"]

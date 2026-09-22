@@ -86,6 +86,12 @@ export function developmentTimestamps(): TimestampPort {
   };
 }
 
+/** A server that can be asked to stop accepting new work before it closes. */
+export interface DrainableServer extends Server {
+  /** Fail readiness, keep serving in-flight requests. */
+  beginDraining(): void;
+}
+
 export interface ServiceDependencies {
   readonly repository: RequestRepository;
   readonly idempotency: IdempotencyStore;
@@ -147,11 +153,24 @@ function readBody(request: IncomingMessage): Promise<{ ok: true; raw: string } |
 
 // -- The service --------------------------------------------------------------
 
-export function createService(deps: ServiceDependencies): Server {
+export function createService(deps: ServiceDependencies): DrainableServer {
   const validateRaise: Validator = validatorFor('RaiseRequest');
   let sequence = 0;
 
-  return createServer((request, response) => {
+  /*
+   * Set on SIGTERM, before the listener closes.
+   *
+   * OpenShift sends SIGTERM and removes the pod from the service endpoints
+   * at roughly the same moment, not in a guaranteed order. Failing `/readyz`
+   * first means the load balancer stops sending new work while in-flight
+   * requests finish — without it, a rolling deploy drops requests that were
+   * already accepted, and a dropped state-changing request is one the caller
+   * will retry. Retries are safe here because of the idempotency key, but a
+   * deployment should not be relying on that.
+   */
+  let draining = false;
+
+  const server = createServer((request, response) => {
     void handle(request, response).catch(() => {
       // Nothing about the failure reaches the caller beyond the correlation
       // identifier. Internal detail, credentials and personal data stay in.
@@ -170,7 +189,13 @@ export function createService(deps: ServiceDependencies): Server {
         correlationId,
       );
     });
-  });
+  }) as DrainableServer;
+
+  server.beginDraining = (): void => {
+    draining = true;
+  };
+
+  return server;
 
   async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const supplied = request.headers['x-correlation-id'];
@@ -179,6 +204,29 @@ export function createService(deps: ServiceDependencies): Server {
 
     const url = new URL(request.url ?? '/', 'http://service.invalid');
     const method = (request.method ?? 'GET').toUpperCase();
+
+    /*
+     * Platform probes, before authentication and outside the API's base path.
+     *
+     * They must be unauthenticated: the kubelet holds no credential, and a
+     * probe that needs one reports every pod unhealthy. They therefore say
+     * as little as possible — a status code and a fixed word. No version, no
+     * dependency detail, no build identifier. A liveness endpoint is the most
+     * reliably unauthenticated thing in any deployment and is not a place to
+     * describe the estate.
+     *
+     * These are never routed through the gateway. They belong to the platform
+     * that schedules the pod, not to any caller.
+     */
+    if (url.pathname === '/healthz' || url.pathname === '/readyz') {
+      const live = url.pathname === '/healthz' || !draining;
+      response.writeHead(live ? 200 : 503, {
+        'content-type': 'text/plain; charset=utf-8',
+        'cache-control': 'no-store',
+      });
+      response.end(live ? 'ok\n' : 'draining\n');
+      return;
+    }
 
     if (!url.pathname.startsWith(BASE_PATH)) {
       send(response, notFound(correlationId, 'ROUTE_NOT_FOUND'), correlationId);

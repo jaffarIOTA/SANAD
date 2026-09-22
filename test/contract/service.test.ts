@@ -504,6 +504,58 @@ describe('transport', () => {
   });
 });
 
+// -- Platform probes ----------------------------------------------------------
+
+describe('health and readiness', () => {
+  it('answers without a credential, because the kubelet holds none', async () => {
+    for (const path of ['/healthz', '/readyz']) {
+      const probe = await fetch(`${origin.replace(BASE_PATH, '')}${path}`);
+      expect(probe.status, path).toBe(200);
+    }
+  });
+
+  it('says almost nothing', async () => {
+    // A liveness endpoint is the most reliably unauthenticated thing in any
+    // deployment. It is not a place to describe the estate.
+    const probe = await fetch(`${origin.replace(BASE_PATH, '')}/healthz`);
+    const body = await probe.text();
+
+    expect(body.trim()).toBe('ok');
+    expect(body).not.toMatch(/\d+\.\d+\.\d+/);           // no version
+    expect(probe.headers.get('content-type')).toContain('text/plain');
+  });
+
+  it('sits outside the API base path, so the gateway never routes it', async () => {
+    const underApi = await fetch(`${origin}/healthz`, {
+      headers: { authorization: `Bearer ${PARTNER_TOKEN}` },
+    });
+    expect(underApi.status).toBe(404);
+  });
+
+  it('fails readiness while draining but stays live', async () => {
+    const drainable = createService({
+      repository: inMemoryRequestRepository(),
+      idempotency: inMemoryIdempotencyStore(),
+      credentials: registry,
+      timestamps: developmentTimestamps(),
+    });
+    await new Promise<void>((resolve) => drainable.listen(0, '127.0.0.1', resolve));
+    const port = (drainable.address() as AddressInfo).port;
+    const base = `http://127.0.0.1:${String(port)}`;
+
+    expect((await fetch(`${base}/readyz`)).status).toBe(200);
+
+    drainable.beginDraining();
+
+    // Readiness fails first, so the router stops sending new work...
+    expect((await fetch(`${base}/readyz`)).status).toBe(503);
+    // ...while liveness stays up, so the pod is drained and not restarted.
+    expect((await fetch(`${base}/healthz`)).status).toBe(200);
+
+    await new Promise<void>((resolve) => drainable.close(() => { resolve(); }));
+  });
+});
+
 // -- Listing ------------------------------------------------------------------
 
 describe('listing', () => {
