@@ -75,6 +75,60 @@ describe('§5 — gateway concerns are configuration, not code', () => {
 
 // -- The gateway holds no control ---------------------------------------------
 
+describe('the API Connect artefacts', () => {
+  const api = parse(read('gateway/ibm/health-api_1.0.0.yaml')) as Record<string, any>;
+  const product = parse(read('gateway/ibm/health-product_1.0.0.yaml')) as Record<string, any>;
+
+  it('is OpenAPI 3.0, because v10.0.11 rejects 3.1', () => {
+    // Established by experiment: `apic validate` answers "Invalid file type
+    // provided" on a 3.1 document, identically with --no-extensions. See
+    // ClaudeRecommendations.md E-25.
+    expect(String(api['openapi'])).toMatch(/^3\.0\./);
+  });
+
+  it('carries x-ibm-configuration, without which it will not validate', () => {
+    expect(api['x-ibm-configuration']).toBeDefined();
+    expect(api['x-ibm-configuration'].gateway).toBe('datapower-api-gateway');
+  });
+
+  it('names no environment host — the upstream is a property', () => {
+    // One definition per API, not one per environment.
+    const raw = read('gateway/ibm/health-api_1.0.0.yaml');
+    const targets: string[] = [];
+    for (const step of api['x-ibm-configuration'].assembly.execute ?? []) {
+      if (step.invoke !== undefined) targets.push(String(step.invoke['target-url']));
+    }
+    expect(targets.length).toBeGreaterThan(0);
+    for (const target of targets) expect(target).toMatch(/^\$\(/);
+    expect(raw).not.toMatch(/apiconnect\.ibmappdomain\.cloud/);
+  });
+
+  it('transforms nothing — it constructs a fixed response', () => {
+    // DataPower is a transformation engine, and this is the flow where that
+    // temptation is strongest. Nothing from the upstream body may reach the
+    // caller, or upstream detail leaks through a health check (E-16).
+    const steps = api['x-ibm-configuration'].assembly.execute ?? [];
+    const kinds = steps.flatMap((s: object) => Object.keys(s));
+    for (const forbidden of ['map', 'gatewayscript', 'xslt', 'json-to-xml', 'xml-to-json']) {
+      expect(kinds).not.toContain(forbidden);
+    }
+  });
+
+  it('exposes no component detail to an unauthenticated caller', () => {
+    // The published API answers a fixed word. The detailed report, which
+    // names our dependencies, is a different endpoint behind a scope.
+    const schema = api['components'].schemas.Health;
+    expect(Object.keys(schema.properties)).toEqual(['status']);
+    expect(schema.additionalProperties).toBe(false);
+  });
+
+  it('publishes through a plan that does not throttle a monitor', () => {
+    const plan = product['plans'].default;
+    expect(plan.approval).toBe(false);
+    expect(plan['rate-limits'].default['hard-limit']).toBe(false);
+  });
+});
+
 describe('§5 — the gateway is not the security boundary', () => {
   const pluginNames = (kong.plugins ?? []).map((p) => p.name);
 

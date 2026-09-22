@@ -1,0 +1,148 @@
+# Health API — API Connect definition.
+#
+# OpenAPI **3.0**, not 3.1. Established by experiment rather than release
+# notes: `apic validate` on API Connect v10.0.11 rejects a 3.1 document with
+# "Invalid file type provided", and does so identically with `--no-extensions`,
+# so it is the version and not the IBM extensions. See
+# ClaudeRecommendations.md E-25.
+#
+# **This is deliberately the thin one.**
+#
+# The service has three health endpoints answering three different questions.
+# `/healthz` is liveness and checks nothing downstream. `/readyz` is readiness
+# and checks only what is pod-local. `/health` is the real report, and it is
+# authenticated, because it names our dependencies, their status and their
+# latency — a map of the estate and where it is weak.
+#
+# What is published here invokes the *dumb* one. A caller learns that the path
+# from them, through the gateway, to the service is working. They learn nothing
+# about what we depend on. This is a connectivity smoke test, not a status page.
+#
+# It is also the right first thing to publish: it has no dependency on the
+# origination service being finished, so it proves the publish pipeline —
+# toolkit, catalog, gateway, upstream routing, TLS — end to end on its own.
+
+openapi: 3.0.3
+
+info:
+  title: Sanad Platform Health
+  x-ibm-name: sanad-platform-health
+  version: 1.0.0
+  description: |
+    Returns 200 when the platform is reachable and serving.
+
+    This endpoint reports reachability, not detail. It carries no information
+    about which components are healthy, what they are, or how they are
+    configured.
+
+servers:
+  - url: /platform/v1
+
+# Unauthenticated on purpose. A health check that needs a credential cannot be
+# called by the thing that most needs to call it — an external monitor, before
+# anyone has logged in. It is safe precisely because it says so little.
+security:
+  - {}
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Is the platform reachable and serving?
+      responses:
+        '200':
+          description: The platform is serving.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+              example:
+                status: OK
+        '503':
+          description: The platform is not serving.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+              example:
+                status: UNAVAILABLE
+
+components:
+  schemas:
+    Health:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - OK
+            - UNAVAILABLE
+
+# -- Gateway behaviour --------------------------------------------------------
+#
+# `x-ibm-configuration` is not optional decoration: without it `apic validate`
+# fails outright. It is also where the gateway's behaviour lives, which is why
+# this file sits in `gateway/ibm/` under version control rather than being
+# authored in a console (§5).
+x-ibm-configuration:
+  type: rest
+  phase: realized
+  enforced: true
+  testable: true
+  cors:
+    enabled: false
+  gateway: datapower-api-gateway
+
+  properties:
+    upstream-url:
+      value: http://origination.sanad.svc.cluster.local
+      description: The origination service, in-cluster. Set per catalog.
+      encoded: false
+
+  assembly:
+    execute:
+      - invoke:
+          version: 2.5.0
+          title: ask the service
+          target-url: $(upstream-url)/healthz
+          verb: GET
+          timeout: 10
+          cache-response: no-cache
+          stop-on-error:
+            - ConnectionError
+            - OperationError
+          output: upstream
+
+      # The service answers `ok` as text/plain; the caller gets a fixed JSON
+      # object. This is the one place a response is *constructed* rather than
+      # transformed — nothing from the upstream body reaches the caller, so
+      # there is no path by which upstream detail leaks outward.
+      - set-variable:
+          version: 2.0.0
+          title: answer
+          actions:
+            - set: message.status.code
+              value: '200'
+            - set: message.headers.Content-Type
+              value: application/json
+            - set: message.body
+              value: '{"status":"OK"}'
+
+    catch:
+      - errors:
+          - ConnectionError
+          - OperationError
+        execute:
+          - set-variable:
+              version: 2.0.0
+              title: not serving
+              actions:
+                - set: message.status.code
+                  value: '503'
+                - set: message.headers.Content-Type
+                  value: application/json
+                - set: message.body
+                  value: '{"status":"UNAVAILABLE"}'

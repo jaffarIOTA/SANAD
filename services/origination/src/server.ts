@@ -38,6 +38,7 @@ import { money } from '@sanad/core/kernel/money.ts';
 import { type TsaInstant, tsaInstant } from '@sanad/core/time/tsa.ts';
 
 import { validatorFor, type Validator } from './contract.ts';
+import { statusCodeFor, type HealthService } from './health.ts';
 import { fromRejection, problem, type Problem } from './problem.ts';
 import {
   fingerprint,
@@ -94,6 +95,8 @@ export interface DrainableServer extends Server {
 
 export interface ServiceDependencies {
   readonly repository: RequestRepository;
+  /** Absent means the detailed report is unavailable, not that all is well. */
+  readonly health?: HealthService;
   readonly idempotency: IdempotencyStore;
   readonly credentials: CredentialRegistry;
   readonly timestamps: TimestampPort;
@@ -228,12 +231,15 @@ export function createService(deps: ServiceDependencies): DrainableServer {
       return;
     }
 
-    if (!url.pathname.startsWith(BASE_PATH)) {
-      send(response, notFound(correlationId, 'ROUTE_NOT_FOUND'), correlationId);
-      return;
-    }
-    const path = url.pathname.slice(BASE_PATH.length) || '/';
-
+    /*
+     * Authentication comes before routing, not after.
+     *
+     * The order matters for one specific reason: `/health` is a platform
+     * endpoint at the root, outside the API's base path, and it is
+     * authenticated. If the base-path check ran first it would answer 404 to
+     * a caller who is merely unauthorised, which is a confusing answer to an
+     * operator holding what they believe is a valid credential.
+     */
     // 2. Authenticate. Tenant, channel and partner all come from here — never
     //    from the body, never from a gateway header.
     const auth = authenticate(
@@ -262,6 +268,46 @@ export function createService(deps: ServiceDependencies): DrainableServer {
       return;
     }
     const principal = auth.principal;
+
+    /*
+     * The detailed report. Authenticated, and behind its own scope.
+     *
+     * Placed after authentication and before routing, because it is a
+     * platform endpoint rather than part of the origination API — a partner
+     * credential reaches it and is refused, rather than not finding it.
+     */
+    if (url.pathname === '/health') {
+      if (!hasScope(principal, 'platform:health')) {
+        send(response, forbidden(correlationId), correlationId);
+        return;
+      }
+      if (deps.health === undefined) {
+        send(
+          response,
+          fail(
+            problem({
+              status: 503,
+              title: 'Health reporting unavailable',
+              detail: 'No health checks are configured on this deployment.',
+              reason: 'HEALTH_NOT_CONFIGURED',
+              correlationId,
+            }),
+          ),
+          correlationId,
+        );
+        return;
+      }
+      const report = await deps.health.check();
+      send(response, ok(statusCodeFor(report.status), report), correlationId);
+      return;
+    }
+
+    // Everything below is the origination API.
+    if (!url.pathname.startsWith(BASE_PATH)) {
+      send(response, notFound(correlationId, 'ROUTE_NOT_FOUND'), correlationId);
+      return;
+    }
+    const path = url.pathname.slice(BASE_PATH.length) || '/';
 
     const write = method !== 'GET' && method !== 'HEAD';
     if (!hasScope(principal, write ? 'origination:write' : 'origination:read')) {

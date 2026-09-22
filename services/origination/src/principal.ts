@@ -28,7 +28,16 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 
 import type { OriginationChannel } from '@sanad/core/origination/channel.ts';
 
-export type Scope = 'origination:read' | 'origination:write';
+export type Scope =
+  | 'origination:read'
+  | 'origination:write'
+  /**
+   * The detailed health report. Deliberately a separate scope, and
+   * deliberately not granted to partner credentials: the report names the
+   * systems we depend on, their status and their latency, which is a map of
+   * the estate and where it is weak.
+   */
+  | 'platform:health';
 
 export interface PartnerPrincipal {
   /** Opaque partner identifier. Safe to log. */
@@ -75,6 +84,14 @@ export function developmentRegistry(env: NodeJS.ProcessEnv): CredentialRegistry 
     channel: 'PARTNER_API',
     scopes: ['origination:read', 'origination:write'],
     credentialRef: 'cred-dev-partner-01',
+  });
+
+  add(env['PLATFORM_OPS_DEV_TOKEN'], {
+    partnerId: 'platform-ops',
+    tenantId: 'bank-a',
+    channel: 'PARTNER_API',
+    scopes: ['platform:health'],
+    credentialRef: 'cred-dev-platform-ops',
   });
 
   add(env['AGGREGATOR_DEV_TOKEN'], {

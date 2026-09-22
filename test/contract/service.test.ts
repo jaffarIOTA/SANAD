@@ -23,6 +23,7 @@ import {
 } from '../../services/origination/src/server.ts';
 import { inMemoryIdempotencyStore } from '../../services/origination/src/idempotency.ts';
 import { inMemoryRequestRepository } from '../../services/origination/src/repository.ts';
+import { createHealthService } from '../../services/origination/src/health.ts';
 import type {
   CredentialRegistry,
   PartnerPrincipal,
@@ -35,6 +36,7 @@ const PARTNER_TOKEN = 'test-token-partner';
 const AGGREGATOR_TOKEN = 'test-token-aggregator';
 const OTHER_PARTNER_TOKEN = 'test-token-other-partner';
 const READ_ONLY_TOKEN = 'test-token-read-only';
+const OPS_TOKEN = 'test-token-platform-ops';
 
 const PARTNER: PartnerPrincipal = {
   partnerId: 'partner-01',
@@ -65,6 +67,14 @@ const READ_ONLY: PartnerPrincipal = {
   credentialRef: 'cred-04',
 };
 
+const OPS: PartnerPrincipal = {
+  partnerId: 'platform-ops',
+  tenantId: 'bank-a',
+  channel: 'PARTNER_API',
+  scopes: ['platform:health'],
+  credentialRef: 'cred-ops',
+};
+
 const sha = (v: string): string => createHash('sha256').update(v, 'utf8').digest('hex');
 
 const registry: CredentialRegistry = {
@@ -74,6 +84,7 @@ const registry: CredentialRegistry = {
       [sha(AGGREGATOR_TOKEN), AGGREGATOR],
       [sha(OTHER_PARTNER_TOKEN), OTHER_PARTNER],
       [sha(READ_ONLY_TOKEN), READ_ONLY],
+      [sha(OPS_TOKEN), OPS],
     ]);
     return table.get(digest);
   },
@@ -88,6 +99,9 @@ beforeAll(async () => {
     idempotency: inMemoryIdempotencyStore(),
     credentials: registry,
     timestamps: developmentTimestamps(),
+    health: createHealthService({
+      checks: [{ name: 'fixture', critical: true, run: () => Promise.resolve({ status: 'UP' }) }],
+    }),
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address() as AddressInfo;
@@ -122,6 +136,8 @@ async function call(
     body?: unknown;
     idempotencyKey?: string | null;
     correlationId?: string;
+    /** Platform endpoints sit outside the API base path. */
+    atRoot?: boolean;
   } = {},
 ): Promise<{ status: number; headers: Headers; body: any }> {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
@@ -132,7 +148,8 @@ async function call(
   }
   if (options.correlationId !== undefined) headers['x-correlation-id'] = options.correlationId;
 
-  const response = await fetch(`${origin}${path}`, {
+  const base = options.atRoot === true ? origin.replace(BASE_PATH, '') : origin;
+  const response = await fetch(`${base}${path}`, {
     method,
     headers,
     ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
@@ -393,11 +410,18 @@ describe('authentication and scope', () => {
   });
 
   it('never echoes the credential in a problem body', async () => {
+    // Prefixed `example-` so the secret scanner's placeholder allowlist
+    // recognises it as a fixture. The alternative — assembling the string at
+    // runtime, as `absences.test.ts` does for the forbidden rate identifiers
+    // — is warranted when the literal must look real. Here it must only be
+    // distinctive, so a self-describing placeholder is clearer.
+    const notASecret = 'example-credential-that-must-not-appear';
+
     const response = await call('POST', '/requests', {
-      token: 'secret-value-that-must-not-appear',
+      token: notASecret,
       body: validBody(),
     });
-    expect(JSON.stringify(response.body)).not.toContain('secret-value-that-must-not-appear');
+    expect(JSON.stringify(response.body)).not.toContain(notASecret);
   });
 
   it('reports another partner’s request as absent, not forbidden', async () => {
@@ -553,6 +577,68 @@ describe('health and readiness', () => {
     expect((await fetch(`${base}/healthz`)).status).toBe(200);
 
     await new Promise<void>((resolve) => drainable.close(() => { resolve(); }));
+  });
+});
+
+// -- The three health endpoints, and why they are three -----------------------
+
+describe('the detailed health report', () => {
+  it('answers 200 with each component when all is well', async () => {
+    const response = await call('GET', '/health', {
+      token: OPS_TOKEN,
+      idempotencyKey: null,
+      atRoot: true,
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe('UP');
+    expect(response.body.components[0].name).toBe('fixture');
+    expect(response.body.checkedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  /**
+   * The report names our dependencies, their status and their latency — a map
+   * of the estate and where it is weak. A partner credential is exactly who
+   * should not have it.
+   */
+  it('refuses a partner credential', async () => {
+    const response = await call('GET', '/health', {
+      token: PARTNER_TOKEN,
+      idempotencyKey: null,
+      atRoot: true,
+    });
+    expect(response.status).toBe(403);
+    expect(response.body.reason).toBe('SCOPE_INSUFFICIENT');
+  });
+
+  it('refuses an unauthenticated caller', async () => {
+    const response = await call('GET', '/health', {
+      token: '',
+      idempotencyKey: null,
+      atRoot: true,
+    });
+    expect(response.status).toBe(401);
+  });
+
+  /**
+   * The rule that prevents an outage. If liveness checked dependencies, a
+   * database outage would fail liveness on every pod, the platform would
+   * restart all of them, and a recoverable dependency failure would become an
+   * unrecoverable restart loop.
+   */
+  it('keeps liveness independent of the dependency checks', async () => {
+    const detailed = await call('GET', '/health', {
+      token: OPS_TOKEN,
+      idempotencyKey: null,
+      atRoot: true,
+    });
+    const liveness = await fetch(`${origin.replace(BASE_PATH, '')}/healthz`);
+
+    expect(detailed.body.components.length).toBeGreaterThan(0);
+    // Liveness says a fixed word and nothing about any component.
+    const body = await liveness.text();
+    expect(body.trim()).toBe('ok');
+    expect(body).not.toContain('fixture');
   });
 });
 

@@ -1,0 +1,57 @@
+# Product — what a consumer subscribes to.
+#
+# An API Connect Product bundles APIs and offers them through Plans. A Plan is
+# where rate limits and approval requirements live.
+#
+# One Plan here, with no approval and a generous limit, because this is a
+# health check: anything that makes it harder to call defeats the point of
+# having it. A monitor that has to be onboarded before it can tell you the
+# platform is down is not a monitor.
+#
+# Note what this file does NOT do: it grants no entitlement over origination.
+# Plans govern *access to APIs*; they are not an authorisation layer for the
+# domain. That distinction is §5 and §8 — the service decides, from the
+# authenticated principal, every time.
+
+product: 1.0.0
+
+info:
+  name: sanad-platform-health
+  title: Sanad Platform Health
+  version: 1.0.0
+  description: |
+    Reachability of the Sanad platform. Publish this first: it proves the
+    path from caller to gateway to service without depending on any business
+    capability being finished.
+
+gateways:
+  - datapower-api-gateway
+
+apis:
+  health:
+    $ref: health-api_1.0.0.yaml
+
+visibility:
+  view:
+    enabled: true
+    type: authenticated
+    tags: []
+    orgs: []
+  subscribe:
+    enabled: true
+    type: authenticated
+    tags: []
+    orgs: []
+
+plans:
+  default:
+    title: Health
+    description: Unmetered reachability checks.
+    approval: false
+    rate-limits:
+      default:
+        # Generous on purpose. A monitor polling every ten seconds from three
+        # regions is 18 calls a minute; a limit that throttles it produces a
+        # false alarm about the thing it is monitoring.
+        value: 600/1minute
+        hard-limit: false

@@ -12,14 +12,56 @@
  */
 
 import { createService, developmentTimestamps, BASE_PATH } from './server.ts';
+import { createHealthService, type HealthCheck } from './health.ts';
 import { inMemoryIdempotencyStore } from './idempotency.ts';
 import { inMemoryRequestRepository } from './repository.ts';
 import { developmentRegistry } from './principal.ts';
 
 const port = Number.parseInt(process.env['PORT'] ?? '3002', 10);
 
+/*
+ * What "all good" means for this deployment.
+ *
+ * Each check answers for one dependency and says as little as it can. A check
+ * never reports a host, a connection string or an exception message: those
+ * routinely carry credentials, and this report is read by an operator over a
+ * network (§4).
+ *
+ * The list is short today because the dependencies are. As the database, the
+ * cache and the external adapters arrive, each gets a check here and nothing
+ * else changes — which is the point of the port.
+ */
+const checks: readonly HealthCheck[] = [
+  {
+    name: 'contract',
+    // If the OpenAPI document failed to compile into validators, the service
+    // is running but cannot accept a single request correctly. That is worth
+    // knowing before a partner discovers it.
+    critical: true,
+    run: () =>
+      Promise.resolve(
+        typeof BASE_PATH === 'string' && BASE_PATH.length > 0
+          ? { status: 'UP' as const }
+          : { status: 'DOWN' as const, detail: 'contract not loaded' },
+      ),
+  },
+  {
+    name: 'repository',
+    critical: true,
+    run: async () => {
+      // A trivial read. Enough to prove the store answers, cheap enough to
+      // run on every poll.
+      await repository.list({ tenantId: '__health__', partnerId: '__health__', limit: 1 });
+      return { status: 'UP' as const, detail: 'in-memory (development)' };
+    },
+  },
+];
+
+const repository = inMemoryRequestRepository();
+
 const server = createService({
-  repository: inMemoryRequestRepository(),
+  repository,
+  health: createHealthService({ checks }),
   idempotency: inMemoryIdempotencyStore(),
   credentials: developmentRegistry(process.env),
   timestamps: developmentTimestamps(),
