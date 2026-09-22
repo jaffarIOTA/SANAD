@@ -43,5 +43,8 @@
     "config/**/*",
     "adapters/**/*",
     "test/**/*"
+  ],
+  "exclude": [
+    "test/ui"
   ]
 }
