@@ -18,6 +18,8 @@
  * item.
  */
 
+import type { IconName } from '@sanad/design/icons.tsx';
+
 export type ModuleReadiness =
   /** Usable now. */
   | { readonly kind: 'LIVE' }
@@ -43,6 +45,8 @@ export interface ModuleGroup {
   readonly id: string;
   readonly titleEn: string;
   readonly titleAr: string;
+  /** Beside the group heading, never instead of it. */
+  readonly icon: IconName;
   readonly items: readonly ModuleItem[];
 }
 
@@ -52,6 +56,7 @@ const soon = (): ModuleReadiness => ({ kind: 'NOT_BUILT' });
 export const MODULE_GROUPS: readonly ModuleGroup[] = [
   {
     id: 'origination',
+    icon: 'key-in',
     titleEn: 'Origination',
     titleAr: 'إنشاء الطلبات',
     items: [
@@ -100,6 +105,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
   },
   {
     id: 'counterparty',
+    icon: 'people',
     titleEn: 'Counterparty',
     titleAr: 'العملاء',
     items: [
@@ -111,6 +117,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
   },
   {
     id: 'decisioning',
+    icon: 'gauge',
     titleEn: 'Decisioning & limits',
     titleAr: 'القرار والحدود',
     items: [
@@ -122,6 +129,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
   },
   {
     id: 'transactions',
+    icon: 'exchange',
     titleEn: 'Transactions',
     titleAr: 'المعاملات',
     items: [
@@ -134,6 +142,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
   },
   {
     id: 'documents',
+    icon: 'document',
     titleEn: 'Documents',
     titleAr: 'المستندات',
     items: [
@@ -157,6 +166,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
   },
   {
     id: 'settlement',
+    icon: 'banknote',
     titleEn: 'Settlement',
     titleAr: 'التسوية',
     items: [
@@ -167,6 +177,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
   },
   {
     id: 'lifecycle',
+    icon: 'cycle',
     titleEn: 'Lifecycle',
     titleAr: 'دورة الحياة',
     items: [
@@ -187,6 +198,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
   },
   {
     id: 'shariah',
+    icon: 'shield-check',
     titleEn: 'Shariah governance',
     titleAr: 'الحوكمة الشرعية',
     items: [
@@ -198,6 +210,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
   },
   {
     id: 'programmes',
+    icon: 'building',
     titleEn: 'Programmes',
     titleAr: 'البرامج',
     items: [
@@ -218,6 +231,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
   },
   {
     id: 'administration',
+    icon: 'settings',
     titleEn: 'Administration',
     titleAr: 'الإدارة',
     items: [

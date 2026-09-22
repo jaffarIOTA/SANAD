@@ -50,10 +50,14 @@ function readinessNote(readiness: Readiness): string | undefined {
 
 export default async function DashboardPage({
   params,
+  searchParams,
 }: {
   readonly params: Promise<{ readonly locale: string }>;
+  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { locale: segment } = await params;
+  const { q } = await searchParams;
+  const term = (Array.isArray(q) ? q[0] : q)?.trim() ?? '';
   const locale = localeFromSegment(segment);
   if (locale === undefined) notFound();
 
@@ -63,21 +67,34 @@ export default async function DashboardPage({
     formatMinorUnits({ minorUnits, currency: 'SAR' }, numerals);
 
   const [channels, capabilities] = await Promise.all([channelCards(), servicingCapabilities()]);
-  const queue = listRequests();
+  const all = listRequests();
 
-  const count = (...states: string[]) => queue.filter((q) => states.includes(q.state)).length;
+  // The header search narrows the table only. The KPIs, the charts and the
+  // compliance panel keep counting the whole book — a filtered figure
+  // presented as a total is how an operator reports the wrong number.
+  const needle = term.toLowerCase();
+  const queue =
+    needle === ''
+      ? all
+      : all.filter((r) =>
+          [r.requestId, r.counterpartyId, r.invoiceNumber].some((f) =>
+            f.toLowerCase().includes(needle),
+          ),
+        );
+
+  const count = (...states: string[]) => all.filter((r) => states.includes(r.state)).length;
   const awaitingServicing = count('AWAITING_SERVICING_RESPONSE');
   const awaitingReview = count('AWAITING_REVIEW');
   const returned = count('RETURNED_TO_MAKER');
   const approved = count('APPROVED');
   const rejected = count('REJECTED');
 
-  const approvedValue = queue
-    .filter((q) => q.state === 'APPROVED')
-    .reduce((sum, q) => sum + q.amountMinorUnits, 0n);
-  const pipelineValue = queue
-    .filter((q) => q.state !== 'REJECTED' && q.state !== 'WITHDRAWN')
-    .reduce((sum, q) => sum + q.amountMinorUnits, 0n);
+  const approvedValue = all
+    .filter((r) => r.state === 'APPROVED')
+    .reduce((sum, r) => sum + r.amountMinorUnits, 0n);
+  const pipelineValue = all
+    .filter((r) => r.state !== 'REJECTED' && r.state !== 'WITHDRAWN')
+    .reduce((sum, r) => sum + r.amountMinorUnits, 0n);
 
   return (
     <div className="flex flex-col gap-7">
@@ -104,20 +121,30 @@ export default async function DashboardPage({
       {/* -- KPIs ----------------------------------------------------------- */}
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
+          icon="inbox"
+          tone={awaitingReview > 0 ? 'attention' : 'neutral'}
           label={arabic ? 'بانتظار مراجعتك' : 'Awaiting your review'}
           value={String(awaitingReview)}
+          context={arabic ? 'أربع أعين' : 'four eyes'}
           emphasis={awaitingReview > 0}
         />
         <StatTile
+          icon="clock"
+          tone="neutral"
           label={arabic ? 'بانتظار نظام الخدمة' : 'Awaiting servicing platform'}
           value={String(awaitingServicing)}
+          context={arabic ? 'خارج سندّ' : 'external'}
         />
         <StatTile
+          icon="coins"
+          tone="brand"
           label={arabic ? 'قيمة قيد المعالجة' : 'Value in pipeline'}
           value={sar(pipelineValue)}
           unit="SAR"
         />
         <StatTile
+          icon="check-circle"
+          tone="positive"
           label={arabic ? 'قيمة معتمدة' : 'Value approved'}
           value={sar(approvedValue)}
           unit="SAR"
@@ -171,7 +198,7 @@ export default async function DashboardPage({
             emptyLabel={arabic ? 'لا توجد طلبات بعد.' : 'No requests yet.'}
             rows={channels.map((c) => ({
               label: arabic ? c.titleAr : c.titleEn,
-              value: queue.filter((q) => q.channel === c.channel).length,
+              value: all.filter((r) => r.channel === c.channel).length,
             }))}
           />
         </Card>
@@ -232,15 +259,35 @@ export default async function DashboardPage({
           <h2 className="text-lg font-semibold">
             {arabic ? 'الطلبات' : 'Requests'}
           </h2>
-          <span className="text-sm text-ink-quiet tabular-nums">
-            {queue.length} {arabic ? 'إجمالاً' : 'total'}
-          </span>
+          {term === '' ? (
+            <span className="text-sm text-ink-quiet tabular-nums">
+              {queue.length} {arabic ? 'إجمالاً' : 'total'}
+            </span>
+          ) : (
+            <span className="flex items-center gap-2 text-sm text-ink-quiet">
+              <span className="tabular-nums">
+                {queue.length} {arabic ? 'من' : 'of'} {all.length}
+              </span>
+              <span className="rounded-full bg-sunken px-2 py-0.5 text-xs">
+                <bdi>{term}</bdi>
+              </span>
+              <a href={`/${segment}`} className="text-brand-deep underline">
+                {arabic ? 'إلغاء التصفية' : 'clear'}
+              </a>
+            </span>
+          )}
         </div>
 
         <Card>
           {queue.length === 0 ? (
             <p className="text-sm text-ink-quiet">
-              {arabic ? 'لا توجد طلبات بعد.' : 'No requests yet.'}
+              {term === ''
+                ? arabic
+                  ? 'لا توجد طلبات بعد.'
+                  : 'No requests yet.'
+                : arabic
+                  ? 'لا يطابق البحث أي طلب.'
+                  : 'No request matches that search.'}
             </p>
           ) : (
             <div className="overflow-x-auto">

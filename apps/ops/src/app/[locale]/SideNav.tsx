@@ -14,6 +14,7 @@
 
 import type { ReactElement } from 'react';
 
+import { Icon } from '@sanad/design/icons.tsx';
 import { MODULE_GROUPS, readinessTally, type ModuleReadiness } from '../../server/modules.ts';
 
 const DOT: Record<ModuleReadiness['kind'], string> = {
@@ -62,7 +63,8 @@ export function SideNav({
     >
       {MODULE_GROUPS.map((group) => (
         <div key={group.id} className="flex flex-col gap-1">
-          <h2 className="px-2 text-[0.6875rem] font-semibold uppercase tracking-wider text-ink-quiet">
+          <h2 className="flex items-center gap-2 px-2 text-[0.6875rem] font-semibold uppercase tracking-wider text-ink-quiet">
+            <Icon name={group.icon} size={14} />
             {arabic ? group.titleAr : group.titleEn}
           </h2>
 

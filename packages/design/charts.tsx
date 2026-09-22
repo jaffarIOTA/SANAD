@@ -22,6 +22,8 @@
 
 import type { ReactElement } from 'react';
 
+import { IconChip, type IconName } from './icons.tsx';
+
 export interface Segment {
   readonly id: string;
   readonly label: string;
@@ -40,14 +42,23 @@ export function StatTile({
   label,
   value,
   unit,
-  delta,
+  icon,
+  tone = 'brand',
+  context,
   emphasis = false,
 }: {
   readonly label: string;
   readonly value: string;
   readonly unit?: string;
-  /** Rendered with its sign and a word, never as a bare coloured arrow. */
-  readonly delta?: { readonly text: string; readonly direction: 'up' | 'down' | 'flat' };
+  readonly icon: IconName;
+  readonly tone?: 'brand' | 'positive' | 'attention' | 'neutral';
+  /**
+   * The small chip the reference dashboards use for a period-on-period delta.
+   * Ours carries a real, current fact instead — we have no history to compare
+   * against yet, and a fabricated "+8.5%" on an operations screen is a lie
+   * with a percent sign on it.
+   */
+  readonly context?: string;
   readonly emphasis?: boolean;
 }): ReactElement {
   return (
@@ -56,18 +67,25 @@ export function StatTile({
         emphasis ? 'border-brand-strong' : 'border-line'
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-sm text-ink-quiet">{label}</span>
-        {delta !== undefined ? (
-          <span className="rounded-full bg-sunken px-2 py-0.5 text-[0.6875rem] text-ink-quiet tabular-nums">
-            {delta.text}
-          </span>
-        ) : null}
+      <div className="flex items-start gap-3">
+        <IconChip name={icon} tone={tone} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-sm text-ink-quiet">{label}</span>
+            {context !== undefined ? (
+              <span className="shrink-0 rounded-full bg-sunken px-2 py-0.5 text-[0.6875rem] text-ink-quiet tabular-nums">
+                {context}
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-1 text-amount font-semibold leading-tight text-ink tabular-nums">
+            <bdi>{value}</bdi>
+            {unit !== undefined ? (
+              <span className="ms-1 text-sm font-normal text-ink-quiet">{unit}</span>
+            ) : null}
+          </p>
+        </div>
       </div>
-      <p className="mt-2 text-amount font-semibold text-ink tabular-nums">
-        <bdi>{value}</bdi>
-        {unit !== undefined ? <span className="ms-1 text-sm text-ink-quiet">{unit}</span> : null}
-      </p>
     </div>
   );
 }
@@ -200,12 +218,15 @@ export function BarList({
 
 export type IndicatorTone = 'good' | 'warning' | 'serious' | 'critical' | 'neutral';
 
-const INDICATOR: Record<IndicatorTone, { readonly dot: string; readonly text: string }> = {
-  good: { dot: 'bg-positive', text: 'text-positive' },
-  warning: { dot: 'bg-attention', text: 'text-attention' },
-  serious: { dot: 'bg-attention', text: 'text-attention' },
-  critical: { dot: 'bg-blocked', text: 'text-blocked' },
-  neutral: { dot: 'bg-line-strong', text: 'text-ink-quiet' },
+const INDICATOR: Record<
+  IndicatorTone,
+  { readonly dot: string; readonly text: string; readonly pill: string }
+> = {
+  good: { dot: 'bg-positive', text: 'text-positive', pill: 'bg-sunken' },
+  warning: { dot: 'bg-attention', text: 'text-attention', pill: 'bg-brand-wash' },
+  serious: { dot: 'bg-attention', text: 'text-attention', pill: 'bg-brand-wash' },
+  critical: { dot: 'bg-blocked', text: 'text-blocked', pill: 'bg-blocked-wash' },
+  neutral: { dot: 'bg-line-strong', text: 'text-ink-quiet', pill: 'bg-sunken' },
 };
 
 /**
@@ -227,13 +248,13 @@ export function Indicator({
 }): ReactElement {
   const style = INDICATOR[tone];
   return (
-    <li className="flex items-start gap-2 border-b border-line py-2 last:border-b-0">
+    <li className={`flex items-start gap-2 rounded-card px-3 py-2 ${style.pill}`}>
       <span aria-hidden className={`mt-1.5 size-1.5 shrink-0 rounded-full ${style.dot}`} />
       <span className="flex min-w-0 flex-col">
         <span className="text-sm text-ink">{label}</span>
         {note !== undefined ? <span className="text-xs text-ink-quiet">{note}</span> : null}
       </span>
-      <span className={`ms-auto shrink-0 text-sm font-medium tabular-nums ${style.text}`}>
+      <span className={`ms-auto shrink-0 text-sm font-semibold tabular-nums ${style.text}`}>
         {value}
       </span>
     </li>

@@ -11,6 +11,7 @@ import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 
 import { BrandMark, LanguageSwitch } from '@sanad/design/primitives.tsx';
+import { Icon } from '@sanad/design/icons.tsx';
 import {
   LOCALE_SEGMENTS,
   htmlLang,
@@ -47,13 +48,62 @@ export default async function OpsLayout({
     <html lang={htmlLang(locale)} dir={isRtl(locale) ? 'rtl' : 'ltr'}>
       <body className="min-h-dvh bg-sunken text-ink antialiased">
         <header className="border-b border-line bg-surface">
-          <div className="flex items-center gap-3 px-5 py-3">
+          <div className="flex flex-wrap items-center gap-3 px-5 py-3">
             <BrandMark size={26} />
             <span className="text-base font-semibold tracking-[0.15em]">SANAD</span>
             <span className="text-sm text-ink-quiet">{arabic ? 'العمليات' : 'Operations'}</span>
-            <div className="ms-auto">
-              <LanguageSwitch current={segment as LocaleSegment} />
+
+            {/*
+              A real filter, not header decoration. A plain GET form, so it
+              works with JavaScript off and the result is a linkable URL —
+              which is what an operator actually wants when handing a case to
+              a colleague.
+            */}
+            <form action={`/${segment}`} method="get" role="search" className="ms-auto">
+              <label className="flex min-h-tap items-center gap-2 rounded-card border border-line bg-sunken ps-3 pe-1 focus-within:border-brand-strong">
+                <Icon name="search" size={16} className="shrink-0 text-ink-quiet" />
+                <span className="sr-only">
+                  {arabic ? 'بحث في الطلبات' : 'Search requests'}
+                </span>
+                <input
+                  type="search"
+                  name="q"
+                  autoComplete="off"
+                  placeholder={
+                    arabic ? 'رقم طلب أو عميل أو فاتورة' : 'Request, counterparty or invoice'
+                  }
+                  className="w-56 bg-transparent py-1.5 pe-2 text-sm text-ink outline-none placeholder:text-ink-quiet"
+                />
+              </label>
+            </form>
+
+            {/*
+              Who you are acting as. Not an avatar for its own sake: under
+              four eyes the maker may not be the checker, so the identity a
+              screen acts under is operational information. This build holds
+              both development identities at once, and says so rather than
+              presenting a tidy single user that does not exist yet.
+            */}
+            <div className="flex items-center gap-2 border-s border-line ps-3">
+              <span
+                aria-hidden
+                className="inline-flex size-8 items-center justify-center rounded-full bg-brand-wash text-xs font-semibold text-brand-deep"
+              >
+                DEV
+              </span>
+              <span className="flex flex-col leading-tight">
+                <span className="text-sm font-medium text-ink">
+                  {arabic ? 'جلسة تطوير' : 'Development session'}
+                </span>
+                <span className="text-[0.6875rem] text-attention">
+                  {arabic
+                    ? 'مُدخِل ومُراجِع معاً — لا يجوز في الإنتاج'
+                    : 'maker and checker — not permitted in production'}
+                </span>
+              </span>
             </div>
+
+            <LanguageSwitch current={segment as LocaleSegment} />
           </div>
         </header>
 
