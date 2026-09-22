@@ -101,6 +101,11 @@ damage is not proportional to the data lost.
   Functions were rejected for it (§3.4). The durable workflow's state must fail
   over *with* the database, so it should be stored in the same PostgreSQL
   cluster rather than in a separate engine with its own replication story.
+- **On-premises makes RPO 0 achievable.** With two in-Kingdom datacentres,
+  synchronous replication for those two schemas over a metro link is ordinary
+  engineering. The same guarantee across cloud regions is expensive and slow,
+  so this constraint got considerably cheaper when the cluster turned out to be
+  on-premises (E-15).
 - **A DR drill must include a gate replay**, not just a "the site came up" check.
   Take the evidence set from before failover, re-run gate evaluation on the
   recovered site, and assert identical results. This is only possible because
@@ -278,23 +283,28 @@ control plane buys nothing: the lower environments can run a containerised Kong
 locally, which keeps configuration and telemetry in the Kingdom and costs
 nothing. The analysis is retained in git history.
 
-## E-15 — Is the OpenShift cluster on-premises, or Azure Red Hat OpenShift? · **Blocking**
+## E-15 — Is the OpenShift cluster on-premises, or ARO? · ✅ **Answered**
 
-The single question E-10's answer opens, and it decides how much E-09 matters.
+**On-premises.** The bank's own Red Hat OpenShift, in the Kingdom.
 
-- **On-premises OCP, in-Kingdom** — the Azure region timing problem largely
-  disappears. Our services deploy to the bank's cluster beside DataPower, in
-  the Kingdom, from day one. `deploy/openshift/` targets exactly this.
-- **Azure Red Hat OpenShift (ARO)** — the problem returns in full, because ARO
-  runs in an Azure region and there is no in-Kingdom one until November 2026.
+This is the best available answer and it settles more than it appears to:
 
-Worth asking in the same conversation as the DataPower retry setting, because
-it is the same team.
+- **E-09 stops blocking the platform.** Our services deploy to the bank's
+  cluster beside DataPower, in the Kingdom, from day one. The Azure region
+  timing no longer gates UAT. Azure may still be useful for our own build and
+  development infrastructure, where no real data exists and residency does not
+  bite — that is now a convenience decision, not a compliance one.
+- **Compute residency is satisfied by construction** rather than by
+  configuration, which is a much stronger position.
+- **DR becomes a second datacentre, not a second region.** That materially
+  helps E-02: synchronous replication for `evidence` and `audit` over a metro
+  link between two in-Kingdom datacentres is ordinary engineering, where the
+  same RPO-0 guarantee across cloud regions is expensive and slow. Saudi banks
+  typically already run primary and DR sites — ask which two, and what the
+  latency between them is.
 
-A second, smaller question for them: **do our services run on the bank's
-cluster at all, or in our own environment with DataPower calling across?** The
-manifests assume the former. If it is the latter, the network policy and the
-mTLS termination point both change.
+It also sharpens three questions that were previously vague. See E-17, E-18
+and E-19.
 
 ## E-16 — DataPower can rewrite a body, and that is a new risk · **Material**
 
@@ -322,6 +332,96 @@ control code — are precisely the ones a helpful policy would break.
 
 **Get this in front of their DataPower team early**, before an assembly is
 written. It is much easier to not add a transform than to remove one.
+
+## E-17 — What is the database platform on the bank's cluster? · **Blocking**
+
+The largest remaining platform risk, and it is now askable in concrete terms.
+
+ADR 0001 decided self-hosted PostgreSQL. On the bank's OpenShift that resolves
+two very different ways:
+
+1. **PostgreSQL on-cluster**, via an operator, managed by us. What ADR 0001
+   assumes, and what every migration in `supabase/migrations/` is written for.
+2. **The bank's existing database estate**, managed by their DBAs. In a Saudi
+   bank that is frequently **Oracle or Db2**, and for an IBM shop running
+   DataPower, Db2 is a live possibility.
+
+Option 2 is not a configuration change. Our schema is PostgreSQL-specific in
+places that are load-bearing rather than incidental:
+
+- **Row-level security** on every table, with a tenant-scoping policy. Oracle's
+  analogue is VPD; Db2's is LBAC. Both exist, neither is a translation.
+- **Deferred constraint triggers** carrying SH-02 — an executed total never
+  increases. The deferral is what lets a multi-row reschedule be checked as one
+  transaction.
+- **Immutability triggers** on executed records, and append-only evidence and
+  audit tables with no `UPDATE` grant.
+- `gen_random_uuid()`, which is trivial to replace and mentioned only so the
+  list is complete.
+
+**Ask now, not at UAT.** If the answer is Oracle or Db2, the schema work is
+substantial and the compliance constraints have to be re-expressed in a
+different dialect — which means re-proving them, not just re-writing them.
+
+Ans:
+
+## E-18 — Egress to SaaS goes through the bank's proxy · **Material**
+
+An on-premises cluster does not have open outbound internet. Calls to Tuum, to
+the document platform, to a timestamping authority and to any registry go
+through a forward proxy with an allowlist, and quite possibly through TLS
+interception.
+
+Two consequences, recorded now because **no live HTTP client exists yet** — the
+adapters are ports with fixture implementations, so this is a requirement on
+the transport we write rather than a defect in one we have:
+
+1. **Node's `fetch` does not honour `HTTPS_PROXY`.** Unlike curl or most
+   language runtimes, undici ignores the conventional environment variables
+   unless given an explicit `ProxyAgent` dispatcher. A transport written the
+   obvious way will work on a developer's laptop and fail in the bank's
+   cluster, which is the worst time to find out.
+2. **If the bank terminates TLS for inspection**, the client must trust their
+   internal CA, and certificate pinning becomes impossible. Worth knowing
+   before anyone proposes pinning as a control.
+
+Also ask for the **allowlist process and its lead time**. In most banks it is
+measured in weeks, and it applies per environment — so it belongs on the
+critical path for UAT, not in the week before.
+
+Ans:
+
+## E-19 — If compute must be in-Kingdom, why is the core banking platform not? · **Blocking**
+
+The sharpest question the on-premises answer raises, and it needs asking of the
+client rather than answering by us.
+
+The reason the cluster is on-premises and in-Kingdom is NFR-05 / RC-03 / AP-09:
+customer, transaction and document data is stored and processed in the Kingdom,
+"including for logs, backups, analytics and third-party processors."
+
+**Tuum is SaaS.** If it is the system of record for accounts, balances and
+payments, then customer and transaction data is processed outside the Kingdom
+by a third-party processor — which is the thing the on-premises decision exists
+to prevent. The same question applies to the document platform, and more
+sharply, because executed contracts are the statutory-retention artefacts.
+
+Three possible answers, and the client has to pick one:
+
+1. **The vendor deploys in-Kingdom** — self-managed or in a local region.
+   Changes the commercial conversation and possibly the vendor.
+2. **A documented exemption exists** for that class of processing. Then it
+   should be written down, with its scope, rather than assumed.
+3. **Minimise what crosses.** Sanad holds the contract, the schedule, the
+   profit amount and the evidence; the external platform holds only what it
+   must.
+
+Option 3 is **the same recommendation already made in R-01 for an entirely
+different reason** — that a servicing platform displaying a proportion against
+a Murabaha is a Shariah audit finding on day one. Two independent arguments
+converging on one design is usually a sign the design is right.
+
+Ans:
 
 ## E-08 — ADR 0001 contains a factual error about role revocation · **Hygiene**
 
