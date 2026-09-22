@@ -18,7 +18,11 @@ name: gateway
 
 on:
   pull_request:
-    paths: ['gateway/**', 'api/openapi/**', '.github/workflows/gateway.yml']
+    paths:
+      - 'gateway/**'
+      - 'api/openapi/**'
+      - 'scripts/build-apic-definition.mjs'
+      - '.github/workflows/gateway.yml'
   push:
     branches: [main]
     paths: ['gateway/**', 'api/openapi/**']
@@ -55,6 +59,15 @@ jobs:
           # in repository configuration rather than in this file.
           TOOLKIT_URL: ${{ vars.APIC_TOOLKIT_URL }}
 
+      - name: The generated artefact must be current
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build:apic
+          # A generated file committed stale means the gateway and the
+          # contract disagree, and nothing would say so.
+          git diff --exit-code gateway/ibm/origination-api_1.0.0.yaml
+
       - name: Validate every gateway definition
         run: |
           set -euo pipefail
@@ -65,8 +78,8 @@ jobs:
           done
           exit $failed
 
-      - name: The published definition must stay in step with the contract
-        run: npm ci && npx vitest run test/architecture/gateway
+      - name: The published definitions must stay in step with the contract
+        run: npx vitest run test/architecture/gateway test/contract/apic-artefact
 
   publish:
     needs: validate
@@ -119,6 +132,13 @@ jobs:
             --catalog "$APIC_CATALOG" \
             --scope catalog \
             gateway/ibm/health-product_1.0.0.yaml
+
+          apic products:publish \
+            --server "$APIC_SERVER" \
+            --org "$APIC_ORG" \
+            --catalog "$APIC_CATALOG" \
+            --scope catalog \
+            gateway/ibm/origination-product_1.0.0.yaml
         env:
           APIC_SERVER: ${{ vars.APIC_SERVER }}
           APIC_ORG: ${{ vars.APIC_ORG }}

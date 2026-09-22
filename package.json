@@ -16,12 +16,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:compliance": "vitest run test/compliance",
-    "verify": "npm run typecheck && npm run test",
+    "verify": "npm run build:apic && npm run typecheck && npm run test",
     "dev": "next dev apps/sme",
     "build:sme": "next build apps/sme",
     "dev:ops": "next dev apps/ops --port 3001",
     "build:ops": "next build apps/ops",
-    "dev:api": "node --experimental-strip-types services/origination/src/index.ts"
+    "dev:api": "node --experimental-strip-types services/origination/src/index.ts",
+    "build:apic": "node scripts/build-apic-definition.mjs"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

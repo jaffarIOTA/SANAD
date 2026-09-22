@@ -1,0 +1,63 @@
+# Product — the origination API as something a partner subscribes to.
+#
+# Unlike the health Product, this one has approval on. A subscription here is
+# a partner gaining the ability to raise financing requests against a tenant,
+# which is a commercial and compliance decision, not a self-service one.
+#
+# What a Plan is NOT: an authorisation layer. Plans govern access to *APIs*.
+# Every entitlement that matters — which tenant, which channel, which
+# counterparty, whether a gate is satisfied — is decided by the service from
+# the authenticated credential, on every request (§5, §8). A partner with a
+# valid subscription and no business raising a request is refused by the
+# service, not by the gateway.
+
+product: 1.0.0
+
+info:
+  name: sanad-origination
+  title: Sanad Origination
+  version: 1.0.0
+  description: |
+    Raise and track origination requests.
+
+    An origination request is an instruction to originate, not a credit. An
+    approved request buys the right to open a transaction in DRAFT, at the
+    start of a sequence that must validate the trade, reserve limit, execute a
+    purchase, evidence ownership, evidence possession and hold the goods at
+    the institution's own risk before any sale can be offered.
+
+gateways:
+  - datapower-api-gateway
+
+apis:
+  origination:
+    $ref: origination-api_1.0.0.yaml
+
+visibility:
+  view:
+    enabled: true
+    type: authenticated
+    tags: []
+    orgs: []
+  subscribe:
+    enabled: true
+    type: authenticated
+    tags: []
+    orgs: []
+
+plans:
+  partner:
+    title: Partner
+    description: |
+      For an integrating system raising requests under its own credential.
+      Subscription requires approval.
+    approval: true
+    rate-limits:
+      default:
+        # A coarse ceiling, and deliberately soft. A hard limit that sheds a
+        # state-changing request produces a retry, and a retry that the
+        # caller did not choose to make is how an instruction gets sent
+        # twice. The service's idempotency store is the real protection;
+        # this is a shock absorber, not a control.
+        value: 600/1minute
+        hard-limit: false
