@@ -75,7 +75,7 @@ const COPY: Readonly<
     summaryAr: 'ترشّح المنصة أحد التجار لديها. يتطلب تفويضًا من التاجر ومراجعة من شخصين.',
     readiness: {
       kind: 'BLOCKED',
-      on: 'What goods are bought and sold. A Murabaha needs a real trade; working capital with no underlying purchase has no seller and no goods. Board question — see docs/open-questions.md.',
+      on: 'What goods are bought and sold. A Murabaha needs a real trade; working capital with no underlying purchase has no seller and no goods. Board question OI-22 — see docs/open-questions.md.',
     },
   },
 };
@@ -112,7 +112,7 @@ export async function servicingCapabilities(): Promise<readonly CapabilityCard[]
         'Collect through the aggregator: a share of daily settlement, a fixed daily amount, or a weekly, fortnightly or monthly sweep.',
       readiness: {
         kind: 'BLOCKED',
-        on: 'Determinacy. A share-of-sales sweep has no determinate final payment date, and SH-03 requires payment dates to be determinate before a contract can execute. Resolvable with a fixed backstop maturity — needs a Board ruling.',
+        on: 'Determinacy. A share-of-sales sweep has no determinate final payment date, and SH-03 requires payment dates to be determinate before a contract can execute. Resolvable with a fixed backstop maturity — Board question OI-23.',
       },
     },
     {
@@ -124,7 +124,7 @@ export async function servicingCapabilities(): Promise<readonly CapabilityCard[]
       readiness: {
         kind: 'EXCLUDED_THIS_PHASE',
         basis:
-          'This is organised tawarruq. SDD §1.5 and PR-X2 exclude it from Phase 1 entirely; admissible later only on an explicit Board ruling, with enforced conditions and a volume cap.',
+          'This is organised tawarruq. SDD §1.5 and PR-X2 exclude it from Phase 1 entirely; admissible later only on an explicit Board ruling, with enforced conditions and a volume cap. Recorded as OI-24.',
       },
     },
   ];
