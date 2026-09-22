@@ -194,6 +194,241 @@ credential leak.
 
 Ans:
 
+## E-13 — Konnect now, self-hosted later: viable, with one correction and three conditions · **Material**
+
+Proposed: take Kong's hosted offering now and migrate to Azure once the
+Kingdom region lands. This works, and it is a reasonable way to buy time —
+but the framing needs one correction first.
+
+**Konnect is not a place to host a gateway. It is a control plane.**
+
+In hybrid mode the control plane holds configuration and receives telemetry;
+the **data planes run wherever you put them**, and that is where traffic
+actually flows. So this is not "hosted now, self-hosted later". It is a
+decision about where *configuration and telemetry* live, which is separable
+from where requests are processed.
+
+That is good news: **data planes can run in-Kingdom from day one regardless**,
+and the later move is a control-plane move, not a traffic move.
+
+**What actually crosses the border.** Kong documents that telemetry carries no
+customer information and no data processed by the data plane — analytics are
+aggregate, by gateway service, route and consuming application. What does
+leave is *configuration* (service and route names, plugin settings) and
+*traffic volumes*. That is not customer data, but it is the bank's API
+topology and its security posture, and a Saudi bank's security function may
+object to that alone. **Their call, not ours — ask rather than assume.**
+
+**Konnect's Middle East geo is UAE, not KSA.** There are five geos — US, EU,
+AU, Middle East (UAE), India — and none is in the Kingdom. So the control
+plane is outside the Kingdom whichever geo is chosen.
+
+### The three conditions that keep migration cheap
+
+Konnect and self-hosted DB-less Kong share one declarative configuration
+format. Migration is then re-pointing data planes and applying the same file —
+days, not months. It stays that way only if:
+
+1. **`gateway/kong/` in git is the source of truth, applied with decK.**
+   Konnect consumes our configuration; it never originates it. The moment
+   someone edits in the Konnect UI, git stops being authoritative and the
+   migration cost balloons quietly.
+2. **No Konnect-exclusive feature on the critical path.** Dev portal, service
+   catalog and hosted analytics are fine to *use* and must never be *depended
+   on*. If an outage of one of them would stop a transaction, it is on the
+   critical path.
+3. **Plugins restricted to the open-source set.** See E-11.
+
+### Recommended shape
+
+| Environment | Gateway |
+|---|---|
+| development, sandbox | Konnect free or Plus. No real data, so the residency question does not arise. |
+| UAT | Depends on timing — see below. |
+| production, DR | Almost certainly **not** Konnect: either the bank runs IBM (E-10), or its security function declines a foreign-hosted control plane. |
+
+**The pivot is when UAT is scheduled.** Saudi Arabia East lands November 2026.
+If UAT is after that, go straight to self-hosted in-Kingdom and skip Konnect
+for UAT entirely. If UAT is before it, Konnect with in-Kingdom data planes is
+a defensible interim — on synthetic data only (E-06).
+
+So: **Konnect is a lower-environment accelerator, not a production path.**
+Framed that way it is a good decision and costs very little.
+
+Indicative cost: a free tier exists but is proof-of-concept scale. Plus is
+around USD 105/month per gateway service plus roughly USD 34 per million
+requests — our surface is one gateway service, so this is tens of dollars a
+month in lower environments. Enterprise is where it becomes a five-figure
+annual line, and we should not need it.
+
+Ans:
+
+## E-14 — Cluster-wide rate limiting is a fourth, legitimate Redis job · **Material**
+
+Noticed while writing the gateway configuration, and it amends R-14.
+
+Kong's rate-limiting plugin with `policy: local` counts per data-plane node.
+With three nodes behind a load balancer, a caller limited to 100 requests a
+minute actually gets 300. Enforcing one shared limit needs shared counters,
+and for Kong that means Redis.
+
+This is a genuine cache workload and it is the cleanest of the four: the
+counters are ephemeral by nature, losing them fails *open* toward the
+configured limit rather than corrupting anything, and no customer data is
+involved. Unlike idempotency, eviction here is survivable.
+
+It also has to be in-Kingdom and inside the trust boundary like everything
+else — and it is a second Redis *use*, not necessarily a second Redis.
+
+Ans:
+
+## E-09 — Azure has no in-Kingdom region until November 2026 · **Blocking**
+
+Hosting the gateway — or anything else — in "our Azure" runs into the same
+wall as Supabase and Upstash, and the date matters.
+
+Microsoft's **Saudi Arabia East** region (Eastern Province, three availability
+zones) is announced for **November 2026**. As of today it is not generally
+available. Every other Azure region, including UAE North and UAE Central, is
+outside the Kingdom.
+
+So an Azure deployment today is lawful for `development` and `sandbox` and for
+nothing above them. UAE North is *not* a substitute: NFR-05 / RC-03 / AP-09
+say in-Kingdom, and the Gulf is not the Kingdom.
+
+**Recommendation.** Two viable paths, and they should be chosen deliberately
+rather than drifted into:
+
+1. **Wait for Saudi Arabia East** and sequence UAT to land after it. If UAT is
+   scheduled before November this does not work.
+2. **Use an in-Kingdom provider now** — the local hyperscaler partnerships or
+   a licensed in-Kingdom datacentre — and treat Azure as the later target.
+
+Either way the decision belongs in ADR 0001 as an amendment, because it sets
+the earliest possible UAT date. This is the first item in this register that
+constrains a *schedule* rather than a design.
+
+Ans:
+
+## E-10 — Do we run Kong in production at all? · **Blocking, and cheap to answer**
+
+Worth settling before anyone sizes infrastructure, because the answer may make
+the cost question moot.
+
+CLAUDE.md §5 exists because the client may deploy behind **IBM API Connect /
+DataPower**, which is common in Saudi banks. If they do, we never run Kong in
+production — Kong is a development and UAT convenience, and the production
+gateway is the bank's, on the bank's infrastructure, at the bank's cost.
+
+That changes the sizing question from "what does an HA Kong cost us" to "what
+does a single non-HA Kong cost us in lower environments", which is a rounding
+error by comparison.
+
+**Ask the client's infrastructure function which gateway they run.** One
+question, and it determines whether this is a five-figure annual line or not.
+
+### What to establish while evaluating IBM
+
+Three framing questions first, because they change the answer more than any
+feature comparison:
+
+1. **API Connect or DataPower, or both?** They are different products. API
+   Connect is the management layer — catalogs, products, the developer portal.
+   DataPower is the gateway itself, as an appliance, a virtual image or a
+   container. Many Saudi banks already run DataPower for other traffic.
+2. **Whose instance?** If it is the bank's existing estate, we do not pay for
+   it, do not operate it, and supply an API definition rather than a
+   deployment. That is the cheapest outcome available and it is quite likely.
+3. **Deployment form?** Appliance, virtual, or container on OpenShift. Saudi
+   banks frequently run OpenShift, which makes the container form the path of
+   least resistance.
+
+Then the eight obligations in `gateway/ibm/README.md`. Four of them are worth
+asking about explicitly, because they are where the default behaviour differs
+from what we need:
+
+- **Retries.** The important one. Does the invoke policy retry by default, and
+  can it be disabled? A gateway retry reissues a request **without a fresh
+  idempotency key**, which is the one path by which this platform can execute
+  an instruction twice. `retries: 0` is asserted by test on the Kong side and
+  needs the same guarantee here.
+- **Declarative, git-sourced configuration.** Can the API definition and
+  assembly be held in git and applied by CLI, or does it require the console?
+  If it requires the console, `gateway/` stops being the source of truth and
+  the swap stops being reversible.
+- **Body size caps** and where mTLS terminates.
+- **Correlation identifier** generated when absent and echoed, or do we rely
+  on the service alone.
+
+**What does not need asking**, because our architecture already settles it:
+authentication, tenant resolution and every entitlement stay in the service.
+Whatever IBM does on those is defence in depth. That is why this decision can
+change our cost and our operations but cannot break the platform.
+
+Ans:
+
+## E-11 — Kong licensing: the open-source edition is enough for our design · **Material**
+
+Kong Gateway OSS is Apache 2.0 and free. Kong Enterprise self-hosted starts
+around **USD 30–50k/year** for small deployments and runs well into six figures
+at scale.
+
+The usual trap is that OIDC, SAML and advanced rate limiting sit behind the
+Enterprise licence, and one security requirement forces the upgrade.
+
+**We are unusually well placed to avoid it,** and not by accident. §5 already
+requires that every service re-validates the caller's identity and tenant
+independently and never trusts a gateway-injected header — and
+`services/origination` does exactly that. The gateway is not our authentication
+authority, so Kong's OIDC plugin is not load-bearing for us. A bank may still
+want it for its own reasons; that is their licence to buy, on their gateway.
+
+**Recommendation.** Kong **OSS in DB-less mode**, configured declaratively from
+`gateway/kong/`. DB-less removes a PostgreSQL instance from the estate, matches
+§5's requirement that gateway concerns are declared as configuration, and makes
+the swap to IBM a matter of writing a second directory rather than migrating
+state.
+
+Ans:
+
+## E-12 — Indicative Azure cost for a self-hosted Kong · *(estimate — verify)*
+
+**These are magnitudes, not a quote.** Saudi Arabia East pricing is not
+published yet, and Azure list prices move. Put the final numbers through the
+Azure pricing calculator for the actual region and commitment, and apply
+whatever enterprise agreement discount the client has — a bank's EA discount is
+usually material.
+
+Shape of the bill for a modest, zone-redundant, DB-less Kong on AKS:
+
+| Component | Indicative |
+|---|---|
+| AKS control plane (Standard tier, uptime SLA) | ~USD 75/mo |
+| 3 × general-purpose nodes across 3 zones | ~USD 450–600/mo |
+| Standard Load Balancer | ~USD 25/mo + data processing |
+| Egress | usage-dependent |
+| Kong OSS licence | nil |
+| **Gateway subtotal** | **roughly USD 550–900/mo** |
+
+Three things that move this more than the SKU choice does:
+
+- **DB-less saves a database.** A Kong with PostgreSQL adds a managed instance
+  and its HA, which is comparable to the whole node bill above.
+- **Kong is stateless and light in DB-less mode.** The nodes are sized for
+  availability zones, not for Kong's appetite. Do not over-provision because a
+  vendor sizing guide assumed Enterprise with analytics.
+- **This is the gateway only.** It is a small fraction of the platform:
+  PostgreSQL, object-lock storage, the services and DR are the real bill, and
+  E-02's RPO-0 requirement for `evidence` and `audit` is the single most
+  expensive line in this architecture.
+
+**Azure API Management** is the native alternative. Premium tier is roughly an
+order of magnitude more per month, and it would be a *third* gateway
+implementation alongside Kong and IBM, so it needs a reason beyond "we are on
+Azure". Worth raising with the client, not worth recommending unprompted.
+
+Ans:
+
 ## E-08 — ADR 0001 contains a factual error about role revocation · **Hygiene**
 
 [ADR 0001](docs/adr/0001-data-residency-and-datastore.md#L45) says revoking a
@@ -267,53 +502,13 @@ Ans:
 
 # C. Engineering risks and hygiene
 
-## R-12 — There is no service runtime. The contract has no handler. · **Blocking**
+## R-12 — There is no service runtime · **Blocking** · ✅ **Done**
 
-Worth stating plainly, because "the backend" currently means two different
-things and only one of them exists.
+*Moved to Closed. See C-04.*
 
-**What exists** is the domain and its persistence: `core/` (24 modules — the
-sequencing state machine, gates, pricing, obligations, evidence, legs, the
-charity ledger, counterparty distinctness, the financed-invoice registry, the
-decisioning engine, entitlements), `adapters/` (Tuum, Nutrient, circuit
-breaker, fixture transport), and 1,596 lines of SQL across five migrations
-carrying the controls as constraints. That is real backend and it is tested.
+## R-13 — `gateway/` does not exist · **Material** · ✅ **Done**
 
-**What does not exist is anything that listens.** There is no HTTP service, no
-route handler, no process to deploy. `api/openapi/origination.v1.yaml`
-specifies an API that nothing implements. The only runtime today is Next.js
-server actions inside the ops app, backed by an in-memory store on
-`globalThis`.
-
-That was the right order — contract first, domain first — but it means the
-honest status of the partner API is "specified and tested as a contract, zero
-percent implemented", and the honest status of the platform is "no deployable
-service exists yet".
-
-**Recommendation.** One Node service fronting `core/`, with the OpenAPI
-document as its contract test. It is the next substantial piece of work and it
-is a prerequisite for anything in Section A — you cannot stand up UAT without
-something to deploy into it.
-
-Ans:
-
-## R-13 — `gateway/` does not exist · **Material**
-
-CLAUDE.md §5 and §7 require `gateway/kong/` and `gateway/ibm/` holding
-authentication, rate limiting, routing, mTLS, request size and CORS as
-declarative configuration, one directory per implementation. Neither
-directory is present.
-
-This is not cosmetic. The reason for the split is that the client may deploy
-behind IBM API Connect / DataPower, and the way that stays survivable is that
-gateway concerns live in configuration rather than in code. With no
-`gateway/` at all, there is nowhere for that configuration to go, and the
-first person to need rate limiting will reach for the nearest middleware.
-
-Should be created alongside R-12, even if the IBM directory starts as a
-README recording what has to be reproduced.
-
-Ans:
+*Moved to Closed. See C-05.*
 
 ## R-14 — Redis is specified but absent, and it should not do all three jobs · **Material**
 
@@ -519,6 +714,50 @@ Mutation-tested: `ml-4`, `sm:text-left`, `margin-left` in CSS, `text-align:
 right` in CSS, `aria-hidden` removed from an icon, a component hardcoding
 `dir`, an Arabic string left in English, a drifted alias, and a rate prop —
 all nine caught.
+
+## C-04 — Origination service *(was R-12)*
+
+`services/origination/` — `node:http`, no framework, four operations, 35
+contract tests driven over a real socket.
+
+The load-bearing piece is `contract.ts`: the OpenAPI document is compiled into
+runtime validators, so `additionalProperties: false` stopped being a claim in
+a document and became a behaviour. Hand-written validation would have drifted
+from the spec within a release, which is the failure §8 exists to prevent.
+`ajv` is the one new dependency and that is its justification.
+
+**A cross-partner data leak, caught by its own test.** Idempotency was scoped
+by tenant alone. Several partners share a tenant, so partner B presenting
+partner A's key received A's stored response — carrying A's counterparty,
+trade and amounts. Now scoped `(tenant, partner, key)`.
+
+**A domain gap the contract exposed.** `withdraw()` did not accept
+`AWAITING_SERVICING_RESPONSE`, so a partner could not withdraw while the
+servicing platform was still deliberating. Widened; the decided states remain
+absent from the signature, so withdrawing an approved request does not
+typecheck.
+
+Still outstanding from this slice: the service's repository is separate from
+the ops workbench store, so a request raised over the API does not appear in
+the review queue. Both collapse onto the database.
+
+## C-05 — `gateway/` *(was R-13)*
+
+`gateway/kong/kong.yaml` (DB-less, decK-applied), `gateway/kong/README.md`,
+`gateway/ibm/README.md`, and 16 tests in `test/architecture/gateway.test.ts`.
+
+Every plugin is open-source. There is deliberately **no authentication
+plugin**: the service authenticates every request itself, so the gateway is
+not an identity source — which is both what keeps it swappable and what keeps
+us off an enterprise licence.
+
+`retries: 0`, asserted by test. A gateway retry reissues a request **without a
+fresh idempotency key**, which is the one path by which this platform can
+execute an instruction twice.
+
+Mutation-tested: a gateway retry, an OIDC plugin, a body-rewriting plugin, a
+plaintext listener, a browser origin, and a service reading a consumer header
+— all six caught.
 
 ## C-03 — Review queue *(was R-08)*
 
