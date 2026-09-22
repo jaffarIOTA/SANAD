@@ -267,6 +267,119 @@ Ans:
 
 # C. Engineering risks and hygiene
 
+## R-12 — There is no service runtime. The contract has no handler. · **Blocking**
+
+Worth stating plainly, because "the backend" currently means two different
+things and only one of them exists.
+
+**What exists** is the domain and its persistence: `core/` (24 modules — the
+sequencing state machine, gates, pricing, obligations, evidence, legs, the
+charity ledger, counterparty distinctness, the financed-invoice registry, the
+decisioning engine, entitlements), `adapters/` (Tuum, Nutrient, circuit
+breaker, fixture transport), and 1,596 lines of SQL across five migrations
+carrying the controls as constraints. That is real backend and it is tested.
+
+**What does not exist is anything that listens.** There is no HTTP service, no
+route handler, no process to deploy. `api/openapi/origination.v1.yaml`
+specifies an API that nothing implements. The only runtime today is Next.js
+server actions inside the ops app, backed by an in-memory store on
+`globalThis`.
+
+That was the right order — contract first, domain first — but it means the
+honest status of the partner API is "specified and tested as a contract, zero
+percent implemented", and the honest status of the platform is "no deployable
+service exists yet".
+
+**Recommendation.** One Node service fronting `core/`, with the OpenAPI
+document as its contract test. It is the next substantial piece of work and it
+is a prerequisite for anything in Section A — you cannot stand up UAT without
+something to deploy into it.
+
+Ans:
+
+## R-13 — `gateway/` does not exist · **Material**
+
+CLAUDE.md §5 and §7 require `gateway/kong/` and `gateway/ibm/` holding
+authentication, rate limiting, routing, mTLS, request size and CORS as
+declarative configuration, one directory per implementation. Neither
+directory is present.
+
+This is not cosmetic. The reason for the split is that the client may deploy
+behind IBM API Connect / DataPower, and the way that stays survivable is that
+gateway concerns live in configuration rather than in code. With no
+`gateway/` at all, there is nowhere for that configuration to go, and the
+first person to need rate limiting will reach for the nearest middleware.
+
+Should be created alongside R-12, even if the IBM directory starts as a
+README recording what has to be reproduced.
+
+Ans:
+
+## R-14 — Redis is specified but absent, and it should not do all three jobs · **Material**
+
+There is no Redis anywhere in the repository — no client, no configuration, no
+connection. It appears twice in prose (CLAUDE.md §2, README) and nowhere in
+code.
+
+CLAUDE.md §2 gives it three jobs. My recommendation differs for each, so this
+needs a decision rather than an implementation ticket.
+
+| Job | Recommendation |
+|---|---|
+| **Freshness windows** | **Yes, Redis.** Genuine cache: how long a screening result, a bureau pull or a clearance status stays valid. Losing it costs a re-fetch. This is what Redis is for. |
+| **Idempotency keys** | **PostgreSQL is the system of record; Redis at most a read-through cache.** §8 requires the response be persisted and replays return the original result. A key that can be evicted under memory pressure means a replay re-executes — in this product that is a duplicate purchase leg or a duplicate payment. Durability is the requirement, and Redis's default posture is eviction. |
+| **Limit reservation** | **No Redis. Keep it in PostgreSQL.** `core.limit_reservation` and the `core.enforce_facility_capacity()` trigger already exist in migration 0004, and the domain has a `LIMIT_RESERVED` state. Coordinating reservations in Redis would create a second source of truth for remaining capacity, and the two will diverge under exactly the conditions that matter — concurrency and partial failure. A row lock in the same transaction that writes the reservation is simpler and correct. |
+
+So: Redis earns its place for one of the three stated jobs, is a cache in front
+of the second, and should be kept away from the third.
+
+### R-14a — The Upstash endpoint specifically
+
+A hosted endpoint (`*.upstash.io`) was proposed. Three things about it:
+
+- **No Saudi region.** Same call as Supabase: fine for development, not lawful
+  for UAT or above under NFR-05 / RC-03 / AP-09. See ADR 0001 — this is the
+  identical decision, and it should be recorded the same way rather than
+  arrived at again at deployment time.
+- **The REST interface uses a long-lived bearer token** granting full data
+  access to the whole instance. That is a coarser credential than a scoped
+  connection, so it wants rotation and it must never be near a browser.
+- **Every operation is an HTTPS round trip to another region.** Tolerable for
+  a cache. Not tolerable on the idempotency path, where it would add a
+  cross-region round trip to every state-changing request *on top of* the
+  durability problem above. This is a second, independent reason to keep
+  idempotency in PostgreSQL.
+
+Using it for development is reasonable. `config.integration_credential`'s
+provider list would need a cache value added — it currently allows nine
+providers and none of them is a cache.
+
+**Two constraints whichever way this goes.** Redis holding idempotency payloads
+or cached counterparty data is holding customer data, so it is **in-Kingdom,
+encrypted in transit and at rest, and inside the same trust boundary** — a
+managed Redis in a non-Kingdom region is a residency breach on the same footing
+as the database (see E-07). And it must be treated as **losable**: every path
+that uses it has to be correct when it returns nothing, because that is what a
+failover looks like.
+
+Ans:
+
+## R-15 — The OpenAPI document promises idempotency behaviour nothing implements · **Material**
+
+Following from R-12 and R-14. `api/openapi/origination.v1.yaml` specifies:
+the response is persisted against the key, a replay returns the original
+result with `Idempotent-Replay: true`, and the same key with a different body
+is a `409`. `IdempotencyKey` exists as a *type* in
+`core/ports/core-banking.ts` and is mapped through the Tuum adapter, but there
+is no store and no replay path anywhere.
+
+The contract test asserts the header is *required*, which is true of the
+document. It cannot assert the behaviour, because there is nothing to assert
+it against. Worth knowing so nobody reads a green contract suite as meaning
+idempotency works.
+
+Ans:
+
 ## R-05 — Compiled `.js` files are committed · **Hygiene**
 
 40 compiled `.js` files are tracked, produced by `"compilets.autoStart": true` in
