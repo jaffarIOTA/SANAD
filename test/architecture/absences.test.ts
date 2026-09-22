@@ -14,7 +14,7 @@
  * is cheaper than carving a hole in the guard.
  */
 
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,6 +35,11 @@ function filesUnder(dir: string): string[] {
       if (statSync(full).isDirectory()) {
         walk(full);
       } else if (CODE_EXTENSIONS.has(extname(entry))) {
+        // Skip compiled output. A `.js` sitting beside a `.ts` of the same name
+        // is build product, and scanning it means scanning the same source
+        // twice while reporting offenders at a path nobody edits. Hand-written
+        // JavaScript, which has no sibling, is still scanned.
+        if (extname(entry) === '.js' && existsSync(full.replace(/\.js$/, '.ts'))) continue;
         out.push(full);
       }
     }

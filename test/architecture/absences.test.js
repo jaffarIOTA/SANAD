@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -14,6 +14,7 @@ function filesUnder(dir) {
       if (statSync(full).isDirectory()) {
         walk(full);
       } else if (CODE_EXTENSIONS.has(extname(entry))) {
+        if (extname(entry) === ".js" && existsSync(full.replace(/\.js$/, ".ts"))) continue;
         out.push(full);
       }
     }

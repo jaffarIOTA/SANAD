@@ -1,0 +1,130 @@
+@import 'tailwindcss';
+
+/*
+ * Sanad design tokens.
+ *
+ * The palette is taken from the Sanad mark: a warm orange, a cream, and a
+ * taupe. One correction was needed on the way in — white text on the brand
+ * orange measures about 3.1:1, which is fine for large text and component
+ * boundaries but below the 4.5:1 that WCAG 2.2 AA requires for body text
+ * (NFR-09). So the brand orange stays decorative, and a darker derivative
+ * carries anything interactive that needs white on top of it.
+ *
+ * Client branding is a token override, never a component fork — that is what
+ * makes the product re-skinnable per institution without a code change
+ * (SDD §7.6). A second institution changes this block and nothing else.
+ */
+
+@theme {
+  /* -- Brand, from the mark ------------------------------------------------ */
+  --color-brand: #e96c33; /* decorative and large text only: 3.1:1 on white */
+  --color-brand-strong: #b85320; /* interactive; white text on this is 4.9:1 */
+  --color-brand-deep: #98421a; /* pressed and hover */
+  --color-brand-wash: #fdf1ea; /* tinted surface */
+  --color-cream: #f6f0e7;
+  --color-taupe: #c9c0b3;
+  --color-taupe-deep: #8a8177;
+
+  /* -- Surface ------------------------------------------------------------- */
+  --color-page: #ffffff;
+  --color-surface: #ffffff;
+  --color-sunken: #faf8f5;
+  --color-line: #e5e0d8;
+  --color-line-strong: #c2bab0;
+
+  /* -- Text ---------------------------------------------------------------- */
+  --color-ink: #1a1614;
+  --color-ink-quiet: #5e574f;
+  --color-on-brand: #ffffff;
+
+  /* -- Meaning. Never carried by colour alone; every status has a label too. */
+  --color-positive: #1a6f47;
+  --color-attention: #7a5100;
+  --color-blocked: #9a2b1e;
+  --color-blocked-wash: #fdecea;
+
+  /* -- Type. Arabic and Latin are tuned independently: matching point sizes
+        do not produce matching perceived weight (SDD §7.5). ----------------- */
+  --font-arabic: 'Noto Kufi Arabic', 'Segoe UI', system-ui, sans-serif;
+  --font-latin: 'Inter', system-ui, -apple-system, sans-serif;
+
+  --text-amount: 1.5rem;
+  --text-amount--line-height: 2rem;
+
+  --radius-card: 0.75rem;
+
+  /* Sized for the mid-range Android that is the SME's primary hardware,
+     not for a desktop pointer (NFR-10, FP-05). */
+  --spacing-tap: 2.75rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-page: #14100e;
+    --color-surface: #1d1815;
+    --color-sunken: #171310;
+    --color-line: #332b26;
+    --color-line-strong: #4a3f37;
+    --color-ink: #f4efe9;
+    --color-ink-quiet: #b3a99e;
+    --color-brand: #f2884f;
+    --color-brand-strong: #f2884f;
+    --color-brand-deep: #ffa472;
+    --color-brand-wash: #3a2115;
+    --color-cream: #2a231e;
+    --color-positive: #55b586;
+    --color-attention: #d9a441;
+    --color-blocked: #e8796f;
+    --color-blocked-wash: #331916;
+  }
+}
+
+:root[data-theme='dark'] {
+  --color-page: #14100e;
+  --color-surface: #1d1815;
+  --color-sunken: #171310;
+  --color-line: #332b26;
+  --color-line-strong: #4a3f37;
+  --color-ink: #f4efe9;
+  --color-ink-quiet: #b3a99e;
+  --color-brand: #f2884f;
+  --color-brand-strong: #f2884f;
+  --color-brand-deep: #ffa472;
+  --color-brand-wash: #3a2115;
+  --color-cream: #2a231e;
+  --color-positive: #55b586;
+  --color-attention: #d9a441;
+  --color-blocked: #e8796f;
+  --color-blocked-wash: #331916;
+}
+
+html {
+  background: var(--color-page);
+  color: var(--color-ink);
+}
+
+html[lang='ar'] body {
+  font-family: var(--font-arabic);
+}
+
+html[lang='en'] body {
+  font-family: var(--font-latin);
+}
+
+/*
+ * Machine-readable identifiers always render in Latin digits regardless of the
+ * numeral preference, because they get copied, quoted and read down a phone
+ * line (SDD §7.5).
+ */
+.identifier {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-latin);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Visible focus that follows reading direction, in both themes. */
+:where(a, button, [role='button'], input, select, textarea):focus-visible {
+  outline: 2px solid var(--color-brand-strong);
+  outline-offset: 2px;
+}
