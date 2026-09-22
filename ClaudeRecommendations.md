@@ -423,6 +423,234 @@ converging on one design is usually a sign the design is right.
 
 Ans:
 
+## E-20 — API Connect · ✅ **Decided**
+
+**IBM API Connect**, as a single platform for three integration flows: front
+end to back end, partner integration, and bank integration.
+
+**My earlier advice was scoped too narrowly and I am withdrawing it.** I
+assessed API Connect against the partner API alone and concluded DataPower was
+sufficient — which it is, for that one flow. Judged against three flows on one
+platform, one vendor, one skillset and an estate the bank already runs, the
+decision is sound and the earlier comparison was answering a smaller question.
+
+Two flows are a good fit and one is not an API integration at all. See E-21.
+The deployment location is now more important than it was. See E-22.
+
+### Where it genuinely helps
+
+- **Partner integration** is what API Connect is for. Products, Plans and
+  subscriptions map onto partner onboarding, and the Developer Portal is worth
+  having once there are more than two partners.
+- **Bank and vendor integration** — outbound to the core banking platform, the
+  document platform, the e-invoicing authority, the identity provider. A single
+  governed egress point is **better** than each adapter dialling out
+  independently: it is one place to hold the allowlist (E-18), one place that
+  logs what left, and one place to enforce what must not (E-19).
+
+### One caution that grows with the scope
+
+E-16 gets larger, not smaller. An assembly is where DataPower transforms, and
+API Connect makes assemblies the natural unit of work. If **all** integration
+now flows through assemblies, the temptation to transform a body is present on
+every path rather than one. The SH-01 control depends on bodies arriving
+exactly as sent, so `gateway/ibm/README.md`'s prohibitions now apply to more
+surface. Raise them with the DataPower team before the first assembly, not
+after the tenth.
+
+## E-21 — "Front end to back end" is not an API integration here · **Material**
+
+Worth separating, because it is the one of the three flows where the platform
+may not apply — and if it is forced to, it breaks something.
+
+Our front end is Next.js with **server components and server actions**. The
+browser does not call the origination API. It calls the Next.js server, which
+renders HTML and handles form posts; the Next.js server then calls the service.
+So "front end to back end" is two hops, and neither is a partner-style API
+call:
+
+1. **Browser → Next.js server.** These are HTML requests and server-action
+   posts. A server action is an opaque POST carrying a `Next-Action` header and
+   React's own streaming encoding. An API gateway cannot manage it as an API —
+   there is no schema to validate, no Product to attach — and **any body
+   transformation breaks the protocol outright**. This hop wants a load
+   balancer and TLS, not API management.
+
+2. **Next.js server → origination service.** East-west, inside the cluster,
+   both sides ours, inside one trust boundary. Routing it through API Connect
+   adds a hop to every page render and buys little: the service already
+   authenticates, and there is no third party to govern.
+
+**This is not an objection to API Connect.** It is a scoping point: flows 2 and
+3 are a good fit, flow 1 mostly is not. Putting the browser-facing hop behind
+API Connect will produce effort and latency for no control.
+
+**Unless the intent is a different front end.** If the plan is to move to a
+browser-side application calling the API directly, then flow 1 becomes a real
+API integration and API Connect fits it properly. That is a genuine
+architectural choice with consequences for §6 — server-rendered today means the
+front end never infers a gate result, and transaction state always originates
+from the server. Worth deciding deliberately rather than by gateway placement.
+
+Ans:
+
+## E-22 — Where does API Connect run? · **Blocking**
+
+More important now than when it was one flow, because API Connect is becoming
+the main data path rather than a side channel.
+
+**IBM Cloud has no Saudi region**; its Middle East data centres are in the UAE.
+So:
+
+- **Deployed on the bank's on-premises OpenShift** — the right answer. Runtime
+  and control plane both in the Kingdom, beside the services and DataPower.
+  API Connect is supported on OpenShift and this is the common pattern in the
+  Gulf.
+- **Consumed as a managed service on IBM Cloud** — the control plane, the
+  analytics and the configuration sit outside the Kingdom, and now so does the
+  governance of *all three* integration flows. This is the same analysis as
+  E-13, which we rejected for Kong Konnect, with more traffic behind it.
+
+Buying the entitlement *through* IBM Cloud as a commercial channel is fine and
+says nothing about where it runs. **Confirm the deployment target is the
+on-premises cluster** before the purchase is structured, because the two are
+priced and licensed differently and it is awkward to change afterwards.
+
+Ans:
+
+## E-23 — Sanad is a product with two deployment targets · *(record it — it validates a lot)*
+
+**Sanad runs on our cloud; once sold, it is deployed to the bank's own
+on-premises OpenShift, per that bank's policy.**
+
+This is the most clarifying thing said so far, and it should be written into
+ADR 0001, because several decisions that read as caution now read as
+requirements:
+
+- **The second-client test stops being hypothetical.** §7 asks of every change
+  "would the next client want this exact behaviour?" There is now a concrete
+  next client, and a third, each with their own cluster.
+- **Tenant-scoped, effective-dated configuration (§1.7) is the product.** Two
+  Boards ruling differently is not an edge case — it is the delivery model.
+- **The gateway abstraction (§5) is necessary, not theoretical.** Each bank
+  brings its own gateway. `gateway/` having one directory per implementation is
+  how a second bank is onboarded rather than forked.
+- **No client name in `core/`**, which CI already greps for, is load-bearing
+  rather than tidy.
+- **`config.deployment_profile` was designed for exactly this** — one row per
+  deployment, carrying `data_region` and `production_data_permitted`, with a
+  constraint refusing production data outside the Kingdom behind a
+  platform-managed key. It needs no change. Worth noting that it already fits,
+  because it means residency is a per-deployment property rather than a global
+  assumption.
+
+### The new requirement this creates
+
+**Our cloud deployment must acquire no dependency that cannot be reproduced
+on-premises.** This is the Supabase trap again, one level up and with more at
+stake: anything convenient in our cloud — a managed cache, a managed object
+store, a cloud key vault, a managed Postgres extension — becomes a porting
+problem at the moment of sale, which is the worst possible moment to discover
+it.
+
+The discipline that keeps this honest is the one ADR 0001 already established:
+every external capability sits behind a port in `core/ports/`, with the cloud
+convenience as one adapter and an on-premises equivalent as another. Where no
+on-premises equivalent exists, that is a decision to take deliberately and
+record, not a detail to leave to the port's implementer.
+
+### One question
+
+**Does the cloud instance ever hold a live client's real data** — a pilot, a
+proof of value, a trial with real invoices? If it does, everything in Section A
+applies to it in full, including residency. If it is only demonstration and
+development on synthetic data, none of it bites and the cloud choice is free.
+
+The answer is likely "not yet, but a pilot will", which means it should be
+decided before the pilot is sold rather than during it.
+
+Ans:
+
+## E-24 — Selling the product means migrating a hash chain · **Material**
+
+Follows directly from E-23 and is the part most likely to be discovered late.
+
+If a bank pilots on our cloud and the deployment then moves to their
+on-premises cluster, the data moves with it. Most of that is an ordinary
+database migration. Two datasets are not:
+
+- **`evidence` is hash-chained**, each record bound to its predecessor.
+- **`audit` is append-only**, with no `UPDATE` grant at all.
+
+A chain that is exported, reloaded and re-sequenced is no longer the chain that
+was attested. If the verification replays over identifiers, ordering or
+timestamps that the move altered, it fails — and a chain that cannot be
+verified cannot be audited by the Board (SH-18). The failure would surface at
+the first Shariah audit after go-live, which is the worst time to find it.
+
+Three things follow:
+
+1. **The chain must be verifiable across a move by construction**, not by luck.
+   That means the links bind content and attestation rather than storage
+   identity — no dependence on a sequence number, an insertion order, or a
+   database-assigned surrogate key.
+2. **Timestamping authority attestations must still validate afterwards.** They
+   are third-party signed, so they survive a move — provided the token itself
+   is retained, not just its digest. Worth confirming that is what we store.
+3. **A migration must be provable.** The acceptance test for a move is the same
+   test as for DR (E-02): replay gate evaluation over the migrated evidence and
+   assert identical results. That is available to us only because gate
+   evaluation is a pure function of transaction and evidence set (§1.3), which
+   is a second place that decision pays for itself.
+
+**Recommendation.** Write a migration-and-verification procedure before the
+first pilot, and test it by moving a populated development deployment
+end to end. It is far cheaper to design now than to retrofit against a live
+client's data.
+
+Ans:
+
+## E-25 — Our contract is OpenAPI 3.1; API Connect may only take 3.0 · **Material**
+
+`api/openapi/origination.v1.yaml` is OpenAPI **3.1**, and that is not
+incidental: 3.1's schemas are JSON Schema 2020-12, which is what lets
+`services/origination/src/contract.ts` compile the document straight into
+runtime validators. That is the mechanism by which `additionalProperties:
+false` stopped being a claim and became the SH-01 control.
+
+Many API Connect versions accept only OpenAPI 2.0 and 3.0. Thirteen constructs
+in our document would need converting:
+
+| Construct | Occurrences | Converts to 3.0? |
+|---|---|---|
+| `const: X` | 4 | Yes — `enum: [X]`, semantically identical |
+| union `type: [string, 'null']` | 2 | Yes — `nullable: true` |
+| schema-level `examples` array | 2 | Yes — singular `example` |
+| `info.summary`, `license.identifier` | 2 | Yes — fold into `description` / `url` |
+| **`if` / `then` conditional** | 2 | **No** |
+| **`webhooks`** | 1 | **No** |
+
+The last two are genuinely lossy. The conditional is what makes `invoiceUuid`
+and `invoiceHash` required when the trade is a cleared invoice; in 3.0 that
+constraint simply cannot be expressed, and would live only in the service.
+`webhooks` has no 3.0 equivalent at all.
+
+**Recommendation: do not downgrade the source.** Keep 3.1 as the contract —
+it drives the runtime validator and the contract tests — and **generate** a 3.0
+publication artefact for API Connect from it, with a test asserting the two
+agree on everything that matters: the same paths, the same operations, the same
+required fields, and closed schemas throughout.
+
+That way the control keeps its teeth where it is enforced, the gateway gets a
+document it can parse, and the two cannot drift silently. Downgrading the
+source instead would quietly delete a constraint from the system of record in
+order to satisfy a tool.
+
+**Confirm the API Connect version first** — if it accepts 3.1, none of this is
+needed.
+
+Ans:
+
 ## E-08 — ADR 0001 contains a factual error about role revocation · **Hygiene**
 
 [ADR 0001](docs/adr/0001-data-residency-and-datastore.md#L45) says revoking a
