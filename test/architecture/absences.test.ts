@@ -22,7 +22,7 @@ import { describe, expect, it } from 'vitest';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
-const CODE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.sql', '.json']);
+const CODE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.sql', '.json', '.yaml', '.yml']);
 
 function filesUnder(dir: string): string[] {
   const absolute = join(ROOT, dir);
@@ -85,7 +85,12 @@ const RATE_IDENTIFIERS: readonly string[] = [
 const ANNUALISED = ['a', 'p', 'r'].join('');
 
 describe('SH-01 — no rate construct exists anywhere', () => {
-  const surfaces = ['core', 'config', 'adapters', 'supabase/migrations'];
+  // `api` is on this list because an OpenAPI document is the likeliest place
+  // for a rate to reappear: an integrating partner asks for one field to
+  // reconcile against, it goes in the contract, and the implementation
+  // follows the contract. The absence has to be enforced at the boundary as
+  // well as in the domain.
+  const surfaces = ['core', 'config', 'adapters', 'supabase/migrations', 'api'];
 
   it.each(surfaces)('%s declares no rate identifier', (surface) => {
     const offenders: string[] = [];

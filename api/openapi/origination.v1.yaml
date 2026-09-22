@@ -1,0 +1,849 @@
+# Partner origination API, v1.
+#
+# Authored before the implementation (CLAUDE.md §8). The handler is verified
+# against this document by contract test; where the two disagree, this wins.
+#
+# Scope is the **partner-facing** surface only: an integrating system raises a
+# request, reads its state, and withdraws it. Review — approve, return, reject —
+# is deliberately absent. Those are institutional acts performed by named
+# principals inside the bank, and putting them on a partner-authenticated API
+# is how a partner ends up approving its own request. They will live in a
+# separate internal specification.
+#
+# Four properties of this document are load-bearing rather than stylistic.
+#
+# 1. **Every schema is `additionalProperties: false`.** This is §1.1's "the
+#    absence is the control" applied to the wire format. A partner that posts
+#    any proportion-shaped field does not get it silently dropped and does not
+#    get it stored — the request is refused. An unknown field is a defect in
+#    one of the two systems and both should hear about it immediately.
+#
+#    This file is scanned by `test/architecture/absences.test.ts` for the
+#    forbidden identifiers, so the prose here names none of them. Writing one
+#    down to explain that it is banned would put the literal in the repository,
+#    which is the thing being prevented.
+#
+# 2. **Money is a string of minor units.** Not a JSON number. JSON numbers are
+#    IEEE-754 doubles in most parsers, and §8 forbids floating point anywhere
+#    in the financial path. A string of digits survives every parser intact.
+#
+# 3. **The client cannot choose its tenant, its channel, or its own identity.**
+#    There is no `tenantId`, no `channel` and no `partnerId` in any request
+#    body. All three are derived from the authenticated credential. Supplying
+#    them is rejected by `additionalProperties: false`, which is the point.
+#
+# 4. **No gateway header appears anywhere.** Kong today, possibly IBM API
+#    Connect later (§5). The contract names no `X-Consumer-*`, no
+#    `X-Anonymous-Consumer`, nothing a specific gateway injects. The service
+#    re-validates identity and tenant independently of whatever ran in front
+#    of it, so this document stays true across a gateway change.
+
+openapi: 3.1.0
+
+info:
+  title: Sanad Origination API
+  version: 1.0.0
+  summary: Raise and track origination requests from an integrating system.
+  description: |
+    An origination request is an **instruction to originate**, not a credit.
+
+    This is the distinction most likely to be misread by a team integrating
+    from a conventional lending background, so it is stated here rather than
+    buried. In a loan origination system, approval is the moment the credit
+    exists. Here it is not. An approved request buys exactly one thing: the
+    right to open a transaction in `DRAFT`, at the very start of a sequence
+    that must then validate the trade, reserve limit, execute a purchase,
+    evidence ownership, evidence possession, and hold the goods at the
+    institution's own risk for the Board's interval before any sale can be
+    offered.
+
+    There is no field in this API, and no entitlement behind it, that shortens
+    that sequence. A `state` of `APPROVED` means a file was opened.
+
+    **There is no rate.** Not in a request, not in a response, not in an error.
+    Return on a Murabaha is a profit *amount* disclosed with the cost it is
+    added to, and it is fixed once at inception. If your integration expects a
+    periodic proportion to reconcile against, raise it with us rather than
+    working around it — the concept does not exist in this system and adding
+    it is a regulatory matter, not a backlog item.
+  contact:
+    name: Sanad platform
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+
+servers:
+  - url: https://api.{environment}.sanad.example/origination/v1
+    description: Environment-scoped base URL. Supplied per integration.
+    variables:
+      environment:
+        default: sandbox
+        enum: [sandbox, uat, production]
+
+security:
+  - mutualTls: []
+    partnerOAuth: [origination:read, origination:write]
+
+tags:
+  - name: Requests
+    description: Raising, reading and withdrawing origination requests.
+
+paths:
+  /requests:
+    post:
+      tags: [Requests]
+      operationId: raiseOriginationRequest
+      summary: Raise an origination request.
+      description: |
+        Creates a request against a real trade.
+
+        **A request always names a trade.** There is no amount-only form of
+        this call. The trade is what is bought and sold; financing is the
+        consequence of it. A body without a `tradeReference` is refused with
+        `SH-03`, not accepted with a null.
+
+        The channel is derived from the authenticated credential, and for both
+        partner channels the servicing platform is consulted before any human
+        sees the request. A successful call therefore returns
+        `AWAITING_SERVICING_RESPONSE`, not `AWAITING_REVIEW`. Do not treat the
+        `201` as an indication of appetite; it means the instruction was
+        accepted as well-formed and is now in the institution's hands.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RaiseRequest'
+            examples:
+              partnerSystem:
+                summary: A partner system raising against a cleared invoice
+                value:
+                  programmeId: 018f3a2c-7b41-7c9e-9a11-3f0c2d5e6a70
+                  counterpartyId: 018f3a2c-7b41-7c9e-9a11-4b1d3e6f7a81
+                  tradeReference:
+                    type: CLEARED_INVOICE
+                    invoiceUuid: 018f3a2d-1c22-7d3e-8f44-5a6b7c8d9e01
+                    invoiceHash: 9f2c1a7e5d3b08462fbc19a7d4e5061c8a3b2d9e7f01234556789abcdef01234
+                    issuerCr: '1010223344'
+                    recipientCr: '2050667788'
+                  requestedAmount:
+                    minorUnits: '48500000'
+                    currency: SAR
+                  requestedTenorDays: 90
+                  initiator:
+                    kind: PARTNER_SYSTEM
+              aggregatorOnBehalf:
+                summary: An aggregator nominating a merchant it serves
+                value:
+                  programmeId: 018f3a2c-7b41-7c9e-9a11-3f0c2d5e6a70
+                  counterpartyId: 018f3a2c-7b41-7c9e-9a11-4b1d3e6f7a81
+                  tradeReference:
+                    type: PURCHASE_ORDER
+                    issuerCr: '1010223344'
+                    recipientCr: '2050667788'
+                  requestedAmount:
+                    minorUnits: '12000000'
+                    currency: SAR
+                  requestedTenorDays: 60
+                  initiator:
+                    kind: AGGREGATOR_ON_BEHALF
+                    merchantMandateRef: mnd_018f3a2e4477c1
+      responses:
+        '201':
+          description: The request was accepted and is now with the institution.
+          headers:
+            Location: { $ref: '#/components/headers/Location' }
+            X-Correlation-Id: { $ref: '#/components/headers/CorrelationId' }
+            Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OriginationRequest'
+        '400': { $ref: '#/components/responses/Malformed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '422': { $ref: '#/components/responses/ControlRejection' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+    get:
+      tags: [Requests]
+      operationId: listOriginationRequests
+      summary: List the requests this credential raised.
+      description: |
+        Scoped to the authenticated partner and tenant. A partner sees the
+        requests it raised and nothing else; there is no query parameter that
+        widens that, and supplying a tenant is rejected.
+      parameters:
+        - name: state
+          in: query
+          description: Filter by state. Repeatable.
+          required: false
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/RequestState' }
+          style: form
+          explode: true
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string, maxLength: 512 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: A page of requests, newest first.
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/OriginationRequest' }
+                  nextCursor:
+                    type: [string, 'null']
+                    maxLength: 512
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /requests/{requestId}:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags: [Requests]
+      operationId: getOriginationRequest
+      summary: Read a request.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: The request.
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OriginationRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /requests/{requestId}/withdrawal:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    put:
+      tags: [Requests]
+      operationId: withdrawOriginationRequest
+      summary: Withdraw a request the partner raised.
+      description: |
+        Withdrawal is the only state change a partner may cause after raising.
+        It is available while the request is still open; once it has been
+        approved or rejected there is nothing to withdraw and the call is
+        refused with `422`.
+
+        Modelled as `PUT` on a sub-resource rather than `POST /withdraw`,
+        because withdrawal is idempotent by nature: withdrawing an already
+        withdrawn request is the same outcome, not an error.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  description: |
+                    Free text, retained on the request. Must not contain a
+                    national identifier or any personal datum; this field is
+                    surfaced in the audit workspace.
+      responses:
+        '200':
+          description: The request is withdrawn.
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/CorrelationId' }
+            Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OriginationRequest' }
+        '400': { $ref: '#/components/responses/Malformed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '422': { $ref: '#/components/responses/ControlRejection' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+webhooks:
+  requestStateChanged:
+    post:
+      operationId: onRequestStateChanged
+      summary: Delivered when a request changes state.
+      description: |
+        Emitted through the transactional outbox (§8), so it is neither lost
+        nor duplicated in effect — though it may be **delivered** more than
+        once. Deduplicate on `eventId`.
+
+        Ordering is not guaranteed. Use `occurredAt.instant` and, where two
+        events carry the same instant, `sequence`. A receiver that infers
+        state by counting deliveries will eventually be wrong; the event
+        carries the resulting state explicitly so it never has to.
+      parameters:
+        - name: Sanad-Signature
+          in: header
+          required: true
+          description: Detached signature over the raw body. Verify before parsing.
+          schema: { type: string, maxLength: 512 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [eventId, sequence, occurredAt, request]
+              properties:
+                eventId: { type: string, format: uuid }
+                sequence: { type: integer, minimum: 0 }
+                occurredAt: { $ref: '#/components/schemas/AttestedInstant' }
+                request: { $ref: '#/components/schemas/OriginationRequest' }
+      responses:
+        '204':
+          description: Accepted. Any 2xx suppresses redelivery.
+
+components:
+  securitySchemes:
+    mutualTls:
+      type: mutualTLS
+      description: |
+        Client certificate, pinned per integration. Terminated at the gateway
+        and re-asserted to the service; the service does not accept a
+        gateway's word for it (§5).
+    partnerOAuth:
+      type: oauth2
+      description: |
+        Both schemes apply together, not as alternatives. The token identifies
+        the partner; the certificate binds the channel.
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.sandbox.sanad.example/oauth2/token
+          scopes:
+            origination:read: Read requests this partner raised.
+            origination:write: Raise and withdraw requests.
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Required on every state-changing request (§8). The response is
+        persisted against the key; a replay with the same key and the same
+        body returns the original result verbatim with `Idempotent-Replay:
+        true`. The same key with a different body is a `409`, never a second
+        request.
+
+        Generate a fresh UUID per logical instruction. Reusing a key across
+        two genuinely different instructions will lose one of them.
+      schema:
+        type: string
+        format: uuid
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: |
+        Carried through every log, span and audit record for this instruction.
+        Supply your own to correlate across both systems; one is generated if
+        you do not, and returned either way.
+      schema:
+        type: string
+        format: uuid
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  headers:
+    Location:
+      description: The created request.
+      schema: { type: string, format: uri-reference }
+    CorrelationId:
+      description: The correlation identifier for this instruction.
+      schema: { type: string, format: uuid }
+    IdempotentReplay:
+      description: Present and `true` when this response was replayed from a stored result.
+      schema: { type: boolean }
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema: { type: integer, minimum: 0 }
+
+  schemas:
+    Money:
+      type: object
+      additionalProperties: false
+      required: [minorUnits, currency]
+      description: |
+        An amount in minor units, as a string of digits.
+
+        A string rather than a number on purpose. A JSON number is a double in
+        most parsers, and §8 forbids floating point in the financial path;
+        `48500000` is halalas, so `485,000.00 SAR`. Do not divide it to
+        display it — split on the last two digits.
+      properties:
+        minorUnits:
+          type: string
+          pattern: '^(0|[1-9][0-9]{0,18})$'
+          examples: ['48500000']
+        currency:
+          type: string
+          enum: [SAR]
+          description: Saudi riyal, two minor digits. Extended by agreement, not unilaterally.
+
+    AttestedInstant:
+      type: object
+      additionalProperties: false
+      required: [instant, attestationRef]
+      description: |
+        A point in time together with the attestation that establishes it.
+
+        Times that carry contractual effect in this system come from an RFC
+        3161 timestamping authority, never from a server clock and never from
+        a client. The attestation reference is what makes the instant
+        replayable by the Board's audit process (SH-18), which is why it
+        travels with the value rather than being held somewhere else.
+      properties:
+        instant:
+          type: string
+          format: date-time
+        attestationRef:
+          type: string
+          minLength: 1
+          maxLength: 128
+
+    TradeReference:
+      type: object
+      additionalProperties: false
+      required: [type, issuerCr, recipientCr]
+      description: |
+        The real trade the financing attaches to.
+
+        `issuerCr` and `recipientCr` are commercial registration numbers, and
+        counterparty distinctness is matched on these rather than on names
+        (SH-08). Two names that differ are not two parties.
+      properties:
+        type:
+          type: string
+          enum: [CLEARED_INVOICE, PURCHASE_ORDER]
+        invoiceUuid:
+          type: string
+          format: uuid
+          description: |
+            The e-invoicing authority's identifier. Required where `type` is
+            `CLEARED_INVOICE`. This is the key the financed-invoice registry
+            is unique on (SH-10) — the same invoice cannot be financed twice,
+            including after settlement.
+        invoiceHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 of the cleared document, lowercase hex.
+        issuerCr:
+          type: string
+          pattern: '^[0-9]{10}$'
+        recipientCr:
+          type: string
+          pattern: '^[0-9]{10}$'
+      allOf:
+        - if:
+            properties:
+              type: { const: CLEARED_INVOICE }
+            required: [type]
+          then:
+            required: [invoiceUuid, invoiceHash]
+
+    Initiator:
+      description: |
+        What the server cannot already know about who is asking.
+
+        Deliberately thin. The partner or aggregator identity and its
+        credential reference come from the authenticated credential, not from
+        the body, so a caller cannot assert that it is somebody else. The only
+        thing carried here is the merchant's own mandate, which is a fact
+        about a third party that the credential does not establish.
+      oneOf:
+        - $ref: '#/components/schemas/PartnerSystemInitiator'
+        - $ref: '#/components/schemas/AggregatorInitiator'
+      discriminator:
+        propertyName: kind
+        mapping:
+          PARTNER_SYSTEM: '#/components/schemas/PartnerSystemInitiator'
+          AGGREGATOR_ON_BEHALF: '#/components/schemas/AggregatorInitiator'
+
+    PartnerSystemInitiator:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          const: PARTNER_SYSTEM
+
+    AggregatorInitiator:
+      type: object
+      additionalProperties: false
+      required: [kind, merchantMandateRef]
+      properties:
+        kind:
+          type: string
+          const: AGGREGATOR_ON_BEHALF
+        merchantMandateRef:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: |
+            A mandate from the party who will owe the money — the merchant —
+            not from the aggregator introducing them. An aggregator's
+            commercial interest is not the merchant's consent, and a missing
+            or empty mandate is refused.
+
+    RaiseRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - programmeId
+        - counterpartyId
+        - tradeReference
+        - requestedAmount
+        - requestedTenorDays
+        - initiator
+      description: |
+        Note what is absent: no `tenantId`, no `channel`, no `partnerId`, and
+        nothing resembling a rate. All are either derived server-side or do
+        not exist. Because this schema is closed, sending one is a `400`
+        rather than a silent drop.
+      properties:
+        programmeId: { type: string, format: uuid }
+        counterpartyId: { type: string, format: uuid }
+        tradeReference: { $ref: '#/components/schemas/TradeReference' }
+        requestedAmount: { $ref: '#/components/schemas/Money' }
+        requestedTenorDays:
+          type: integer
+          minimum: 1
+          maximum: 365
+          description: |
+            A determinate tenor in days (SH-03). There is no open-ended or
+            "until collected" form — a term that cannot be stated is gharar.
+        initiator: { $ref: '#/components/schemas/Initiator' }
+        partnerReference:
+          type: string
+          maxLength: 128
+          description: Your own reference, echoed back. Not used for idempotency.
+
+    RequestState:
+      type: string
+      enum:
+        - AWAITING_SERVICING_RESPONSE
+        - AWAITING_REVIEW
+        - RETURNED_TO_MAKER
+        - APPROVED
+        - REJECTED
+        - WITHDRAWN
+      description: |
+        `KEYING` is intentionally not in this list. It is the state of a
+        request being typed into an internal screen and is never observable
+        over this API — a partner's request is created submitted.
+
+        `APPROVED` means a transaction may now be opened in `DRAFT`. It does
+        not mean funds, a sale, or an executed contract.
+
+    ServicingOutcome:
+      type: object
+      additionalProperties: false
+      required: [decision, reference, respondedAt]
+      description: |
+        What the servicing platform said about credit capacity — limits,
+        exposure, account standing.
+
+        It is an input to the institution's decision and never the decision
+        itself. It also has no view whatsoever on sequencing: a servicing
+        `APPROVED` says nothing about whether goods were bought, possessed and
+        held at risk, and is not consulted about it.
+      properties:
+        decision:
+          type: string
+          enum: [APPROVED, DECLINED, REFERRED]
+        reference:
+          type: string
+          minLength: 1
+          maxLength: 128
+        reasonCode:
+          type: string
+          maxLength: 64
+          description: Present on `DECLINED` and `REFERRED`.
+        respondedAt: { $ref: '#/components/schemas/AttestedInstant' }
+
+    OriginationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - requestId
+        - state
+        - channel
+        - programmeId
+        - counterpartyId
+        - tradeReference
+        - requestedAmount
+        - requestedTenorDays
+        - raisedAt
+        - correlationId
+      description: |
+        The reviewing principals are not exposed. Who keyed and who approved a
+        request is recorded in full and is available to the Board's audit
+        workspace, but it is internal staff identity and a partner has no
+        business with it.
+      properties:
+        requestId: { type: string, format: uuid }
+        state: { $ref: '#/components/schemas/RequestState' }
+        channel:
+          type: string
+          enum: [PARTNER_API, EMBEDDED_AGGREGATOR]
+          description: Derived from the credential. Echoed so you can assert it is what you expected.
+        programmeId: { type: string, format: uuid }
+        counterpartyId: { type: string, format: uuid }
+        tradeReference: { $ref: '#/components/schemas/TradeReference' }
+        requestedAmount: { $ref: '#/components/schemas/Money' }
+        requestedTenorDays: { type: integer, minimum: 1 }
+        raisedAt: { $ref: '#/components/schemas/AttestedInstant' }
+        correlationId: { type: string, format: uuid }
+        partnerReference: { type: string, maxLength: 128 }
+        servicing: { $ref: '#/components/schemas/ServicingOutcome' }
+        outcome:
+          type: object
+          additionalProperties: false
+          required: [decidedAt]
+          description: Present once a human has decided.
+          properties:
+            decidedAt: { $ref: '#/components/schemas/AttestedInstant' }
+            reasonCode:
+              type: string
+              maxLength: 64
+              description: Present on `REJECTED`. Names the control or policy reason.
+            note:
+              type: string
+              maxLength: 500
+              description: Present on `RETURNED_TO_MAKER`. What needs changing.
+        transaction:
+          type: object
+          additionalProperties: false
+          required: [transactionId, state]
+          description: |
+            Present once an approved request has been opened as a transaction.
+            The state is `DRAFT` and can be nothing else here — this is the
+            beginning of the sequence, not the end of it.
+          properties:
+            transactionId: { type: string, format: uuid }
+            state:
+              type: string
+              const: DRAFT
+
+    ControlCode:
+      type: string
+      description: |
+        The control that refused the request. Never a generic decline: the
+        counterparty surface renders this into a specific, respectful Arabic
+        explanation, and the Board's audit workspace indexes on it.
+      enum:
+        - SH-01
+        - SH-02
+        - SH-03
+        - SH-04
+        - SH-05
+        - SH-06
+        - SH-07
+        - SH-08
+        - SH-09
+        - SH-10
+        - SH-11
+        - SH-12
+        - SH-13
+        - SH-14
+        - SH-15
+        - SH-16
+        - SH-17
+        - SH-18
+        - OP-DETERMINACY
+        - OP-CHAIN
+        - OP-LIMIT
+
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, detail, detailAr, correlationId]
+      description: |
+        RFC 9457 problem details, with two additions.
+
+        `control` and `reason` are the machine-readable pair: the control that
+        refused, and why. `detail`/`detailAr` are both always present —
+        bilingual is a requirement of the product, not a localisation feature,
+        and an English-only refusal cannot be shown to a counterparty.
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        detail: { type: string, description: English. }
+        detailAr: { type: string, description: Arabic. Always present. }
+        instance: { type: string, format: uri-reference }
+        correlationId: { type: string, format: uuid }
+        control: { $ref: '#/components/schemas/ControlCode' }
+        reason:
+          type: string
+          maxLength: 64
+          description: Stable machine reason, e.g. `INVOICE_ALREADY_FINANCED`.
+          examples: [INVOICE_ALREADY_FINANCED]
+        context:
+          type: object
+          description: |
+            Structured context for the audit trail. Scalars only, and never a
+            national identifier, a personal datum or a credential — problem
+            details are logged, forwarded and shown on screens.
+          additionalProperties:
+            type: [string, number, boolean]
+
+  responses:
+    Malformed:
+      description: |
+        The body could not be accepted as written — a missing required field,
+        a wrong type, or an unknown property. An unknown property is an error
+        rather than a silent drop; see the note on closed schemas.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            unknownProperty:
+              summary: A field that does not exist in this system
+              value:
+                type: https://sanad.example/problems/malformed-request
+                title: Malformed request
+                status: 400
+                detail: >-
+                  Unknown property. Return in this system is expressed as a
+                  profit amount added to a disclosed cost, never as a
+                  proportion, and there is no field to carry one.
+                detailAr: >-
+                  حقل غير معروف. يُعبَّر عن العائد بمبلغ ربح يُضاف إلى تكلفة
+                  مُفصح عنها، لا بنسبة، ولا يوجد حقل يحملها.
+                correlationId: 018f3a2f-0000-7000-8000-000000000001
+                control: SH-01
+                reason: UNKNOWN_PROPERTY
+    Unauthenticated:
+      description: No valid credential. The service verifies this itself and does not rely on the gateway.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: |
+        Authenticated, but not entitled — including any attempt to read or act
+        on a request belonging to another partner or another tenant.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: |
+        No such request within this partner's scope. A request that exists for
+        another partner is reported as absent rather than forbidden, so the
+        API does not confirm the existence of other partners' business.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    IdempotencyConflict:
+      description: |
+        The `Idempotency-Key` has been used with a different body. The stored
+        result is not returned and the new instruction is not performed — one
+        of the two is a defect and guessing which would be worse than failing.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ControlRejection:
+      description: |
+        Well-formed, and refused by a control.
+
+        Distinguished from `400` on purpose: the body was understood. Retrying
+        it unchanged will be refused again. `control` names what refused.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            duplicateFinancing:
+              summary: The invoice has already been financed
+              value:
+                type: https://sanad.example/problems/control-rejection
+                title: Refused by a Shariah control
+                status: 422
+                detail: This invoice has already been financed and cannot be financed again.
+                detailAr: 'سبق تمويل هذه الفاتورة، ولا يمكن تمويلها مرة أخرى.'
+                correlationId: 018f3a2f-0000-7000-8000-000000000002
+                control: SH-10
+                reason: INVOICE_ALREADY_FINANCED
+            sameEntityBothSides:
+              summary: Issuer and recipient are the same registered entity
+              value:
+                type: https://sanad.example/problems/control-rejection
+                title: Refused by a Shariah control
+                status: 422
+                detail: The buyer and the seller are the same registered entity.
+                detailAr: 'البائع والمشتري كيان مسجَّل واحد.'
+                correlationId: 018f3a2f-0000-7000-8000-000000000003
+                control: SH-08
+                reason: COUNTERPARTIES_NOT_DISTINCT
+            mandateMissing:
+              summary: An aggregator nominated a merchant without the merchant's mandate
+              value:
+                type: https://sanad.example/problems/control-rejection
+                title: Refused
+                status: 422
+                detail: An aggregator may introduce a merchant; it may not consent on the merchant's behalf.
+                detailAr: 'يجوز للوسيط تعريف التاجر، ولا يجوز له الموافقة نيابة عنه.'
+                correlationId: 018f3a2f-0000-7000-8000-000000000004
+                control: OP-DETERMINACY
+                reason: MERCHANT_MANDATE_EMPTY
+    RateLimited:
+      description: Too many requests. Declared in `gateway/`, enforced there, re-checked by the service.
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Internal:
+      description: |
+        An unexpected failure. The correlation identifier is always present;
+        quote it. No internal detail, credential or personal datum appears in
+        this body.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }

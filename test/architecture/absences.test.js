@@ -3,7 +3,7 @@ import { extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-const CODE_EXTENSIONS = /* @__PURE__ */ new Set([".ts", ".tsx", ".js", ".sql", ".json"]);
+const CODE_EXTENSIONS = /* @__PURE__ */ new Set([".ts", ".tsx", ".js", ".sql", ".json", ".yaml", ".yml"]);
 function filesUnder(dir) {
   const absolute = join(ROOT, dir);
   const out = [];
@@ -44,7 +44,7 @@ const RATE_IDENTIFIERS = [
 ]);
 const ANNUALISED = ["a", "p", "r"].join("");
 describe("SH-01 \u2014 no rate construct exists anywhere", () => {
-  const surfaces = ["core", "config", "adapters", "supabase/migrations"];
+  const surfaces = ["core", "config", "adapters", "supabase/migrations", "api"];
   it.each(surfaces)("%s declares no rate identifier", (surface) => {
     const offenders = [];
     for (const file of filesUnder(surface)) {

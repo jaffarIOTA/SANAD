@@ -88,8 +88,11 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         id: 'partner-api',
         titleEn: 'Partner API',
         titleAr: 'واجهة الشركاء',
-        readiness: { kind: 'BLOCKED', on: 'Contract authored first (BE-01); spec in progress.' },
-        reference: 'SDD §6.3',
+        readiness: {
+          kind: 'BLOCKED',
+          on: 'Contract authored and enforced by test (api/openapi/origination.v1.yaml). Handler not built.',
+        },
+        reference: 'SDD §6.3 · api/openapi/origination.v1.yaml',
       },
       {
         id: 'embedded',
