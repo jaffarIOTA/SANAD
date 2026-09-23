@@ -32,11 +32,12 @@
 #    body. All three are derived from the authenticated credential. Supplying
 #    them is rejected by `additionalProperties: false`, which is the point.
 #
-# 4. **No gateway header appears anywhere.** Kong today, possibly IBM API
-#    Connect later (§5). The contract names no `X-Consumer-*`, no
-#    `X-Anonymous-Consumer`, nothing a specific gateway injects. The service
-#    re-validates identity and tenant independently of whatever ran in front
-#    of it, so this document stays true across a gateway change.
+# 4. **No gateway header appears anywhere.** IBM API Connect fronts this
+#    today, and a second institution's gateway may not (§5). The contract
+#    names no `X-Consumer-*`, no `X-Client-*`, nothing a specific gateway
+#    injects. The service re-validates identity and tenant independently of
+#    whatever ran in front of it, so this document stays true across a
+#    gateway change.
 
 openapi: 3.1.0
 

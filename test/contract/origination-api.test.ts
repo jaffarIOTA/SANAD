@@ -10,7 +10,7 @@
  *   - closed schemas are how a rate cannot be posted (§1.1);
  *   - a string of minor units is how no float enters the financial path (§8);
  *   - the absent `tenantId` is how tenancy cannot be claimed by a client (§8);
- *   - the absent gateway header is what keeps Kong swappable for IBM (§5);
+ *   - the absent gateway header is what keeps the gateway swappable (§5);
  *   - `detailAr` on every problem is why no counterparty gets an
  *     English-only refusal (§6).
  *

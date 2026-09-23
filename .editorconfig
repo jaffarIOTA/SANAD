@@ -1,0 +1,24 @@
+# Settles formatting at the repository level, so an editor without its own
+# opinion does not impose one.
+#
+# Added because a test file came back with tabs while the other twenty used
+# spaces, and a mixed-indentation diff hides the change that matters inside
+# whitespace noise. On a repository that ships to a bank and gets reviewed
+# line by line, that is worth preventing rather than tidying up after.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.md]
+# Trailing spaces are a line break in Markdown.
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab

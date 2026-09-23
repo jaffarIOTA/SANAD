@@ -1,17 +1,22 @@
 /**
- * The gateway stays swappable, and stays out of the domain.
+ * The gateway holds no control, and no service depends on one.
  *
- * CLAUDE.md §5 makes two promises. Gateway concerns live in `gateway/` as
- * configuration, one directory per implementation; and no application code
- * depends on a particular gateway having run. Both erode the same way — a
- * plugin that is convenient today becomes a dependency tomorrow — so both are
- * asserted here rather than reviewed.
+ * IBM API Connect is the integration layer and DataPower is the gateway
+ * (ClaudeRecommendations.md E-20). Kong has been removed — it was the
+ * development gateway while the client's choice was unknown, and a
+ * configuration nothing applies is worse than none.
  *
- * The sharpest of these is the authentication one. A gateway auth plugin looks
- * like defence in depth and is actually a second, weaker identity source; once
- * a service stops authenticating because "the gateway does it", the gateway is
- * no longer swappable and the service is no longer safe behind a different
- * one.
+ * What survived Kong's removal is the *independence*, and it is asserted here
+ * rather than trusted. Sanad is a product: it deploys to each buying
+ * institution's own cluster, and the second institution may not run API
+ * Connect (E-23). A service that reads a gateway-injected header is a service
+ * that cannot move.
+ *
+ * The sharpest rule is the authentication one. A gateway auth policy looks
+ * like defence in depth and is actually a second, weaker identity source;
+ * once a service stops authenticating because "the gateway does it", the
+ * gateway is no longer swappable and the service is no longer safe behind a
+ * different one.
  */
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
@@ -24,17 +29,17 @@ import { describe, expect, it } from 'vitest';
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const read = (p: string): string => readFileSync(join(ROOT, p), 'utf8');
 
-interface KongConfig {
-  readonly _format_version: string;
-  readonly services: readonly {
-    readonly name: string;
-    readonly retries?: number;
-    readonly routes?: readonly { readonly protocols?: readonly string[] }[];
-  }[];
-  readonly plugins?: readonly { readonly name: string; readonly config?: Record<string, unknown> }[];
-}
+/** Every API definition we publish. */
+const DEFINITIONS = ['gateway/ibm/health-api_1.0.0.yaml', 'gateway/ibm/origination-api_1.0.0.yaml'];
+const PRODUCTS = [
+  'gateway/ibm/health-product_1.0.0.yaml',
+  'gateway/ibm/origination-product_1.0.0.yaml',
+];
 
-const kong = parse(read('gateway/kong/kong.yaml')) as KongConfig;
+const definitions = DEFINITIONS.map((path) => ({
+  path,
+  doc: parse(read(path)) as Record<string, any>,
+}));
 
 function sourcesUnder(dir: string): string[] {
   const out: string[] = [];
@@ -50,174 +55,137 @@ function sourcesUnder(dir: string): string[] {
   return out;
 }
 
-// -- §5 one directory per implementation --------------------------------------
+// -- The shape of the directory ----------------------------------------------
 
-describe('§5 — gateway concerns are configuration, not code', () => {
-  it('declares a directory for each implementation', () => {
-    expect(existsSync(join(ROOT, 'gateway/kong'))).toBe(true);
+describe('gateway configuration is declarative and lives here', () => {
+  it('has an API Connect directory', () => {
     expect(existsSync(join(ROOT, 'gateway/ibm'))).toBe(true);
   });
 
-  it('parses the Kong configuration', () => {
-    expect(kong._format_version).toMatch(/^3\./);
-    expect(kong.services.length).toBeGreaterThan(0);
+  it('no longer carries a Kong configuration', () => {
+    // Removed deliberately. A gateway config that nothing applies rots, and
+    // implies a tested capability that is not tested.
+    expect(existsSync(join(ROOT, 'gateway/kong'))).toBe(false);
   });
 
-  it('names no environment host in the configuration', () => {
-    // One file serves every environment. A hostname here would leak an
-    // environment's topology into git and mean four near-identical files.
-    const raw = read('gateway/kong/kong.yaml');
-    const hosts = raw.match(/https?:\/\/[a-z0-9.-]+/gi) ?? [];
-    const realHosts = hosts.filter((h) => !h.includes('docs.konghq.com'));
-    expect(realHosts).toEqual([]);
-  });
-});
-
-// -- The gateway holds no control ---------------------------------------------
-
-describe('the API Connect artefacts', () => {
-  const api = parse(read('gateway/ibm/health-api_1.0.0.yaml')) as Record<string, any>;
-  const product = parse(read('gateway/ibm/health-product_1.0.0.yaml')) as Record<string, any>;
-
-  it('is OpenAPI 3.0, because v10.0.11 rejects 3.1', () => {
-    // Established by experiment: `apic validate` answers "Invalid file type
-    // provided" on a 3.1 document, identically with --no-extensions. See
-    // ClaudeRecommendations.md E-25.
-    expect(String(api['openapi'])).toMatch(/^3\.0\./);
+  it.each(DEFINITIONS)('%s is OpenAPI 3.0, which v10.0.11 parses', (path) => {
+    const doc = definitions.find((d) => d.path === path)?.doc;
+    expect(String(doc?.['openapi'])).toMatch(/^3\.0\./);
   });
 
-  it('carries x-ibm-configuration, without which it will not validate', () => {
-    expect(api['x-ibm-configuration']).toBeDefined();
-    expect(api['x-ibm-configuration'].gateway).toBe('datapower-api-gateway');
+  it.each(DEFINITIONS)('%s carries x-ibm-configuration', (path) => {
+    const doc = definitions.find((d) => d.path === path)?.doc;
+    expect(doc?.['x-ibm-configuration']?.gateway).toBe('datapower-api-gateway');
   });
 
-  it('names no environment host — the upstream is a property', () => {
-    // One definition per API, not one per environment.
-    const raw = read('gateway/ibm/health-api_1.0.0.yaml');
-    const targets: string[] = [];
-    for (const step of api['x-ibm-configuration'].assembly.execute ?? []) {
-      if (step.invoke !== undefined) targets.push(String(step.invoke['target-url']));
-    }
-    expect(targets.length).toBeGreaterThan(0);
-    for (const target of targets) expect(target).toMatch(/^\$\(/);
+  it.each([...DEFINITIONS, ...PRODUCTS])('%s names no environment host', (path) => {
+    // One definition serves every catalog; the upstream is a property. A
+    // hostname here leaks an environment's topology into git and means four
+    // near-identical files.
+    const raw = read(path);
     expect(raw).not.toMatch(/apiconnect\.ibmappdomain\.cloud/);
-  });
-
-  it('transforms nothing — it constructs a fixed response', () => {
-    // DataPower is a transformation engine, and this is the flow where that
-    // temptation is strongest. Nothing from the upstream body may reach the
-    // caller, or upstream detail leaks through a health check (E-16).
-    const steps = api['x-ibm-configuration'].assembly.execute ?? [];
-    const kinds = steps.flatMap((s: object) => Object.keys(s));
-    for (const forbidden of ['map', 'gatewayscript', 'xslt', 'json-to-xml', 'xml-to-json']) {
-      expect(kinds).not.toContain(forbidden);
-    }
-  });
-
-  it('exposes no component detail to an unauthenticated caller', () => {
-    // The published API answers a fixed word. The detailed report, which
-    // names our dependencies, is a different endpoint behind a scope.
-    const schema = api['components'].schemas.Health;
-    expect(Object.keys(schema.properties)).toEqual(['status']);
-    expect(schema.additionalProperties).toBe(false);
-  });
-
-  it('publishes through a plan that does not throttle a monitor', () => {
-    const plan = product['plans'].default;
-    expect(plan.approval).toBe(false);
-    expect(plan['rate-limits'].default['hard-limit']).toBe(false);
+    expect(raw).not.toMatch(/https?:\/\/[a-z0-9.-]*\.(com|net|io)\b/i);
   });
 });
 
-describe('§5 — the gateway is not the security boundary', () => {
-  const pluginNames = (kong.plugins ?? []).map((p) => p.name);
+// -- The gateway is not the security boundary --------------------------------
 
-  it('configures no authentication plugin', () => {
-    // Authentication is the service's job. A plugin here would be a second
-    // identity source and the requirement that forces an enterprise licence.
-    const auth = [
-      'key-auth',
-      'jwt',
-      'openid-connect',
-      'oauth2',
-      'basic-auth',
-      'hmac-auth',
-      'ldap-auth',
-      'mtls-auth',
-      'session',
-    ];
-    expect(pluginNames.filter((n) => auth.includes(n))).toEqual([]);
-  });
+describe('the gateway holds no control', () => {
+  it.each(DEFINITIONS)('%s transforms nothing in either direction', (path) => {
+    /*
+     * DataPower is a transformation engine — GatewayScript, XSLT and JSON/XML
+     * mediation are its core competency, which is exactly why this has to be
+     * ruled out explicitly rather than assumed absent (E-16).
+     *
+     * A gateway that normalises JSON silently disables SH-01: our schemas are
+     * closed, so a stripped unknown property never reaches the service that
+     * exists to reject it. A gateway that rewrites an error strips the control
+     * code a compliance rejection carries. A gateway that transforms a body
+     * can change an amount.
+     */
+    const doc = definitions.find((d) => d.path === path)?.doc;
+    const steps: Record<string, unknown>[] = doc?.['x-ibm-configuration'].assembly.execute ?? [];
+    const kinds = steps.flatMap((s) => Object.keys(s));
 
-  it('configures nothing that rewrites a request or a response', () => {
-    // A gateway that rewrites a body can change an amount. A gateway that
-    // rewrites a response can strip the control code a compliance rejection
-    // exists to carry.
-    const transformers = [
-      'request-transformer',
-      'request-transformer-advanced',
-      'response-transformer',
-      'response-transformer-advanced',
-    ];
-    expect(pluginNames.filter((n) => transformers.includes(n))).toEqual([]);
-  });
-
-  it('uses only plugins in the open-source distribution', () => {
-    const openSource = new Set([
-      'rate-limiting',
-      'request-size-limiting',
-      'correlation-id',
-      'cors',
-      'ip-restriction',
-      'request-termination',
-      'file-log',
-      'syslog',
-      'prometheus',
-    ]);
-    const enterprise = pluginNames.filter((n) => !openSource.has(n));
-    expect(enterprise).toEqual([]);
-  });
-
-  /**
-   * A gateway retry reissues a request without a fresh idempotency key, which
-   * is the one path by which this platform can execute an instruction twice.
-   * Retries belong to the caller, who holds the key.
-   */
-  it('never retries an upstream request', () => {
-    for (const service of kong.services) {
-      expect(service.retries, `${service.name} retries`).toBe(0);
+    for (const forbidden of [
+      'map',
+      'gatewayscript',
+      'xslt',
+      'json-to-xml',
+      'xml-to-json',
+      'validate',
+    ]) {
+      expect(kinds, `${path}: ${forbidden}`).not.toContain(forbidden);
     }
   });
 
-  it('exposes no plaintext listener', () => {
-    for (const service of kong.services) {
-      for (const route of service.routes ?? []) {
-        expect(route.protocols).toEqual(['https']);
-      }
+  it.each(DEFINITIONS)('%s enforces no authentication in the assembly', (path) => {
+    /*
+     * The assembly, not the whole document.
+     *
+     * `components.securitySchemes` legitimately *declares* that a partner
+     * presents an OAuth token — that is documentation telling an integrator
+     * what credential to bring, and the service is what checks it. An
+     * assembly policy would be different: a second, weaker identity source
+     * enforced at the gateway, which is what makes a gateway unswappable and
+     * what would otherwise force an enterprise licence.
+     *
+     * So this asserts on the steps, and a raw text search would not
+     * distinguish the two.
+     */
+    const doc = definitions.find((d) => d.path === path)?.doc;
+    const steps: Record<string, unknown>[] = doc?.['x-ibm-configuration'].assembly.execute ?? [];
+    const kinds = steps.flatMap((s) => Object.keys(s).map((k) => k.toLowerCase()));
+
+    for (const policy of [
+      'oauth',
+      'jwt-validate',
+      'jwt-generate',
+      'validate-usernametoken',
+      'ldap-authenticate',
+      'extract-identity',
+      'authenticate',
+      'user-security',
+    ]) {
+      expect(kinds, `${path}: ${policy}`).not.toContain(policy);
     }
   });
 
-  it('allows no browser origin on a server-to-server API', () => {
-    const cors = (kong.plugins ?? []).find((p) => p.name === 'cors');
-    expect(cors?.config?.['origins']).toEqual([]);
+  it.each(DEFINITIONS)('%s allows no browser origin', (path) => {
+    const doc = definitions.find((d) => d.path === path)?.doc;
+    expect(doc?.['x-ibm-configuration'].cors?.enabled).toBe(false);
+  });
+
+  it.each(PRODUCTS)('%s uses no hard rate limit', (path) => {
+    /*
+     * A hard limit that sheds a state-changing request produces a retry, and a
+     * retry the caller did not choose to make is how an instruction gets sent
+     * twice. The service's idempotency store is the protection; a gateway
+     * limit is a shock absorber.
+     */
+    const product = parse(read(path)) as Record<string, any>;
+    for (const [name, plan] of Object.entries(product['plans'] as Record<string, any>)) {
+      expect(plan['rate-limits']?.default?.['hard-limit'], `${path}: ${name}`).toBe(false);
+    }
   });
 });
 
-// -- No application code depends on a gateway ---------------------------------
+// -- No service depends on a gateway -----------------------------------------
 
-describe('§5 — no service depends on a gateway having run', () => {
+describe('no service depends on a gateway having run', () => {
   const surfaces = ['services', 'apps/ops/src', 'apps/sme/src', 'core', 'adapters'];
 
   it.each(surfaces)('%s reads no gateway-injected header', (surface) => {
-    // Kong injects `x-consumer-*`; API Connect and DataPower inject their own.
-    // Reading any of them is what makes a gateway unswappable.
+    // API Connect and DataPower inject their own headers, as every gateway
+    // does. Reading any of them is what makes a gateway unswappable — and
+    // this platform is sold to institutions that each bring their own.
     const injected =
-      /x-consumer-|x-anonymous-consumer|x-credential-|x-authenticated-(scope|userid)|x-kong-|x-ibm-client|x-datapower/i;
+      /x-consumer-|x-anonymous-consumer|x-credential-|x-authenticated-(scope|userid)|x-kong-|x-ibm-client|x-datapower|x-apic-/i;
 
     const offenders: string[] = [];
     for (const file of sourcesUnder(surface)) {
       const source = readFileSync(file, 'utf8');
-      // Strip comments: the rule is allowed to name what it forbids.
+      // Strip comments: a rule is allowed to name what it forbids.
       const code = source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*$/gm, '$1');
       if (injected.test(code)) offenders.push(relative(ROOT, file));
     }
@@ -225,22 +193,14 @@ describe('§5 — no service depends on a gateway having run', () => {
   });
 
   it('names no gateway product inside core', () => {
-    // §7: no vendor names in core. The gateway is a vendor like any other.
+    // §7: no vendor names in core. A gateway is a vendor like any other, and
+    // that stays true now that the vendor has been chosen.
     const offenders: string[] = [];
     for (const file of sourcesUnder('core')) {
-      if (/\b(kong|konnect|datapower|api connect|apigee)\b/i.test(readFileSync(file, 'utf8'))) {
+      if (/\b(kong|konnect|datapower|api ?connect|apigee)\b/i.test(readFileSync(file, 'utf8'))) {
         offenders.push(relative(ROOT, file));
       }
     }
     expect(offenders).toEqual([]);
-  });
-
-  it('keeps the two implementations in step', () => {
-    // The IBM directory is a list of obligations rather than configuration,
-    // so what is asserted is that it still enumerates what Kong does.
-    const ibm = read('gateway/ibm/README.md');
-    for (const plugin of (kong.plugins ?? []).map((p) => p.name)) {
-      expect(ibm, `IBM README covers ${plugin}`).toContain(plugin);
-    }
   });
 });

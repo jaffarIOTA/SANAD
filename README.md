@@ -56,7 +56,7 @@ test/
 
 ## Stack
 
-Next.js · Node + TypeScript · Kong (abstracted for IBM API Connect / DataPower) · Redis ·
+Next.js · Node + TypeScript · IBM API Connect / DataPower · Redis ·
 Supabase (PostgreSQL) · a durable workflow engine for sequencing (**not yet selected** —
 see below)
 

@@ -6,7 +6,7 @@
   "workspaces": [
     "core"
   ],
-  "description": "Sanad \u2014 Shariah-compliant origination platform. Wasl \u2014 SME supply chain finance.",
+  "description": "Sanad — Shariah-compliant origination platform. Wasl — SME supply chain finance.",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=20"

@@ -264,24 +264,27 @@ Consequences, which settle three other items:
 
 See E-15 for the one question this opens rather than closes.
 
-## E-11 — Kong licensing · ✅ **Closed by E-10**
+## E-11, E-12, E-13 — Kong licensing, hosting cost, Konnect · ✅ **Closed — Kong removed**
 
-No production Kong, so no enterprise licence question. Open source in lower
-environments. The design reason it was never likely — the service authenticates
-itself, so the gateway is not an identity source — still holds and is what
-keeps DataPower swappable too.
+All three analysed a gateway the product no longer carries. `gateway/kong/`
+has been deleted: IBM API Connect is the integration layer for every flow, and
+a configuration nothing applies rots while implying a tested capability that is
+not tested.
 
-## E-12 — Azure cost for a self-hosted Kong · ✅ **Closed by E-10**
+The analyses are retained in git history if a future institution brings a
+different gateway.
 
-There is no production Kong to host. The estimate is retained in git history if
-it is ever needed for a different gateway.
+**What did not go with it** is the independence — no service reads a
+gateway-injected header, every service re-validates identity and tenant
+itself, contract tests run against the service directly. That is not Kong
+nostalgia. Sanad deploys to each buying institution's own cluster under its own
+policy (E-23), so the second institution may not run API Connect, and the
+independence is what makes that a configuration exercise rather than a fork.
+It is also what keeps us off an enterprise licence: the gateway is not our
+identity source, so no OIDC policy is load-bearing.
 
-## E-13 — Konnect now, self-hosted later · ✅ **Superseded by E-10**
-
-Proposed before the gateway was known. With DataPower confirmed, a hosted Kong
-control plane buys nothing: the lower environments can run a containerised Kong
-locally, which keeps configuration and telemetry in the Kingdom and costs
-nothing. The analysis is retained in git history.
+Asserted by `test/architecture/gateway.test.ts`, which now reads the API
+Connect artefacts and additionally checks that `gateway/kong/` is absent.
 
 ## E-15 — Is the OpenShift cluster on-premises, or ARO? · ✅ **Answered**
 

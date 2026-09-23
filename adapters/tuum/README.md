@@ -277,3 +277,106 @@ Nightly reconciliation proves exactly-once in both directions (SDD §4.9, §6.10
 
 Correct *because* the core is not a compliance dependency. Screening, e-invoicing, signing
 and timestamping all fail closed instead.
+
+---
+
+# Authentication — settled from the published contract
+
+Source: `https://auth-api.sandbox-partners.tuumplatform.com/v3/api-docs/api`
+(auth-api 2.46.0.RELEASE). Implemented in `authentication.ts`, 17 tests in
+`test/adapters/tuum-authentication.test.ts`.
+
+## Why the earlier attempt returned `err.unauthorised`
+
+Three candidates, in the order they are worth checking.
+
+**1. The host.** The auth API is on
+`auth-api.sandbox-partners.tuumplatform.com` — note **`sandbox-partners`**,
+not `sandbox`. Earlier attempts used `loan-api.sandbox.tuumplatform.com`,
+which is a different host serving a different API.
+
+**2. The endpoint.** There are two, taking an identical request body:
+
+| Endpoint | For |
+|---|---|
+| `POST /api/v1/authorise` | a person in the tenant |
+| `POST /api/v1/employees/authorise` | a back-office user |
+
+**A login created in the Tuum console is almost certainly an employee.**
+Posting employee credentials to the person endpoint is refused, and the
+refusal looks identical to a wrong password.
+
+**3. `x-tenant-code`.** The tenant code travels both in the body and as a
+header. Both are marked optional in the document and at least one is required
+in practice, so send both.
+
+## Four things that produce an adapter which looks correct
+
+1. **It is not OAuth 2.** No client-credentials grant, no `grant_type`, no
+   `client_id`. The body is `{username, password, tenantCode}`. So the stored
+   secret is a **password** — password rotation policy applies to it, not
+   API-key policy.
+
+2. **The token goes in `x-auth-token`.** The published security scheme is
+   `apiKey` in that header. An `Authorization: Bearer` header is silently
+   ignored and every call is unauthenticated.
+
+3. **A 200 can carry errors.** The success envelope is
+   `{errors, validationErrors, data}` and the 200 response is declared as that
+   same envelope. Checking `response.ok` is not enough; a failed
+   authentication arrives as HTTP 200 with a populated `errors` array. This is
+   the one most likely to ship.
+
+4. **The response carries no expiry.** `AuthTokenJson` has exactly one field,
+   `token`. No `expiresIn`, no `refreshToken`. The lifetime has to come from
+   the token's own `exp` claim or be assumed conservatively.
+
+## Verifying your sandbox credentials
+
+Never paste a password or a token into a chat, an issue or a file in this
+repository. Read them from the environment:
+
+```sh
+export TUUM_USER='...'
+export TUUM_PASS='...'
+export TUUM_TENANT='...'          # the tenant code, e.g. as shown in the console
+export TUUM_HOST='https://auth-api.sandbox-partners.tuumplatform.com'
+
+# Employee — try this one first.
+curl -sS -X POST "$TUUM_HOST/api/v1/employees/authorise" \
+  -H 'content-type: application/json' \
+  -H "x-tenant-code: $TUUM_TENANT" \
+  -d "{\"username\":\"$TUUM_USER\",\"password\":\"$TUUM_PASS\",\"tenantCode\":\"$TUUM_TENANT\"}" \
+  | python3 -m json.tool
+```
+
+Read the **`errors`** array, not the HTTP status. A successful response looks
+like:
+
+```json
+{ "errors": [], "validationErrors": [], "data": { "token": "..." } }
+```
+
+If that returns `err.unauthorised`, try the person endpoint
+(`/api/v1/authorise`) with the same body before concluding the credentials are
+wrong.
+
+Then use the token — in `x-auth-token`, not `Authorization`:
+
+```sh
+export TUUM_TOKEN='...'           # from data.token above
+curl -sS "$TUUM_HOST/api/v1/employees" \
+  -H "x-auth-token: $TUUM_TOKEN" \
+  -H "x-tenant-code: $TUUM_TENANT" | python3 -m json.tool
+```
+
+## What this does not settle
+
+**OI-02 remains open.** Knowing how to authenticate says nothing about
+whether Tuum should be the system of record for the contract, the schedule and
+the profit amount. Tuum's own published example for accepting an offer returns
+proportion-shaped fields on the created contract, and under SH-18 the Board
+audits the servicing platform's records. See ClaudeRecommendations.md R-01,
+and E-19 for a second, independent argument reaching the same recommendation.
+
+Authentication is needed either way, which is why it was worth building now.

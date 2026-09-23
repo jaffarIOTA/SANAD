@@ -15,10 +15,11 @@
  * requirement, which is the erosion `core/origination/channel.ts` warns
  * about.
  *
- * **No gateway header is trusted.** Kong may well have authenticated this
- * request already, and IBM API Connect may do it tomorrow (§5). This service
- * re-validates independently and reads nothing a gateway injects, which is
- * both defence in depth and what keeps the gateway swappable.
+ * **No gateway header is trusted.** API Connect may well have authenticated
+ * this request already, and a second institution's gateway may do it
+ * differently (§5). This service re-validates independently and reads nothing
+ * a gateway injects, which is both defence in depth and what keeps the
+ * gateway swappable.
  *
  * The token itself is never stored, compared in plaintext or logged. Lookup is
  * by digest, and the comparison is length-independent.

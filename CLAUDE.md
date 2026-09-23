@@ -201,21 +201,36 @@ that, stop and ask why.
 
 ---
 
-## 5. Gateway abstraction — Kong now, IBM later
+## 5. Gateway — IBM API Connect, and independence from it
 
-Kong is the gateway today. The client may deploy behind **IBM API Connect / DataPower**,
-which is common in Saudi banks. Therefore:
+**IBM API Connect is the integration layer**, with DataPower as the gateway, for partner
+integration, bank and vendor integration, and the platform's own APIs. The client runs
+DataPower on its own OpenShift; we run API Connect for development and for the product's
+own deployment.
 
-- **No Kong-specific behaviour in application code.** No Kong headers read in handlers, no
-  Kong plugin assumed to have run, no Kong admin API called from a service.
-- Gateway concerns — authentication, rate limiting, routing, mTLS, request size, CORS — are
-  declared in `gateway/` as configuration, with one directory per implementation:
-  `gateway/kong/` and `gateway/ibm/`.
+Kong was carried as the development gateway while the client's choice was unknown, and has
+been removed. A gateway configuration that nothing applies rots, and implies a tested
+capability that is not tested.
+
+The *independence* stays, and for a reason that outlives the choice: Sanad is a product,
+deployed to each buying institution's own cluster under its own policy, and the second
+institution may not run API Connect.
+
+- **No gateway-specific behaviour in application code.** No gateway header read in a
+  handler, no policy assumed to have run, no gateway admin API called from a service.
+- Gateway concerns — rate limiting, routing, mTLS, request size, CORS — are declared in
+  `gateway/ibm/` as configuration. A second implementation gets its own directory beside
+  it; it does not get a branch.
 - Every service **re-validates** the caller's identity and tenant independently. Never trust
   a gateway-injected header as the sole source of truth. This is both defence in depth and
-  what makes the gateway swappable.
+  what keeps the gateway swappable.
 - Contract tests run against the service directly, not through the gateway, so they stay
   valid across a gateway change.
+- **The gateway transforms nothing.** DataPower is a transformation engine, so this is
+  stated rather than assumed: a gateway that normalises JSON disables SH-01 by stripping
+  the unknown property the service exists to reject; one that rewrites an error strips the
+  control code a compliance rejection carries; one that transforms a body can change an
+  amount.
 
 ---
 
@@ -246,7 +261,7 @@ adapters/    one per external system (tuum, nutrient, zatca, nafath, …)
              uniform capability-named interfaces, recorded fixtures, circuit breakers
 config/      products, policies, templates, registers, workflows — data, not code
 apps/        next.js surfaces (sme, anchor, ops, shariah, admin)
-gateway/     kong/ and ibm/ declarative config
+gateway/     ibm/ — API Connect definitions, Products, assembly
 supabase/    migrations, RLS policies, functions
 ```
 
