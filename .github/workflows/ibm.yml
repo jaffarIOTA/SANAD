@@ -1,0 +1,36 @@
+name: Sync Discovered API with APIConnect
+
+on: [push, pull_request, workflow_dispatch]
+
+env:
+  API_HOST: ap-south-a.apiconnect.automation.ibm.com
+  PLATFORM_API_PREFIX: platform-api
+  PROVIDER_ORG: iota-api-dev
+  API_FILES: health_1.0.0.yaml
+
+jobs:
+  run-discovery:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Difference
+        id: difference-output
+        run: |
+          echo "action_updates=$(git diff --name-only --diff-filter=ACMRT ${{ github.event.before }} ${{ github.sha }} | xargs)" >> $GITHUB_OUTPUT
+
+      - uses: ibm-apiconnect/apic-discovery-action@main
+        id: discover-apis
+        with:
+          api_host: ${{ env.API_HOST }}
+          platform_api_prefix: ${{ env.PLATFORM_API_PREFIX }}
+          provider_org: ${{ env.PROVIDER_ORG }}
+          api_key: ${{ secrets.apicApikey }}
+          api_files: ${{ env.API_FILES }}
+          resync_check: ${{ true }}
+          git_diff: ${{ steps.difference-output.outputs.action_updates }}
+
+      - name: Display the action-result
+        run: echo "Result of the action: ${{ steps.discover-apis.outputs.action-result }}"
