@@ -1,0 +1,25 @@
+# Catalog properties — sandbox.
+#
+# One file per catalog, because the whole point of these values is that they
+# differ per environment. The API definitions carry no defaults for them (see
+# `tuum-egress_1.0.0.yaml`), so a catalog without these set fails loudly
+# rather than quietly pointing at the wrong system.
+#
+# Apply with:
+#   apic properties:create --scope catalog \
+#     --server "$APIC_SERVER" --org "$APIC_ORG" --catalog sandbox \
+#     gateway/ibm/catalog-properties/sandbox.yaml
+#
+# Nothing here is a credential. These are hostnames. A credential would go to
+# the credential store, never to a file in this repository.
+
+# The core banking platform.
+#
+# Note `sandbox-partners`, not `sandbox`. A different host serves a different
+# API, and calling the wrong one produces an authentication failure that looks
+# exactly like a wrong password.
+tuum-base-url: https://auth-api.sandbox-partners.tuumplatform.com
+
+# The origination service, in-cluster. Not reachable from a SaaS gateway in
+# another region — see gateway/ibm/INSTANCE.md on what a correct 503 proves.
+upstream-url: http://origination.sanad.svc.cluster.local

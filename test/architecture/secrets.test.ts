@@ -226,8 +226,27 @@ describe('the pre-commit hook is installed and bites', () => {
     ['.env.example', 'UPSTASH_REDIS_REST_TOKEN=', 'a name with no value'],
     ['a.ts', "const tokenDigest = 'development-substitute';", 'a named placeholder'],
     ['a.md', 'Set TUUM_CLIENT_SECRET in .env.local', 'prose about a credential'],
+    // Regression. An earlier pattern allowed short names as a *prefix*, so
+    // `sa` matched `sandbox.yaml`, `sales.yaml` and `sanad.json` — this
+    // product's own name. It refused a catalog-properties file holding two
+    // hostnames. A scanner that flags ordinary files gets bypassed, and a
+    // bypassed scanner is worse than none.
+    ['gateway/ibm/catalog-properties/sandbox.yaml', 'tuum-base-url: https://example.test', 'a file merely starting with "sa"'],
+    ['sanad.json', '{}', "the product's own name"],
+    ['sales.yaml', 'total: 5', 'an ordinary file starting with "sa"'],
   ])('allows %s — %s', (path, content) => {
     expect(scan(path, content)).toEqual([]);
+  });
+
+  it.each([
+    ['credentials.json', 'a credential bundle'],
+    ['sa.json', 'a service-account file, exact stem'],
+    ['kubeconfig.yaml', 'a cluster credential'],
+    ['service-account-prod.json', 'a prefixed service-account file'],
+    ['config/credentials.yml', 'one nested in a directory'],
+  ])('still refuses %s — %s', (path) => {
+    // Narrowing the pattern must not have narrowed it past the point.
+    expect(scan(path, '{}').length).toBeGreaterThan(0);
   });
 });
 

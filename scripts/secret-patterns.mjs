@@ -34,9 +34,27 @@ export const OPAQUE_ASSIGNMENT =
  * A vendor toolkit hands you one of these and the natural place to put it is
  * the project root. Catching the name is more reliable than catching every
  * field a vendor might choose to call its secret.
+ *
+ * **The two forms are separated on purpose.** An earlier version allowed any
+ * of these as a *prefix*, which meant the short ones matched far too much:
+ * `sa` matched `sandbox.yaml`, `sales.yaml` and — the one that gave it away —
+ * `sanad.json`, this product's own name.
+ *
+ * So short names must be the whole stem, and only the unambiguous long ones
+ * may carry a suffix. A scanner that flags ordinary files is one that gets
+ * bypassed, and a bypassed scanner is worse than none because it is still
+ * believed in.
  */
-export const CREDENTIAL_FILE =
-  /(^|\/)(credentials|toolkit-credentials|service-account|sa|gha|kubeconfig)[-.\w]*\.(json|ya?ml|conf)$/i;
+const EXACT_STEM = ['credentials', 'credential', 'kubeconfig', 'sa', 'gha', 'netrc'];
+const STEM_PREFIX = ['toolkit-credentials', 'service-account', 'client-secret', 'credentials'];
+
+export const CREDENTIAL_FILE = new RegExp(
+  `(^|/)(` +
+    `(?:${EXACT_STEM.join('|')})` +
+    `|(?:${STEM_PREFIX.join('|')})[-._\\w]*` +
+    `)\\.(json|ya?ml|conf)$`,
+  'i',
+);
 
 /** Values that are obviously not secrets. */
 export const PLACEHOLDER = /^(development|example|placeholder|redacted|changeme|test|fixture|your[_-])/i;
