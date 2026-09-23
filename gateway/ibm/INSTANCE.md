@@ -86,12 +86,50 @@ The platform API returns `403 {"Error":"Plan limit reached"}`.
 | Account created | **today**, ~19:26 UTC | — |
 | Total users | 1 | — |
 
-**A brand-new account cannot have exhausted a quota.** "Plan limit reached" on
-an account hours old with no prior usage is not consumed capacity; it is an
-entitlement that has not been applied, or a plan tier that does not include
-platform API access at all. Some trial tiers are UI-only.
+### What was bought (My IBM, checked 2026-09-23)
 
-So there are two candidates, and they need different actions:
+Both Active, both started 2026-09-22, billing number 0077786961, owner
+tech@iotatechnologies.ai:
+
+| Subscription | Quantity | Meaning |
+|---|---|---|
+| Enterprise as a Service PAYG **Access per Annum** (ID 516338989) | Access: 1 | The platform seat. Auto-renews 2026-10-22. |
+| Enterprise as a Service PAYG **100 API calls Pay per Use** (ID 516338988) | API call: 1 | 1 × 100 = **100 gateway calls/month**. Small, but irrelevant to this fault — see below. Raise the quantity before real development. |
+
+**Usage exhaustion is ruled out.** IBM defines the metered unit as "a single
+request routed through the gateway to your managed API" — management calls
+(API Manager UI, `apic`, curl probes) are not metered. Nothing is published
+and nothing has been called, so usage is 0/100. A quota theory was briefly
+entertained here and was wrong.
+
+**Not a trial.** My IBM shows Trials: 0. The "UI-only trial tier" candidate
+below is ruled out too.
+
+That leaves one explanation consistent with every probe above: **paid
+entitlement exists but has not been applied to instance `iota-api-dev`.** That
+is IBM's provisioning, and only IBM can fix it.
+
+### Raise the ticket — from the subscription page
+
+Fastest route: My IBM → the **Access per Annum** subscription → left nav →
+**Product support**. It opens a case already tied to the subscription. Paste:
+
+> Account `20260922-1926-5593-809a-cbc498188fce`, instance `iota-api-dev`,
+> region `ap-south-a`. Subscriptions 516338989 (Enterprise as a Service PAYG
+> Access per Annum) and 516338988 (100 API calls Pay per Use), billing number
+> 0077786961, both Active since 22 Sep 2026. The platform API at
+> `api.ap-south-a.apiconnect.ibmappdomain.cloud` returns
+> `403 {"Error":"Plan limit reached"}` on every valid path **including
+> unauthenticated requests**; a non-existent path correctly returns 404 and
+> the API Manager UI functions normally. No APIs are published and no gateway
+> calls have been made, so this is not consumed capacity. Please confirm the
+> subscriptions are applied to this instance and that platform API / toolkit
+> access is enabled.
+
+Do not poll the platform API while waiting — it proves nothing new. One probe
+at publish time (already in `scripts/apic-publish.sh`) is enough.
+
+### For the record — the two candidates as first written
 
 1. **Provisioning has not finished propagating.** Common in the first hours
    after an account is created. This resolves by waiting, and costs nothing to

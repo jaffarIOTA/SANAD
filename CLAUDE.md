@@ -101,7 +101,7 @@ that point. Parameterise it. See SDD §3.11.
 | Layer | Choice | Notes |
 |---|---|---|
 | Frontend | **Next.js** (App Router) + TypeScript | RTL-first. See §6. |
-| API gateway | **Kong** | Abstracted — see §5. |
+| API gateway | **IBM API Connect** / DataPower | The integration layer. Services stay independent of it — see §5. |
 | Cache | **Redis** | Freshness windows, limit reservation coordination, idempotency keys. |
 | Database | **Supabase** (PostgreSQL) | See §3 — important constraints. |
 | Services | **Node + TypeScript** | One language across the stack. |

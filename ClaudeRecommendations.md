@@ -574,172 +574,56 @@ decided before the pilot is sold rather than during it.
 
 Ans:
 
-## E-24 — Selling the product means migrating a hash chain · **Material**
+## E-24 — Migrating a hash chain · **Partly settled by test**
 
-Follows directly from E-23 and is the part most likely to be discovered late.
+Tested rather than assumed: `test/compliance/chain-migration.test.ts`, 11
+tests that do to a chain what a migration does.
 
-If a bank pilots on our cloud and the deployment then moves to their
-on-premises cluster, the data moves with it. Most of that is an ordinary
-database migration. Two datasets are not:
+### Settled — the chain survives a move
 
-- **`evidence` is hash-chained**, each record bound to its predecessor.
-- **`audit` is append-only**, with no `UPDATE` grant at all.
+**The chain binds content, not storage identity.** `prevLegHash` references
+the predecessor's `contentHash`, and nothing else. So a chain verifies after
+serialisation, after every `legId` is reassigned by the target database, and
+after row order is lost — and in that last case the correct order is
+*recoverable from the hashes alone*, without trusting a sequence number or the
+storage layer.
 
-A chain that is exported, reloaded and re-sequenced is no longer the chain that
-was attested. If the verification replays over identifiers, ordering or
-timestamps that the move altered, it fails — and a chain that cannot be
-verified cannot be audited by the Board (SH-18). The failure would surface at
-the first Shariah audit after go-live, which is the worst time to find it.
+It also still refuses what it refused before: content altered in transit, a
+leg dropped by a partial load, and a leg reordered without relinking are each
+caught with `HASH_CHAIN_BROKEN`.
 
-Three things follow:
+That is the property E-24 worried about, and it holds by design.
 
-1. **The chain must be verifiable across a move by construction**, not by luck.
-   That means the links bind content and attestation rather than storage
-   identity — no dependence on a sequence number, an insertion order, or a
-   database-assigned surrogate key.
-2. **Timestamping authority attestations must still validate afterwards.** They
-   are third-party signed, so they survive a move — provided the token itself
-   is retained, not just its digest. Worth confirming that is what we store.
-3. **A migration must be provable.** The acceptance test for a move is the same
-   test as for DR (E-02): replay gate evaluation over the migrated evidence and
-   assert identical results. That is available to us only because gate
-   evaluation is a pure function of transaction and evidence set (§1.3), which
-   is a second place that decision pays for itself.
+### Found while testing — a leg cannot be exported through plain JSON
 
-**Recommendation.** Write a migration-and-verification procedure before the
-first pilot, and test it by moving a populated development deployment
-end to end. It is far cheaper to design now than to retrofit against a live
-client's data.
+`JSON.stringify` throws on a leg: `TsaInstant.epochSeconds` is a `bigint`,
+chosen so an attested time is never approximated.
 
-Ans:
+The throw is the *good* case. The bad case is an exporter that "fixes" it with
+`Number(...)` and silently loses precision on a timestamp with contractual
+effect. Two tests now pin this — one asserting the naive path throws, one
+asserting an instant beyond 2⁵³ survives a proper encoding exactly — so nobody
+discovers it by reaching for the lossy fix under deadline.
 
-## E-25 — Our contract is OpenAPI 3.1; API Connect may only take 3.0 · **Material**
+**Any migration tooling must encode bigint explicitly.**
 
-`api/openapi/origination.v1.yaml` is OpenAPI **3.1**, and that is not
-incidental: 3.1's schemas are JSON Schema 2020-12, which is what lets
-`services/origination/src/contract.ts` compile the document straight into
-runtime validators. That is the mechanism by which `additionalProperties:
-false` stopped being a claim and became the SH-01 control.
+### Still open — the part a unit test cannot reach
 
-Many API Connect versions accept only OpenAPI 2.0 and 3.0. Thirteen constructs
-in our document would need converting:
+**The attestation tokens live outside the database.** The domain carries
+`tsaTokenDigest`; the RFC 3161 token itself is stored alongside, in object
+storage under write-once retention.
 
-| Construct | Occurrences | Converts to 3.0? |
-|---|---|---|
-| `const: X` | 4 | Yes — `enum: [X]`, semantically identical |
-| union `type: [string, 'null']` | 2 | Yes — `nullable: true` |
-| schema-level `examples` array | 2 | Yes — singular `example` |
-| `info.summary`, `license.identifier` | 2 | Yes — fold into `description` / `url` |
-| **`if` / `then` conditional** | 2 | **No** |
-| **`webhooks`** | 1 | **No** |
+A database migration that leaves the object store behind produces a chain that
+verifies *internally* and cannot be proven to a third party. The Board's
+verification needs the tokens, not the digests. This is the most likely thing
+to be forgotten in a move, because the database migration will look complete
+and the tests will pass.
 
-The last two are genuinely lossy. The conditional is what makes `invoiceUuid`
-and `invoiceHash` required when the trade is a cleared invoice; in 3.0 that
-constraint simply cannot be expressed, and would live only in the service.
-`webhooks` has no 3.0 equivalent at all.
-
-**Recommendation: do not downgrade the source.** Keep 3.1 as the contract —
-it drives the runtime validator and the contract tests — and **generate** a 3.0
-publication artefact for API Connect from it, with a test asserting the two
-agree on everything that matters: the same paths, the same operations, the same
-required fields, and closed schemas throughout.
-
-That way the control keeps its teeth where it is enforced, the gateway gets a
-document it can parse, and the two cannot drift silently. Downgrading the
-source instead would quietly delete a constraint from the system of record in
-order to satisfy a tool.
-
-### Settled by experiment, not by release notes
-
-**API Connect v10.0.11.0 does not support OpenAPI 3.1.** Tested directly
-against the toolkit with three minimal documents identical but for their
-version:
-
-| Version | `apic validate` |
-|---|---|
-| `openapi: 3.1.0` | `Invalid file type provided` — not recognised as an API definition at all |
-| `openapi: 3.0.3` | Recognised; validates clean with `--no-extensions` |
-| `swagger: "2.0"` | Recognised |
-
-The 3.1 rejection is not about IBM extensions — it fails identically with
-`--no-extensions`. The toolkit simply does not parse 3.1.
-
-**A second requirement found at the same time:** every API definition needs an
-`x-ibm-configuration` extension block. Without it, validation fails with
-`x-ibm-configuration.(root) is of incorrect type`. That block is where the
-gateway type and the assembly live, so it is not boilerplate — it is the
-gateway behaviour, and it belongs in `gateway/ibm/` under version control like
-everything else.
-
-**So the recommendation above stands, now on evidence.** Keep 3.1 as the
-source of truth; generate a 3.0 publication artefact carrying
-`x-ibm-configuration`; assert by test that the two agree on paths, operations,
-required fields and closed schemas. The two genuinely lossy constructs — the
-`if`/`then` conditional on `TradeReference` and `webhooks` — become
-service-enforced only, and that gap should be written down rather than
-absorbed silently.
-
-The dev instance is **SaaS in the Asia-Pacific South zone**, which is fine for
-synthetic data and must not become the production path (E-22).
-
-Ans:
-
-## E-26 — API discovery collectors: not the GitHub one, and not yet · **Material**
-
-API Connect's discovery microservice can pull APIs from three kinds of source
-— GitHub, a DataPower gateway proxy, and OpenTelemetry — and surface them in
-API Connect as discovered drafts for curation.
-
-It runs on a **different host** from the platform API:
-`ap-south-a.apiconnect.automation.ibm.com`, not
-`api.ap-south-a.apiconnect.ibmappdomain.cloud`. Two services, two
-entitlements; do not assume the platform API's plan problem affects this one,
-or the reverse.
-
-### The GitHub collector: decline
-
-Four reasons, in order of weight.
-
-1. **It inverts the direction we chose on purpose.** Our model is push: the
-   repository is authoritative, CI pushes, the console is a view (§5,
-   `gateway/README.md`). Discovery pulls from GitHub and creates drafts that
-   someone then curates, which is a second authoring surface — and a second
-   authoring surface is exactly the drift the push model exists to prevent.
-
-2. **It would discover the wrong file.** The source of truth is
-   `api/openapi/origination.v1.yaml`, OpenAPI **3.1**, which this API Connect
-   cannot parse (E-25). The publishable artefact is the *generated* 3.0 file
-   in `gateway/ibm/`. A crawler pointed at the repository would either fail on
-   the 3.1 document or ingest both, leaving two "discovered" versions of one
-   API and no signal about which is real.
-
-3. **It needs read access to the repository.** That repository is the product
-   — the domain model, the sequencing engine, the compliance controls, the
-   schema. Granting a SaaS service in Asia-Pacific standing read access to it
-   is a supply-chain decision (SDD §6.12) and deserves the same scrutiny as
-   any other third-party processor, even though it holds no customer data.
-
-4. **We have two APIs, both authored contract-first.** Discovery earns its
-   keep where an organisation has dozens of undocumented APIs scattered across
-   repositories and needs an inventory. That is a real problem; it is not ours.
-
-### What IS worth revisiting later
-
-The **OpenTelemetry** and **DataPower proxy** collectors are a different
-proposition, because they discover from *traffic* rather than from source.
-That answers a governance question we will eventually need answered:
-
-> Is anything serving on our gateway that we did not declare?
-
-An endpoint appearing in traffic but not in `gateway/ibm/` is either a
-mistake, a stale deployment, or something published outside the pipeline —
-and all three are worth knowing about. That is a **detective control over the
-push model**, not a replacement for it, and it complements the discipline
-rather than undermining it.
-
-**Recommendation.** Do not configure the GitHub collector. Revisit the traffic
-collectors once there is real traffic and the on-premises gateway exists, and
-treat them then as governance rather than as an authoring path.
+**Recommendation.** The migration procedure moves the object store first and
+verifies token retrieval for every leg before the database cutover, and the
+acceptance test for a move is a gate replay over the migrated evidence — the
+same test as for DR (E-02). Both are available only because gate evaluation is
+a pure function of transaction and evidence set (§1.3).
 
 Ans:
 
