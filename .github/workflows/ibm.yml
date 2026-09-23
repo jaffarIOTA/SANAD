@@ -33,4 +33,5 @@ jobs:
           git_diff: ${{ steps.difference-output.outputs.action_updates }}
 
       - name: Display the action-result
-        run: echo "Result of the action: ${{ steps.discover-apis.outputs.action-result }}"
+        run: |
+          echo "Result of the action: ${{ steps.discover-apis.outputs.action-result }}"
