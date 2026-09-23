@@ -627,6 +627,60 @@ a pure function of transaction and evidence set (§1.3).
 
 Ans:
 
+## E-27 — Tuum through API Connect: an egress pipe, not a published catalogue · **Material**
+
+Asked: bring all Tuum APIs into API Connect. Built: a controlled egress,
+scoped to what we call. The difference is worth recording because the first
+reading is the intuitive one and it conflicts with two rules.
+
+### Where the value genuinely is
+
+On the bank's on-premises cluster there is no open outbound internet. Egress
+goes through a forward proxy with an allowlist (E-18). Making API Connect that
+point gives one place holding the allowlist, one place recording what left,
+one place to rate-limit and break the circuit. That is real and worth having.
+
+### Why "all Tuum APIs" is the wrong scope
+
+**We depend on seven capabilities** — resolve a party, resolve an account,
+book an obligation, instruct a settlement, post a charity liability, fetch
+exposure, receive lifecycle events. Tuum has dozens of endpoints across
+person, account, payment, card and lending APIs.
+
+Publishing all of them means supporting all of them. Every published operation
+is one somebody may call, and one somebody may call is one we own — including
+the lending endpoints, whose accepted-offer response carries the
+proportion-shaped fields that make OI-02 a Board finding.
+
+### Why a façade would be worse than a pipe
+
+The tempting shape is a façade: expose *our* capability names, map them onto
+Tuum's. That puts domain mapping in the gateway, which is the wrong layer
+(§7), and it is precisely the transformation that must not happen on a
+DataPower assembly (E-16).
+
+So it is a **pass-through**. `adapters/tuum/` stays the only thing that
+understands Tuum's shape, which is what keeps a vendor DTO from crossing out
+of the adapter layer (§1.1, §7).
+
+### One thing the test caught
+
+The first draft gave `tuum-base-url` the sandbox host as a default. A default
+is an environment's host committed to git, and the failure is the bad kind:
+publish to a production catalog without overriding it and production transacts
+against a sandbox while every test passes. There is now no default, so a
+missing value fails loudly at publish.
+
+### Deliberately deferred
+
+**Credential injection at the gateway.** The adapter authenticates today. Moving
+that to the gateway would mean services never hold a Tuum credential, which is
+attractive — and it changes who appears in Tuum's audit trail, which under
+SH-18 the Board reads. A separate decision, not something to slip in with a
+routing change.
+
+Ans:
+
 ## E-08 — ADR 0001 contains a factual error about role revocation · **Hygiene**
 
 [ADR 0001](docs/adr/0001-data-residency-and-datastore.md#L45) says revoking a

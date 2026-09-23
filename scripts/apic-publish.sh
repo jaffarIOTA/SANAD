@@ -84,7 +84,11 @@ apic login --server "$SERVER" --realm "$REALM" --apiKey "$APIC_API_KEY" >/dev/nu
 # Health first. It has no dependency on the origination service, so if it
 # publishes and origination does not, the problem is the origination
 # definition rather than the pipeline.
-for product in health origination; do
+# Health first: it has no dependency on the origination service, so if it
+# publishes and the others do not, the problem is the definition rather than
+# the pipeline. Egress last: it is internal-only and needs `tuum-base-url`
+# set on the catalog afterwards, or it has nowhere to forward to.
+for product in health origination tuum-egress; do
   file="gateway/ibm/${product}-product_1.0.0.yaml"
   echo "publishing ${product}..."
   apic products:publish \

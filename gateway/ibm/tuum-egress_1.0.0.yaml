@@ -1,0 +1,172 @@
+# Tuum egress — a controlled way out, not a copy of Tuum's API.
+#
+# **What this is.** The single route from our services to the core banking
+# platform. On the bank's on-premises cluster there is no open outbound
+# internet; egress goes through a forward proxy with an allowlist (E-18). This
+# makes API Connect that point: one place that holds the allowlist, one place
+# that records what left, one place to rate-limit and to break the circuit.
+#
+# **What this is deliberately NOT.**
+#
+# It is not a publication of Tuum's API catalogue. We depend on seven
+# capabilities — resolve a party, resolve an account, book an obligation,
+# instruct a settlement, post a charity liability, fetch exposure, and receive
+# lifecycle events. Tuum has dozens of endpoints across person, account,
+# payment, card and lending APIs. Publishing all of them would mean supporting
+# all of them: every published operation is an operation somebody may call, and
+# an operation somebody may call is one we own.
+#
+# It is not a translation layer either, and that distinction is the important
+# one. A façade exposing *our* capability names and mapping them onto Tuum's
+# would put domain mapping in the gateway — the wrong layer (§7), and exactly
+# the transformation that must not happen on a DataPower assembly (E-16).
+#
+# So this is a **pass-through pipe**. The adapter in `adapters/tuum/` remains
+# the only thing that understands Tuum's shape, which is what keeps Tuum's
+# DTOs — including the proportion-shaped fields on an accepted offer, OI-02 —
+# from ever crossing out of the adapter layer (§1.1, §7).
+#
+# **Credentials are not injected here, yet.** The adapter authenticates, using
+# the client in `adapters/tuum/authentication.ts`. Moving that to the gateway
+# would mean services never hold a Tuum credential, which is attractive — and
+# it is a separate decision with its own consequences for the audit trail, not
+# something to slip in with a routing change.
+
+openapi: 3.0.3
+
+info:
+  title: Tuum Egress
+  x-ibm-name: sanad-tuum-egress
+  version: 1.0.0
+  description: |
+    Internal egress to the core banking platform. Not for partner
+    consumption — see the visibility settings on the Product.
+
+    Requests pass through unchanged in both directions. Anything that needs
+    interpreting is interpreted by the adapter, not here.
+
+servers:
+  - url: /egress/tuum/v1
+
+paths:
+  /{tuumPath}:
+    parameters:
+      - name: tuumPath
+        in: path
+        required: true
+        description: |
+          The Tuum path being called, e.g. `api/v1/employees/authorise`.
+          Passed through verbatim. The allowlist below decides which prefixes
+          are permitted; nothing else is.
+        schema:
+          type: string
+        # Slashes are part of the value rather than separators, so one
+        # operation covers the whole allowed surface.
+        style: simple
+        explode: false
+    get:
+      operationId: egressGet
+      summary: Pass a GET through to the core banking platform.
+      responses:
+        '200':
+          description: The platform's response, unchanged.
+        '403':
+          description: The path is not on the allowlist.
+        '502':
+          description: The platform did not answer.
+    post:
+      operationId: egressPost
+      summary: Pass a POST through to the core banking platform.
+      responses:
+        '200':
+          description: The platform's response, unchanged.
+        '403':
+          description: The path is not on the allowlist.
+        '502':
+          description: The platform did not answer.
+
+x-ibm-configuration:
+  type: rest
+  phase: realized
+  enforced: true
+  testable: false
+  cors:
+    enabled: false
+  gateway: datapower-api-gateway
+
+  properties:
+    tuum-base-url:
+      value: ''
+      description: |
+        The core banking platform. **Set per catalog; there is deliberately no
+        default.**
+
+        A default would be an environment's host committed to git, and the
+        failure mode is the bad one: publish to a production catalog without
+        overriding it and production quietly transacts against a sandbox. An
+        empty value fails loudly at publish instead.
+
+        The host to use for each environment is in README.md, including the
+        one that is easy to get wrong.
+      encoded: false
+    allowed-prefixes:
+      value: 'api/v1/authorise,api/v1/employees/authorise,api/v1/persons,api/v1/accounts,api/v1/payments'
+      description: |
+        The only Tuum paths this egress will forward. An allowlist rather than
+        a denylist: a new Tuum endpoint is unreachable until somebody decides
+        it should be reachable, which is the correct default for the one route
+        out of an in-Kingdom cluster.
+      encoded: false
+
+  assembly:
+    execute:
+      # The allowlist is enforced before anything leaves. A gateway that
+      # forwards first and checks later is not an allowlist.
+      - switch:
+          version: 2.0.0
+          title: is this path allowed?
+          case:
+            - condition: >-
+                ($contains($split($(allowed-prefixes), ','),
+                  $substringBefore($(request.path) & '/', '/')) = false)
+              execute:
+                - throw:
+                    version: 2.0.0
+                    name: PathNotAllowed
+                    message: The requested path is not on the egress allowlist.
+
+      - invoke:
+          version: 2.5.0
+          title: forward, unchanged
+          target-url: $(tuum-base-url)/$(request.path)$(request.search)
+          verb: keep
+          timeout: 30
+          cache-response: no-cache
+          # No retry. A retried call without a fresh idempotency key is how an
+          # instruction executes twice — a duplicate payment, here. Retries
+          # belong to the caller, which is the adapter, which holds the key.
+          #
+          # Nothing is transformed on the way out or the way back. Tuum's
+          # response reaches the adapter byte-for-byte, because the adapter is
+          # the only thing that should be interpreting it.
+          output: platform
+
+    catch:
+      - errors:
+          - PathNotAllowed
+        execute:
+          - set-variable:
+              version: 2.0.0
+              title: refuse
+              actions:
+                - set: message.status.code
+                  value: '403'
+                - set: message.headers.Content-Type
+                  value: application/problem+json
+                - set: message.body
+                  value: >-
+                    {"type":"https://sanad.example/problems/egress-not-allowed",
+                    "title":"Egress not permitted","status":403,
+                    "detail":"The requested path is not on the egress allowlist.",
+                    "detailAr":"المسار المطلوب غير مُدرج في قائمة السماح للاتصال الخارجي.",
+                    "reason":"EGRESS_PATH_NOT_ALLOWED"}

@@ -109,3 +109,48 @@ problem-detail control code, which an error-rewriting gateway would strip.
 matters: an on-premises in-Kingdom cluster removes the Azure region timing
 problem entirely, while ARO puts it straight back, because ARO runs in an Azure
 region and there is no in-Kingdom one until November 2026. Recorded as E-15.
+
+
+---
+
+# Egress to the core banking platform
+
+`tuum-egress_1.0.0.yaml` is the single route out of the cluster to Tuum. It is
+a **pass-through pipe**, not a copy of Tuum's API and not a translation layer —
+see the header of that file for why both of those would be wrong.
+
+## Setting the upstream per catalog
+
+`tuum-base-url` has **no default**, on purpose. A default is an environment's
+host committed to git, and the failure it produces is the bad kind: publish to
+a production catalog without overriding it, and production transacts against a
+sandbox while every test passes.
+
+Set it when publishing:
+
+```sh
+apic products:publish --server $S --org $ORG --catalog $CATALOG --scope catalog \
+  gateway/ibm/tuum-egress-product_1.0.0.yaml
+# then set the property on the catalog, per environment
+```
+
+| Environment | Host |
+|---|---|
+| sandbox | `auth-api.sandbox-partners.tuumplatform.com` |
+| uat, production | supplied by Tuum per tenant — not yet issued |
+
+**The sandbox host is easy to get wrong.** It is `sandbox-partners`, not
+`sandbox`. A different host serves a different API, and calling the wrong one
+produces an authentication failure that looks exactly like a wrong password —
+which cost us an afternoon before the contract was read properly.
+
+## The allowlist
+
+`allowed-prefixes` is an allowlist and not a denylist. A new endpoint at Tuum
+is unreachable until somebody decides it should be reachable, which is the
+correct default for the one route out of an in-Kingdom cluster.
+
+Adding a prefix is a change to this repository, reviewed like any other — not
+a console edit. If a capability needs a path that is not listed, that is a
+conversation about what we are calling and why, which is exactly the
+conversation a single controlled egress exists to force.

@@ -1,0 +1,51 @@
+# Product — internal only.
+#
+# The visibility below is the point of this file. An egress to the core
+# banking platform must never be subscribable by a partner: it would let an
+# integrating system reach the bank's ledger through our credential, which is
+# a confused deputy with a Murabaha attached.
+#
+# Restricted to our own provider organisation, approval required, and it is
+# worth re-checking that on every catalog this is published to — a Product
+# copied to a new catalog does not always carry its visibility with it.
+
+product: 1.0.0
+
+info:
+  name: sanad-tuum-egress
+  title: Tuum Egress (internal)
+  version: 1.0.0
+  description: |
+    Internal egress from Sanad services to the core banking platform.
+    Not for partner consumption.
+
+gateways:
+  - datapower-api-gateway
+
+apis:
+  egress:
+    $ref: tuum-egress_1.0.0.yaml
+
+visibility:
+  view:
+    enabled: true
+    type: custom
+    tags: []
+    orgs:
+      - sanad-internal
+  subscribe:
+    enabled: true
+    type: custom
+    tags: []
+    orgs:
+      - sanad-internal
+
+plans:
+  internal:
+    title: Internal
+    description: For Sanad services only.
+    approval: true
+    rate-limits:
+      default:
+        value: 1200/1minute
+        hard-limit: false

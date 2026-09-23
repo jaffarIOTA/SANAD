@@ -30,10 +30,15 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const read = (p: string): string => readFileSync(join(ROOT, p), 'utf8');
 
 /** Every API definition we publish. */
-const DEFINITIONS = ['gateway/ibm/health-api_1.0.0.yaml', 'gateway/ibm/origination-api_1.0.0.yaml'];
+const DEFINITIONS = [
+  'gateway/ibm/health-api_1.0.0.yaml',
+  'gateway/ibm/origination-api_1.0.0.yaml',
+  'gateway/ibm/tuum-egress_1.0.0.yaml',
+];
 const PRODUCTS = [
   'gateway/ibm/health-product_1.0.0.yaml',
   'gateway/ibm/origination-product_1.0.0.yaml',
+  'gateway/ibm/tuum-egress-product_1.0.0.yaml',
 ];
 
 const definitions = DEFINITIONS.map((path) => ({
@@ -167,6 +172,66 @@ describe('the gateway holds no control', () => {
     for (const [name, plan] of Object.entries(product['plans'] as Record<string, any>)) {
       expect(plan['rate-limits']?.default?.['hard-limit'], `${path}: ${name}`).toBe(false);
     }
+  });
+});
+
+// -- Egress ------------------------------------------------------------------
+
+describe('the egress to the core banking platform', () => {
+  const egress = parse(read('gateway/ibm/tuum-egress_1.0.0.yaml')) as Record<string, any>;
+  const product = parse(read('gateway/ibm/tuum-egress-product_1.0.0.yaml')) as Record<string, any>;
+
+  it('is an allowlist, not a denylist', () => {
+    // A new endpoint at the vendor is unreachable until somebody decides it
+    // should be — the correct default for the one route out of an in-Kingdom
+    // cluster.
+    const prefixes = String(egress['x-ibm-configuration'].properties['allowed-prefixes'].value);
+    expect(prefixes.length).toBeGreaterThan(0);
+    expect(prefixes.split(',').length).toBeGreaterThan(1);
+  });
+
+  it('checks the allowlist before forwarding, not after', () => {
+    // A gateway that forwards first and checks later is not an allowlist.
+    const steps: Record<string, unknown>[] = egress['x-ibm-configuration'].assembly.execute;
+    const guard = steps.findIndex((s) => 'switch' in s);
+    const forward = steps.findIndex((s) => 'invoke' in s);
+    expect(guard).toBeGreaterThanOrEqual(0);
+    expect(guard).toBeLessThan(forward);
+  });
+
+  it('passes through without translating', () => {
+    /*
+     * The distinction that keeps §7 intact. A façade exposing our capability
+     * names and mapping them onto the vendor's would put domain mapping in
+     * the gateway, and would be the transformation E-16 forbids.
+     *
+     * Because this is a pipe, `adapters/tuum/` stays the only thing that
+     * understands the vendor's shape — which is what stops a vendor DTO, and
+     * the proportion-shaped fields on an accepted offer (OI-02), from
+     * crossing out of the adapter layer.
+     */
+    const steps: Record<string, unknown>[] = egress['x-ibm-configuration'].assembly.execute;
+    const kinds = steps.flatMap((s) => Object.keys(s));
+    for (const forbidden of ['map', 'gatewayscript', 'xslt', 'json-to-xml', 'xml-to-json']) {
+      expect(kinds, forbidden).not.toContain(forbidden);
+    }
+  });
+
+  it('is not subscribable by a partner', () => {
+    // An egress a partner can call is a confused deputy with a Murabaha
+    // attached: an integrating system reaching the bank's ledger through our
+    // credential.
+    for (const kind of ['view', 'subscribe']) {
+      expect(product['visibility'][kind].type, kind).toBe('custom');
+      expect(product['visibility'][kind].orgs, kind).not.toHaveLength(0);
+    }
+    expect(product['plans'].internal.approval).toBe(true);
+  });
+
+  it('names no vendor concept in our own path structure', () => {
+    // The path is a pass-through parameter, so the vendor's route names are
+    // data rather than part of our published surface.
+    expect(Object.keys(egress['paths'])).toEqual(['/{tuumPath}']);
   });
 });
 
