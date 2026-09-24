@@ -112,9 +112,9 @@ export default async function DashboardPage({
         </div>
         <a
           href={`/${segment}/originate`}
-          className="inline-flex min-h-tap items-center rounded-card bg-brand-strong px-4 text-sm font-semibold text-on-brand hover:bg-brand-deep"
+          className="inline-flex min-h-tap items-center gap-2 rounded-card bg-brand-strong px-4 text-sm font-semibold text-on-brand hover:bg-brand-deep"
         >
-          {arabic ? 'إنشاء طلب' : 'Key a request'}
+          {arabic ? 'طلب تمويل جديد' : 'New origination request'}
         </a>
       </div>
 

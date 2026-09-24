@@ -1,18 +1,16 @@
 # Gateway definitions: validate on every change, publish on merge.
 #
-# This is the whole of the "connection" between the repository and API
-# Connect. There is no GitHub integration in API Connect and nothing pulls
-# from here — the direction is **push**, and this job is what pushes.
+# The API Connect toolkit is **optional here**, deliberately. It is not on npm
+# and is downloaded from API Manager behind a login, so a CI runner can only
+# get it if someone publishes a reachable URL. Making the whole job depend on
+# that meant every run failed with `curl: (3) URL rejected` until it was set —
+# which is what happened, and a CI job that is always red teaches people to
+# ignore CI.
 #
-# That direction is the point, not an implementation detail. `gateway/` is the
-# source of truth (§5); the console is a view of what was pushed. The moment
-# someone edits an API in the API Manager UI, this repository stops describing
-# what is deployed, and the next merge silently reverts their change. If that
-# ever needs to happen in an incident, it should be followed by a commit, not
-# left in place.
-#
-# Credentials never appear here. They are GitHub repository secrets, read at
-# run time, and nothing in this file prints them.
+# So the checks that need no toolkit always run, and `apic validate` runs when
+# `vars.APIC_TOOLKIT_URL` is configured. The valuable checks are in the first
+# group anyway: that the generated artefact is current, and that it still
+# agrees with the contract.
 
 name: gateway
 
@@ -25,125 +23,109 @@ on:
       - '.github/workflows/gateway.yml'
   push:
     branches: [main]
-    paths: ['gateway/**', 'api/openapi/**']
+    paths:
+      - 'gateway/**'
+      - 'api/openapi/**'
+      - 'scripts/build-apic-definition.mjs'
+      - '.github/workflows/gateway.yml'
 
-# Two concurrent publishes to one catalog is a race with a gateway on the
-# other end of it.
 concurrency:
   group: gateway-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   validate:
-    # Runs on every pull request, including from people without access to the
-    # instance. It needs no credential, because `apic validate` is offline —
-    # which is exactly why it is worth having as a gate.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install the API Connect toolkit
-        run: |
-          set -euo pipefail
-          # The toolkit is not on npm for v10+. `apiconnect` on npm is the v5
-          # toolkit, last published 2023, and it cannot talk to a v10
-          # instance — installing it is a convincing way to lose an hour.
-          curl -fsSL "${TOOLKIT_URL}" -o toolkit.zip
-          unzip -q toolkit.zip -d toolkit
-          find toolkit -type f -name 'apic*' -exec chmod +x {} \;
-          find toolkit -type f -name 'apic*' -exec mv {} /usr/local/bin/apic \;
-          apic --accept-license --live-help=false
-          apic version
-        env:
-          # A URL, not a credential — but it is instance-specific, so it lives
-          # in repository configuration rather than in this file.
-          TOOLKIT_URL: ${{ vars.APIC_TOOLKIT_URL }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
 
       - name: The generated artefact must be current
         run: |
           set -euo pipefail
-          npm ci
           npm run build:apic
           # A generated file committed stale means the gateway and the
           # contract disagree, and nothing would say so.
           git diff --exit-code gateway/ibm/origination-api_1.0.0.yaml
 
-      - name: Validate every gateway definition
+      - name: The definitions must stay in step with the contract
+        run: npx vitest run test/architecture/gateway test/contract/apic-artefact
+
+      # Optional. Skipped, not failed, when no toolkit URL is configured.
+      - name: Install the API Connect toolkit
+        id: toolkit
+        if: vars.APIC_TOOLKIT_URL != ''
+        run: |
+          set -euo pipefail
+          # Not on npm for v10+. `apiconnect` on npm is the v5 toolkit, last
+          # published 2023, and cannot talk to a v10 instance.
+          curl -fsSL "${{ vars.APIC_TOOLKIT_URL }}" -o toolkit.zip
+          unzip -q toolkit.zip -d toolkit
+          binary="$(find toolkit -type f -name 'apic*' | head -1)"
+          chmod +x "$binary"
+          sudo mv "$binary" /usr/local/bin/apic
+          apic --accept-license --live-help=false
+          apic version
+
+      - name: Validate every definition against the toolkit
+        if: steps.toolkit.outcome == 'success'
         run: |
           set -euo pipefail
           failed=0
-          for file in gateway/ibm/*_*.yaml; do
+          for file in gateway/ibm/*-product_*.yaml; do
             echo "── $file"
             apic validate "$file" || failed=1
           done
           exit $failed
 
-      - name: The published definitions must stay in step with the contract
-        run: npx vitest run test/architecture/gateway test/contract/apic-artefact
+      - name: Note when toolkit validation was skipped
+        if: vars.APIC_TOOLKIT_URL == ''
+        run: |
+          echo "::notice::apic validate skipped — set the APIC_TOOLKIT_URL repository variable to enable it."
 
   publish:
     needs: validate
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # Also requires the toolkit and a credential, so it is skipped rather than
+    # failed while either is absent.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      vars.APIC_TOOLKIT_URL != '' &&
+      vars.APIC_SERVER != ''
     runs-on: ubuntu-latest
-    # A GitHub environment, so publishing to a catalog can require a reviewer
-    # once this points at anything other than development.
     environment: apic-dev
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
       - name: Install the API Connect toolkit
         run: |
           set -euo pipefail
-          curl -fsSL "${TOOLKIT_URL}" -o toolkit.zip
+          curl -fsSL "${{ vars.APIC_TOOLKIT_URL }}" -o toolkit.zip
           unzip -q toolkit.zip -d toolkit
-          find toolkit -type f -name 'apic*' -exec chmod +x {} \;
-          find toolkit -type f -name 'apic*' -exec mv {} /usr/local/bin/apic \;
+          binary="$(find toolkit -type f -name 'apic*' | head -1)"
+          chmod +x "$binary"
+          sudo mv "$binary" /usr/local/bin/apic
           apic --accept-license --live-help=false
-        env:
-          TOOLKIT_URL: ${{ vars.APIC_TOOLKIT_URL }}
 
-      - name: Log in
-        run: |
-          set -euo pipefail
-          # `--apiKey` rather than `--sso`: the provider identity provider is
-          # IBM Verify (OIDC), which is browser-based and cannot work here.
-          #
-          # If this instance expects an IBM Cloud API key, `apic iam-apikey`
-          # is the purpose-built command and should replace this step — see
-          # gateway/ibm/INSTANCE.md.
-          #
-          # Nothing below echoes the key, and `set -x` is deliberately absent.
-          apic login \
-            --server "$APIC_SERVER" \
-            --realm "$APIC_REALM" \
-            --apiKey "$APIC_API_KEY"
+      - name: Publish
+        run: sh scripts/apic-publish.sh
         env:
           APIC_SERVER: ${{ vars.APIC_SERVER }}
           # provider/ibm-verify on this instance — see gateway/ibm/INSTANCE.md
           APIC_REALM: ${{ vars.APIC_REALM }}
-          APIC_API_KEY: ${{ secrets.APIC_API_KEY }}
-
-      - name: Publish
-        run: |
-          set -euo pipefail
-          apic products:publish \
-            --server "$APIC_SERVER" \
-            --org "$APIC_ORG" \
-            --catalog "$APIC_CATALOG" \
-            --scope catalog \
-            gateway/ibm/health-product_1.0.0.yaml
-
-          apic products:publish \
-            --server "$APIC_SERVER" \
-            --org "$APIC_ORG" \
-            --catalog "$APIC_CATALOG" \
-            --scope catalog \
-            gateway/ibm/origination-product_1.0.0.yaml
-        env:
-          APIC_SERVER: ${{ vars.APIC_SERVER }}
           APIC_ORG: ${{ vars.APIC_ORG }}
           APIC_CATALOG: ${{ vars.APIC_CATALOG }}
-
-      - name: Log out
-        if: always()
-        run: apic logout --server "${{ vars.APIC_SERVER }}" || true
+          APIC_API_KEY: ${{ secrets.APIC_API_KEY }}

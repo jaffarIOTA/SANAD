@@ -63,8 +63,31 @@ function developmentAttestation(): TsaInstant {
 interface DevelopmentState {
   readonly requests: Map<string, OriginationRequest>;
   readonly invoiceNumbers: Map<string, string>;
+  /** Half-completed origination journeys. See `Draft` below. */
+  readonly drafts: Map<string, Draft>;
+  /** SH-10. invoiceUuid -> the requestId that financed it. Never purged. */
+  readonly financed: Map<string, string>;
   sequence: number;
   seeded: boolean;
+}
+
+/**
+ * A journey in progress.
+ *
+ * Deliberately *not* a domain `Keying`. `raise()` validates a whole request
+ * and returns one; a half-filled wizard is not a request yet and should not
+ * be able to masquerade as one. This is screen state, and it becomes a domain
+ * object only at the final step, where the domain gets to refuse it.
+ */
+export interface Draft {
+  readonly draftId: string;
+  /** Chosen first. Everything else follows from it. */
+  readonly invoiceUuid?: string;
+  readonly programmeId?: string;
+  readonly tenorDays?: number;
+  readonly channel: OriginationChannel;
+  readonly merchantMandateRef?: string;
+  readonly aggregatorId?: string;
 }
 
 const GLOBAL_KEY = Symbol.for('sanad.ops.developmentStore');
@@ -73,6 +96,8 @@ const globalScope = globalThis as unknown as Record<symbol, DevelopmentState | u
 const state: DevelopmentState = (globalScope[GLOBAL_KEY] ??= {
   requests: new Map<string, OriginationRequest>(),
   invoiceNumbers: new Map<string, string>(),
+  drafts: new Map<string, Draft>(),
+  financed: new Map<string, string>(),
   sequence: 0,
   seeded: false,
 });
@@ -153,6 +178,46 @@ export function toRow(requestId: string, request: OriginationRequest): RequestRo
   };
 }
 
+// -- Drafts -------------------------------------------------------------------
+
+export function startDraft(channel: OriginationChannel): Draft {
+  state.sequence += 1;
+  const draft: Draft = { draftId: `drf_${String(state.sequence).padStart(5, '0')}`, channel };
+  state.drafts.set(draft.draftId, draft);
+  return draft;
+}
+
+export function findDraft(draftId: string): Draft | undefined {
+  return state.drafts.get(draftId);
+}
+
+export function updateDraft(draftId: string, patch: Partial<Draft>): Draft | undefined {
+  const current = state.drafts.get(draftId);
+  if (current === undefined) return undefined;
+  const next = { ...current, ...patch, draftId: current.draftId };
+  state.drafts.set(draftId, next);
+  return next;
+}
+
+export function discardDraft(draftId: string): void {
+  state.drafts.delete(draftId);
+}
+
+/**
+ * The financed-invoice registry (SH-10).
+ *
+ * Records are never purged, including after settlement — which is the whole
+ * point. An invoice financed once stays financed forever, so the same trade
+ * cannot be financed twice by waiting.
+ *
+ * In production this is `config.financed_invoice_registry` with a unique
+ * constraint on `(tenant_id, invoice_uuid)`, and the constraint is what
+ * actually enforces it. This map is the development stand-in.
+ */
+export function financedInvoices(): ReadonlyMap<string, string> {
+  return state.financed;
+}
+
 // -- Commands -----------------------------------------------------------------
 
 export function keyRequest(input: KeyRequestInput): Result<RequestRow> {
@@ -190,6 +255,20 @@ export function keyRequest(input: KeyRequestInput): Result<RequestRow> {
 
   const keyed = raise({ core, maker: input.maker });
   if (!keyed.ok) return keyed;
+
+  // SH-10. Written at the moment the request is raised, not at settlement:
+  // two operators keying the same invoice concurrently must not both succeed,
+  // and the registry is what stops the second.
+  const alreadyFinanced = state.financed.get(input.invoiceUuid);
+  if (alreadyFinanced !== undefined) {
+    return reject(
+      'SH-10',
+      'INVOICE_ALREADY_FINANCED',
+      'This invoice has already been financed and cannot be financed again',
+      { invoiceUuid: input.invoiceUuid, financedAs: alreadyFinanced },
+    );
+  }
+  state.financed.set(input.invoiceUuid, requestId);
 
   INVOICE_NUMBERS.set(requestId, input.invoiceNumber);
   REQUESTS.set(requestId, keyed.value);
