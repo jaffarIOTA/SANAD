@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-09-25.** This was the operative charter from 21 to 25 September 2026, when Sanad was scoped as a Murabaha-only SME supply-chain-finance platform. It was superseded by the re-charter in the root `CLAUDE.md` and `docs/adr/0002-re-charter-as-ksa-loan-origination-platform.md`. Its Murabaha invariants survive, scoped to the Murabaha product module; its platform-wide bans on amounts, rates and Tawarruq do not.
+
 # Sanad / Wasl — Build Instructions
 
 Shariah-compliant SME supply chain finance for the Kingdom of Saudi Arabia.

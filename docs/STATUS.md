@@ -7,6 +7,8 @@ companion to [ClaudeRecommendations.md](../ClaudeRecommendations.md), which
 holds the open items in detail; this is the summary a delivery conversation
 needs.
 
+> **Re-chartered 2026-09-25 (ADR 0002).** Sanad is now a product-agnostic KSA Loan Origination Platform; Wasl is its first product module. The table *What is deliberately not built* below no longer applies to embedded lending or the commodity broker integration, which are now product modules and a port respectively. Everything under *Built and tested* remains accurate. Read `CLAUDE.md` for the operative charter and build order.
+
 ---
 
 ## Where we are in one paragraph

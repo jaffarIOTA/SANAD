@@ -2,50 +2,76 @@
 """
 Sanad invariant guard — PreToolUse hook on Edit/Write.
 
-Blocks edits that would violate a Shariah or security invariant from CLAUDE.md.
+Blocks edits that would violate a platform or module invariant from CLAUDE.md.
 Exit 2 blocks the tool call and shows stderr to Claude.
 
-These are the invariants most likely to be violated silently by a coding agent
-reaching for a familiar lending pattern. Everything else is code review.
+Re-scoped 2026-09-25 (ADR 0002). Rates and APR are now legitimate platform
+concepts; the no-rate rule applies ONLY inside the Murabaha product module.
+Global rules cover the things that are wrong in every module: floating-point
+money or rates, domain tables in the exposed schema, hardcoded credentials.
 """
 import json, re, sys, os
 
 CODE_EXT = {'.ts', '.tsx', '.js', '.jsx', '.sql', '.py', '.go', '.java', '.kt', '.cs', '.rb', '.php'}
 
+# ---------------------------------------------------------------- global rules
 # (regex, control, message)
 RULES = [
-    (r'\b(interest_rate|interestRate|profit_rate|profitRate|accrued_interest|'
-     r'accruedInterest|compounding_frequency|compoundingFrequency|penalty_rate|'
-     r'penaltyRate|rate_index|rateIndex)\b',
-     'SH-01',
-     'No interest or rate construct may exist. Return is a profit AMOUNT:\n'
-     '  sale_price_amount = cost_amount + profit_amount\n'
-     'fixed at inception and immutable. A benchmark may inform the amount at\n'
-     'quotation time; no rate is ever persisted. The absence IS the control.'),
-
-    (r'\bapr\b(?!\s*=\s*[\'"]?\w*apr)',
-     'SH-01',
-     'APR is a rate. See CLAUDE.md §1.1 — express return as a profit amount.'),
-
     (r'create\s+table\s+(if\s+not\s+exists\s+)?public\.',
-     'SH-05',
+     'PLAT-01',
      'Domain tables must NOT live in the public schema. PostgREST auto-exposes it,\n'
-     'which is a direct gate-bypass path — RLS controls who writes a row, not\n'
-     'whether the state machine ran. Use core / config / evidence / audit.'),
+     'which bypasses the service layer. Use core / config / evidence / audit / products.'),
 
     (r'(?i)(api[_-]?key|secret|token|password|client[_-]?secret)\s*[:=]\s*'
      r'[\'"][A-Za-z0-9_\-+/=]{20,}[\'"]',
      'SEC',
-     'Hardcoded credential. Secrets live in Supabase Vault via\n'
+     'Hardcoded credential. Secrets live in the vault via\n'
      'config.set_integration_credential(). See docs/SAVING-CREDENTIALS.md.'),
+
+    # A rate or APR typed as a JS number is a float in the financial path.
+    (r'\b(rate|apr|aprBp|rateBp|profitRate|interestRate|marginBp|benchmarkBp)\s*\??\s*:\s*number\b',
+     'PLAT-02',
+     'No floating point in the financial path. Rates and APR are integer basis\n'
+     'points as bigint: `Rate = { bp: bigint; basis; period }` in core/pricing/rate.ts.\n'
+     'Convert for display only, in the <Rate> component.'),
+
+    (r'\b(amount|total|principal|instalment|installment|fee)\w*\s*\??\s*:\s*number\b',
+     'PLAT-02',
+     'No floating point in the financial path. Money is minor-unit bigint\n'
+     '(core/kernel/money.ts). If this is a count rather than money, rename it.'),
 ]
 
-# Path-scoped rules: (path fragment, regex, control, message)
+# ----------------------------------------------------------- path-scoped rules
+# (path fragments, regex, control, message)
+MURABAHA_PATHS = (
+    'products/murabaha',
+    # legacy locations until the relocation in CLAUDE.md §13 step 1 is complete
+    'core/sequencing', 'core/pricing/murabaha', 'core/legs', 'core/obligation',
+    'core/ledger', 'core/structures', 'core/trade',
+)
+
 SCOPED = [
-    ('sequencing', r'\b(new\s+Date\s*\(\s*\)|Date\.now\s*\(\s*\))',
+    (MURABAHA_PATHS,
+     r'\b(interest_rate|interestRate|profit_rate|profitRate|accrued_interest|'
+     r'accruedInterest|compounding_frequency|compoundingFrequency|penalty_rate|'
+     r'penaltyRate|rate_index|rateIndex|apr|aprBp|rateBp)\b',
+     'SH-01',
+     'Inside the Murabaha module there is no rate. Return is a profit AMOUNT:\n'
+     '  sale_price_amount = cost_amount + profit_amount\n'
+     'fixed at inception and immutable. This rule is module-scoped (ADR 0002);\n'
+     'rate-priced products live in their own module under products/.'),
+
+    (('sequencing',),
+     r'\b(new\s+Date\s*\(\s*\)|Date\.now\s*\(\s*\))',
      'SH-06',
-     'The risk period is measured against the external timestamping authority,\n'
-     'never the server clock. Use the TSA token time.'),
+     'The Murabaha risk period is measured against the external timestamping\n'
+     'authority, never the server clock. Use the TSA token time.'),
+
+    (('core/pricing/apr',),
+     r'\b(Math\.pow|Math\.exp|Math\.log|parseFloat|toFixed)\b',
+     'PLAT-02',
+     'APR is computed in integer arithmetic (fixed-point iteration over bigint).\n'
+     'No Math.* float helpers in core/pricing/apr.ts.'),
 ]
 
 
@@ -69,15 +95,20 @@ def main():
     if not content.strip():
         sys.exit(0)
 
+    # Test files may name prohibited constructs in order to assert their absence.
+    low = path.lower().replace('\\', '/')
+    is_test = '/test/' in low or low.endswith('.test.ts') or low.endswith('.test.tsx')
+    if is_test:
+        sys.exit(0)
+
     findings = []
     for pattern, control, msg in RULES:
         m = re.search(pattern, content)
         if m:
             findings.append((control, m.group(0), msg))
 
-    low = path.lower()
-    for frag, pattern, control, msg in SCOPED:
-        if frag in low:
+    for frags, pattern, control, msg in SCOPED:
+        if any(frag in low for frag in frags):
             m = re.search(pattern, content)
             if m:
                 findings.append((control, m.group(0), msg))
@@ -89,7 +120,7 @@ def main():
             out += ['  ' + line for line in msg.split('\n')]
         out += ['', '=' * 52,
                 'These are structural invariants, not style rules. Do not work around',
-                'the hook — change the design. See CLAUDE.md §1.', '']
+                'the hook — change the design. See CLAUDE.md §2 and §12.', '']
         print('\n'.join(out), file=sys.stderr)
         sys.exit(2)
 

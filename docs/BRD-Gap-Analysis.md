@@ -3,6 +3,8 @@
 **As at 25 September 2026.** Source: `docs/Loan_Origination_System_BRD_v1.0.docx` (34 sections)
 compared with the SDD v0.2, CLAUDE.md, and what is built.
 
+> **Partly superseded 2026-09-25 by ADR 0002.** Section A's deviations for the *amount*, *products with pricing references*, *interest/rates* and *disbursement* no longer apply platform-wide: they remain true only inside the Murabaha product module. Those BRD items are now ordinary backlog for the Tawarruq, BNPL, embedded-lending and conventional modules. See `CLAUDE.md` §2.
+
 ---
 
 ## The one-paragraph answer
