@@ -417,6 +417,7 @@ describe('the contract agrees with the domain it fronts', () => {
         'APPROVED',
         'REJECTED',
         'WITHDRAWN',
+        'EXPIRED',
       ]),
     );
   });

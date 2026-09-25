@@ -78,6 +78,14 @@ const COPY: Readonly<
       on: 'What goods are bought and sold. A Murabaha needs a real trade; working capital with no underlying purchase has no seller and no goods. Board question OI-22 — see docs/open-questions.md.',
     },
   },
+  AGENT_ASSISTED: {
+    titleEn: 'Agent-assisted',
+    titleAr: 'عبر وكيل مخوَّل',
+    summaryEn:
+      'Keyed by an authorised agent or relationship manager within tenant-configured limits. A second person still reviews.',
+    summaryAr: 'يُدخله وكيل أو مدير علاقات مخوَّل ضمن حدود تحددها المؤسسة. ويراجعه شخص ثانٍ.',
+    readiness: { kind: 'LIVE' },
+  },
 };
 
 export async function channelCards(): Promise<readonly ChannelCard[]> {

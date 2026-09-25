@@ -33,6 +33,9 @@
       ],
       "@sanad/origination/*": [
         "../../services/origination/src/*"
+      ],
+      "@sanad/config/*": [
+        "../../config/*"
       ]
     },
     "baseUrl": "."

@@ -1,0 +1,35 @@
+{
+  "tenantId": "bank-a",
+  "version": "1.0.0",
+  "expirySeconds": {
+    "AWAITING_SERVICING_RESPONSE": 172800,
+    "AWAITING_REVIEW": 1209600,
+    "RETURNED_TO_MAKER": 604800
+  },
+  "slaSeconds": {
+    "AWAITING_SERVICING_RESPONSE": 14400,
+    "AWAITING_REVIEW": 86400,
+    "RETURNED_TO_MAKER": 172800,
+    "AWAITING_CREDIT_REVIEW": 172800
+  },
+  "approvalTiers": [
+    { "upToMinorUnits": "25000000", "authority": "CHECKER" },
+    { "upToMinorUnits": "100000000", "authority": "SENIOR_CHECKER" },
+    { "authority": "CREDIT_COMMITTEE" }
+  ],
+  "agents": [
+    { "agentId": "agt-rm-104", "status": "ACTIVE", "branchCode": "RUH-01", "programmes": "ALL", "maxRequestMinorUnits": "50000000" },
+    { "agentId": "agt-fo-227", "status": "ACTIVE", "branchCode": "JED-03", "programmes": ["prg-0001"], "maxRequestMinorUnits": "15000000" },
+    { "agentId": "agt-rm-088", "status": "SUSPENDED", "branchCode": "RUH-01", "programmes": "ALL", "maxRequestMinorUnits": "50000000" }
+  ],
+  "partners": [
+    { "partnerId": "partner-dev-01", "status": "ACTIVE", "channel": "PARTNER_API", "programmes": "ALL", "maxRequestMinorUnits": "100000000" },
+    { "partnerId": "aggregator-dev-01", "status": "ACTIVE", "channel": "EMBEDDED_AGGREGATOR", "programmes": ["prg-0001"], "maxRequestMinorUnits": "20000000" },
+    { "partnerId": "hungerstation", "status": "ACTIVE", "channel": "EMBEDDED_AGGREGATOR", "programmes": ["prg-0001"], "maxRequestMinorUnits": "20000000" },
+    { "partnerId": "partner-01", "status": "ACTIVE", "channel": "PARTNER_API", "programmes": "ALL", "maxRequestMinorUnits": "100000000" },
+    { "partnerId": "partner-02", "status": "ACTIVE", "channel": "PARTNER_API", "programmes": "ALL", "maxRequestMinorUnits": "100000000" },
+    { "partnerId": "aggregator-01", "status": "ACTIVE", "channel": "EMBEDDED_AGGREGATOR", "programmes": "ALL", "maxRequestMinorUnits": "100000000" },
+    { "partnerId": "partner-03", "status": "ACTIVE", "channel": "PARTNER_API", "programmes": "ALL", "maxRequestMinorUnits": "100000000" },
+    { "partnerId": "partner-suspended", "status": "SUSPENDED", "channel": "PARTNER_API", "programmes": "ALL", "maxRequestMinorUnits": "100000000" }
+  ]
+}

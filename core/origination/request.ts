@@ -34,6 +34,15 @@ import {
   verifyIdentification,
 } from './channel.ts';
 import type { Draft, TradeReference, TransactionCore } from '../sequencing/state.ts';
+import {
+  type ApprovalAuthority,
+  type OriginationPolicy,
+  authorityCovers,
+  checkAgentEntitlement,
+  checkPartnerEntitlement,
+  isExpired,
+  requiredAuthority,
+} from './policy.ts';
 
 export type RequestState =
   | 'KEYING'
@@ -42,11 +51,19 @@ export type RequestState =
   | 'RETURNED_TO_MAKER'
   | 'APPROVED'
   | 'WITHDRAWN'
-  | 'REJECTED';
+  | 'REJECTED'
+  | 'EXPIRED';
 
 export interface Principal {
   readonly principalId: string;
   readonly tenantId: string;
+  /**
+   * The approval authority this principal holds, per the tenant's approval
+   * tiers. Absent means the lowest. This governs which *requests* a person
+   * may approve — it is not, and cannot be made into, anything that touches a
+   * sequencing gate.
+   */
+  readonly authority?: ApprovalAuthority;
 }
 
 export interface OriginationRequestCore {
@@ -143,6 +160,20 @@ export interface Withdrawn {
   readonly core: OriginationRequestCore;
 }
 
+/**
+ * Timed out while waiting.
+ *
+ * A request nobody acted on within the tenant's configured interval. Terminal:
+ * a stale request is re-raised, not revived, because the trade it names and
+ * the limits it was checked against may no longer hold.
+ */
+export interface Expired {
+  readonly state: 'EXPIRED';
+  readonly core: OriginationRequestCore;
+  readonly wasIn: 'AWAITING_SERVICING_RESPONSE' | 'AWAITING_REVIEW' | 'RETURNED_TO_MAKER';
+  readonly expiredAt: TsaInstant;
+}
+
 export type OriginationRequest =
   | Keying
   | AwaitingServicingResponse
@@ -150,18 +181,37 @@ export type OriginationRequest =
   | ReturnedToMaker
   | Approved
   | Rejected
-  | Withdrawn;
+  | Withdrawn
+  | Expired;
 
 // -- Raising ------------------------------------------------------------------
 
 export function raise(params: {
   readonly core: OriginationRequestCore;
   readonly maker: Principal;
+  /**
+   * The tenant's origination policy. When supplied, an agent or partner
+   * initiator is checked against its entitlement — status, channel,
+   * programme, per-request limit. Omitting it means no entitlement check,
+   * which is only acceptable where the caller has already done one.
+   */
+  readonly policy?: OriginationPolicy;
 }): Result<Keying> {
-  const { core, maker } = params;
+  const { core, maker, policy } = params;
 
   const identified = verifyIdentification(core.channel, core.identification);
   if (!identified.ok) return identified;
+
+  if (policy !== undefined) {
+    const id = core.identification;
+    if (id.kind === 'AGENT') {
+      const entitled = checkAgentEntitlement(policy, id, core);
+      if (!entitled.ok) return entitled;
+    } else if (id.kind === 'PARTNER_SYSTEM' || id.kind === 'AGGREGATOR_ON_BEHALF') {
+      const entitled = checkPartnerEntitlement(policy, id, core);
+      if (!entitled.ok) return entitled;
+    }
+  }
 
   if (maker.tenantId !== core.tenantId) {
     return reject(
@@ -275,6 +325,11 @@ export function approve(
    * writing.
    */
   contraryJustification?: string,
+  /**
+   * The tenant's origination policy. When supplied, the checker's held
+   * authority must cover the tier the request's amount falls in.
+   */
+  originationPolicy?: OriginationPolicy,
 ): Result<Approved> {
   if (checker.tenantId !== request.core.tenantId) {
     return reject(
@@ -303,6 +358,18 @@ export function approve(
       'This channel consults the servicing platform before a human decides, and no response has been recorded',
       { requestId: request.core.requestId, channel: request.core.channel },
     );
+  }
+
+  if (originationPolicy !== undefined) {
+    const required = requiredAuthority(originationPolicy, request.core.requestedAmount);
+    if (!authorityCovers(checker.authority, required)) {
+      return reject(
+        'OP-DETERMINACY',
+        'APPROVAL_AUTHORITY_INSUFFICIENT',
+        'This request needs a higher approval authority than the approver holds',
+        { requestId: request.core.requestId, required, held: checker.authority ?? 'CHECKER' },
+      );
+    }
   }
 
   const declined = request.servicing?.decision === 'DECLINED';
@@ -372,6 +439,31 @@ export function rejectRequest(
     );
   }
   return ok({ state: 'REJECTED', core: request.core, reviewer, reasonCode });
+}
+
+/**
+ * Expire a request that has waited too long.
+ *
+ * Pure: the observed instant is an argument, attested like every instant with
+ * effect, and the interval comes from the tenant's policy. Refuses if the
+ * interval has not elapsed, so a caller cannot expire something early by
+ * calling this — only the passage of attested time expires a request.
+ */
+export function expire(
+  request: AwaitingServicingResponse | AwaitingReview | ReturnedToMaker,
+  policy: OriginationPolicy,
+  observedAt: TsaInstant,
+): Result<Expired> {
+  const since = 'submittedAt' in request ? request.submittedAt.epochSeconds : request.core.raisedAt.epochSeconds;
+  if (!isExpired(policy, request.state, since, observedAt.epochSeconds)) {
+    return reject(
+      'OP-DETERMINACY',
+      'REQUEST_NOT_YET_EXPIRED',
+      'The configured interval has not elapsed for this request',
+      { requestId: request.core.requestId, state: request.state },
+    );
+  }
+  return ok({ state: 'EXPIRED', core: request.core, wasIn: request.state, expiredAt: observedAt });
 }
 
 export function reopen(request: ReturnedToMaker): Keying {

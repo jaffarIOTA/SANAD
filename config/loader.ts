@@ -16,12 +16,15 @@ import bankAStructure from './tenants/bank-a/structures/murabaha-distributor.jso
 import fintechBStructure from './tenants/fintech-b/structures/murabaha-distributor.json' with { type: 'json' };
 import bankAPolicyV1 from './tenants/bank-a/credit-policy/wasl-distributor-v1.json' with { type: 'json' };
 import fintechBPolicyV1 from './tenants/fintech-b/credit-policy/wasl-distributor-v1.json' with { type: 'json' };
+import bankAOrigination from './tenants/bank-a/origination/policy.json' with { type: 'json' };
+import fintechBOrigination from './tenants/fintech-b/origination/policy.json' with { type: 'json' };
 
 import {
   type StructureDefinition,
   parseStructureDefinition,
 } from '../core/structures/definition.ts';
 import { type CreditPolicy, parseCreditPolicy } from '../core/decisioning/policy.ts';
+import { type OriginationPolicy, parseOriginationPolicy } from '../core/origination/policy.ts';
 import { type Result, ok, reject } from '../core/kernel/result.ts';
 
 /** The tenant codes this deployment knows about. */
@@ -37,6 +40,19 @@ const CREDIT_POLICIES: Readonly<Record<TenantCode, readonly unknown[]>> = {
   'bank-a': [bankAPolicyV1],
   'fintech-b': [fintechBPolicyV1],
 };
+
+const ORIGINATION_POLICIES: Readonly<Record<TenantCode, unknown>> = {
+  'bank-a': bankAOrigination,
+  'fintech-b': fintechBOrigination,
+};
+
+/**
+ * The tenant's intake parameters: expiry, SLAs, approval tiers, agent and
+ * partner entitlements. Parsed strictly; a malformed file refuses to activate.
+ */
+export function loadOriginationPolicy(tenant: TenantCode): Result<OriginationPolicy> {
+  return parseOriginationPolicy(ORIGINATION_POLICIES[tenant]);
+}
 
 export function isTenantCode(value: string): value is TenantCode {
   return (TENANT_CODES as readonly string[]).includes(value);

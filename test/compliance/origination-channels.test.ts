@@ -54,6 +54,7 @@ const IDENTIFICATION: Readonly<Record<OriginationChannel, InitiatorIdentificatio
     credentialRef: 'cred-0002',
     merchantMandateRef: 'mdt-0001',
   },
+  AGENT_ASSISTED: { kind: 'AGENT', agentId: 'agt-fo-227', branchCode: 'JED-03' },
 };
 
 function requestCore(channel: OriginationChannel): OriginationRequestCore {

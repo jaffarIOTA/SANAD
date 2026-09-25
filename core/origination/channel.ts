@@ -30,13 +30,20 @@ export type OriginationChannel =
   /** Posted by an integrating system under its own credential. */
   | 'PARTNER_API'
   /** Nominated by an aggregator on behalf of a merchant in its network. */
-  | 'EMBEDDED_AGGREGATOR';
+  | 'EMBEDDED_AGGREGATOR'
+  /**
+   * Keyed by an authorised agent, relationship manager or field officer, on
+   * the counterparty's behalf. The agent's identity, branch and limits are
+   * tenant configuration (BRD §5.3); a second person still reviews.
+   */
+  | 'AGENT_ASSISTED';
 
 export const ORIGINATION_CHANNELS: readonly OriginationChannel[] = [
   'MAKER_CHECKER',
   'COUNTERPARTY_SELF',
   'PARTNER_API',
   'EMBEDDED_AGGREGATOR',
+  'AGENT_ASSISTED',
 ];
 
 /**
@@ -51,6 +58,8 @@ export type InitiatorIdentification =
   | { readonly kind: 'STAFF_PRINCIPAL'; readonly principalId: string }
   | { readonly kind: 'VERIFIED_SIGNATORY'; readonly assertionId: string }
   | { readonly kind: 'PARTNER_SYSTEM'; readonly partnerId: string; readonly credentialRef: string }
+  /** An agent acting for a counterparty who is present but not keying. */
+  | { readonly kind: 'AGENT'; readonly agentId: string; readonly branchCode: string }
   | {
       readonly kind: 'AGGREGATOR_ON_BEHALF';
       readonly aggregatorId: string;
@@ -120,6 +129,15 @@ export const CHANNEL_POLICIES: Readonly<Record<OriginationChannel, ChannelPolicy
     requiresFourEyes: true,
     acceptableIdentification: ['AGGREGATOR_ON_BEHALF'],
     requiresMerchantMandate: true,
+  },
+  AGENT_ASSISTED: {
+    channel: 'AGENT_ASSISTED',
+    requiresServicingDecision: false,
+    // An agent is not the counterparty and is paid to originate. Four eyes
+    // is not optional on this door.
+    requiresFourEyes: true,
+    acceptableIdentification: ['AGENT'],
+    requiresMerchantMandate: false,
   },
 };
 

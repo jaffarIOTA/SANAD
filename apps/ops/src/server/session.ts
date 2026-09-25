@@ -21,7 +21,12 @@
 import type { Principal } from '@sanad/core/origination/request.ts';
 
 export const MAKER: Principal = { principalId: 'stf-maker-01', tenantId: 'bank-a' };
-export const CHECKER: Principal = { principalId: 'stf-checker-01', tenantId: 'bank-a' };
+/**
+ * Holds the lowest authority on purpose. The tenant's approval tiers then
+ * refuse this checker anything above the first tier, so the control is
+ * exercised in the workbench rather than only asserted in a test.
+ */
+export const CHECKER: Principal = { principalId: 'stf-checker-01', tenantId: 'bank-a', authority: 'CHECKER' };
 
 export type WorkbenchRole = 'MAKER' | 'CHECKER';
 

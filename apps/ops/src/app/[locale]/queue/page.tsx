@@ -36,24 +36,32 @@ import { Icon } from '@sanad/design/icons.tsx';
 import { defaultNumerals, formatMinorUnits } from '@sanad/design/Money.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 
+import { isExpired, slaStatus } from '@sanad/core/origination/policy.ts';
+
 import { CHECKER, canReview } from '../../../server/session.ts';
-import { listRequests, type RequestRow } from '../../../server/store.ts';
+import { expireOverdueAction } from '../../../server/actions.ts';
+import { listRequests, originationPolicy, type RequestRow } from '../../../server/store.ts';
 
-type View = 'review' | 'servicing' | 'maker' | 'decided';
+type View = 'review' | 'servicing' | 'maker' | 'breached' | 'decided';
 
-const VIEWS: readonly View[] = ['review', 'servicing', 'maker', 'decided'];
+const VIEWS: readonly View[] = ['review', 'servicing', 'maker', 'breached', 'decided'];
+
+const WAITING: readonly RequestRow['state'][] = ['AWAITING_SERVICING_RESPONSE', 'AWAITING_REVIEW', 'RETURNED_TO_MAKER'];
 
 const VIEW_STATES: Readonly<Record<View, readonly RequestRow['state'][]>> = {
   review: ['AWAITING_REVIEW'],
   servicing: ['AWAITING_SERVICING_RESPONSE'],
   maker: ['RETURNED_TO_MAKER', 'KEYING'],
-  decided: ['APPROVED', 'REJECTED', 'WITHDRAWN'],
+  // The supervisor's view: anything waiting past its SLA, whichever state.
+  breached: WAITING,
+  decided: ['APPROVED', 'REJECTED', 'WITHDRAWN', 'EXPIRED'],
 };
 
 const VIEW_LABEL: Readonly<Record<View, { en: string; ar: string }>> = {
   review: { en: 'Needs your decision', ar: 'بانتظار قرارك' },
   servicing: { en: 'With the servicing platform', ar: 'لدى نظام الخدمة' },
   maker: { en: 'With the maker', ar: 'لدى المُدخِل' },
+  breached: { en: 'Past SLA', ar: 'تجاوزت المهلة' },
   decided: { en: 'Decided', ar: 'تم البت فيها' },
 };
 
@@ -64,6 +72,7 @@ const VIEW_EMPTY: Readonly<Record<View, { en: string; ar: string }>> = {
     ar: 'لا يوجد لدى نظام الخدمة شيء.',
   },
   maker: { en: 'Nothing has been returned.', ar: 'لم يُعَد أي طلب.' },
+  breached: { en: 'Nothing is past its SLA.', ar: 'لا يوجد طلب تجاوز مهلته.' },
   decided: { en: 'Nothing has been decided yet.', ar: 'لم يتم البت في أي طلب بعد.' },
 };
 
@@ -118,23 +127,22 @@ export default async function QueuePage({
   const nowEpochSeconds = BigInt(Math.floor(Date.now() / 1000));
 
   const all = listRequests();
-  const counts = Object.fromEntries(
-    VIEWS.map((v) => [v, all.filter((r) => VIEW_STATES[v].includes(r.state)).length]),
-  ) as Record<View, number>;
+  const policy = originationPolicy();
+  const breached = (r: RequestRow): boolean =>
+    slaStatus(policy, r.state, waitingSince(r), nowEpochSeconds) === 'BREACHED';
+  const overdue = (r: RequestRow): boolean =>
+    isExpired(policy, r.state, waitingSince(r), nowEpochSeconds);
+  const inView = (v: View, r: RequestRow): boolean =>
+    VIEW_STATES[v].includes(r.state) && (v !== 'breached' || breached(r));
 
-  /*
-   * Oldest first in the working views: a queue, not a feed. Decided items
-   * read better newest-first, because that is a log rather than a backlog.
-   *
-   * The tie-break matters more than it looks. Attested timestamps have
-   * one-second granularity, so a batch that arrives together — an aggregator
-   * posting overnight, or a seeded fixture — ties on the second and would
-   * otherwise fall back to whatever order the repository happened to return,
-   * which is descending. That silently inverts a FIFO queue. Request
-   * identifiers are monotonic, so they settle it deterministically.
-   */
+  const counts = Object.fromEntries(
+    VIEWS.map((v) => [v, all.filter((r) => inView(v, r)).length]),
+  ) as Record<View, number>;
+  const expirable = all.filter((r) => WAITING.includes(r.state) && overdue(r)).length;
+  const justExpired = Number.parseInt(String((await searchParams)['expired'] ?? '0'), 10) || 0;
+
   const rows = all
-    .filter((r) => VIEW_STATES[view].includes(r.state))
+    .filter((r) => inView(view, r))
     .sort((a, b) => {
       const direction = view === 'decided' ? -1 : 1;
       const byTime = Number(waitingSince(a) - waitingSince(b));
@@ -193,6 +201,28 @@ export default async function QueuePage({
         </ul>
       </nav>
 
+      {justExpired > 0 ? (
+        <p className="rounded-card border border-line bg-sunken p-3 text-sm text-ink-quiet">
+          {arabic ? `انتهت صلاحية ${String(justExpired)} من الطلبات.` : `${String(justExpired)} request(s) expired.`}
+        </p>
+      ) : null}
+
+      {view === 'breached' ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-sunken p-3 text-sm">
+          <span className="text-ink-quiet">
+            {arabic
+              ? `المهل من إعدادات المؤسسة. ${String(expirable)} من الطلبات تجاوزت مدة الانتظار القصوى ويمكن إنهاؤها.`
+              : `SLAs come from the tenant’s policy. ${String(expirable)} request(s) have waited past the expiry interval and can be expired.`}
+          </span>
+          <form action={expireOverdueAction}>
+            <input type="hidden" name="locale" value={segment} />
+            <button type="submit" disabled={expirable === 0} className="inline-flex min-h-tap items-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink hover:bg-sunken disabled:opacity-50">
+              {arabic ? 'إنهاء الطلبات المتأخرة' : 'Expire overdue requests'}
+            </button>
+          </form>
+        </div>
+      ) : null}
+
       {view === 'review' && blockedCount > 0 ? (
         <p className="flex items-start gap-2 rounded-card border border-line bg-sunken p-3 text-sm text-ink-quiet">
           <Icon name="shield-check" size={16} className="mt-0.5 shrink-0" />
@@ -248,7 +278,12 @@ export default async function QueuePage({
                   return (
                     <tr key={row.requestId} className="border-b border-line last:border-b-0">
                       <td className="py-3 pe-3 text-ink-quiet">
-                        {age(waitingSince(row), nowEpochSeconds, locale)}
+                        <span className="flex flex-col gap-0.5">
+                          <span>{age(waitingSince(row), nowEpochSeconds, locale)}</span>
+                          {breached(row) ? (
+                            <Status tone="blocked" label={arabic ? 'تجاوز المهلة' : 'past SLA'} />
+                          ) : null}
+                        </span>
                       </td>
 
                       <td className="py-3 pe-3">

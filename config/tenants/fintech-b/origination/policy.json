@@ -1,0 +1,20 @@
+{
+  "tenantId": "fintech-b",
+  "version": "1.0.0",
+  "expirySeconds": {
+    "AWAITING_SERVICING_RESPONSE": 86400,
+    "AWAITING_REVIEW": 259200,
+    "RETURNED_TO_MAKER": 259200
+  },
+  "slaSeconds": {
+    "AWAITING_SERVICING_RESPONSE": 3600,
+    "AWAITING_REVIEW": 14400
+  },
+  "approvalTiers": [
+    { "authority": "CHECKER" }
+  ],
+  "agents": [],
+  "partners": [
+    { "partnerId": "partner-dev-01", "status": "ACTIVE", "channel": "PARTNER_API", "programmes": "ALL", "maxRequestMinorUnits": "30000000" }
+  ]
+}

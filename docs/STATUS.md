@@ -1,6 +1,6 @@
 # Sanad — build status
 
-**As at 23 September 2026.**
+**As at 25 September 2026.**
 
 A record of what exists, what has been decided, and what is waiting. The
 companion to [ClaudeRecommendations.md](../ClaudeRecommendations.md), which
@@ -16,8 +16,7 @@ obligations, evidence, the leg hash chain, the decisioning engine and the
 charity ledger, with 1,596 lines of SQL carrying the compliance controls as
 database constraints. A **partner API exists and runs** — contract authored
 first, compiled into its own runtime validator, driven over HTTP by 43 tests.
-Two **operator screens** work end to end in Arabic and English. **459 tests
-pass.**
+Two **operator screens** work end to end in Arabic and English. **519 tests pass.**
 
 What does not exist is everything that depends on infrastructure nobody has
 provisioned yet: there is no database, no timestamping authority, no live
@@ -41,7 +40,7 @@ The part that makes non-compliant transactions structurally impossible.
 | **Money** | Minor-unit `bigint`. No multiply-by-fraction, no percentage helper, no division — those are rate operations. |
 | **Leg hash chain** | Each leg binds its predecessor's content hash. Verified to survive migration; see below. |
 | **Decisioning** | A closed expression language with no loops, no regex, no clock. Failure mode is REFER, never approve. |
-| **Origination requests** | Four channels, maker–checker, four-eyes enforced in the domain rather than by a hidden button. |
+| **Origination requests** | Five channels (operator, counterparty, partner API, aggregator, agent), maker–checker with four eyes enforced in the domain, tenant-configured approval tiers, agent and partner entitlements, SLAs and expiry — all as configuration (`config/tenants/*/origination/policy.json`), none of it able to reach a gate. |
 
 ### The API — `services/origination/`
 
@@ -70,11 +69,11 @@ against the real toolkit. The origination definition is **generated** from the
 that 3.0 cannot express are listed inside the generated file rather than
 dropped silently.
 
-### Tests — 459 across 21 files
+### Tests — 519 across 23 files
 
 | Suite | Tests | What it protects |
 |---|---|---|
-| `compliance/` | ~89 | Each test *attempts* a prohibited outcome and passes only when it fails |
+| `compliance/` | ~120 | Each test *attempts* a prohibited outcome and passes only when it fails |
 | `contract/` | ~84 | The published contract, and the running service over HTTP |
 | `unit/` | ~50 | Decisioning and health aggregation |
 | `architecture/` | ~53 | The absences: no rate, no clock in core, no secret, no gateway dependency |

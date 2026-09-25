@@ -22,6 +22,7 @@ import { beginOriginationAction } from '../../../server/actions.ts';
 const KEYABLE = [
   { channel: 'MAKER_CHECKER', en: 'Keyed by an operator, approved by a second', ar: 'يُدخله موظف ويعتمده آخر' },
   { channel: 'EMBEDDED_AGGREGATOR', en: 'Nominated by an aggregator, on a merchant’s mandate', ar: 'يرشّحه وسيط بتفويض من التاجر' },
+  { channel: 'AGENT_ASSISTED', en: 'Keyed by an authorised agent or relationship manager, within their limits', ar: 'يُدخله وكيل أو مدير علاقات مخوَّل ضمن حدوده' },
 ] as const;
 
 export default async function OriginatePage({

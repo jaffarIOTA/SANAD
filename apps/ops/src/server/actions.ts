@@ -20,9 +20,11 @@ import { tsaInstant } from '@sanad/core/time/tsa.ts';
 
 import { CHECKER, MAKER } from './session.ts';
 import { findClearedInvoice, unavailableReason } from './invoices.ts';
+import { tsaInstant as attest } from '@sanad/core/time/tsa.ts';
 import {
   applyServicingOutcome,
   discardDraft,
+  expireOverdue,
   financedInvoices,
   findDraft,
   startDraft,
@@ -196,6 +198,8 @@ export async function chooseTermsAction(form: FormData): Promise<void> {
   updateDraft(draftId, {
     programmeId: field(form, 'programmeId'),
     tenorDays,
+    ...(field(form, 'agentId') === '' ? {} : { agentId: field(form, 'agentId') }),
+    ...(field(form, 'branchCode') === '' ? {} : { branchCode: field(form, 'branchCode') }),
     ...(field(form, 'merchantMandateRef') === ''
       ? {}
       : { merchantMandateRef: field(form, 'merchantMandateRef') }),
@@ -240,6 +244,8 @@ export async function submitDraftAction(form: FormData): Promise<void> {
       ? {}
       : { merchantMandateRef: draft.merchantMandateRef }),
     ...(draft.aggregatorId === undefined ? {} : { aggregatorId: draft.aggregatorId }),
+    ...(draft.agentId === undefined ? {} : { agentId: draft.agentId }),
+    ...(draft.branchCode === undefined ? {} : { branchCode: draft.branchCode }),
   });
 
   if (!keyed.ok) {
@@ -254,4 +260,27 @@ export async function submitDraftAction(form: FormData): Promise<void> {
   discardDraft(draftId);
   refresh(locale, keyed.value.requestId);
   redirect(`/${locale}/requests/${keyed.value.requestId}`);
+}
+
+
+/**
+ * Expire requests that have waited past the tenant's interval.
+ *
+ * A supervisor's action. The instant is attested — the development substitute
+ * here, the timestamping authority in a deployed environment — and the domain
+ * refuses anything that has not actually elapsed, so pressing this early
+ * expires nothing.
+ */
+export async function expireOverdueAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'en';
+  const expired = expireOverdue(
+    attest({
+      verified: true,
+      genTimeEpochSeconds: BigInt(Math.floor(Date.now() / 1000)),
+      tokenDigest: 'development-substitute',
+      authorityId: 'development',
+    }),
+  );
+  refresh(locale);
+  redirect(`/${locale}/queue?show=${expired.length > 0 ? 'decided' : 'breached'}&expired=${String(expired.length)}`);
 }

@@ -29,6 +29,16 @@ import type { OriginationChannel } from '@sanad/core/origination/channel.ts';
 import { money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import { type TsaInstant, tsaInstant } from '@sanad/core/time/tsa.ts';
+import { expire } from '@sanad/core/origination/request.ts';
+import { expectOk } from '@sanad/core/kernel/result.ts';
+import { loadOriginationPolicy } from '@sanad/config/loader.ts';
+
+/**
+ * The tenant's intake policy, loaded once. A malformed file throws here, at
+ * start-up, rather than silently defaulting a limit away at request time.
+ */
+const POLICY = expectOk(loadOriginationPolicy('bank-a'));
+export const originationPolicy = (): typeof POLICY => POLICY;
 
 /**
  * Stands in for the timestamping authority adapter.
@@ -89,6 +99,8 @@ export interface Draft {
   readonly channel: OriginationChannel;
   readonly merchantMandateRef?: string;
   readonly aggregatorId?: string;
+  readonly agentId?: string;
+  readonly branchCode?: string;
 }
 
 const GLOBAL_KEY = Symbol.for('sanad.ops.developmentStore');
@@ -131,6 +143,9 @@ export interface KeyRequestInput {
   readonly credentialRef?: string;
   /** Echoed back to a partner. Not used for idempotency. */
   readonly partnerReference?: string;
+  /** Required on the agent channel: who keyed it, and for which branch. */
+  readonly agentId?: string;
+  readonly branchCode?: string;
 }
 
 /** Display shape. The screens never reach into the domain union directly. */
@@ -244,7 +259,9 @@ export function keyRequest(input: KeyRequestInput): Result<RequestRow> {
             partnerId: input.partnerId ?? '',
             credentialRef: input.credentialRef ?? '',
           } satisfies OriginationRequestCore['identification'])
-        : ({ kind: 'STAFF_PRINCIPAL' as const, principalId: input.maker.principalId });
+        : input.channel === 'AGENT_ASSISTED'
+          ? ({ kind: 'AGENT' as const, agentId: input.agentId ?? '', branchCode: input.branchCode ?? '' })
+          : ({ kind: 'STAFF_PRINCIPAL' as const, principalId: input.maker.principalId });
 
   const core: OriginationRequestCore = {
     requestId,
@@ -266,7 +283,8 @@ export function keyRequest(input: KeyRequestInput): Result<RequestRow> {
     raisedAt: developmentAttestation(),
   };
 
-  const keyed = raise({ core, maker: input.maker });
+  // The policy is what makes an agent's or partner's limit real.
+  const keyed = raise({ core, maker: input.maker, policy: POLICY });
   if (!keyed.ok) return keyed;
 
   // SH-10. Written at the moment the request is raised, not at settlement:
@@ -335,6 +353,7 @@ export function approveRequest(
     checker,
     developmentAttestation(),
     contraryJustification,
+    POLICY,
   );
   if (!next.ok) return next;
 
@@ -370,6 +389,29 @@ export function declineRequest(
 
   REQUESTS.set(requestId, next.value);
   return ok(toRow(requestId, next.value));
+}
+
+/**
+ * Expire everything that has waited past the tenant's interval.
+ *
+ * The instant is supplied by the caller and attested; the store reads no
+ * clock. Returns the identifiers expired so the screen can say what happened.
+ */
+export function expireOverdue(observedAt: TsaInstant): readonly string[] {
+  const expired: string[] = [];
+  for (const [requestId, request] of REQUESTS) {
+    if (
+      request.state !== 'AWAITING_SERVICING_RESPONSE' &&
+      request.state !== 'AWAITING_REVIEW' &&
+      request.state !== 'RETURNED_TO_MAKER'
+    ) continue;
+    const result = expire(request, POLICY, observedAt);
+    if (result.ok) {
+      REQUESTS.set(requestId, result.value);
+      expired.push(requestId);
+    }
+  }
+  return expired;
 }
 
 // -- Queries ------------------------------------------------------------------
@@ -443,6 +485,8 @@ interface Seed {
   readonly maker: Principal;
   readonly merchantMandateRef?: string;
   readonly aggregatorId?: string;
+  readonly agentId?: string;
+  readonly branchCode?: string;
   /** Left in `AWAITING_SERVICING_RESPONSE` when false. */
   readonly servicingResponded?: ServicingOutcome['decision'];
 }
@@ -489,6 +533,17 @@ const SEEDS: readonly Seed[] = [
     servicingResponded: 'DECLINED',
   },
   {
+    counterpartyId: 'Rawabi Industrial Supplies Establishment',
+    invoiceNumber: '452287',
+    invoiceUuid: '3cf5d9a2-0000-4000-8000-000000000008',
+    amountMinorUnits: 9_800_000n,
+    tenorDays: 60,
+    channel: 'AGENT_ASSISTED',
+    maker: MAKER_ONE,
+    agentId: 'agt-fo-227',
+    branchCode: 'JED-03',
+  },
+  {
     counterpartyId: 'Bahr Al-Khaleej Shipping Establishment',
     invoiceNumber: 'AGG-88147',
     invoiceUuid: '3cf5d9a2-0000-4000-8000-000000000005',
@@ -522,6 +577,8 @@ if (!state.seeded) {
         ? {}
         : { merchantMandateRef: seed.merchantMandateRef }),
       ...(seed.aggregatorId === undefined ? {} : { aggregatorId: seed.aggregatorId }),
+      ...(seed.agentId === undefined ? {} : { agentId: seed.agentId }),
+      ...(seed.branchCode === undefined ? {} : { branchCode: seed.branchCode }),
     });
     if (!keyed.ok) continue;
 

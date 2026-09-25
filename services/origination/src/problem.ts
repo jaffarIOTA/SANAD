@@ -61,6 +61,18 @@ const ARABIC: Readonly<Record<string, string>> = {
   COUNTERPARTY_MISMATCH: 'يجب أن تكون المعاملة للعميل الذي حدده الطلب.',
   TRADE_REFERENCE_SUBSTITUTED: 'الصفقة المرتبطة بالمعاملة ليست الصفقة المعتمدة.',
   REQUEST_NOT_IN_EXPECTED_STATE: 'حالة هذا الطلب تغيّرت منذ تحميل الصفحة.',
+  REQUEST_NOT_YET_EXPIRED: 'لم تنقضِ المدة المحددة لهذا الطلب بعد.',
+  APPROVAL_AUTHORITY_INSUFFICIENT: 'يتطلب هذا الطلب صلاحية اعتماد أعلى مما يحملها المعتمِد.',
+  AGENT_NOT_ENTITLED: 'هذا الوكيل غير مُهيّأ لإنشاء طلبات لهذه المؤسسة.',
+  AGENT_SUSPENDED: 'هذا الوكيل موقوف.',
+  AGENT_OUTSIDE_BRANCH: 'لا يجوز لهذا الوكيل إنشاء طلبات لذلك الفرع.',
+  AGENT_PROGRAMME_NOT_ENTITLED: 'هذا الوكيل غير مخوّل بالإنشاء ضمن ذلك البرنامج.',
+  AGENT_LIMIT_EXCEEDED: 'يتجاوز الطلب حد هذا الوكيل لكل طلب.',
+  PARTNER_NOT_ENTITLED: 'هذا الشريك غير مُهيّأ لإنشاء طلبات لهذه المؤسسة.',
+  PARTNER_SUSPENDED: 'هذا الشريك موقوف.',
+  PARTNER_CHANNEL_MISMATCH: 'هذا الشريك غير مخوّل بالإنشاء عبر تلك القناة.',
+  PARTNER_PROGRAMME_NOT_ENTITLED: 'هذا الشريك غير مخوّل بالإنشاء ضمن ذلك البرنامج.',
+  PARTNER_LIMIT_EXCEEDED: 'يتجاوز الطلب حد هذا الشريك لكل طلب.',
 
   // Transport-level refusals raised by this service
   MALFORMED_JSON: 'تعذّرت قراءة محتوى الطلب كبيانات JSON صحيحة.',

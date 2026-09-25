@@ -575,7 +575,13 @@ components:
         - APPROVED
         - REJECTED
         - WITHDRAWN
+        - EXPIRED
       description: |
+        `EXPIRED` means nobody acted on the request within the institution's
+        configured interval. It is terminal: re-raise rather than expect it to
+        be revived, because the trade it named and the limits it was checked
+        against may no longer hold.
+
         `KEYING` is intentionally not in this list. It is the state of a
         request being typed into an internal screen and is never observable
         over this API — a partner's request is created submitted.

@@ -664,7 +664,8 @@ export function createService(deps: ServiceDependencies): DrainableServer {
 
     if (
       current.state === 'APPROVED' ||
-      current.state === 'REJECTED'
+      current.state === 'REJECTED' ||
+      current.state === 'EXPIRED'
     ) {
       return fail(
         problem({

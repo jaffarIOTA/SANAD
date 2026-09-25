@@ -15,7 +15,7 @@ import { CHANNEL_POLICIES } from '@sanad/core/origination/channel.ts';
 
 import { chooseTermsAction } from '../../../../../server/actions.ts';
 import { findClearedInvoice } from '../../../../../server/invoices.ts';
-import { findDraft } from '../../../../../server/store.ts';
+import { findDraft, originationPolicy } from '../../../../../server/store.ts';
 import { Steps } from '../../Steps.tsx';
 
 const LABEL = 'block text-sm font-medium text-ink';
@@ -40,6 +40,11 @@ export default async function TermsPage({
   const arabic = locale === 'ar-SA';
   const numerals = defaultNumerals(locale);
   const needsMandate = CHANNEL_POLICIES[draft.channel].requiresMerchantMandate;
+  const isAgent = draft.channel === 'AGENT_ASSISTED';
+  // Every configured agent is offered, including suspended ones, so the
+  // refusal is demonstrated rather than hidden behind a filtered list.
+  const agents = originationPolicy().agents;
+  const branches = [...new Set(agents.map((a) => a.branchCode))];
 
   return (
     <div className="flex max-w-2xl flex-col gap-5">
@@ -74,6 +79,32 @@ export default async function TermsPage({
               {arabic ? 'مدة محددة. لا توجد مدة مفتوحة.' : 'A determinate term. There is no open-ended option.'}
             </span>
           </label>
+
+          {isAgent ? (
+            <>
+              <label className={LABEL}>
+                {arabic ? 'الوكيل' : 'Agent'}
+                <select name="agentId" required defaultValue={draft.agentId ?? ''} className={INPUT}>
+                  <option value="" disabled>{arabic ? 'اختر' : 'Choose'}</option>
+                  {agents.map((a) => (
+                    <option key={a.agentId} value={a.agentId}>
+                      {a.agentId} · {a.branchCode}{a.status === 'SUSPENDED' ? (arabic ? ' · موقوف' : ' · suspended') : ''}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-xs text-ink-quiet">
+                  {arabic ? 'حدود الوكيل من إعدادات المؤسسة، لا من هذه الشاشة.' : 'An agent’s limits come from the tenant’s policy, not from this screen.'}
+                </span>
+              </label>
+              <label className={LABEL}>
+                {arabic ? 'الفرع' : 'Branch'}
+                <select name="branchCode" required defaultValue={draft.branchCode ?? ''} className={INPUT}>
+                  <option value="" disabled>{arabic ? 'اختر' : 'Choose'}</option>
+                  {branches.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </label>
+            </>
+          ) : null}
 
           {needsMandate ? (
             <>

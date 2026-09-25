@@ -27,7 +27,10 @@ import {
   returnAction,
   servicingRespondAction,
 } from '../../../../server/actions.ts';
-import { findRequest } from '../../../../server/store.ts';
+import { findRequest, originationPolicy } from '../../../../server/store.ts';
+import { CHECKER } from '../../../../server/session.ts';
+import { authorityCovers, requiredAuthority } from '@sanad/core/origination/policy.ts';
+import { money } from '@sanad/core/kernel/money.ts';
 
 const INPUT =
   'mt-1 block w-full min-h-tap rounded-card border border-line bg-surface px-3 text-base text-ink';
@@ -55,6 +58,13 @@ export default async function ReviewPage({
   const awaitingServicing = request.state === 'AWAITING_SERVICING_RESPONSE';
   const awaitingReview = request.state === 'AWAITING_REVIEW';
   const servicingDeclined = request.servicing?.decision === 'DECLINED';
+
+  // The tenant's approval tiers, applied to this amount. Shown before the
+  // button so a checker without the authority learns it here, not from a
+  // refusal after writing a justification. The domain refuses regardless.
+  const required = requiredAuthority(originationPolicy(), money(request.amountMinorUnits));
+  const held = CHECKER.authority ?? 'CHECKER';
+  const mayApprove = authorityCovers(held, required);
 
   return (
     <div className="flex max-w-3xl flex-col gap-5">
@@ -225,6 +235,14 @@ export default async function ReviewPage({
 
         {awaitingReview ? (
           <div className="mt-3 flex flex-col gap-4">
+            <p className={`rounded-card px-3 py-2 text-xs ${mayApprove ? 'bg-sunken text-ink-quiet' : 'bg-blocked-wash text-blocked'}`}>
+              {arabic ? 'صلاحية الاعتماد المطلوبة: ' : 'Approval authority required: '}
+              <span className="identifier">{required}</span>
+              {' · '}
+              {arabic ? 'تحمل: ' : 'you hold: '}
+              <span className="identifier">{held}</span>
+              {mayApprove ? null : (arabic ? ' — يلزم معتمِد أعلى' : ' — a higher approver is needed')}
+            </p>
             <form action={approveAction} className="flex flex-col gap-2">
               <input type="hidden" name="locale" value={segment} />
               <input type="hidden" name="requestId" value={request.requestId} />

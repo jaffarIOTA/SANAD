@@ -130,6 +130,9 @@ export function toWire(
     ...(outcome === undefined ? {} : { outcome }),
     ...(request.state === 'RETURNED_TO_MAKER' ? { outcome: { note: request.note } } : {}),
     ...(request.state === 'REJECTED' ? { outcome: { reasonCode: request.reasonCode } } : {}),
+    ...(request.state === 'EXPIRED'
+      ? { outcome: { decidedAt: attested(request.expiredAt), reasonCode: `EXPIRED_WHILE_${request.wasIn}` } }
+      : {}),
   } as OriginationRequestWire;
 }
 

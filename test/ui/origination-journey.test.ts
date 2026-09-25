@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { findClearedInvoice, listClearedInvoices, unavailableReason } from '../../apps/ops/src/server/invoices.ts';
+import * as store from '../../apps/ops/src/server/store.ts';
 import {
   discardDraft,
   financedInvoices,
@@ -106,9 +107,7 @@ describe('unavailable trades are shown and refused, with the control', () => {
   it('the registry is never purged — a financed invoice stays financed', () => {
     // No function in the store removes a registry entry. Asserted by the
     // module's export surface rather than by trying every name.
-    const exported = Object.keys(
-      require('../../apps/ops/src/server/store.ts') as Record<string, unknown>,
-    );
+    const exported = Object.keys(store);
     expect(exported.some((n) => /unfinance|purge|releaseInvoice|clearRegistry/i.test(n))).toBe(false);
   });
 });
