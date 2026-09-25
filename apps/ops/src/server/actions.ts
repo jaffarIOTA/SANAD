@@ -48,51 +48,6 @@ function failTo(path: string, control: string, message: string): never {
   redirect(`${path}?${query.toString()}`);
 }
 
-export async function keyAndSubmitAction(form: FormData): Promise<void> {
-  const locale = field(form, 'locale') || 'en';
-
-  // Minor units, parsed from a decimal string without touching a float. The
-  // string is split on the point rather than multiplied by 100 (BE-06).
-  const [major = '0', minor = ''] = field(form, 'amount').split('.');
-  const digits = `${major.replace(/[^\d]/g, '') || '0'}${minor.padEnd(2, '0').slice(0, 2)}`;
-
-  let amountMinorUnits: bigint;
-  try {
-    amountMinorUnits = BigInt(digits);
-  } catch {
-    failTo(`/${locale}/originate`, 'OP-DETERMINACY', 'The amount could not be read as a whole number of minor units.');
-  }
-
-  const channel = field(form, 'channel') as OriginationChannel;
-
-  const keyed = keyRequest({
-    tenantId: MAKER.tenantId,
-    programmeId: field(form, 'programmeId'),
-    counterpartyId: field(form, 'counterparty'),
-    channel,
-    invoiceUuid: field(form, 'invoiceUuid'),
-    invoiceNumber: field(form, 'invoiceNumber'),
-    issuerCr: field(form, 'issuerCr'),
-    recipientCr: field(form, 'recipientCr'),
-    amountMinorUnits,
-    tenorDays: Number(field(form, 'tenorDays') || '0'),
-    maker: MAKER,
-    merchantMandateRef: field(form, 'merchantMandateRef'),
-    aggregatorId: field(form, 'aggregatorId'),
-  });
-
-  if (!keyed.ok) {
-    failTo(`/${locale}/originate`, keyed.error.control, keyed.error.detail);
-  }
-
-  const submitted = submit(keyed.value.requestId);
-  if (!submitted.ok) {
-    failTo(`/${locale}/originate`, submitted.error.control, submitted.error.detail);
-  }
-
-  refresh(locale, keyed.value.requestId);
-  redirect(`/${locale}/requests/${keyed.value.requestId}`);
-}
 
 /**
  * Stand in for the servicing platform answering.

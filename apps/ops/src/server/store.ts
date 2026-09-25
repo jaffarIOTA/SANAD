@@ -63,6 +63,7 @@ function developmentAttestation(): TsaInstant {
 interface DevelopmentState {
   readonly requests: Map<string, OriginationRequest>;
   readonly invoiceNumbers: Map<string, string>;
+  readonly partnerReferences: Map<string, string>;
   /** Half-completed origination journeys. See `Draft` below. */
   readonly drafts: Map<string, Draft>;
   /** SH-10. invoiceUuid -> the requestId that financed it. Never purged. */
@@ -96,6 +97,7 @@ const globalScope = globalThis as unknown as Record<symbol, DevelopmentState | u
 const state: DevelopmentState = (globalScope[GLOBAL_KEY] ??= {
   requests: new Map<string, OriginationRequest>(),
   invoiceNumbers: new Map<string, string>(),
+  partnerReferences: new Map<string, string>(),
   drafts: new Map<string, Draft>(),
   financed: new Map<string, string>(),
   sequence: 0,
@@ -124,6 +126,11 @@ export interface KeyRequestInput {
   /** Required on the embedded channel: the merchant's own mandate. */
   readonly merchantMandateRef?: string;
   readonly aggregatorId?: string;
+  /** Required on the partner channel: who the credential belongs to. */
+  readonly partnerId?: string;
+  readonly credentialRef?: string;
+  /** Echoed back to a partner. Not used for idempotency. */
+  readonly partnerReference?: string;
 }
 
 /** Display shape. The screens never reach into the domain union directly. */
@@ -231,7 +238,13 @@ export function keyRequest(input: KeyRequestInput): Result<RequestRow> {
           credentialRef: 'cred-development',
           merchantMandateRef: input.merchantMandateRef ?? '',
         } satisfies OriginationRequestCore['identification'])
-      : ({ kind: 'STAFF_PRINCIPAL' as const, principalId: input.maker.principalId });
+      : input.channel === 'PARTNER_API'
+        ? ({
+            kind: 'PARTNER_SYSTEM' as const,
+            partnerId: input.partnerId ?? '',
+            credentialRef: input.credentialRef ?? '',
+          } satisfies OriginationRequestCore['identification'])
+        : ({ kind: 'STAFF_PRINCIPAL' as const, principalId: input.maker.principalId });
 
   const core: OriginationRequestCore = {
     requestId,
@@ -271,6 +284,7 @@ export function keyRequest(input: KeyRequestInput): Result<RequestRow> {
   state.financed.set(input.invoiceUuid, requestId);
 
   INVOICE_NUMBERS.set(requestId, input.invoiceNumber);
+  if (input.partnerReference !== undefined) state.partnerReferences.set(requestId, input.partnerReference);
   REQUESTS.set(requestId, keyed.value);
   return ok(toRow(requestId, keyed.value));
 }
@@ -363,6 +377,35 @@ export function declineRequest(
 export function listRequests(): readonly RequestRow[] {
   return [...REQUESTS.entries()]
     .map(([id, request]) => toRow(id, request))
+    .sort((a, b) => b.requestId.localeCompare(a.requestId));
+}
+
+/**
+ * The domain object itself, for the partner API's wire mapper. Scoped to the
+ * partner whose credential is asking: another partner's request is reported
+ * as absent, not forbidden, so the API never confirms other partners' business.
+ */
+export function findPartnerRequest(
+  requestId: string,
+  partnerId: string,
+): { readonly request: OriginationRequest; readonly partnerReference?: string } | undefined {
+  const request = REQUESTS.get(requestId);
+  if (request === undefined) return undefined;
+  const id = request.core.identification;
+  if (id.kind !== 'PARTNER_SYSTEM' || id.partnerId !== partnerId) return undefined;
+  const partnerReference = state.partnerReferences.get(requestId);
+  return { request, ...(partnerReference === undefined ? {} : { partnerReference }) };
+}
+
+export function listPartnerRequests(
+  partnerId: string,
+): readonly { readonly requestId: string; readonly request: OriginationRequest; readonly partnerReference?: string }[] {
+  return [...REQUESTS.entries()]
+    .filter(([, r]) => r.core.identification.kind === 'PARTNER_SYSTEM' && r.core.identification.partnerId === partnerId)
+    .map(([requestId, request]) => {
+      const partnerReference = state.partnerReferences.get(requestId);
+      return { requestId, request, ...(partnerReference === undefined ? {} : { partnerReference }) };
+    })
     .sort((a, b) => b.requestId.localeCompare(a.requestId));
 }
 
