@@ -122,8 +122,14 @@ export function DualDate({
 
   return (
     <span className="inline-flex flex-col items-start" data-testid="dual-date">
-      <span className="text-base text-ink">{first}</span>
-      <span className="text-xs text-ink-quiet">{second}</span>
+      {/*
+        Each calendar is bidi-isolated. Without this an RTL page renders
+        "18 September 2026" as "September 2026 18": the digits are neutral and
+        get pulled to the reading end. The Hijri string is Arabic and stays
+        put; the Gregorian one is Latin and must be told its own direction.
+      */}
+      <bdi className="text-base text-ink">{first}</bdi>
+      <bdi className="text-xs text-ink-quiet">{second}</bdi>
     </span>
   );
 }

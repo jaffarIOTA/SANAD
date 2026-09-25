@@ -88,21 +88,18 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         id: 'partner-api',
         titleEn: 'Partner API',
         titleAr: 'واجهة الشركاء',
-        readiness: {
-          kind: 'BLOCKED',
-          on: 'Contract authored and enforced by test (api/openapi/origination.v1.yaml). Handler not built.',
-        },
-        reference: 'SDD §6.3 · api/openapi/origination.v1.yaml',
+        // No screen: an ERP calls it. Live because a request raised over it
+        // lands in the same queue as every other channel.
+        readiness: live(),
+        reference: 'SDD §6.3 · POST /api/origination/v1/requests',
       },
       {
         id: 'embedded',
         titleEn: 'Embedded nomination',
         titleAr: 'الترشيح المدمج',
-        readiness: {
-          kind: 'BLOCKED',
-          on: 'OI-22 — what goods an embedded Murabaha trades. See docs/open-questions.md.',
-        },
-        reference: 'OI-22',
+        href: '/originate',
+        readiness: live(),
+        reference: 'Aggregator channel · merchant mandate required',
       },
     ],
   },
