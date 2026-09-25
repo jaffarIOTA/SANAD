@@ -15,6 +15,7 @@
  * the wire without someone deciding it should.
  */
 
+import type { EligibilityOutcome } from '@sanad/core/decisioning/eligibility.ts';
 import type {
   OriginationRequest,
   OriginationRequestCore,
@@ -65,12 +66,18 @@ export interface OriginationRequestWire {
     readonly respondedAt: AttestedInstantWire;
   };
   readonly outcome?: {
-    readonly decidedAt: AttestedInstantWire;
+    readonly decidedAt?: AttestedInstantWire;
     readonly reasonCode?: string;
     readonly note?: string;
+    readonly requestedInformation?: { readonly from: string; readonly items: readonly string[] };
+    readonly servicingAttempts?: number;
+    readonly revisedFields?: readonly string[];
   };
   readonly transaction?: { readonly transactionId: string; readonly state: 'DRAFT' };
 }
+
+const revised = (changes: { readonly fields: readonly string[] } | undefined): { revisedFields?: readonly string[] } =>
+  changes === undefined ? {} : { revisedFields: changes.fields };
 
 function tradeReference(core: OriginationRequestCore): TradeReferenceWire {
   const trade = core.tradeReference;
@@ -133,6 +140,23 @@ export function toWire(
     ...(request.state === 'EXPIRED'
       ? { outcome: { decidedAt: attested(request.expiredAt), reasonCode: `EXPIRED_WHILE_${request.wasIn}` } }
       : {}),
+    ...(request.state === 'PENDING_INFORMATION'
+      ? { outcome: { requestedInformation: { from: request.from, items: request.items }, ...revised(request.changes) } }
+      : {}),
+    ...(request.state === 'SERVICING_UNAVAILABLE'
+      ? { outcome: { servicingAttempts: request.attempts.length, ...revised(request.changes) } }
+      : {}),
+    ...((request.state === 'AWAITING_REVIEW' || request.state === 'AWAITING_SERVICING_RESPONSE') &&
+    (request.changes !== undefined || ('attempts' in request && request.attempts !== undefined && request.attempts.length > 0))
+      ? {
+          outcome: {
+            ...revised(request.changes),
+            ...('attempts' in request && request.attempts !== undefined && request.attempts.length > 0
+              ? { servicingAttempts: request.attempts.length }
+              : {}),
+          },
+        }
+      : {}),
   } as OriginationRequestWire;
 }
 
@@ -147,4 +171,32 @@ export interface RaiseRequestBody {
     | { readonly kind: 'PARTNER_SYSTEM' }
     | { readonly kind: 'AGGREGATOR_ON_BEHALF'; readonly merchantMandateRef: string };
   readonly partnerReference?: string;
+}
+
+export interface EligibilityWire {
+  readonly outcome: 'APPROVE' | 'DECLINE' | 'REFER';
+  readonly reasonCodes: readonly string[];
+  readonly policyId: string;
+  readonly policyVersion: string;
+  readonly evaluatedAt: AttestedInstantWire;
+  readonly persisted: false;
+}
+
+export interface EligibilityRequestBody {
+  readonly programmeId: string;
+  readonly counterpartyId: string;
+  readonly tradeReference: RaiseRequestBody['tradeReference'];
+  readonly requestedAmount: RaiseRequestBody['requestedAmount'];
+  readonly requestedTenorDays: number;
+}
+
+export function eligibilityToWire(outcome: EligibilityOutcome): EligibilityWire {
+  return {
+    outcome: outcome.outcome,
+    reasonCodes: outcome.reasonCodes,
+    policyId: outcome.policyId,
+    policyVersion: outcome.policyVersion,
+    evaluatedAt: attested(outcome.evaluatedAt),
+    persisted: false,
+  };
 }

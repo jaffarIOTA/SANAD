@@ -88,13 +88,13 @@ BRD statuses mapped to ours:
 |---|---|---|
 | Draft, Submitted | `KEYING`, submitted → `AWAITING_*` | ✅ |
 | Validation / Failed Validation | refused at `raise()` with a control code | 🟡 (no persisted "failed validation" state — refusal is immediate, which is stronger) |
-| **Pending Documents** | — | ❌ → filling (`PENDING_INFORMATION` with a typed reason) |
+| **Pending Documents** | `PENDING_INFORMATION` from `DOCUMENTS` | ✅ **built** |
 | Maker Review / Checker Review / Returned to Maker | `KEYING` / `AWAITING_REVIEW` / `RETURNED_TO_MAKER` | ✅ |
-| Credit Assessment | decisioning REFER | 🟡 → filling as `AWAITING_CREDIT_REVIEW` |
+| Credit Assessment | decisioning `REFER`, surfaced to the checker | 🟡 no separate state; a `REFER` is decided by a person holding the authority the tiers require |
 | Approved for Processing / Rejected | `APPROVED` (→ transaction `DRAFT`) / `REJECTED` | ✅ |
 | Submitted to LPS / LPS Accepted / Processing | transaction sequencing states (`DRAFT` … `SALE_OFFERED`) | ✅ different boundary, see A |
-| **Pending Customer / Pending Partner** | — | ❌ → filling (`PENDING_INFORMATION`, party = COUNTERPARTY or PARTNER) |
-| **Integration Failure** | — | ❌ → filling (`SERVICING_UNAVAILABLE`, with retry ledger — see §21) |
+| **Pending Customer / Pending Partner** | `PENDING_INFORMATION` from `COUNTERPARTY` / `PARTNER` | ✅ **built** |
+| **Integration Failure** | `SERVICING_UNAVAILABLE` with the attempt ledger | ✅ **built** — see §21 |
 | Cancelled | `WITHDRAWN` | ✅ |
 | **Expired** | `EXPIRED` | ✅ **built** (`EXPIRED`; tenant-configured TTL; evaluated against an attested instant, never `new Date()`) |
 
@@ -103,29 +103,29 @@ BRD statuses mapped to ours:
 |---|---|
 | Configurable rules, not hard-coded | ✅ closed DSL, tenant policy versions |
 | Outcomes Approve / Reject / Refer | ✅ `APPROVE` / `DECLINE` / `REFER`; failure mode is REFER |
-| **Outcome: Additional Information** | ❌ → filling (`NEEDS_INFORMATION` outcome, mapped to `PENDING_INFORMATION`) |
+| **Outcome: Additional Information** | ✅ **built** as `PENDING_INFORMATION`, requested by the checker. Deliberately not a fourth engine outcome: the engine says what it could not read (`REFER` + reason), a person decides what to ask for |
 
 ### §13 Credit bureau · §14 KYC / AML / sanctions / fraud
 | | Status | Note |
 |---|---|---|
-| Bureau request after consent; store reference; controlled exception when unavailable | 🟡 `SIMAH` in the credential enum; no port/adapter | ❌ → **port to add** `core/ports/credit-bureau.ts`; consent gate; unavailable → `SERVICING_UNAVAILABLE` pattern |
-| Identity, KYC status, AML/sanctions/PEP, fraud screening | 🟡 `SCREENING`, `NAFATH`, `WATHQ` in enum; modules `NOT_BUILT` | ❌ → **port to add** `core/ports/screening.ts` |
+| Bureau request after consent; store reference; controlled exception when unavailable | ✅ **port built** `core/ports/credit-bureau.ts`: `consentId` required on the request, `UNAVAILABLE` a typed outcome | adapter needs vendor access |
+| Identity, KYC status, AML/sanctions/PEP, fraud screening | ✅ **port built** `core/ports/screening.ts`, consent-gated | adapter needs vendor access |
 | **Duplicate application detection** | ✅ stronger: duplicate *financing* is structurally impossible (SH-10 registry, never purged) | |
 | Identity mismatch, channel/agent risk | ❌ | with the screening port |
-| Outcomes Clear / Refer / Reject / **Pending Investigation** | 🟡 | Pending Investigation → exception model |
+| Outcomes Clear / Refer / Reject / **Pending Investigation** | ✅ Pending Investigation is an open `CaseException` in `core/exceptions/` | |
 
 ### §15 Document management
 | | Status |
 |---|---|
 | Upload, preview, versions (corrections supersede), validation, audit | 🟡 designed; Nutrient adapter with extraction confidence floor (BR-G08) |
-| **Mandatory/optional checklist per product** | ❌ → filling (config) |
-| **Expiry tracking** | ❌ → filling (config + evidence `validUntil`) |
+| **Mandatory/optional checklist per product** | ✅ **built** — `config/tenants/*/documents/<programme>.json`, shown on the request |
+| **Expiry tracking** | ✅ **built** — validity window per item, `EvidenceRecord.validUntil`, `EXPIRED` in the report |
 | OCR / document intelligence, name/ID matching | 🟡 adapter exists; blocked on licence scope (R-02) |
 
 ### §17 Exception management
 | | Status |
 |---|---|
-| Typed exceptions with severity, owner, SLA, resolution, resolver, audit | ❌ → **filling** — an `Exception` aggregate in `core/exceptions/`; the existing `NOT_BUILT` "Verification exceptions" and "Matching exceptions" modules become views over it |
+| Typed exceptions with severity, owner, SLA, resolution, resolver, audit | ✅ **built** — `core/exceptions/exception.ts`, append-only events; the "Verification exceptions" and "Matching exceptions" modules become views over it (screens not yet built) |
 
 ### §18 Partner & aggregator management
 | | Status |
@@ -150,16 +150,16 @@ BRD statuses mapped to ours:
 | | Status | Note |
 |---|---|---|
 | Standardised interface, idempotent submission, returned reference | ✅ ports; `IdempotencyKey`; Tuum adapter maps `x-request-id` | boundary differs — see A |
-| Pending state on failure | ❌ → filling (`SERVICING_UNAVAILABLE`) |
-| **Retry count and timestamps recorded; failures visible to operations; manual resubmission controlled and auditable** | ❌ → filling (retry ledger on the outbox; "Integration failures" queue view) |
+| Pending state on failure | ✅ **built** (`SERVICING_UNAVAILABLE`) |
+| **Retry count and timestamps recorded; failures visible to operations; manual resubmission controlled and auditable** | ✅ **built** — attempt ledger on the request, automatic retry within tenant policy, manual resubmission by a named person with a recorded note, *Integration failures* queue view |
 | Idempotency prevents duplicates | ✅ | |
 
 ### §22 Notifications & consent
 | | Status |
 |---|---|
-| Notifications (SMS/email/push) | ❌ `NOT_BUILT`; port to add |
+| Notifications (SMS/email/push) | ✅ port built `core/ports/notifications.ts` (by reference to a party, never an address); adapter and templates not built |
 | Partner callbacks | ✅ webhooks in the contract |
-| **Consent records** (type, version, datetime, channel, customer) | 🟡 designed (BR-B04, RC-05); ❌ → filling the `Consent` record + a gate before bureau/screening calls |
+| **Consent records** (type, version, datetime, channel, customer) | ✅ **built** — `core/consent/consent.ts`; bureau and screening ports refuse a request without a `consentId` |
 
 ### §23 SLA & queue management
 | | Status |
@@ -171,7 +171,7 @@ BRD statuses mapped to ours:
 |---|---|
 | By channel · pending/aging | ✅ |
 | By product/branch/partner/agent · approval/rejection/referral rates | 🟡 |
-| Avg processing time · **SLA breaches** · maker/checker productivity · exception & integration-failure queues | ❌ → SLA breaches and failure queue with §23/§21; productivity later |
+| Avg processing time · **SLA breaches** · maker/checker productivity · exception & integration-failure queues | 🟡 SLA breaches and the integration-failure queue ✅; exception queue and productivity later |
 
 ### §25 Audit & security
 | | Status |
@@ -209,14 +209,14 @@ Ordered by: valid for a Murabaha platform · buildable in domain/config without 
 | 3 | Approval tiers by amount — a checker's delegated authority must cover the request; never a gate override | MC-010, §6 | `core/origination/request.ts`, `config/` | **done** — `core/origination/policy.ts`, `config/tenants/*/origination/policy.json`, tests in `test/compliance/origination-policy.test.ts` |
 | 4 | SLA per stage, breach shown in the queue, Supervisor view | §23, §24 | `config/`, queue | **done** — `core/origination/policy.ts`, `config/tenants/*/origination/policy.json`, tests in `test/compliance/origination-policy.test.ts` |
 | 5 | Partner status + entitlement (products, limits), enforced at the API | §18, §19 | `config/`, API | **done** — `core/origination/policy.ts`, `config/tenants/*/origination/policy.json`, tests in `test/compliance/origination-policy.test.ts` |
-| 6 | Exception aggregate: type, severity, owner, SLA, resolution, resolver, audit | §17, §14 | `core/exceptions/` | next |
-| 7 | Return with diff + re-validation on material change | MC-008/009, §25 | `core/origination/request.ts` | next |
-| 8 | `PENDING_INFORMATION` (documents / customer / partner) + `NEEDS_INFORMATION` decision outcome | §11, §16 | domain | next |
-| 9 | `SERVICING_UNAVAILABLE` + retry ledger + integration-failure queue | §21, §11 | domain, outbox | next |
-| 10 | Document checklist per product + expiry | §15, §9 | `config/`, evidence | next |
-| 11 | Eligibility pre-check API (`POST /eligibility`) | §19 | contract + service | next |
-| 12 | Consent records + gate before bureau/screening | §22, §13 | domain | next |
-| 13 | Ports for counterparty registry (CIF), credit bureau, screening, notifications | §8, §13, §14, §22 | `core/ports/` | next — ports only; adapters need vendor access |
+| 6 | Exception aggregate: type, severity, owner, SLA, resolution, resolver, audit | §17, §14 | `core/exceptions/` | **done** — `core/exceptions/exception.ts`: append-only events, `open/assign/note/escalate/resolve`, SLA breach against an attested instant, resolution mandatory; `test/unit/exceptions.test.ts` |
+| 7 | Return with diff + re-validation on material change | MC-008/009, §25 | `core/origination/request.ts` | **done** — `resubmit()` in `core/origination/request.ts` keeps the identifier, diffs the fields, marks the change material if it touches a tenant-listed field (`revalidateOn` in `policy.json`), re-runs `raise()` and discards any earlier servicing answer; the diff is shown to the checker; `test/compliance/request-lifecycle.test.ts` |
+| 8 | `PENDING_INFORMATION` (documents / customer / partner) + `NEEDS_INFORMATION` decision outcome | §11, §16 | domain | **done** — `PENDING_INFORMATION` (from COUNTERPARTY / PARTNER / DOCUMENTS, items, who asked, when); requested by the checker from review; returns to review when it arrives; withdrawable, expires; queue view *Awaiting information*. Not an engine outcome: the engine still has three, and a person asks for information — see §12 |
+| 9 | `SERVICING_UNAVAILABLE` + retry ledger + integration-failure queue | §21, §11 | domain, outbox | **done** — `SERVICING_UNAVAILABLE` with an attempt ledger (`at`, `reason`, manual by/whom/note); automatic retry within `servicingRetry` (max attempts, backoff) per tenant; beyond that a named person resubmits with a recorded note; queue view *Integration failures*; `test/compliance/request-lifecycle.test.ts` |
+| 10 | Document checklist per product + expiry | §15, §9 | `config/`, evidence | **done** — `core/documents/checklist.ts` + `config/tenants/*/documents/wasl-distributor.json`; per-item required/optional, validity window, `EvidenceRecord.validUntil`; report PRESENT / MISSING / EXPIRED / INVALID / PENDING shown on the request; `test/unit/checklist.test.ts` |
+| 11 | Eligibility pre-check API (`POST /eligibility`) | §19 | contract + service | **done** — `POST /origination/v1/eligibility` in the 3.1 contract and the 3.0 artefact; `core/decisioning/eligibility.ts` runs the policy version in force over a snapshot; `persisted: false` in the type and on the wire; approve-for-less refers with `R_ELIGIBLE_BELOW_REQUESTED_AMOUNT`; `test/unit/eligibility.test.ts`. Development snapshot source until the adapters exist |
+| 12 | Consent records + gate before bureau/screening | §22, §13 | domain | **done** — `core/consent/consent.ts`: typed, versioned, channel-bearing consent; withdrawal is a new record; `requireConsent()` refuses `CONSENT_MISSING`; the bureau and screening ports require a `consentId` on every request; `test/unit/consent.test.ts` |
+| 13 | Ports for counterparty registry (CIF), credit bureau, screening, notifications | §8, §13, §14, §22 | `core/ports/` | **done — ports only** — `core/ports/{counterparty-registry,credit-bureau,screening,notifications,applicant-snapshot}.ts`; unavailable is a typed outcome, never a throw; `test/architecture/ports.test.ts` proves no rate-shaped or personal-identifier field. Adapters need vendor access |
 
 Items 1–5 are built and tested; 6–13 follow. None of them touches a sequencing gate: `test/compliance/origination-policy.test.ts` asserts the sequencing modules use none of the policy's exports, and `openTransaction` still returns `Draft` and nothing later.
 

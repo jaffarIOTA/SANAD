@@ -23,8 +23,14 @@ import { findClearedInvoice, unavailableReason } from './invoices.ts';
 import { tsaInstant as attest } from '@sanad/core/time/tsa.ts';
 import {
   applyServicingOutcome,
+  attachDocument,
   discardDraft,
   expireOverdue,
+  failServicing,
+  provideInformation,
+  requestInformation,
+  retryServicing,
+  reviseAndResubmit,
   financedInvoices,
   findDraft,
   startDraft,
@@ -283,4 +289,63 @@ export async function expireOverdueAction(form: FormData): Promise<void> {
   );
   refresh(locale);
   redirect(`/${locale}/queue?show=${expired.length > 0 ? 'decided' : 'breached'}&expired=${String(expired.length)}`);
+}
+
+
+// -- Lifecycle actions (BRD §11, §16, §21, MC-008/009, §15) --------------------
+
+const back = (locale: string, requestId: string): string => `/${locale}/requests/${requestId}`;
+
+export async function requestInformationAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'en';
+  const requestId = field(form, 'requestId');
+  const items = field(form, 'items').split('\n').map((i) => i.trim()).filter((i) => i.length > 0);
+  const result = requestInformation(requestId, CHECKER, field(form, 'from') as 'COUNTERPARTY' | 'PARTNER' | 'DOCUMENTS', items);
+  if (!result.ok) failTo(back(locale, requestId), result.error.control, result.error.detail);
+  refresh(locale, requestId); redirect(back(locale, requestId));
+}
+
+export async function provideInformationAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'en';
+  const requestId = field(form, 'requestId');
+  const result = provideInformation(requestId);
+  if (!result.ok) failTo(back(locale, requestId), result.error.control, result.error.detail);
+  refresh(locale, requestId); redirect(back(locale, requestId));
+}
+
+/** Development stand-in for the adapter reporting the platform unreachable. */
+export async function failServicingAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'en';
+  const requestId = field(form, 'requestId');
+  const result = failServicing(requestId, field(form, 'reason') || 'simulated: platform unreachable');
+  if (!result.ok) failTo(back(locale, requestId), result.error.control, result.error.detail);
+  refresh(locale, requestId); redirect(back(locale, requestId));
+}
+
+export async function retryServicingAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'en';
+  const requestId = field(form, 'requestId');
+  const note = field(form, 'note');
+  const result = retryServicing(requestId, field(form, 'mode') === 'manual' ? { by: CHECKER, note } : undefined);
+  if (!result.ok) failTo(back(locale, requestId), result.error.control, result.error.detail);
+  refresh(locale, requestId); redirect(back(locale, requestId));
+}
+
+export async function reviseAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'en';
+  const requestId = field(form, 'requestId');
+  const tenor = Number.parseInt(field(form, 'tenorDays'), 10);
+  const result = reviseAndResubmit(requestId, {
+    ...(field(form, 'programmeId') === '' ? {} : { programmeId: field(form, 'programmeId') }),
+    ...(Number.isFinite(tenor) && tenor > 0 ? { tenorDays: tenor } : {}),
+  });
+  if (!result.ok) failTo(back(locale, requestId), result.error.control, result.error.detail);
+  refresh(locale, requestId); redirect(back(locale, requestId));
+}
+
+export async function attachDocumentAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'en';
+  const requestId = field(form, 'requestId');
+  attachDocument(requestId, field(form, 'documentType'));
+  refresh(locale, requestId); redirect(back(locale, requestId));
 }

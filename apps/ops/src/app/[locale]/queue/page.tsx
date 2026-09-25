@@ -42,16 +42,19 @@ import { CHECKER, canReview } from '../../../server/session.ts';
 import { expireOverdueAction } from '../../../server/actions.ts';
 import { listRequests, originationPolicy, type RequestRow } from '../../../server/store.ts';
 
-type View = 'review' | 'servicing' | 'maker' | 'breached' | 'decided';
+type View = 'review' | 'servicing' | 'maker' | 'information' | 'failures' | 'breached' | 'decided';
 
-const VIEWS: readonly View[] = ['review', 'servicing', 'maker', 'breached', 'decided'];
+const VIEWS: readonly View[] = ['review', 'servicing', 'maker', 'information', 'failures', 'breached', 'decided'];
 
-const WAITING: readonly RequestRow['state'][] = ['AWAITING_SERVICING_RESPONSE', 'AWAITING_REVIEW', 'RETURNED_TO_MAKER'];
+const WAITING: readonly RequestRow['state'][] = ['AWAITING_SERVICING_RESPONSE', 'AWAITING_REVIEW', 'RETURNED_TO_MAKER', 'PENDING_INFORMATION', 'SERVICING_UNAVAILABLE'];
 
 const VIEW_STATES: Readonly<Record<View, readonly RequestRow['state'][]>> = {
   review: ['AWAITING_REVIEW'],
   servicing: ['AWAITING_SERVICING_RESPONSE'],
   maker: ['RETURNED_TO_MAKER', 'KEYING'],
+  information: ['PENDING_INFORMATION'],
+  // Integration failures, visible to operations (BRD §21).
+  failures: ['SERVICING_UNAVAILABLE'],
   // The supervisor's view: anything waiting past its SLA, whichever state.
   breached: WAITING,
   decided: ['APPROVED', 'REJECTED', 'WITHDRAWN', 'EXPIRED'],
@@ -61,6 +64,8 @@ const VIEW_LABEL: Readonly<Record<View, { en: string; ar: string }>> = {
   review: { en: 'Needs your decision', ar: 'بانتظار قرارك' },
   servicing: { en: 'With the servicing platform', ar: 'لدى نظام الخدمة' },
   maker: { en: 'With the maker', ar: 'لدى المُدخِل' },
+  information: { en: 'Awaiting information', ar: 'بانتظار معلومات' },
+  failures: { en: 'Integration failures', ar: 'أعطال التكامل' },
   breached: { en: 'Past SLA', ar: 'تجاوزت المهلة' },
   decided: { en: 'Decided', ar: 'تم البت فيها' },
 };
@@ -72,6 +77,8 @@ const VIEW_EMPTY: Readonly<Record<View, { en: string; ar: string }>> = {
     ar: 'لا يوجد لدى نظام الخدمة شيء.',
   },
   maker: { en: 'Nothing has been returned.', ar: 'لم يُعَد أي طلب.' },
+  information: { en: 'Nothing is waiting on outside information.', ar: 'لا يوجد طلب بانتظار معلومات خارجية.' },
+  failures: { en: 'The servicing platform is reachable for everything.', ar: 'نظام الخدمة متاح لكل الطلبات.' },
   breached: { en: 'Nothing is past its SLA.', ar: 'لا يوجد طلب تجاوز مهلته.' },
   decided: { en: 'Nothing has been decided yet.', ar: 'لم يتم البت في أي طلب بعد.' },
 };

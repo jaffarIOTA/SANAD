@@ -29,6 +29,7 @@ import {
 } from '../../../../server/actions.ts';
 import { findRequest, originationPolicy } from '../../../../server/store.ts';
 import { CHECKER } from '../../../../server/session.ts';
+import { Lifecycle } from './Lifecycle.tsx';
 import { authorityCovers, requiredAuthority } from '@sanad/core/origination/policy.ts';
 import { money } from '@sanad/core/kernel/money.ts';
 
@@ -192,6 +193,8 @@ export default async function ReviewPage({
       ) : null}
 
       {/* -- Stage two: the institution decides ----------------------------- */}
+      <Lifecycle request={request} segment={segment} arabic={arabic} />
+
       <Card muted={!awaitingReview}>
         <h2 className="font-medium">
           {policy.requiresServicingDecision

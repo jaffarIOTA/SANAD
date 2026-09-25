@@ -64,6 +64,8 @@ export interface EvidenceRecord {
 
   /** When the fact became true, attested — not when the row was written. */
   readonly capturedAt: TsaInstant;
+  /** For documents that expire (a registration, a statement). Absent = does not. */
+  readonly validUntil?: TsaInstant;
 
   readonly validationStatus: ValidationStatus;
   /** Type-specific validation output. Structured, never free text. */

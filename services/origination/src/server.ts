@@ -35,6 +35,10 @@ import {
   withdraw,
 } from '@sanad/core/origination/request.ts';
 import { money } from '@sanad/core/kernel/money.ts';
+import { preCheck } from '@sanad/core/decisioning/eligibility.ts';
+import type { CreditPolicy } from '@sanad/core/decisioning/policy.ts';
+import type { Result } from '@sanad/core/kernel/result.ts';
+import type { ApplicantSnapshotPort } from '@sanad/core/ports/applicant-snapshot.ts';
 import { type TsaInstant, tsaInstant } from '@sanad/core/time/tsa.ts';
 
 import { validatorFor, type Validator } from './contract.ts';
@@ -51,7 +55,7 @@ import {
   type CredentialRegistry,
   type PartnerPrincipal,
 } from './principal.ts';
-import { toWire, type RaiseRequestBody } from './representation.ts';
+import { eligibilityToWire, toWire, type EligibilityRequestBody, type RaiseRequestBody } from './representation.ts';
 import type { RequestRepository, StoredRequest } from './repository.ts';
 
 export const BASE_PATH = '/origination/v1';
@@ -93,8 +97,16 @@ export interface DrainableServer extends Server {
   beginDraining(): void;
 }
 
+/** The credit policy versions a tenant has configured. Reads configuration, never a request. */
+export interface CreditPolicySource {
+  versionsFor(tenantId: string): Result<readonly CreditPolicy[]>;
+}
+
 export interface ServiceDependencies {
   readonly repository: RequestRepository;
+  /** Both absent means the eligibility pre-check answers 503, not 404: the route exists, its sources do not. */
+  readonly snapshots?: ApplicantSnapshotPort;
+  readonly creditPolicies?: CreditPolicySource;
   /** Absent means the detailed report is unavailable, not that all is well. */
   readonly health?: HealthService;
   readonly idempotency: IdempotencyStore;
@@ -158,6 +170,7 @@ function readBody(request: IncomingMessage): Promise<{ ok: true; raw: string } |
 
 export function createService(deps: ServiceDependencies): DrainableServer {
   const validateRaise: Validator = validatorFor('RaiseRequest');
+  const validateEligibility: Validator = validatorFor('EligibilityRequest');
   let sequence = 0;
 
   /*
@@ -329,6 +342,12 @@ export function createService(deps: ServiceDependencies): DrainableServer {
       send(response, await listHandler(url, principal), correlationId);
       return;
     }
+    if (path === '/eligibility' && method === 'POST') {
+      await withIdempotency(request, response, correlationId, principal, method, path, (body) =>
+        eligibilityHandler(body, principal, correlationId),
+      );
+      return;
+    }
     if (detail !== null && method === 'GET') {
       send(response, await getHandler(detail[1] ?? '', principal, correlationId), correlationId);
       return;
@@ -340,7 +359,7 @@ export function createService(deps: ServiceDependencies): DrainableServer {
       );
       return;
     }
-    if (path === '/requests' || detail !== null || withdrawal !== null) {
+    if (path === '/requests' || path === '/eligibility' || detail !== null || withdrawal !== null) {
       send(
         response,
         fail(
@@ -597,6 +616,50 @@ export function createService(deps: ServiceDependencies): DrainableServer {
     return ok(201, toWire(record.request, record.partnerReference), {
       location: `${BASE_PATH}/requests/${requestId}`,
     });
+  }
+
+  /**
+   * Eligibility pre-check. Persists nothing: no request row, no decision row,
+   * no snapshot row. The only state it touches is the idempotency store, so
+   * a partner retrying the same question gets the same answer.
+   */
+  async function eligibilityHandler(
+    body: unknown,
+    principal: PartnerPrincipal,
+    correlationId: string,
+  ): Promise<Reply> {
+    const failures = validateEligibility(body);
+    if (failures.length > 0) return malformed(failures, correlationId);
+    if (deps.snapshots === undefined || deps.creditPolicies === undefined) {
+      return fail(
+        problem({
+          status: 503,
+          title: 'Unavailable',
+          detail: 'The eligibility pre-check has no fact sources configured in this deployment.',
+          reason: 'ELIGIBILITY_SOURCES_UNAVAILABLE',
+          correlationId,
+        }),
+      );
+    }
+    const payload = body as EligibilityRequestBody;
+    const at = await deps.timestamps.attest();
+    const versions = deps.creditPolicies.versionsFor(principal.tenantId);
+    if (!versions.ok) return fail(fromRejection(versions.error, correlationId));
+    const snapshot = await deps.snapshots.assemble({
+      tenantId: principal.tenantId,
+      counterpartyId: payload.counterpartyId,
+      programmeId: payload.programmeId,
+      at,
+    });
+    if (!snapshot.ok) return fail(fromRejection(snapshot.error, correlationId));
+    const outcome = preCheck(versions.value, {
+      snapshot: snapshot.value,
+      requestedAmount: money(BigInt(payload.requestedAmount.minorUnits), payload.requestedAmount.currency),
+      requestedTenorDays: payload.requestedTenorDays,
+      evaluatedAt: at,
+    });
+    if (!outcome.ok) return fail(fromRejection(outcome.error, correlationId));
+    return ok(200, eligibilityToWire(outcome.value));
   }
 
   async function getHandler(

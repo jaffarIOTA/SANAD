@@ -495,7 +495,9 @@ describe('withdrawal cannot reverse a decision', () => {
       'AwaitingReview',
       'AwaitingServicingResponse',
       'Keying',
+      'PendingInformation',
       'ReturnedToMaker',
+      'ServicingUnavailable',
     ]);
 
     // The decided states are absent, so withdrawing one does not typecheck.

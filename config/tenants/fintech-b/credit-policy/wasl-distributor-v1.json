@@ -5,7 +5,7 @@
   "programmeScope": "ALL",
   "currency": "SAR",
 
-  "effectiveFromEpochSeconds": "1790899200",
+  "effectiveFromEpochSeconds": "1780000000",
 
   "approval": {
     "creditApprovalRef": "CRC-B-2026-008",

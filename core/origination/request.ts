@@ -52,7 +52,9 @@ export type RequestState =
   | 'APPROVED'
   | 'WITHDRAWN'
   | 'REJECTED'
-  | 'EXPIRED';
+  | 'EXPIRED'
+  | 'PENDING_INFORMATION'
+  | 'SERVICING_UNAVAILABLE';
 
 export interface Principal {
   readonly principalId: string;
@@ -104,11 +106,37 @@ export interface ServicingOutcome {
   readonly respondedAt: TsaInstant;
 }
 
+/**
+ * What changed on resubmission after a return (BRD MC-008/009).
+ *
+ * Carried on the request so the checker sees it beside the fields rather
+ * than reconstructing it from memory. `material` means a field the tenant
+ * lists in `revalidateOn` changed, so validation was re-run and any earlier
+ * servicing answer was discarded.
+ */
+export interface ChangeSet {
+  readonly fields: readonly string[];
+  readonly material: boolean;
+  readonly returnedNote: string;
+  readonly resubmittedAt: TsaInstant;
+}
+
+/** One attempt to reach the servicing platform, and why it failed. */
+export interface ServicingAttempt {
+  readonly at: TsaInstant;
+  readonly reason: string;
+  /** Present when a named person resubmitted beyond the automatic attempts. */
+  readonly manual?: { readonly by: Principal; readonly note: string };
+}
+
 export interface AwaitingServicingResponse {
   readonly state: 'AWAITING_SERVICING_RESPONSE';
   readonly core: OriginationRequestCore;
   readonly maker: Principal;
   readonly submittedAt: TsaInstant;
+  readonly changes?: ChangeSet;
+  /** Retained across a retry so the ledger is complete. */
+  readonly attempts?: readonly ServicingAttempt[];
 }
 
 export interface AwaitingReview {
@@ -118,6 +146,40 @@ export interface AwaitingReview {
   readonly submittedAt: TsaInstant;
   /** Absent where the channel does not consult the servicing platform. */
   readonly servicing?: ServicingOutcome;
+  readonly changes?: ChangeSet;
+}
+
+export type InformationSource = 'COUNTERPARTY' | 'PARTNER' | 'DOCUMENTS';
+
+/**
+ * Waiting on someone outside the institution (BRD §11 Pending Documents /
+ * Pending Customer / Pending Partner; §16 "Additional Information").
+ */
+export interface PendingInformation {
+  readonly state: 'PENDING_INFORMATION';
+  readonly core: OriginationRequestCore;
+  readonly maker: Principal;
+  readonly submittedAt: TsaInstant;
+  readonly requestedBy: Principal;
+  readonly from: InformationSource;
+  readonly items: readonly string[];
+  readonly requestedAt: TsaInstant;
+  readonly servicing?: ServicingOutcome;
+  readonly changes?: ChangeSet;
+}
+
+/**
+ * The servicing platform could not be reached (BRD §21). Not a decline: a
+ * controlled pending state with a ledger of attempts, visible to operations,
+ * retried automatically within policy and manually beyond it.
+ */
+export interface ServicingUnavailable {
+  readonly state: 'SERVICING_UNAVAILABLE';
+  readonly core: OriginationRequestCore;
+  readonly maker: Principal;
+  readonly submittedAt: TsaInstant;
+  readonly attempts: readonly ServicingAttempt[];
+  readonly changes?: ChangeSet;
 }
 
 export interface ReturnedToMaker {
@@ -170,7 +232,7 @@ export interface Withdrawn {
 export interface Expired {
   readonly state: 'EXPIRED';
   readonly core: OriginationRequestCore;
-  readonly wasIn: 'AWAITING_SERVICING_RESPONSE' | 'AWAITING_REVIEW' | 'RETURNED_TO_MAKER';
+  readonly wasIn: 'AWAITING_SERVICING_RESPONSE' | 'AWAITING_REVIEW' | 'RETURNED_TO_MAKER' | 'PENDING_INFORMATION' | 'SERVICING_UNAVAILABLE';
   readonly expiredAt: TsaInstant;
 }
 
@@ -182,7 +244,9 @@ export type OriginationRequest =
   | Approved
   | Rejected
   | Withdrawn
-  | Expired;
+  | Expired
+  | PendingInformation
+  | ServicingUnavailable;
 
 // -- Raising ------------------------------------------------------------------
 
@@ -450,11 +514,14 @@ export function rejectRequest(
  * calling this — only the passage of attested time expires a request.
  */
 export function expire(
-  request: AwaitingServicingResponse | AwaitingReview | ReturnedToMaker,
+  request: AwaitingServicingResponse | AwaitingReview | ReturnedToMaker | PendingInformation | ServicingUnavailable,
   policy: OriginationPolicy,
   observedAt: TsaInstant,
 ): Result<Expired> {
-  const since = 'submittedAt' in request ? request.submittedAt.epochSeconds : request.core.raisedAt.epochSeconds;
+  const since =
+    request.state === 'PENDING_INFORMATION' ? request.requestedAt.epochSeconds
+    : 'submittedAt' in request ? request.submittedAt.epochSeconds
+    : request.core.raisedAt.epochSeconds;
   if (!isExpired(policy, request.state, since, observedAt.epochSeconds)) {
     return reject(
       'OP-DETERMINACY',
@@ -464,6 +531,134 @@ export function expire(
     );
   }
   return ok({ state: 'EXPIRED', core: request.core, wasIn: request.state, expiredAt: observedAt });
+}
+
+// -- Information from outside the institution ---------------------------------
+
+export function requestInformation(
+  request: AwaitingReview,
+  requestedBy: Principal,
+  from: InformationSource,
+  items: readonly string[],
+  at: TsaInstant,
+): Result<PendingInformation> {
+  const named = items.map((i) => i.trim()).filter((i) => i.length > 0);
+  if (named.length === 0) {
+    return reject('OP-DETERMINACY', 'INFORMATION_REQUEST_EMPTY', 'Say what is needed; a request for nothing cannot be answered', { requestId: request.core.requestId });
+  }
+  return ok({
+    state: 'PENDING_INFORMATION', core: request.core, maker: request.maker, submittedAt: request.submittedAt,
+    requestedBy, from, items: named, requestedAt: at,
+    ...(request.servicing === undefined ? {} : { servicing: request.servicing }),
+    ...(request.changes === undefined ? {} : { changes: request.changes }),
+  });
+}
+
+/** The information arrived. Back in front of a person; the earlier servicing answer stands. */
+export function provideInformation(request: PendingInformation, _at: TsaInstant): AwaitingReview {
+  return {
+    state: 'AWAITING_REVIEW', core: request.core, maker: request.maker, submittedAt: request.submittedAt,
+    ...(request.servicing === undefined ? {} : { servicing: request.servicing }),
+    ...(request.changes === undefined ? {} : { changes: request.changes }),
+  };
+}
+
+// -- The servicing platform could not be reached ------------------------------
+
+export function recordServicingFailure(
+  request: AwaitingServicingResponse | ServicingUnavailable,
+  at: TsaInstant,
+  reason: string,
+): Result<ServicingUnavailable> {
+  if (reason.trim().length === 0) {
+    return reject('OP-DETERMINACY', 'SERVICING_FAILURE_WITHOUT_REASON', 'Record why the platform could not be reached', { requestId: request.core.requestId });
+  }
+  const prior = request.state === 'SERVICING_UNAVAILABLE' ? request.attempts : (request.attempts ?? []);
+  return ok({
+    state: 'SERVICING_UNAVAILABLE', core: request.core, maker: request.maker, submittedAt: request.submittedAt,
+    attempts: [...prior, { at, reason }],
+    ...(request.changes === undefined ? {} : { changes: request.changes }),
+  });
+}
+
+/**
+ * Try again.
+ *
+ * Automatically: only within the tenant's maximum attempts and after the
+ * backoff. Manually: beyond the maximum, but only by a named person with a
+ * note — which is what makes "manual resubmission controlled and auditable"
+ * (BRD §21) true rather than aspirational. The full ledger travels with the
+ * request either way.
+ */
+export function retryServicing(
+  request: ServicingUnavailable,
+  at: TsaInstant,
+  policy: OriginationPolicy,
+  manual?: { readonly by: Principal; readonly note: string },
+): Result<AwaitingServicingResponse> {
+  const lastAttempt = request.attempts[request.attempts.length - 1];
+  if (manual === undefined) {
+    if (request.attempts.length >= policy.servicingRetry.maxAttempts) {
+      return reject('OP-DETERMINACY', 'SERVICING_RETRIES_EXHAUSTED', 'Automatic retries are exhausted; a named person must resubmit', { requestId: request.core.requestId, attempts: request.attempts.length });
+    }
+    if (lastAttempt !== undefined && at.epochSeconds - lastAttempt.at.epochSeconds < BigInt(policy.servicingRetry.backoffSeconds)) {
+      return reject('OP-DETERMINACY', 'SERVICING_RETRY_TOO_SOON', 'The backoff interval has not elapsed', { requestId: request.core.requestId });
+    }
+  } else if (manual.note.trim().length === 0) {
+    return reject('OP-DETERMINACY', 'MANUAL_RESUBMISSION_WITHOUT_NOTE', 'A manual resubmission must say why', { requestId: request.core.requestId });
+  }
+  const attempts = manual === undefined ? request.attempts : [...request.attempts, { at, reason: 'manual resubmission', manual }];
+  return ok({
+    state: 'AWAITING_SERVICING_RESPONSE', core: request.core, maker: request.maker, submittedAt: request.submittedAt,
+    attempts,
+    ...(request.changes === undefined ? {} : { changes: request.changes }),
+  });
+}
+
+// -- Resubmission after a return, with a diff ---------------------------------
+
+const FIELD_VALUES: Readonly<Record<string, (c: OriginationRequestCore) => string>> = {
+  tradeReference: (c) => `${c.tradeReference.type}:${c.tradeReference.invoiceUuid ?? ''}:${c.tradeReference.issuerCr}:${c.tradeReference.recipientCr}`,
+  requestedAmount: (c) => `${c.requestedAmount.currency}:${c.requestedAmount.minorUnits.toString()}`,
+  counterpartyId: (c) => c.counterpartyId,
+  programmeId: (c) => c.programmeId,
+  requestedTenorDays: (c) => String(c.requestedTenorDays),
+  channel: (c) => c.channel,
+};
+
+/**
+ * The maker corrected a returned request and sends it back (MC-007/008/009).
+ *
+ * The identifier is preserved — a corrected request is the same request. The
+ * diff is computed here, from the returned core against the revised one, so
+ * the checker sees exactly what changed. A material change re-runs the
+ * validations `raise()` performs and discards a servicing answer given to
+ * different facts.
+ */
+export function resubmit(
+  request: ReturnedToMaker,
+  revised: OriginationRequestCore,
+  at: TsaInstant,
+  policy: OriginationPolicy,
+): Result<AwaitingServicingResponse | AwaitingReview> {
+  if (revised.requestId !== request.core.requestId || revised.tenantId !== request.core.tenantId) {
+    return reject('OP-DETERMINACY', 'RESUBMISSION_CHANGES_IDENTITY', 'A resubmitted request keeps its identifier and tenant', { requestId: request.core.requestId });
+  }
+  if (revised.channel !== request.core.channel) {
+    return reject('OP-DETERMINACY', 'RESUBMISSION_CHANGES_CHANNEL', 'A request cannot change the door it came through', { requestId: request.core.requestId });
+  }
+  const fields = Object.keys(FIELD_VALUES).filter((f) => FIELD_VALUES[f]?.(request.core) !== FIELD_VALUES[f]?.(revised));
+  const material = fields.some((f) => policy.revalidateOn.includes(f));
+  const changes: ChangeSet = { fields, material, returnedNote: request.note, resubmittedAt: at };
+
+  // Re-validate as if raised afresh — identification, entitlement, positivity.
+  const revalidated = raise({ core: revised, maker: request.maker, policy });
+  if (!revalidated.ok) return revalidated;
+
+  if (material && CHANNEL_POLICIES[revised.channel].requiresServicingDecision) {
+    return ok({ state: 'AWAITING_SERVICING_RESPONSE', core: revised, maker: request.maker, submittedAt: at, changes });
+  }
+  return ok({ state: 'AWAITING_REVIEW', core: revised, maker: request.maker, submittedAt: at, changes });
 }
 
 export function reopen(request: ReturnedToMaker): Keying {
@@ -485,7 +680,7 @@ export function reopen(request: ReturnedToMaker): Keying {
  * not this function.
  */
 export function withdraw(
-  request: Keying | AwaitingServicingResponse | AwaitingReview | ReturnedToMaker,
+  request: Keying | AwaitingServicingResponse | AwaitingReview | ReturnedToMaker | PendingInformation | ServicingUnavailable,
 ): Withdrawn {
   return { state: 'WITHDRAWN', core: request.core };
 }

@@ -1,0 +1,13 @@
+{
+  "tenantId": "bank-a",
+  "programmeId": "prg-0001",
+  "version": "1.0.0",
+  "items": [
+    { "documentType": "COMMERCIAL_REGISTRATION", "titleEn": "Commercial registration", "titleAr": "السجل التجاري", "required": true, "validForSeconds": 31536000 },
+    { "documentType": "CLEARED_INVOICE", "titleEn": "Cleared e-invoice", "titleAr": "فاتورة إلكترونية مُخلَّصة", "required": true },
+    { "documentType": "SIGNATORY_AUTHORITY", "titleEn": "Authorised signatory evidence", "titleAr": "إثبات صلاحية التوقيع", "required": true, "validForSeconds": 15552000 },
+    { "documentType": "BANK_STATEMENT_6M", "titleEn": "Six months' bank statements", "titleAr": "كشوف حساب لستة أشهر", "required": true, "validForSeconds": 7776000 },
+    { "documentType": "ZAKAT_CERTIFICATE", "titleEn": "Zakat certificate", "titleAr": "شهادة الزكاة", "required": false, "validForSeconds": 31536000 },
+    { "documentType": "GOODS_SPECIFICATION", "titleEn": "Goods specification", "titleAr": "مواصفات البضاعة", "required": true }
+  ]
+}

@@ -29,7 +29,20 @@ import type { OriginationChannel } from '@sanad/core/origination/channel.ts';
 import { money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import { type TsaInstant, tsaInstant } from '@sanad/core/time/tsa.ts';
-import { expire } from '@sanad/core/origination/request.ts';
+import {
+  expire,
+  provideInformation as provideInformationTransition,
+  recordServicingFailure,
+  requestInformation as requestInformationTransition,
+  resubmit,
+  retryServicing as retryServicingTransition,
+  type InformationSource,
+  type PendingInformation,
+  type ReturnedToMaker,
+  type ServicingUnavailable,
+} from '@sanad/core/origination/request.ts';
+import { loadDocumentChecklist } from '@sanad/config/loader.ts';
+import { checklistReport, type DocumentChecklist, type ItemReport, type PresentedDocument } from '@sanad/core/documents/checklist.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
 import { loadOriginationPolicy } from '@sanad/config/loader.ts';
 
@@ -49,7 +62,7 @@ export const originationPolicy = (): typeof POLICY => POLICY;
  * feeds a sequencing gate — gate timing comes from the TSA adapter and from
  * nowhere else (SH-06).
  */
-function developmentAttestation(): TsaInstant {
+export function developmentAttestation(): TsaInstant {
   return tsaInstant({
     verified: true,
     genTimeEpochSeconds: BigInt(Math.floor(Date.now() / 1000)),
@@ -76,6 +89,8 @@ interface DevelopmentState {
   readonly partnerReferences: Map<string, string>;
   /** Half-completed origination journeys. See `Draft` below. */
   readonly drafts: Map<string, Draft>;
+  /** Documents presented against a request, for the checklist. Development stand-in for the evidence store. */
+  readonly documents: Map<string, PresentedDocument[]>;
   /** SH-10. invoiceUuid -> the requestId that financed it. Never purged. */
   readonly financed: Map<string, string>;
   sequence: number;
@@ -111,6 +126,7 @@ const state: DevelopmentState = (globalScope[GLOBAL_KEY] ??= {
   invoiceNumbers: new Map<string, string>(),
   partnerReferences: new Map<string, string>(),
   drafts: new Map<string, Draft>(),
+  documents: new Map<string, PresentedDocument[]>(),
   financed: new Map<string, string>(),
   sequence: 0,
   seeded: false,
@@ -171,6 +187,12 @@ export interface RequestRow {
   readonly note?: string;
   readonly reasonCode?: string;
   readonly contraryJustification?: string;
+  /** After a resubmission: what changed, and whether it was material. */
+  readonly changes?: { readonly fields: readonly string[]; readonly material: boolean; readonly returnedNote: string };
+  /** While waiting on someone outside the institution. */
+  readonly pending?: { readonly from: InformationSource; readonly items: readonly string[] };
+  /** The servicing attempt ledger, where one exists. */
+  readonly attempts?: readonly { readonly atEpochSeconds: bigint; readonly reason: string; readonly manualBy?: string; readonly manualNote?: string }[];
 }
 
 const INVOICE_NUMBERS = state.invoiceNumbers;
@@ -196,6 +218,13 @@ export function toRow(requestId: string, request: OriginationRequest): RequestRo
     ...('reasonCode' in request ? { reasonCode: request.reasonCode } : {}),
     ...('contraryToServicing' in request && request.contraryToServicing !== undefined
       ? { contraryJustification: request.contraryToServicing.justification }
+      : {}),
+    ...('changes' in request && request.changes !== undefined
+      ? { changes: { fields: request.changes.fields, material: request.changes.material, returnedNote: request.changes.returnedNote } }
+      : {}),
+    ...(request.state === 'PENDING_INFORMATION' ? { pending: { from: request.from, items: request.items } } : {}),
+    ...('attempts' in request && request.attempts !== undefined && request.attempts.length > 0
+      ? { attempts: request.attempts.map((a) => ({ atEpochSeconds: a.at.epochSeconds, reason: a.reason, ...(a.manual === undefined ? {} : { manualBy: a.manual.by.principalId, manualNote: a.manual.note }) })) }
       : {}),
   };
 }
@@ -414,6 +443,78 @@ export function expireOverdue(observedAt: TsaInstant): readonly string[] {
   return expired;
 }
 
+// -- Lifecycle: information, servicing failures, resubmission ------------------
+
+export function requestInformation(requestId: string, reviewer: Principal, from: InformationSource, items: readonly string[]): Result<RequestRow> {
+  const current = REQUESTS.get(requestId);
+  if (current?.state !== 'AWAITING_REVIEW') return notInState(requestId, 'AWAITING_REVIEW');
+  const next = requestInformationTransition(current as AwaitingReview, reviewer, from, items, developmentAttestation());
+  if (!next.ok) return next;
+  REQUESTS.set(requestId, next.value);
+  return ok(toRow(requestId, next.value));
+}
+
+export function provideInformation(requestId: string): Result<RequestRow> {
+  const current = REQUESTS.get(requestId);
+  if (current?.state !== 'PENDING_INFORMATION') return notInState(requestId, 'PENDING_INFORMATION');
+  const next = provideInformationTransition(current as PendingInformation, developmentAttestation());
+  REQUESTS.set(requestId, next);
+  return ok(toRow(requestId, next));
+}
+
+/** The platform could not be reached. Production: the adapter reports it; here: a button. */
+export function failServicing(requestId: string, reason: string): Result<RequestRow> {
+  const current = REQUESTS.get(requestId);
+  if (current?.state !== 'AWAITING_SERVICING_RESPONSE' && current?.state !== 'SERVICING_UNAVAILABLE') return notInState(requestId, 'AWAITING_SERVICING_RESPONSE');
+  const next = recordServicingFailure(current as AwaitingServicingResponse | ServicingUnavailable, developmentAttestation(), reason);
+  if (!next.ok) return next;
+  REQUESTS.set(requestId, next.value);
+  return ok(toRow(requestId, next.value));
+}
+
+export function retryServicing(requestId: string, manual?: { readonly by: Principal; readonly note: string }): Result<RequestRow> {
+  const current = REQUESTS.get(requestId);
+  if (current?.state !== 'SERVICING_UNAVAILABLE') return notInState(requestId, 'SERVICING_UNAVAILABLE');
+  const next = retryServicingTransition(current as ServicingUnavailable, developmentAttestation(), POLICY, manual);
+  if (!next.ok) return next;
+  REQUESTS.set(requestId, next.value);
+  return ok(toRow(requestId, next.value));
+}
+
+/** The maker corrected a returned request. The identifier is kept; the diff travels with it. */
+export function reviseAndResubmit(requestId: string, patch: { readonly programmeId?: string; readonly tenorDays?: number }): Result<RequestRow> {
+  const current = REQUESTS.get(requestId);
+  if (current?.state !== 'RETURNED_TO_MAKER') return notInState(requestId, 'RETURNED_TO_MAKER');
+  const revised: OriginationRequestCore = {
+    ...current.core,
+    ...(patch.programmeId === undefined ? {} : { programmeId: patch.programmeId }),
+    ...(patch.tenorDays === undefined ? {} : { requestedTenorDays: patch.tenorDays }),
+  };
+  const next = resubmit(current as ReturnedToMaker, revised, developmentAttestation(), POLICY);
+  if (!next.ok) return next;
+  REQUESTS.set(requestId, next.value);
+  return ok(toRow(requestId, next.value));
+}
+
+// -- Documents against a request -----------------------------------------------
+
+export function presentedDocuments(requestId: string): readonly PresentedDocument[] {
+  return state.documents.get(requestId) ?? [];
+}
+
+export function attachDocument(requestId: string, documentType: string): void {
+  const list = state.documents.get(requestId) ?? [];
+  state.documents.set(requestId, [...list, { documentType, capturedAt: developmentAttestation(), validationStatus: 'VALID' }]);
+}
+
+export function checklistFor(request: RequestRow): { readonly checklist: DocumentChecklist; readonly report: readonly ItemReport[] } | undefined {
+  const domain = REQUESTS.get(request.requestId);
+  if (domain === undefined) return undefined;
+  const loaded = loadDocumentChecklist('bank-a', domain.core.programmeId);
+  if (!loaded.ok) return undefined;
+  return { checklist: loaded.value, report: checklistReport(loaded.value, presentedDocuments(request.requestId), developmentAttestation()) };
+}
+
 // -- Queries ------------------------------------------------------------------
 
 export function listRequests(): readonly RequestRow[] {
@@ -529,7 +630,7 @@ const SEEDS: readonly Seed[] = [
     channel: 'EMBEDDED_AGGREGATOR',
     maker: MAKER_ONE,
     merchantMandateRef: 'mnd_dev_0001',
-    aggregatorId: 'agg-dev-01',
+    aggregatorId: 'aggregator-dev-01',
     servicingResponded: 'DECLINED',
   },
   {
@@ -552,7 +653,7 @@ const SEEDS: readonly Seed[] = [
     channel: 'EMBEDDED_AGGREGATOR',
     maker: MAKER_ONE,
     merchantMandateRef: 'mnd_dev_0002',
-    aggregatorId: 'agg-dev-01',
+    aggregatorId: 'aggregator-dev-01',
     // No servicing response yet: sits with the external platform.
   },
 ];
@@ -585,6 +686,11 @@ if (!state.seeded) {
     const submitted = submit(keyed.value.requestId);
     if (!submitted.ok) continue;
 
+    if (seed.invoiceNumber === 'AGG-88147') {
+      // The platform was unreachable for this one. Two attempts on the ledger.
+      failServicing(keyed.value.requestId, 'connect timeout after 30s');
+      failServicing(keyed.value.requestId, 'HTTP 503 from the servicing platform');
+    }
     if (seed.servicingResponded !== undefined) {
       applyServicingOutcome(keyed.value.requestId, {
         decision: seed.servicingResponded,

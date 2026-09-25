@@ -4,17 +4,39 @@
   "expirySeconds": {
     "AWAITING_SERVICING_RESPONSE": 86400,
     "AWAITING_REVIEW": 259200,
-    "RETURNED_TO_MAKER": 259200
+    "RETURNED_TO_MAKER": 259200,
+    "PENDING_INFORMATION": 604800
   },
   "slaSeconds": {
     "AWAITING_SERVICING_RESPONSE": 3600,
-    "AWAITING_REVIEW": 14400
+    "AWAITING_REVIEW": 14400,
+    "PENDING_INFORMATION": 86400,
+    "SERVICING_UNAVAILABLE": 3600
   },
   "approvalTiers": [
-    { "authority": "CHECKER" }
+    {
+      "authority": "CHECKER"
+    }
   ],
   "agents": [],
   "partners": [
-    { "partnerId": "partner-dev-01", "status": "ACTIVE", "channel": "PARTNER_API", "programmes": "ALL", "maxRequestMinorUnits": "30000000" }
+    {
+      "partnerId": "partner-dev-01",
+      "status": "ACTIVE",
+      "channel": "PARTNER_API",
+      "programmes": "ALL",
+      "maxRequestMinorUnits": "30000000"
+    }
+  ],
+  "servicingRetry": {
+    "maxAttempts": 5,
+    "backoffSeconds": 60
+  },
+  "revalidateOn": [
+    "tradeReference",
+    "requestedAmount",
+    "counterpartyId",
+    "programmeId",
+    "requestedTenorDays"
   ]
 }

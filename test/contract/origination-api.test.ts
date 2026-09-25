@@ -418,8 +418,20 @@ describe('the contract agrees with the domain it fronts', () => {
         'REJECTED',
         'WITHDRAWN',
         'EXPIRED',
+        'PENDING_INFORMATION',
+        'SERVICING_UNAVAILABLE',
       ]),
     );
+  });
+
+  it('offers an eligibility pre-check that persists nothing', () => {
+    const op = spec.paths['/eligibility']?.['post'];
+    expect(op?.operationId).toBe('checkEligibility');
+    const result = spec.components.schemas['EligibilityResult'] as { properties: Record<string, Schema>; required: string[] };
+    expect(result.required).toContain('persisted');
+    expect(result.properties['persisted']?.['enum']).toEqual([false]);
+    // Whether the institution would trade — never a price.
+    for (const name of Object.keys(result.properties)) expect(name).not.toMatch(/rate|price|profit|margin/i);
   });
 
   it('requires a trade on every raise, so there is no amount-only path', async () => {

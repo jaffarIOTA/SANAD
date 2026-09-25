@@ -221,6 +221,52 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
+  /eligibility:
+    post:
+      tags: [Requests]
+      operationId: checkEligibility
+      summary: Check eligibility before raising a request.
+      description: |
+        Runs the institution's credit policy over the facts supplied and the
+        facts the institution already holds, and answers with the outcome the
+        engine would reach today. **Nothing is persisted and no request is
+        created.** A partner uses this to avoid raising a request that will be
+        referred or declined — and the reason codes say what would need to
+        change.
+
+        This is a pre-check, not a promise. The same facts may evaluate
+        differently later: the policy may have a new effective version, and
+        the institution's own facts about the counterparty may have moved.
+        `evaluatedAt` and `policyVersion` are returned so a partner can tell.
+
+        Nothing rate-shaped is accepted or returned. Eligibility is a decision
+        about whether the institution would trade, not a price.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EligibilityRequest'
+      responses:
+        '200':
+          description: The outcome the policy reaches on these facts, today.
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/CorrelationId' }
+            Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibilityResult'
+        '400': { $ref: '#/components/responses/Malformed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
   /requests/{requestId}:
     parameters:
       - $ref: '#/components/parameters/RequestId'
@@ -566,6 +612,41 @@ components:
           maxLength: 128
           description: Your own reference, echoed back. Not used for idempotency.
 
+    EligibilityRequest:
+      type: object
+      additionalProperties: false
+      required: [programmeId, counterpartyId, tradeReference, requestedAmount, requestedTenorDays]
+      description: The facts a partner can supply. Everything else comes from the institution's own records.
+      properties:
+        programmeId: { type: string, format: uuid }
+        counterpartyId: { type: string, format: uuid }
+        tradeReference: { $ref: '#/components/schemas/TradeReference' }
+        requestedAmount: { $ref: '#/components/schemas/Money' }
+        requestedTenorDays: { type: integer, minimum: 1, maximum: 365 }
+
+    EligibilityResult:
+      type: object
+      additionalProperties: false
+      required: [outcome, reasonCodes, policyId, policyVersion, evaluatedAt, persisted]
+      properties:
+        outcome:
+          type: string
+          enum: [APPROVE, DECLINE, REFER]
+          description: |
+            `REFER` is also the engine's failure mode: a fact it could not
+            read, or a source the institution has not yet consulted, refers
+            rather than approves. The reason codes say which.
+        reasonCodes:
+          type: array
+          items: { type: string, maxLength: 64 }
+        policyId: { type: string, maxLength: 64 }
+        policyVersion: { type: string, maxLength: 32 }
+        evaluatedAt: { $ref: '#/components/schemas/AttestedInstant' }
+        persisted:
+          type: boolean
+          enum: [false]
+          description: Always false. A pre-check leaves no record and creates no request.
+
     RequestState:
       type: string
       enum:
@@ -576,7 +657,17 @@ components:
         - REJECTED
         - WITHDRAWN
         - EXPIRED
+        - PENDING_INFORMATION
+        - SERVICING_UNAVAILABLE
       description: |
+        `PENDING_INFORMATION` means the institution is waiting on the
+        counterparty, the partner or a document before it can decide; the
+        `outcome.requestedInformation` block says what. `SERVICING_UNAVAILABLE`
+        means the servicing platform could not be reached; the request is held
+        and retried within the institution's policy, and
+        `outcome.servicingAttempts` counts the attempts so far. Neither is a
+        decision.
+
         `EXPIRED` means nobody acted on the request within the institution's
         configured interval. It is terminal: re-raise rather than expect it to
         be revived, because the trade it named and the limits it was checked
@@ -665,6 +756,31 @@ components:
               type: string
               maxLength: 500
               description: Present on `RETURNED_TO_MAKER`. What needs changing.
+            requestedInformation:
+              type: object
+              additionalProperties: false
+              required: [from, items]
+              description: Present on `PENDING_INFORMATION`.
+              properties:
+                from:
+                  type: string
+                  enum: [COUNTERPARTY, PARTNER, DOCUMENTS]
+                items:
+                  type: array
+                  minItems: 1
+                  items: { type: string, maxLength: 200 }
+            servicingAttempts:
+              type: integer
+              minimum: 0
+              description: Present while the servicing platform is being retried.
+            revisedFields:
+              type: array
+              description: |
+                Present after a returned request was corrected and resubmitted:
+                the fields that changed. A change to a field the institution
+                treats as material re-runs validation and discards any earlier
+                servicing answer.
+              items: { type: string, maxLength: 64 }
         transaction:
           type: object
           additionalProperties: false

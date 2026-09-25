@@ -16,7 +16,12 @@ obligations, evidence, the leg hash chain, the decisioning engine and the
 charity ledger, with 1,596 lines of SQL carrying the compliance controls as
 database constraints. A **partner API exists and runs** — contract authored
 first, compiled into its own runtime validator, driven over HTTP by 43 tests.
-Two **operator screens** work end to end in Arabic and English. **519 tests pass.**
+The **operator workbench** runs all three origination doors — ERP over the API,
+embedded aggregator, maker/checker keying — into one queue, in Arabic and
+English, and the BRD's lifecycle gaps (information from outside, servicing
+failure with a controlled retry ledger, resubmission with a diff, document
+checklist, consent, exceptions, eligibility pre-check) are built and tested.
+**570 tests pass.**
 
 What does not exist is everything that depends on infrastructure nobody has
 provisioned yet: there is no database, no timestamping authority, no live
@@ -28,7 +33,7 @@ domain and it is done — but it should not be read as "nearly finished".
 
 ## Built and tested
 
-### The domain — `core/`, 26 modules
+### The domain — `core/`, 36 modules
 
 The part that makes non-compliant transactions structurally impossible.
 
@@ -41,10 +46,15 @@ The part that makes non-compliant transactions structurally impossible.
 | **Leg hash chain** | Each leg binds its predecessor's content hash. Verified to survive migration; see below. |
 | **Decisioning** | A closed expression language with no loops, no regex, no clock. Failure mode is REFER, never approve. |
 | **Origination requests** | Five channels (operator, counterparty, partner API, aggregator, agent), maker–checker with four eyes enforced in the domain, tenant-configured approval tiers, agent and partner entitlements, SLAs and expiry — all as configuration (`config/tenants/*/origination/policy.json`), none of it able to reach a gate. |
+| **Request lifecycle** | `PENDING_INFORMATION` (from the counterparty, the partner or documents), `SERVICING_UNAVAILABLE` with an attempt ledger and tenant-bounded automatic retry, manual resubmission by a named person with a recorded note, and `resubmit()` after a return — identifier kept, diff recorded, material changes (a tenant-listed field) re-validated. |
+| **Exceptions, consent, documents** | `CaseException` as append-only events with owner, SLA and mandatory resolution; consent records that gate the bureau and screening ports; a per-programme document checklist with validity windows. |
+| **Eligibility pre-check** | The policy version in force, run over a snapshot, answering approve / refer / decline with reason codes and `persisted: false` in the type. Never a price. |
+| **Ports** | Counterparty registry, credit bureau, screening, notifications, applicant snapshot — capability-named, consent-bearing, unavailable as a typed outcome, no personal identifier by value. Adapters wait on vendor access. |
 
 ### The API — `services/origination/`
 
-A Node HTTP service, no framework. Four operations plus platform health.
+A Node HTTP service, no framework. Five operations plus platform health,
+the fifth being `POST /eligibility`, which creates nothing.
 
 The load-bearing piece: **the OpenAPI document is compiled into the runtime
 validators**. `additionalProperties: false` stopped being a claim in a
@@ -57,9 +67,14 @@ the credential and never from the body, and no gateway header read anywhere.
 
 ### The interface — `apps/ops`, `apps/sme`
 
-Six routes, Arabic-first with logical properties throughout, both calendars,
-and a `<Money>` component that cannot gain a rate prop — adding one fails the
-build rather than a test.
+Arabic-first with logical properties throughout, both calendars, and a
+`<Money>` component that cannot gain a rate prop — adding one fails the build
+rather than a test. The workbench hosts the partner API in development so a
+request raised by an ERP, an aggregator or an officer lands in the same queue;
+the queue has views for review, servicing, the maker, awaiting information,
+integration failures, past SLA and decided; the request page carries the
+lifecycle controls, the attempt ledger, the resubmission diff and the
+document checklist.
 
 ### The gateway — `gateway/ibm/`
 
@@ -69,16 +84,16 @@ against the real toolkit. The origination definition is **generated** from the
 that 3.0 cannot express are listed inside the generated file rather than
 dropped silently.
 
-### Tests — 519 across 23 files
+### Tests — 570 across 29 files
 
 | Suite | Tests | What it protects |
 |---|---|---|
-| `compliance/` | ~120 | Each test *attempts* a prohibited outcome and passes only when it fails |
-| `contract/` | ~84 | The published contract, and the running service over HTTP |
-| `unit/` | ~50 | Decisioning and health aggregation |
-| `architecture/` | ~53 | The absences: no rate, no clock in core, no secret, no gateway dependency |
-| `adapters/` | ~43 | Partner integration and Tuum authentication |
-| `ui/` | ~38 | RTL/LTR parity, logical properties, no rate on a screen |
+| `compliance/` | 172 | Each test *attempts* a prohibited outcome and passes only when it fails |
+| `contract/` | 85 | The published contract, and the running service over HTTP |
+| `unit/` | 77 | Decisioning, eligibility, exceptions, consent, checklist, health aggregation |
+| `architecture/` | 113 | The absences: no rate, no clock in core, no secret, no gateway dependency |
+| `adapters/` | 43 | Partner integration and Tuum authentication |
+| `ui/` | 80 | RTL/LTR parity, logical properties, no rate on a screen |
 
 ---
 
@@ -126,9 +141,10 @@ Ordered by what it costs to guess wrong.
 
 ### Buildable now, nothing blocking
 
-1. **The repository split.** A request raised over the API does not appear in
-   the operator review queue: the service and the workbench hold separate
-   in-memory stores. Both collapse onto the database.
+1. **The repository split.** Worked around for development by hosting the
+   partner API inside the workbench, so every channel lands in one queue. The
+   standalone service still holds its own in-memory store; both collapse onto
+   the database, and the workbench copy of the routes goes at that point.
 2. **R-10** — the internal review API specification. Approve, return and
    reject are deliberately absent from the partner contract; they need their
    own, with their own authentication.

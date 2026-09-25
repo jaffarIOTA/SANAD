@@ -64,6 +64,8 @@ export const WAITING_STATES = [
   'AWAITING_REVIEW',
   'RETURNED_TO_MAKER',
   'AWAITING_CREDIT_REVIEW',
+  'PENDING_INFORMATION',
+  'SERVICING_UNAVAILABLE',
 ] as const;
 export type WaitingState = (typeof WAITING_STATES)[number];
 
@@ -78,11 +80,24 @@ export interface OriginationPolicy {
   readonly approvalTiers: readonly ApprovalTier[];
   readonly agents: readonly AgentEntitlement[];
   readonly partners: readonly PartnerEntitlement[];
+  /**
+   * When the servicing platform cannot be reached (BRD §21): how many
+   * automatic attempts, and how long between them. A manual resubmission
+   * by a named person is allowed beyond the maximum and is recorded as such.
+   */
+  readonly servicingRetry: { readonly maxAttempts: number; readonly backoffSeconds: number };
+  /**
+   * Fields whose change on resubmission after a return is *material*
+   * (BRD MC-009): the request is re-validated and, on a channel that consults
+   * the servicing platform, the earlier answer is discarded.
+   */
+  readonly revalidateOn: readonly string[];
 }
 
 // -- Parsing ------------------------------------------------------------------
 
-const TOP_LEVEL = new Set(['tenantId', 'version', 'expirySeconds', 'slaSeconds', 'approvalTiers', 'agents', 'partners']);
+const TOP_LEVEL = new Set(['tenantId', 'version', 'expirySeconds', 'slaSeconds', 'approvalTiers', 'agents', 'partners', 'servicingRetry', 'revalidateOn']);
+const REVALIDATABLE = ['tradeReference', 'requestedAmount', 'counterpartyId', 'programmeId', 'requestedTenorDays'] as const;
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
@@ -201,7 +216,23 @@ export function parseOriginationPolicy(input: unknown): Result<OriginationPolicy
     partners.push({ partnerId: p['partnerId'], status: st.value, channel: p['channel'], programmes: pr.value, maxRequestMinorUnits: mx.value });
   }
 
-  return ok({ tenantId: input['tenantId'], version: input['version'], expirySeconds: expiry.value, slaSeconds: sla.value, approvalTiers: tiers, agents, partners });
+  let servicingRetry = { maxAttempts: 3, backoffSeconds: 300 };
+  if (input['servicingRetry'] !== undefined) {
+    const r = input['servicingRetry'];
+    if (!isRecord(r) || typeof r['maxAttempts'] !== 'number' || !Number.isInteger(r['maxAttempts']) || r['maxAttempts'] < 1 || typeof r['backoffSeconds'] !== 'number' || !Number.isInteger(r['backoffSeconds']) || r['backoffSeconds'] < 0) {
+      return reject('OP-DETERMINACY', 'POLICY_SERVICING_RETRY_INVALID', 'servicingRetry needs maxAttempts ≥ 1 and backoffSeconds ≥ 0');
+    }
+    servicingRetry = { maxAttempts: r['maxAttempts'], backoffSeconds: r['backoffSeconds'] };
+  }
+  let revalidateOn: readonly string[] = ['tradeReference', 'requestedAmount', 'counterpartyId', 'programmeId'];
+  if (input['revalidateOn'] !== undefined) {
+    const r = input['revalidateOn'];
+    if (!Array.isArray(r) || !r.every((f) => (REVALIDATABLE as readonly string[]).includes(String(f)))) {
+      return reject('OP-DETERMINACY', 'POLICY_REVALIDATE_FIELD_UNKNOWN', `revalidateOn may only name ${REVALIDATABLE.join(', ')}`);
+    }
+    revalidateOn = r as string[];
+  }
+  return ok({ tenantId: input['tenantId'], version: input['version'], expirySeconds: expiry.value, slaSeconds: sla.value, approvalTiers: tiers, agents, partners, servicingRetry, revalidateOn });
 }
 
 // -- Approval authority -------------------------------------------------------

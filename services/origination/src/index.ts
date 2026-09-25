@@ -15,6 +15,9 @@ import { createService, developmentTimestamps, BASE_PATH } from './server.ts';
 import { createHealthService, type HealthCheck } from './health.ts';
 import { inMemoryIdempotencyStore } from './idempotency.ts';
 import { inMemoryRequestRepository } from './repository.ts';
+import { developmentSnapshots } from './snapshots.ts';
+import { isTenantCode, loadAllForTenant } from '@sanad/config/loader.ts';
+import { reject } from '@sanad/core/kernel/result.ts';
 import { developmentRegistry } from './principal.ts';
 
 const port = Number.parseInt(process.env['PORT'] ?? '3002', 10);
@@ -64,6 +67,14 @@ const server = createService({
   health: createHealthService({ checks }),
   idempotency: inMemoryIdempotencyStore(),
   credentials: developmentRegistry(process.env),
+  snapshots: developmentSnapshots(),
+  creditPolicies: {
+    versionsFor: (tenantId) => {
+      if (!isTenantCode(tenantId)) return reject('OP-DETERMINACY', 'TENANT_UNKNOWN', 'No configuration for this tenant');
+      const all = loadAllForTenant(tenantId);
+      return all.ok ? { ok: true, value: all.value.creditPolicies } : all;
+    },
+  },
   timestamps: developmentTimestamps(),
 });
 

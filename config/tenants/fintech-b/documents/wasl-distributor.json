@@ -1,0 +1,10 @@
+{
+  "tenantId": "fintech-b",
+  "programmeId": "prg-0001",
+  "version": "1.0.0",
+  "items": [
+    { "documentType": "COMMERCIAL_REGISTRATION", "titleEn": "Commercial registration", "titleAr": "السجل التجاري", "required": true, "validForSeconds": 31536000 },
+    { "documentType": "CLEARED_INVOICE", "titleEn": "Cleared e-invoice", "titleAr": "فاتورة إلكترونية مُخلَّصة", "required": true },
+    { "documentType": "GOODS_SPECIFICATION", "titleEn": "Goods specification", "titleAr": "مواصفات البضاعة", "required": false }
+  ]
+}

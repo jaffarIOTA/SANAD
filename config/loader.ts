@@ -18,6 +18,8 @@ import bankAPolicyV1 from './tenants/bank-a/credit-policy/wasl-distributor-v1.js
 import fintechBPolicyV1 from './tenants/fintech-b/credit-policy/wasl-distributor-v1.json' with { type: 'json' };
 import bankAOrigination from './tenants/bank-a/origination/policy.json' with { type: 'json' };
 import fintechBOrigination from './tenants/fintech-b/origination/policy.json' with { type: 'json' };
+import bankAChecklist from './tenants/bank-a/documents/wasl-distributor.json' with { type: 'json' };
+import fintechBChecklist from './tenants/fintech-b/documents/wasl-distributor.json' with { type: 'json' };
 
 import {
   type StructureDefinition,
@@ -25,6 +27,7 @@ import {
 } from '../core/structures/definition.ts';
 import { type CreditPolicy, parseCreditPolicy } from '../core/decisioning/policy.ts';
 import { type OriginationPolicy, parseOriginationPolicy } from '../core/origination/policy.ts';
+import { type DocumentChecklist, parseDocumentChecklist } from '../core/documents/checklist.ts';
 import { type Result, ok, reject } from '../core/kernel/result.ts';
 
 /** The tenant codes this deployment knows about. */
@@ -52,6 +55,21 @@ const ORIGINATION_POLICIES: Readonly<Record<TenantCode, unknown>> = {
  */
 export function loadOriginationPolicy(tenant: TenantCode): Result<OriginationPolicy> {
   return parseOriginationPolicy(ORIGINATION_POLICIES[tenant]);
+}
+
+const CHECKLISTS: Readonly<Record<TenantCode, readonly unknown[]>> = {
+  'bank-a': [bankAChecklist],
+  'fintech-b': [fintechBChecklist],
+};
+
+/** The documents a programme requires of this tenant's counterparties. */
+export function loadDocumentChecklist(tenant: TenantCode, programmeId: string): Result<DocumentChecklist> {
+  for (const candidate of CHECKLISTS[tenant]) {
+    const parsed = parseDocumentChecklist(candidate);
+    if (!parsed.ok) return parsed;
+    if (parsed.value.programmeId === programmeId) return parsed;
+  }
+  return reject('OP-DETERMINACY', 'DOCUMENT_CHECKLIST_NOT_FOUND', 'No document checklist is configured for that programme', { tenant, programmeId });
 }
 
 export function isTenantCode(value: string): value is TenantCode {
