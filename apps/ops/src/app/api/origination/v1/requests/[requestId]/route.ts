@@ -2,7 +2,7 @@ import { toWire } from '@sanad/origination/representation.ts';
 import { problem } from '@sanad/origination/problem.ts';
 
 import { findPartnerRequest } from '../../../../../../server/store.ts';
-import { correlation, principalOr401 } from '../route.ts';
+import { correlation, principalOr401 } from '../../shared.ts';
 
 export async function GET(request: Request, context: { params: Promise<{ requestId: string }> }): Promise<Response> {
   const correlationId = correlation(request);

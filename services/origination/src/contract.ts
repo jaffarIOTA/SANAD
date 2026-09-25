@@ -19,15 +19,48 @@
  * translation layer.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020.js';
 import { parse } from 'yaml';
 
-const SPEC_PATH = fileURLToPath(
-  new URL('../../../api/openapi/origination.v1.yaml', import.meta.url),
-);
+/**
+ * Where the contract lives.
+ *
+ * Under plain Node and vitest, `import.meta.url` is a real `file:` URL and the
+ * document sits three directories up. Under a bundler it is not — Next's
+ * webpack hands over something `fileURLToPath` rejects — and the same module
+ * is now also loaded by the workbench's route handlers. So the file is found
+ * rather than assumed: an explicit override first, the module-relative path
+ * when it is real, and otherwise a walk up from the working directory to the
+ * repository root. Failing loudly beats validating against nothing.
+ */
+const CONTRACT_RELATIVE = 'api/openapi/origination.v1.yaml';
+
+function locateContract(): string {
+  const override = process.env['SANAD_CONTRACT_PATH'];
+  if (override !== undefined && override.length > 0) return override;
+
+  if (import.meta.url.startsWith('file:')) {
+    const beside = fileURLToPath(new URL(`../../../${CONTRACT_RELATIVE}`, import.meta.url));
+    if (existsSync(beside)) return beside;
+  }
+
+  let dir = process.cwd();
+  for (;;) {
+    const candidate = join(dir, CONTRACT_RELATIVE);
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+
+  throw new Error(`the origination contract was not found; set SANAD_CONTRACT_PATH to ${CONTRACT_RELATIVE}`);
+}
+
+const SPEC_PATH = locateContract();
 
 export interface OpenApiDocument {
   readonly openapi: string;

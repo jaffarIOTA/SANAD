@@ -18,10 +18,12 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { correlation, json, principalOr401, refuse } from '../shared.ts';
+
 import { validatorFor } from '@sanad/origination/contract.ts';
 import { fingerprint, inMemoryIdempotencyStore, type IdempotencyStore } from '@sanad/origination/idempotency.ts';
-import { authenticate, developmentRegistry, hasScope, type PartnerPrincipal } from '@sanad/origination/principal.ts';
-import { fromRejection, problem, type Problem } from '@sanad/origination/problem.ts';
+import { hasScope } from '@sanad/origination/principal.ts';
+import { fromRejection, problem } from '@sanad/origination/problem.ts';
 import { toWire, type RaiseRequestBody } from '@sanad/origination/representation.ts';
 
 import { MAKER } from '../../../../../server/session.ts';
@@ -33,41 +35,9 @@ const IDEMPOTENCY_KEY = Symbol.for('sanad.ops.idempotency');
 const idempotency: IdempotencyStore = ((globalThis as Record<symbol, IdempotencyStore | undefined>)[IDEMPOTENCY_KEY] ??=
   inMemoryIdempotencyStore());
 
-function json(status: number, body: unknown, correlationId: string, extra: Record<string, string> = {}): Response {
-  const isProblem = status >= 400;
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      'content-type': isProblem ? 'application/problem+json' : 'application/json',
-      'x-correlation-id': correlationId,
-      'cache-control': 'no-store',
-      ...extra,
-    },
-  });
-}
 
-function refuse(p: Problem): Response {
-  return json(p.status, p, p.correlationId);
-}
 
-export function principalOr401(request: Request, correlationId: string): PartnerPrincipal | Response {
-  const auth = authenticate(request.headers.get('authorization') ?? undefined, developmentRegistry(process.env));
-  if (auth.ok) return auth.principal;
-  return refuse(
-    problem({
-      status: 401,
-      title: 'Unauthenticated',
-      detail: auth.reason === 'CREDENTIAL_MISSING' ? 'No credential was presented.' : 'The credential was not recognised.',
-      reason: auth.reason,
-      correlationId,
-    }),
-  );
-}
 
-export function correlation(request: Request): string {
-  const supplied = request.headers.get('x-correlation-id');
-  return supplied !== null && /^[0-9a-f-]{36}$/i.test(supplied) ? supplied : randomUUID();
-}
 
 export async function POST(request: Request): Promise<Response> {
   const correlationId = correlation(request);
