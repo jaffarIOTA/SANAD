@@ -1,5 +1,5 @@
 /*
- * Design tokens.
+ * Design tokens — the Figma design system (BankDash kit), applied 2026-09-26.
  *
  * Client branding is a token override, never a component fork — that is what
  * makes the product re-skinnable per institution without a code change (SDD
@@ -14,27 +14,27 @@
 
 :root {
   /* Brand — overridden per tenant */
-  --colour-accent: #0f7b6c;
-  --colour-accent-strong: #0a5a4f;
-  --colour-accent-quiet: #e6f2f0;
+  --colour-accent: #2d60ff;
+  --colour-accent-strong: #1814f3;
+  --colour-accent-quiet: #e7edff;
 
   /* Surface */
-  --colour-page: #ffffff;
+  --colour-page: #f5f7fa;
   --colour-surface: #ffffff;
-  --colour-surface-sunken: #f6f7f8;
-  --colour-border: #d9dde1;
-  --colour-border-strong: #aeb6bd;
+  --colour-surface-sunken: #f5f7fa;
+  --colour-border: #e6eff5;
+  --colour-border-strong: #dfeaf2;
 
   /* Text */
-  --colour-text: #10181f;
-  --colour-text-quiet: #5a646d;
+  --colour-text: #232323;
+  --colour-text-quiet: #718ebf;
   --colour-text-on-accent: #ffffff;
 
   /* Meaning. Never carried by colour alone — every status also has a label. */
-  --colour-positive: #1a7f4b;
-  --colour-attention: #8a5a00;
-  --colour-blocked: #a3271f;
-  --colour-blocked-quiet: #fdecea;
+  --colour-positive: #178f6b;
+  --colour-attention: #b45309;
+  --colour-blocked: #d93a53;
+  --colour-blocked-quiet: #ffe8ec;
 
   /* Type. Arabic and Latin are tuned independently: matching point sizes do
      not produce matching perceived weight. */
@@ -57,8 +57,8 @@
   --space-5: 1.5rem;
   --space-6: 2rem;
 
-  --radius: 0.625rem;
-  --radius-sm: 0.375rem;
+  --radius: 1.5625rem;
+  --radius-sm: 0.9375rem;
 
   /* Touch targets sized for the mid-range device that is the SME's primary
      hardware, not for a desktop pointer (NFR-10, FP-05). */

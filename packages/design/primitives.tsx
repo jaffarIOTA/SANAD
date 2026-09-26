@@ -221,8 +221,8 @@ export function Card({
 }): ReactElement {
   return (
     <div
-      className={`rounded-card border p-4 ${
-        muted ? 'border-line bg-sunken opacity-80' : 'border-line bg-surface'
+      className={`card-lift rounded-card p-6 ${
+        muted ? 'border border-line bg-sunken opacity-80' : 'bg-surface'
       }`}
     >
       {children}

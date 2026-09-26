@@ -15,53 +15,75 @@
  * (SDD §7.6). A second institution changes this block and nothing else.
  */
 
-@theme {
-  /* -- Brand, from the mark ------------------------------------------------ */
-  --color-brand: #f47b20; /* the mark. 2.7:1 on white — decorative and large only */
-  --color-brand-strong: #b05512; /* interactive; white text on this is 5.0:1 */
-  --color-brand-deep: #8f440d; /* pressed and hover */
-  --color-brand-wash: #fef2e8; /* tinted surface */
-  /* The mono lockup's grey, for print and for single-colour contexts. */
+@theme static {
+  /* -- Brand, from the Figma design system (BankDash kit, file fPK7qBFIWwuWn8LMwXAYU0)
+        Primary 2 #343C6A (headings) · Primary 3 #2D60FF (accent) · Secondary #FE5C73
+        Applied 2026-09-26. Client branding remains a token override, never a fork. -- */
+  --color-brand: #2d60ff; /* Primary 3. White on it measures 5.0:1 */
+  --color-brand-strong: #2d60ff; /* interactive */
+  --color-brand-deep: #1814f3; /* pressed, hover, chart series 1 */
+  --color-brand-wash: #e7edff; /* tinted surface, icon discs */
+  --color-heading: #343c6a; /* Primary 2 */
   --color-mark-mono: #4d4d4d;
 
-  /* -- Ordinal ramp for charts --------------------------------------------
-     One hue, monotone lightness, the step nearest the surface clearing 2:1.
-     Validated against this surface rather than assumed — five steps, light
-     mode on #ffffff. Not a categorical palette: these encode stages of one
-     thing, so they must never be used to distinguish unrelated series. */
-  --color-stage-1: #f0a05e;
-  --color-stage-2: #e88427;
-  --color-stage-3: #c86a10;
-  --color-stage-4: #a65310;
-  --color-stage-5: #83400c;
+  /* -- Chart series, fixed by the design. Series colours never carry text. -- */
+  --color-series-1: #1814f3;
+  --color-series-2: #16dbcc;
+  --color-slice-1: #343c6a;
+  --color-slice-2: #fc7900;
+  --color-slice-3: #fa00ff;
+  --color-slice-4: #1814f3;
+  --color-area-line: #1814f3;
+
+  /* -- Ordinal ramp for stage charts: one hue, monotone lightness. -- */
+  --color-stage-1: #c7d2fe;
+  --color-stage-2: #93a5f5;
+  --color-stage-3: #5e7bf0;
+  --color-stage-4: #2d60ff;
+  --color-stage-5: #1814f3;
 
   /* -- Surface ------------------------------------------------------------- */
-  --color-page: #ffffff;
+  --color-page: #f5f7fa;
   --color-surface: #ffffff;
-  --color-sunken: #f8f7f5;
-  --color-line: #e4e2df;
-  --color-line-strong: #bdbab6;
+  --color-sunken: #f5f7fa;
+  --color-line: #e6eff5;
+  --color-line-strong: #dfeaf2;
+  --color-field: #edf1f7; /* input pills */
 
   /* -- Text ---------------------------------------------------------------- */
-  --color-ink: #1c1b1a;
-  --color-ink-quiet: #58595b; /* the wordmark grey */
+  --color-ink: #232323;
+  --color-ink-quiet: #718ebf;
+  --color-ink-faint: #b1b1b1; /* inactive navigation */
   --color-on-brand: #ffffff;
 
-  /* -- Meaning. Never carried by colour alone; every status has a label too. */
-  --color-positive: #1a6f47;
-  --color-attention: #7a5100;
-  --color-blocked: #9a2b1e;
-  --color-blocked-wash: #fdecea;
+  /* -- Meaning. The design's marks are kept as drawn; text on white uses a
+        darker derivative so labels clear 4.5:1 (NFR-09). ------------------- */
+  --color-positive: #178f6b;
+  --color-positive-mark: #41d4a8;
+  --color-attention: #b45309;
+  --color-attention-mark: #fc7900;
+  --color-blocked: #d93a53;
+  --color-blocked-mark: #fe5c73;
+  --color-blocked-wash: #ffe8ec;
+  --color-disc-yellow: #fff5d9;
+  --color-disc-blue: #e7edff;
+  --color-disc-teal: #dcfaf8;
 
-  /* -- Type. Arabic and Latin are tuned independently: matching point sizes
-        do not produce matching perceived weight (SDD §7.5). ----------------- */
+  /* -- Type. Inter throughout, per the design; Arabic keeps its own face. -- */
   --font-arabic: 'Noto Kufi Arabic', 'Segoe UI', system-ui, sans-serif;
   --font-latin: 'Inter', system-ui, -apple-system, sans-serif;
 
   --text-amount: 1.5rem;
   --text-amount--line-height: 2rem;
+  --text-h1: 1.75rem; /* Heading one Semibold 28 */
+  --text-h2: 1.375rem; /* Heading two Semibold 22 */
+  --text-h3: 1.125rem; /* Heading three Medium 18 */
 
-  --radius-card: 0.75rem;
+  --radius-card: 1.5625rem; /* 25px cards */
+  --radius-tile: 0.9375rem; /* 15px */
+  --radius-pill: 2.5rem; /* 40px search and inputs */
+
+  --shadow-card: 4px 4px 18px -2px rgb(231 228 232 / 0.8); /* Shadow 1 */
 
   /* Sized for the mid-range Android that is the SME's primary hardware,
      not for a desktop pointer (NFR-10, FP-05). */
@@ -70,53 +92,67 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --color-page: #14100e;
-    --color-surface: #1d1815;
-    --color-sunken: #171310;
-    --color-line: #332b26;
-    --color-line-strong: #4a3f37;
-    --color-ink: #f4efe9;
-    --color-ink-quiet: #b3a99e;
-    --color-brand: #ff9448;
-    --color-brand-strong: #ff9448;
-    --color-brand-deep: #ffb078;
-    --color-brand-wash: #3a2313;
+    --color-page: #0f1424;
+    --color-surface: #171d33;
+    --color-sunken: #121829;
+    --color-line: #26304d;
+    --color-line-strong: #34406a;
+    --color-field: #1f2742;
+    --color-ink: #eef1f8;
+    --color-ink-quiet: #9fb0d8;
+    --color-ink-faint: #6b7590;
+    --color-heading: #eef1f8;
+    --color-brand: #6d8dff;
+    --color-brand-strong: #6d8dff;
+    --color-brand-deep: #9db1ff;
+    --color-brand-wash: #22305e;
     --color-mark-mono: #b8b6b3;
     /* Re-stepped for the dark surface, not flipped. */
-    --color-stage-1: #8f4a10;
-    --color-stage-2: #b05f14;
-    --color-stage-3: #d3791b;
-    --color-stage-4: #ee9436;
-    --color-stage-5: #ffb877;
-    --color-positive: #55b586;
-    --color-attention: #d9a441;
-    --color-blocked: #e8796f;
-    --color-blocked-wash: #331916;
+    --color-stage-1: #2a3a7a;
+    --color-stage-2: #3b52b3;
+    --color-stage-3: #5570e6;
+    --color-stage-4: #7d95ff;
+    --color-stage-5: #b3c2ff;
+    --color-positive: #55d3a5;
+    --color-attention: #f0a45c;
+    --color-blocked: #ff8a9b;
+    --color-blocked-wash: #3a1a22;
+    --color-disc-yellow: #3d3520;
+    --color-disc-blue: #22305e;
+    --color-disc-teal: #163a37;
+    --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.04);
   }
 }
 
 :root[data-theme='dark'] {
-  --color-page: #14100e;
-  --color-surface: #1d1815;
-  --color-sunken: #171310;
-  --color-line: #332b26;
-  --color-line-strong: #4a3f37;
-  --color-ink: #f4efe9;
-  --color-ink-quiet: #b3a99e;
-  --color-brand: #ff9448;
-  --color-brand-strong: #ff9448;
-  --color-brand-deep: #ffb078;
-  --color-brand-wash: #3a2313;
+  --color-page: #0f1424;
+  --color-surface: #171d33;
+  --color-sunken: #121829;
+  --color-line: #26304d;
+  --color-line-strong: #34406a;
+  --color-field: #1f2742;
+  --color-ink: #eef1f8;
+  --color-ink-quiet: #9fb0d8;
+  --color-ink-faint: #6b7590;
+  --color-heading: #eef1f8;
+  --color-brand: #6d8dff;
+  --color-brand-strong: #6d8dff;
+  --color-brand-deep: #9db1ff;
+  --color-brand-wash: #22305e;
   --color-mark-mono: #b8b6b3;
-  --color-stage-1: #8f4a10;
-  --color-stage-2: #b05f14;
-  --color-stage-3: #d3791b;
-  --color-stage-4: #ee9436;
-  --color-stage-5: #ffb877;
-  --color-positive: #55b586;
-  --color-attention: #d9a441;
-  --color-blocked: #e8796f;
-  --color-blocked-wash: #331916;
+  --color-stage-1: #2a3a7a;
+  --color-stage-2: #3b52b3;
+  --color-stage-3: #5570e6;
+  --color-stage-4: #7d95ff;
+  --color-stage-5: #b3c2ff;
+  --color-positive: #55d3a5;
+  --color-attention: #f0a45c;
+  --color-blocked: #ff8a9b;
+  --color-blocked-wash: #3a1a22;
+  --color-disc-yellow: #3d3520;
+  --color-disc-blue: #22305e;
+  --color-disc-teal: #163a37;
+  --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.04);
 }
 
 html {
@@ -148,4 +184,64 @@ html[lang='en'] body {
 :where(a, button, [role='button'], input, select, textarea):focus-visible {
   outline: 2px solid var(--color-brand-strong);
   outline-offset: 2px;
+}
+
+/*
+ * Motion. The Figma file defines no animation (its motion API returns none),
+ * so what follows is ours: the small set a dashboard of this shape implies.
+ * Every one is a transform or opacity, every one is short, and every one is
+ * removed under prefers-reduced-motion.
+ */
+.nav-indicator {
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 160ms ease;
+}
+.card-lift {
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 4px 8px 24px -4px rgb(231 228 232 / 0.9);
+}
+.press {
+  transition: transform 120ms ease, background-color 160ms ease, color 160ms ease;
+}
+.press:active {
+  transform: scale(0.97);
+}
+@keyframes grow-y {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+.grow-y {
+  transform-origin: bottom;
+  animation: grow-y 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes draw {
+  from { stroke-dashoffset: var(--draw-length, 2000); }
+  to { stroke-dashoffset: 0; }
+}
+.draw {
+  stroke-dasharray: var(--draw-length, 2000);
+  animation: draw 1100ms ease-out both;
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.fade-up {
+  animation: fade-up 360ms ease-out both;
+}
+@keyframes slice-in {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: none; }
+}
+.slice-in {
+  transform-origin: center;
+  animation: slice-in 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-indicator, .card-lift, .press { transition: none; }
+  .card-lift:hover { transform: none; }
+  .grow-y, .draw, .fade-up, .slice-in { animation: none; }
+  .draw { stroke-dasharray: none; }
 }

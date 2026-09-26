@@ -37,9 +37,25 @@ export type IconName =
   | 'inbox'
   | 'check-circle'
   | 'coins'
-  | 'alert';
+  | 'alert'
+  | 'bell'
+  | 'menu'
+  | 'send';
 
 const PATHS: Record<IconName, ReactElement> = {
+  bell: (
+    <>
+      <path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2Z" />
+      <path d="M10 20a2 2 0 0 0 4 0" />
+    </>
+  ),
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  send: (
+    <>
+      <path d="M21 3 10 14" />
+      <path d="M21 3 14 21l-4-7-7-4 18-7Z" />
+    </>
+  ),
   dashboard: (
     <>
       <rect x="3" y="3" width="7" height="8" rx="1.5" />
