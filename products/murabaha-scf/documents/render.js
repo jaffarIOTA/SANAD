@@ -14,15 +14,8 @@
 
 import { ok, reject } from '../../../core/kernel/result.js';
 
- 
 
-
-
-
-
-
-
-
+;
 
 
 
@@ -74,11 +67,13 @@ export function buildLegRenderRequest(
     requestId: params.requestId,
     tenantId: params.tenantId,
     leg,
+    subject: { kind: 'CONTRACT_LEG', reference: leg.legId, detail: { legType: leg.legType } },
     templateVersionId: params.templateVersionId,
     governingLocale: 'ar-SA',
     translationLocale: params.translationLocale,
     mergeFields: params.mergeFields,
     shariahApprovalId: params.shariahApprovalId,
+    approvalRef: params.shariahApprovalId,
     correlationId: params.correlationId,
   });
 }

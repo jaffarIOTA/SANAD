@@ -1,0 +1,105 @@
+ function _nullishCoalesce(lhs, rhsFn) { if (lhs != null) { return lhs; } else { return rhsFn(); } } function _optionalChain(ops) { let lastAccessLHS = undefined; let value = ops[0]; let i = 1; while (i < ops.length) { const op = ops[i]; const fn = ops[i + 1]; i += 2; if ((op === 'optionalAccess' || op === 'optionalCall') && value == null) { return undefined; } if (op === 'access' || op === 'optionalAccess') { lastAccessLHS = value; value = fn(value); } else if (op === 'call' || op === 'optionalCall') { value = fn((...args) => value.call(lastAccessLHS, ...args)); lastAccessLHS = undefined; } } return value; }
+import { add, money } from '../../core/kernel/money.js';
+import { ok, reject } from '../../core/kernel/result.js';
+import { emptyOutbox, enqueue } from '../../core/outbox/outbox.js';
+
+
+import { cashFlows, reducingBalanceMonthly, } from '../../core/pricing/schedule.js';
+import { isStrictlyLater } from '../../core/time/tsa.js';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const KEYS = new Set(['minMonths', 'maxMonths', 'maxAmountMinorUnits', 'adminFeeMinorUnits', 'affordability']);
+const isRecord = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isPosInt = (v) => typeof v === 'number' && Number.isInteger(v) && v > 0;
+
+export function parseTermLoanTerms(raw) {
+  if (!isRecord(raw)) return reject('OP-DETERMINACY', 'TERMS_MALFORMED', 'Term loan terms are an object');
+  const unknown = Object.keys(raw).filter((k) => !KEYS.has(k));
+  if (unknown.length > 0) return reject('OP-DETERMINACY', 'TERMS_UNKNOWN_KEY', 'Unknown key in term loan terms', { keys: unknown.join(',') });
+  if (!isPosInt(raw['minMonths']) || !isPosInt(raw['maxMonths']) || raw['minMonths'] > raw['maxMonths']) return reject('OP-DETERMINACY', 'TERMS_MONTHS', 'minMonths ≤ maxMonths');
+  if (typeof raw['maxAmountMinorUnits'] !== 'string' || !/^\d+$/.test(raw['maxAmountMinorUnits'])) return reject('OP-DETERMINACY', 'TERMS_MAX_AMOUNT', 'maxAmountMinorUnits is an integer string');
+  if (raw['adminFeeMinorUnits'] !== undefined && (typeof raw['adminFeeMinorUnits'] !== 'string' || !/^\d+$/.test(raw['adminFeeMinorUnits']))) return reject('OP-DETERMINACY', 'TERMS_FEE', 'adminFeeMinorUnits is an integer string');
+  const aff = raw['affordability'];
+  if (!isRecord(aff) || !isPosInt(aff['maxDeductionPerTenThousand']) || aff['maxDeductionPerTenThousand'] > 10000) return reject('OP-DETERMINACY', 'TERMS_AFFORDABILITY', 'affordability.maxDeductionPerTenThousand is an integer in (0, 10000]');
+  if (typeof aff['citation'] !== 'string' || aff['citation'].trim().length < 10) return reject('OP-DETERMINACY', 'TERMS_CITATION_REQUIRED', 'A regulatory threshold carries the regulation and article it comes from');
+  return ok({ minMonths: raw['minMonths'], maxMonths: raw['maxMonths'], maxAmount: money(BigInt(raw['maxAmountMinorUnits'])), adminFee: money(raw['adminFeeMinorUnits'] === undefined ? 0n : BigInt(raw['adminFeeMinorUnits'] )), affordability: { maxDeductionPerTenThousand: aff['maxDeductionPerTenThousand'], citation: aff['citation'] } });
+}
+
+export function quoteTermLoan(terms, request) {
+  if (request.pricing.rate === undefined) return reject('PLAT-03', 'RATE_REQUIRED', 'A term loan is priced from a sourced rate (C-1)');
+  if (request.requestedAmount.minorUnits <= 0n) return reject('OP-DETERMINACY', 'REQUESTED_AMOUNT_NOT_POSITIVE', 'The amount must be positive');
+  if (request.requestedAmount.minorUnits > terms.maxAmount.minorUnits) return reject('OP-LIMIT', 'AMOUNT_EXCEEDS_PRODUCT', 'Above the product maximum');
+  const months = Math.round(request.requestedTenorDays / 30);
+  if (months < terms.minMonths || months > terms.maxMonths) return reject('OP-DETERMINACY', 'TENOR_OUTSIDE_PRODUCT', 'Tenor outside what this product allows');
+  const schedule = reducingBalanceMonthly(request.requestedAmount, { ...request.pricing.rate.rate, basis: 'REDUCING' }, months);
+  if (!schedule.ok) return schedule;
+  const s = schedule.value;
+  const instalment = _nullishCoalesce(_optionalChain([s, 'access', _ => _.instalments, 'access', _2 => _2[0], 'optionalAccess', _3 => _3.amount]), () => ( money(0n)));
+  const a = request.affordability;
+  if (_optionalChain([a, 'optionalAccess', _4 => _4.monthlyIncome]) === undefined || a.existingMonthlyObligations === undefined) return reject('OP-DETERMINACY', 'AFFORDABILITY_FACTS_MISSING', 'Income and existing obligations are required (C-3)');
+  if (a.monthlyIncome.minorUnits <= 0n) return reject('OP-DETERMINACY', 'INCOME_NOT_POSITIVE', 'No income, no instalment');
+  const deduction = (add(instalment, a.existingMonthlyObligations).minorUnits * 10_000n) / a.monthlyIncome.minorUnits;
+  if (deduction > BigInt(terms.affordability.maxDeductionPerTenThousand)) return reject('OP-LIMIT', 'DEDUCTION_RATIO_EXCEEDED', 'The instalment would exceed the tenant\'s responsible-lending cap', { deductionPerTenThousand: String(deduction), cap: String(terms.affordability.maxDeductionPerTenThousand), citation: terms.affordability.citation });
+  const fees = terms.adminFee.minorUnits > 0n ? [{ code: 'ADMIN', labelEn: 'Administration fee', labelAr: 'رسوم إدارية', amount: terms.adminFee, when: 'UPFRONT'  }] : [];
+  return ok({
+    productCode: 'conventional-term', financingAmount: request.requestedAmount, tenorDays: months * 30, months,
+    schedule: cashFlows(request.requestedAmount, s, fees.map((f) => f.amount)), fees,
+    totalPayable: add(s.totalPayable, terms.adminFee), totalCostOfCredit: add(s.totalProfit, terms.adminFee),
+    monthlyInstalment: instalment, interestAmount: s.totalProfit, rateSnapshot: request.pricing.rate, schedule_: s,
+  });
+}
+
+export function discloseTermLoan(q) {
+  return {
+    financingAmount: q.financingAmount, tenorDays: q.tenorDays, instalmentCount: q.months, instalmentAmount: q.monthlyInstalment,
+    totalCostOfCredit: q.totalCostOfCredit, totalPayable: q.totalPayable, fees: q.fees,
+    lines: [
+      { code: 'PRINCIPAL', labelEn: 'Loan amount', labelAr: 'مبلغ القرض', amount: q.financingAmount },
+      { code: 'INTEREST', labelEn: 'Total interest', labelAr: 'إجمالي الفائدة', amount: q.interestAmount },
+    ],
+  };
+}
+
+export function disburse(t, at) {
+  if (!isStrictlyLater(at, t.core.openedAt)) return reject('OP-CHAIN', 'TIMESTAMPS_NOT_MONOTONIC', 'Disbursement is attested after opening');
+  const key = `txn:${t.core.transactionId}`;
+  const base = { tenantId: t.core.tenantId, subjectRef: t.core.transactionId, correlationId: t.core.correlationId };
+  const one = enqueue(emptyOutbox(), { ...base, eventId: `${key}:disburse`, kind: 'PAYMENT_DISBURSE', idempotencyKey: `${key}:disburse`, payload: { beneficiaryRef: t.core.applicantRef, minorUnits: String(t.core.quote.financingAmount.minorUnits), currency: t.core.quote.financingAmount.currency } });
+  if (!one.ok) return one;
+  const two = enqueue(one.value, { ...base, eventId: `${key}:bureau`, kind: 'BUREAU_REPORT', idempotencyKey: `${key}:bureau`, payload: { facilityRef: t.core.transactionId, event: 'OPENED', minorUnits: String(t.core.quote.totalPayable.minorUnits) } });
+  if (!two.ok) return two;
+  return ok({ state: 'DISBURSED', core: t.core, disbursedAt: at, outbox: two.value });
+}
+
+export const conventionalTerm = {
+  descriptor: { code: 'conventional-term', nameEn: 'Term loan', nameAr: 'قرض لأجل', journeyShape: 'AMOUNT_FIRST', family: 'CONVENTIONAL', consumer: true, requiresBoardRuling: false },
+  validateTerms: parseTermLoanTerms,
+  quote: quoteTermLoan,
+  disclose: discloseTermLoan,
+  execute(_terms, approved, quote, context) {
+    if (context.bureauEnquiryRef.trim().length === 0) return reject('OP-DETERMINACY', 'BUREAU_ENQUIRY_REQUIRED', 'No approval without a bureau enquiry on record (C-4)');
+    if (context.consentId.trim().length === 0) return reject('OP-DETERMINACY', 'CONSENT_MISSING', 'No approval without consent');
+    return ok({ state: 'DRAFT', core: { transactionId: context.transactionId, tenantId: approved.core.tenantId, applicantRef: context.applicantRef, quote, bureauEnquiryRef: context.bureauEnquiryRef, consentId: context.consentId, openedAt: context.openedAt, correlationId: context.correlationId } });
+  },
+};

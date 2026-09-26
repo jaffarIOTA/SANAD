@@ -17,23 +17,16 @@
 
 
 
-/** A real trade. There is no drawdown against a cash amount alone (BR-D01). */
 
 
+;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+/**
+ * Identity and the parameters in force at inception. Everything here is
+ * snapshotted: a later change to the Board's parameters or to credit policy
+ * cannot retroactively change what an executed transaction was executed under
+ * (SDD §3.11.2, §5.7).
+ */
 
 
 
