@@ -12,11 +12,41 @@
  */
 
 import type { Result } from '../kernel/result.ts';
-import type { LegRenderRequest, RenderLocale } from '../documents/render.ts';
 import type { VerifiedTimestamp } from '../time/tsa.ts';
 
 export interface DocumentRef {
   readonly value: string;
+}
+
+export type RenderLocale = 'ar-SA' | 'en-SA';
+
+/**
+ * What a document is about. Exactly one thing: a product module decides what
+ * that thing is (a Murabaha leg, a consumer finance offer, a Tawarruq
+ * commodity sale) and the port does not know or care. A request carries one
+ * subject, not a list, so "render these together" is not expressible here.
+ */
+export interface DocumentSubject {
+  readonly kind: string;
+  readonly reference: string;
+  /** Product-specific facts the template may need, by name. */
+  readonly detail: Readonly<Record<string, string>>;
+}
+
+export interface DocumentRenderRequest {
+  readonly requestId: string;
+  readonly tenantId: string;
+  readonly subject: DocumentSubject;
+  /** Resolved to an explicit approved version. Never "latest". */
+  readonly templateVersionId: string;
+  /** Arabic is the governing text; English accompanies it as a translation. */
+  readonly governingLocale: 'ar-SA';
+  readonly translationLocale: RenderLocale;
+  /** Merge values for the declared variable fields only. */
+  readonly mergeFields: Readonly<Record<string, string>>;
+  /** The approval the template version was issued under, where the product has one. */
+  readonly approvalRef?: string;
+  readonly correlationId: string;
 }
 
 export interface RenderedDocument {
@@ -65,7 +95,7 @@ export interface DocumentRenderingProvider {
     version: number,
   ): Promise<Result<TemplateVersion>>;
 
-  render(request: LegRenderRequest): Promise<Result<RenderedDocument>>;
+  render(request: DocumentRenderRequest): Promise<Result<RenderedDocument>>;
 
   /** Compare an executed document against the version it claims (BR-F07). */
   compareToTemplate(

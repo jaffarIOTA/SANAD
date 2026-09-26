@@ -31,7 +31,7 @@ import {
 } from '../../core/ports/credentials.ts';
 import { money } from '../../core/kernel/money.ts';
 import { expectOk } from '../../core/kernel/result.ts';
-import { buildLegRenderRequest } from '../../core/documents/render.ts';
+import { buildLegRenderRequest } from '../../products/murabaha-scf/documents/render.ts';
 import { DISTRIBUTOR_CR, at, chain } from '../support/fixtures.ts';
 
 /** Records every resolution, so a test can assert the value never escaped. */
@@ -364,7 +364,7 @@ describe('document platform adapter', () => {
       templateFixture,
       {
         operation: 'document.render',
-        match: { legId: 'leg-1' },
+        match: { subjectKind: 'CONTRACT_LEG', subjectRef: 'leg-1' },
         response: {
           documentId: 'doc-0001',
           contentHash: 'sha256-abc',

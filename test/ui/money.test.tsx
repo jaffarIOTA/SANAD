@@ -20,7 +20,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Money, defaultNumerals, formatMinorUnits } from '@sanad/design/Money.tsx';
 import { money } from '@sanad/core/kernel/money.ts';
-import type { MurabahaPricing } from '@sanad/core/pricing/murabaha.ts';
+import type { MurabahaPricing } from '@sanad/products/murabaha-scf/pricing/murabaha.ts';
 
 const LABELS_EN = { cost: 'Cost', profit: 'Profit', total: 'Total' } as const;
 const LABELS_AR = { cost: 'التكلفة', profit: 'الربح', total: 'الإجمالي' } as const;

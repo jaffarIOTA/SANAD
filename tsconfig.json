@@ -38,11 +38,15 @@
       ],
       "@sanad/config/*": [
         "config/*"
+      ],
+      "@sanad/products/*": [
+        "products/*"
       ]
     }
   },
   "include": [
     "core/**/*",
+    "products/**/*",
     "config/**/*",
     "adapters/**/*",
     "test/**/*"

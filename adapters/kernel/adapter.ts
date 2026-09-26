@@ -35,7 +35,18 @@ export type AdapterCapability =
   | 'BUSINESS_REGISTRY'
   | 'CREDIT_BUREAU'
   | 'SCREENING'
-  | 'TIMESTAMP_AUTHORITY';
+  | 'TIMESTAMP_AUTHORITY'
+  | 'IDENTITY_AUTHENTICATION'
+  | 'IDENTITY_VERIFICATION'
+  | 'DOCUMENT_VERIFICATION'
+  | 'EMPLOYMENT_VERIFICATION'
+  | 'TAX_COMPLIANCE'
+  | 'ACCOUNT_INFORMATION'
+  | 'PAYMENT_INITIATION'
+  | 'BILL_COLLECTION'
+  | 'PAYMENTS'
+  | 'RATE_PUBLISHER'
+  | 'COMMODITY_BROKER';
 
 export type FailurePosture =
   /** Blocks the transaction. Compliance dependencies never degrade. */

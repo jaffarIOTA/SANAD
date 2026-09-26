@@ -28,13 +28,13 @@ import {
   type Principal,
   type ServicingOutcome,
   approve,
-  openTransaction,
   raise,
   recordServicingOutcome,
   rejectRequest,
   returnToMaker,
   submitForReview,
 } from '../../core/origination/request.ts';
+import { openTransaction } from '../../products/murabaha-scf/origination/open-transaction.ts';
 import { money } from '../../core/kernel/money.ts';
 import { expectOk } from '../../core/kernel/result.ts';
 import { ANCHOR_CR, INSTITUTION_CR, at, transactionCore } from '../support/fixtures.ts';
@@ -120,7 +120,12 @@ describe.each(ORIGINATION_CHANNELS)('adversarial: origination via %s', (channel)
   });
 
   it('exposes no way to open a transaction in any later state', async () => {
-    const module = await import('../../core/origination/request.ts');
+    // The engine itself opens nothing: an approval is handed to the product
+    // module, and the Murabaha module's only opener returns a DRAFT.
+    const engine = await import('../../core/origination/request.ts');
+    expect(Object.keys(engine).filter((name) => /^(open|convert|book|execute|promote)/i.test(name))).toEqual([]);
+
+    const module = await import('../../products/murabaha-scf/origination/open-transaction.ts');
     const approved = approvedRequest(channel);
 
     // Every exported function that accepts an approval returns a DRAFT or a

@@ -19,7 +19,7 @@
 
 import { money } from '@sanad/core/kernel/money.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
-import { type MurabahaPricing, priceMurabaha } from '@sanad/core/pricing/murabaha.ts';
+import { type MurabahaPricing, priceMurabaha } from '@sanad/products/murabaha-scf/pricing/murabaha.ts';
 import type { ControlCode } from '@sanad/core/kernel/result.ts';
 
 export interface TradeSummary {

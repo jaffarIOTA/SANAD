@@ -29,6 +29,9 @@
       ],
       "@/*": [
         "./src/*"
+      ],
+      "@sanad/products/*": [
+        "../../products/*"
       ]
     },
     "esModuleInterop": true,

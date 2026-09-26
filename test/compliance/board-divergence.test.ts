@@ -16,8 +16,8 @@ import { describe, expect, it } from 'vitest';
 
 import { TENANT_CODES, loadAllForTenant, loadStructureDefinition } from '../../config/loader.ts';
 import { expectOk } from '../../core/kernel/result.ts';
-import { evaluateGates } from '../../core/sequencing/gates.ts';
-import { parseStructureDefinition } from '../../core/structures/definition.ts';
+import { evaluateGates } from '../../products/murabaha-scf/sequencing/gates.ts';
+import { parseStructureDefinition } from '../../products/murabaha-scf/structures/definition.ts';
 import { emittableReasonCodes } from '../../core/decisioning/policy.ts';
 import {
   at,

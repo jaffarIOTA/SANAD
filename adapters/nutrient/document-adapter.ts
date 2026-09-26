@@ -30,7 +30,7 @@ import type {
   TemplateVersion,
 } from '../../core/ports/documents.ts';
 import type { CredentialProvider } from '../../core/ports/credentials.ts';
-import type { LegRenderRequest, RenderLocale } from '../../core/documents/render.ts';
+import type { DocumentRenderRequest, RenderLocale } from '../../core/ports/documents.ts';
 import type { VerifiedTimestamp } from '../../core/time/tsa.ts';
 import { type Result, ok, reject } from '../../core/kernel/result.ts';
 import { type AdapterConfig, BaseAdapter, type KnownDeviation } from '../kernel/adapter.ts';
@@ -133,12 +133,13 @@ export class NutrientDocumentAdapter
   }
 
   /**
-   * Render one leg into one document.
+   * Render one subject into one document.
    *
-   * `LegRenderRequest` holds a single leg, so there is no combined-rendering
-   * path to close off here — the type closed it (SH-07).
+   * `DocumentRenderRequest` holds a single subject — a Murabaha leg, a
+   * consumer offer — so there is no combined-rendering path to close off
+   * here; the type closed it (SH-07 for the Murabaha module).
    */
-  async render(request: LegRenderRequest): Promise<Result<RenderedDocument>> {
+  async render(request: DocumentRenderRequest): Promise<Result<RenderedDocument>> {
     const template = await this.resolveTemplateVersionById(
       request.tenantId,
       request.templateVersionId,
@@ -162,12 +163,13 @@ export class NutrientDocumentAdapter
       request.tenantId,
       {
         templateVersionId: request.templateVersionId,
-        legId: request.leg.legId,
-        legType: request.leg.legType,
+        subjectKind: request.subject.kind,
+        subjectRef: request.subject.reference,
+        ...request.subject.detail,
         governingLocale: request.governingLocale,
         translationLocale: request.translationLocale,
         mergeFields: request.mergeFields,
-        shariahApprovalId: request.shariahApprovalId,
+        ...(request.approvalRef === undefined ? {} : { approvalRef: request.approvalRef }),
       },
       request.correlationId,
     );

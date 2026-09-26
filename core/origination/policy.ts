@@ -16,7 +16,7 @@
  * - **Nothing here touches a sequencing gate.** An approval tier decides who
  *   may approve *raising a transaction*; it has no bearing on whether goods
  *   were bought, possessed and held at risk. The transitions in
- *   `core/sequencing` take no authority and consult no policy, and the
+ *   `products/murabaha-scf/sequencing` take no authority and consult no policy, and the
  *   adversarial suite asserts this file's exports appear nowhere near them.
  * - **Nothing here is a rate.** Limits are amounts in minor units, held as
  *   strings in JSON — the same rule as on the wire — and parsed to `bigint`.

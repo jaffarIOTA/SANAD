@@ -178,7 +178,7 @@ export interface RequestRow {
    *
    * Exposed so a work queue can be ordered and aged. **Operational display
    * only.** No gate is evaluated from these — gate timing comes from the TSA
-   * adapter through `core/sequencing`, and nothing in `apps/` can reach it.
+   * adapter through `products/murabaha-scf/sequencing`, and nothing in `apps/` can reach it.
    */
   readonly raisedAtEpochSeconds: bigint;
   readonly submittedAtEpochSeconds?: bigint;

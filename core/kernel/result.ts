@@ -32,7 +32,10 @@ export type ShariahControl =
 export type OperationalControl =
   | 'OP-DETERMINACY' // a required value is absent or indeterminate
   | 'OP-CHAIN' // hash chain or timestamp monotonicity broken
-  | 'OP-LIMIT'; // limit or concentration breach
+  | 'OP-LIMIT' // limit or concentration breach
+  | 'PLAT-01' // a domain table in the exposed schema
+  | 'PLAT-02' // floating point in the financial path
+  | 'PLAT-03'; // a stale, missing or unsourced rate
 
 export type ControlCode = ShariahControl | OperationalControl;
 

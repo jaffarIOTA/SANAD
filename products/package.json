@@ -1,0 +1,10 @@
+{
+  "name": "@sanad/products",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Product modules. Each owns its contract logic and invariants; none imports another.",
+  "exports": {
+    "./*": "./*"
+  }
+}

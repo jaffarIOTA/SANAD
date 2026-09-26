@@ -137,12 +137,18 @@ describe('SH-01 — no rate reaches a screen', () => {
     expect(declared.sort()).toEqual(['labels', 'locale', 'numerals', 'pricing']);
   });
 
-  it('no rendering surface names a proportion in a prop or a label', () => {
+  it('no Murabaha rendering surface names a proportion in a prop or a label', () => {
+    // Re-scoped 2026-09-25 (ADR 0002): `<Rate>` and `<Disclosure>` in the
+    // design package render rates and APR for rate-priced products, by
+    // decision. The Wasl (Murabaha) portal and the `<Money>` component stay
+    // rate-free; that is what this scan now covers.
     const banned = [['rate'], ['margin'], [['a', 'p', 'r'].join('')], ['percent'], ['yield']].flat();
+    const RATE_SURFACES = ['packages/design/Rate.tsx', 'packages/design/Disclosure.tsx'];
     const offenders: string[] = [];
 
     for (const surface of SURFACES) {
       for (const file of filesUnder(surface, ['.tsx'])) {
+        if (RATE_SURFACES.some((allowed) => rel(file) === allowed)) continue;
         const source = readFileSync(file, 'utf8');
         for (const match of source.matchAll(/^\s*readonly\s+(\w+)\??:/gm)) {
           const name = (match[1] ?? '').toLowerCase();

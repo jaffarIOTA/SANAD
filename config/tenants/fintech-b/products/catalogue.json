@@ -1,0 +1,88 @@
+{
+  "version": "2026-09-26.1",
+  "entries": [
+    {
+      "productCode": "murabaha-scf",
+      "enabled": true,
+      "nameEn": "Wasl — distributor finance",
+      "nameAr": "وصل — تمويل الموزعين",
+      "programmeIds": "ALL",
+      "boardRulingRef": "SSB-B-2026-003",
+      "pricingRule": {
+        "kind": "FIXED_PROFIT_AMOUNT",
+        "profitMinorUnits": "462500"
+      },
+      "terms": {
+        "instalments": "BULLET",
+        "structureCode": "MURABAHA",
+        "maxTenorDays": 120
+      },
+      "effectiveFromEpochSeconds": "1780000000"
+    },
+    {
+      "productCode": "bnpl",
+      "enabled": true,
+      "nameEn": "Pay in 4",
+      "nameAr": "قسّطها على ٤",
+      "programmeIds": "ALL",
+      "pricingRule": {
+        "kind": "FIXED_PROFIT_AMOUNT",
+        "profitMinorUnits": "0"
+      },
+      "terms": {
+        "instalments": 4,
+        "intervalDays": 30,
+        "consumerLimitMinorUnits": "500000",
+        "merchantDiscountPerTenThousand": 400,
+        "citation": "PLACEHOLDER — SAMA Rules for Regulating BNPL Companies (2023): confirm the article setting the consumer limit before go-live"
+      },
+      "effectiveFromEpochSeconds": "1780000000"
+    },
+    {
+      "productCode": "embedded-lending",
+      "enabled": true,
+      "nameEn": "Merchant cash advance via partners",
+      "nameAr": "تمويل التجار عبر الشركاء",
+      "programmeIds": "ALL",
+      "pricingRule": {
+        "kind": "CATALOGUE_RATE",
+        "bp": "1400",
+        "basis": "FLAT",
+        "catalogueRef": "fintech-b/embedded/2026-Q3"
+      },
+      "terms": {
+        "collection": "REVENUE_LINKED",
+        "holdbackPerTenThousand": 1200,
+        "maxAmountMinorUnits": "50000000",
+        "maxTenorDays": 360,
+        "instalmentIntervalDays": 30
+      },
+      "effectiveFromEpochSeconds": "1780000000"
+    },
+    {
+      "productCode": "conventional-term",
+      "enabled": true,
+      "nameEn": "Term loan",
+      "nameAr": "قرض لأجل",
+      "programmeIds": "ALL",
+      "pricingRule": {
+        "kind": "BENCHMARK_PLUS_MARGIN",
+        "benchmarkCode": "SAIBOR-3M",
+        "marginBp": "600",
+        "basis": "REDUCING",
+        "boundByMarketRange": true
+      },
+      "terms": {
+        "minMonths": 6,
+        "maxMonths": 60,
+        "maxAmountMinorUnits": "30000000",
+        "adminFeeMinorUnits": "50000",
+        "affordability": {
+          "maxDeductionPerTenThousand": 3333,
+          "citation": "PLACEHOLDER — SAMA Responsible Lending Principles for Individual Customers: confirm the current article and the deduction cap for this income tier before go-live"
+        }
+      },
+      "effectiveFromEpochSeconds": "1780000000"
+    }
+  ]
+}

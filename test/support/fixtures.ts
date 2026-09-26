@@ -12,14 +12,14 @@
  */
 
 import type { EvidenceRecord, EvidenceSource, EvidenceType, GateId } from '../../core/evidence/evidence.ts';
-import type { ContractLeg, CounterpartyRole, LegType } from '../../core/legs/leg.ts';
+import type { ContractLeg, CounterpartyRole, LegType } from '../../products/murabaha-scf/legs/leg.ts';
 import { type TsaInstant, tsaInstant } from '../../core/time/tsa.ts';
 import { money } from '../../core/kernel/money.ts';
 import { expectOk } from '../../core/kernel/result.ts';
-import { priceMurabaha } from '../../core/pricing/murabaha.ts';
-import type { TransactionCore } from '../../core/sequencing/state.ts';
+import { priceMurabaha } from '../../products/murabaha-scf/pricing/murabaha.ts';
+import type { TransactionCore } from '../../products/murabaha-scf/sequencing/state.ts';
 import type { ApplicantSnapshot } from '../../core/decisioning/snapshot.ts';
-import type { StructureDefinition } from '../../core/structures/definition.ts';
+import type { StructureDefinition } from '../../products/murabaha-scf/structures/definition.ts';
 import { type TenantCode, loadStructureDefinition } from '../../config/loader.ts';
 
 /** An attested instant. Seconds since the epoch; the value itself is arbitrary. */

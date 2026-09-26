@@ -208,12 +208,12 @@ describe('SLA and expiry are pure functions of attested time', () => {
 
 describe('none of this can reach a sequencing gate', () => {
   it('the sequencing modules import nothing from the origination policy and use none of its exports', () => {
-    // Comments are stripped first: `core/sequencing` legitimately speaks of
+    // Comments are stripped first: `products/murabaha-scf/sequencing` legitimately speaks of
     // the *timestamping* authority in prose, and a scan for behaviour is
     // looking for code. The identifiers below are this module's exports.
     const codeOnly = (src: string): string =>
       src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*$/gm, '$1');
-    for (const file of ['core/sequencing/transitions.ts', 'core/sequencing/gates.ts', 'core/sequencing/state.ts']) {
+    for (const file of ['products/murabaha-scf/sequencing/transitions.ts', 'products/murabaha-scf/sequencing/gates.ts', 'products/murabaha-scf/sequencing/state.ts']) {
       const src = codeOnly(readFileSync(`${ROOT}${file}`, 'utf8'));
       expect(src, file).not.toMatch(/origination\/policy/);
       expect(src, file).not.toMatch(
@@ -225,7 +225,7 @@ describe('none of this can reach a sequencing gate', () => {
   it('an approved request still opens a transaction in DRAFT and nothing later, whatever the authority', () => {
     // The type is the control: `openTransaction` returns `Draft`. This pins
     // that the addition of authority tiers did not widen it.
-    const src = readFileSync(`${ROOT}core/origination/request.ts`, 'utf8');
+    const src = readFileSync(`${ROOT}products/murabaha-scf/origination/open-transaction.ts`, 'utf8');
     expect(src).toMatch(/export function openTransaction\([^)]*\): Result<Draft>/);
   });
 });

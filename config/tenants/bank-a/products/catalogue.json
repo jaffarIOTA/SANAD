@@ -1,0 +1,76 @@
+{
+  "version": "2026-09-26.1",
+  "entries": [
+    {
+      "productCode": "murabaha-scf",
+      "enabled": true,
+      "nameEn": "Wasl — distributor finance",
+      "nameAr": "وصل — تمويل الموزعين",
+      "programmeIds": [
+        "prg-0001",
+        "prg-0002"
+      ],
+      "boardRulingRef": "SSB-A-2026-014",
+      "pricingRule": {
+        "kind": "CATALOGUE_RATE",
+        "bp": "850",
+        "basis": "FLAT",
+        "catalogueRef": "bank-a/wasl/2026-Q3"
+      },
+      "terms": {
+        "instalments": "BULLET",
+        "structureCode": "MURABAHA",
+        "maxTenorDays": 180
+      },
+      "effectiveFromEpochSeconds": "1780000000"
+    },
+    {
+      "productCode": "tawarruq-personal",
+      "enabled": true,
+      "nameEn": "Personal finance (Tawarruq)",
+      "nameAr": "التمويل الشخصي (تورّق)",
+      "programmeIds": "ALL",
+      "boardRulingRef": "SSB-A-2026-021",
+      "pricingRule": {
+        "kind": "BENCHMARK_PLUS_MARGIN",
+        "benchmarkCode": "SAIBOR-3M",
+        "marginBp": "450",
+        "basis": "REDUCING",
+        "boundByMarketRange": true
+      },
+      "terms": {
+        "minMonths": 6,
+        "maxMonths": 60,
+        "maxAmountMinorUnits": "50000000",
+        "brokerRef": "broker-board-approved-01",
+        "commodityCode": "LME-AL",
+        "agencyPermitted": true,
+        "adminFeeMinorUnits": "0",
+        "affordability": {
+          "maxDeductionPerTenThousand": 3333,
+          "citation": "PLACEHOLDER — SAMA Responsible Lending Principles for Individual Customers: confirm the current article and the deduction cap for this income tier before go-live"
+        }
+      },
+      "effectiveFromEpochSeconds": "1780000000"
+    },
+    {
+      "productCode": "bnpl",
+      "enabled": false,
+      "nameEn": "Buy now pay later",
+      "nameAr": "اشترِ الآن وادفع لاحقاً",
+      "programmeIds": "ALL",
+      "pricingRule": {
+        "kind": "FIXED_PROFIT_AMOUNT",
+        "profitMinorUnits": "0"
+      },
+      "terms": {
+        "instalments": 4,
+        "intervalDays": 30,
+        "consumerLimitMinorUnits": "500000",
+        "merchantDiscountPerTenThousand": 400,
+        "citation": "PLACEHOLDER — SAMA Rules for Regulating BNPL Companies (2023): confirm the article setting the consumer limit before go-live"
+      },
+      "effectiveFromEpochSeconds": "1780000000"
+    }
+  ]
+}

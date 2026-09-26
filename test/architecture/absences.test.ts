@@ -2,9 +2,14 @@
  * The absences, enforced.
  *
  * Several of this system's controls are things that must not exist: no rate
- * anywhere, no clock read inside the domain, no vendor concept in the core, no
- * client name in the core. An absence cannot be tested by calling a function,
- * so it is tested by reading the source.
+ * inside the Murabaha module, no clock read inside the domain, no vendor
+ * concept in the engine or a product module, no client name in either, and no
+ * product module reachable from the engine. An absence cannot be tested by
+ * calling a function, so it is tested by reading the source.
+ *
+ * Re-scoped 2026-09-25 (ADR 0002): rates are legitimate platform values in
+ * `core/pricing` and in rate-priced product modules. SH-01 applies to
+ * `products/murabaha-scf/` only.
  *
  * A note on the odd string building below. The forbidden identifiers are
  * assembled from fragments rather than written out, because a `PreToolUse` hook
@@ -15,7 +20,7 @@
  */
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { extname, join, relative } from 'node:path';
+import { dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -84,13 +89,14 @@ const RATE_IDENTIFIERS: readonly string[] = [
 
 const ANNUALISED = ['a', 'p', 'r'].join('');
 
-describe('SH-01 — no rate construct exists anywhere', () => {
-  // `api` is on this list because an OpenAPI document is the likeliest place
-  // for a rate to reappear: an integrating partner asks for one field to
-  // reconcile against, it goes in the contract, and the implementation
-  // follows the contract. The absence has to be enforced at the boundary as
-  // well as in the domain.
-  const surfaces = ['core', 'config', 'adapters', 'supabase/migrations', 'api'];
+const MURABAHA = 'products/murabaha-scf';
+const PRODUCT_MODULES = 'products';
+
+describe('SH-01 — no rate construct exists inside the Murabaha module', () => {
+  // Module-scoped by decision (ADR 0002). A rate elsewhere on the platform is
+  // a typed basis-point value in core/pricing; a rate in here would turn a
+  // sale at a disclosed profit into a loan at interest.
+  const surfaces = [MURABAHA];
 
   it.each(surfaces)('%s declares no rate identifier', (surface) => {
     const offenders: string[] = [];
@@ -109,7 +115,7 @@ describe('SH-01 — no rate construct exists anywhere', () => {
   });
 
   it('the transaction aggregate exposes cost, profit and total and nothing rate-shaped', async () => {
-    const { priceMurabaha } = await import('../../core/pricing/murabaha.ts');
+    const { priceMurabaha } = await import('../../products/murabaha-scf/pricing/murabaha.ts');
     const { money } = await import('../../core/kernel/money.ts');
     const { expectOk } = await import('../../core/kernel/result.ts');
 
@@ -133,9 +139,9 @@ describe('SH-06 — the domain reads no clock', () => {
     ['process', 'hrtime('],
   ].map(([a, b]) => (a === 'new' ? `${a} ${b}` : `${a}.${b}`));
 
-  it('core contains no clock read', () => {
+  it.each(['core', MURABAHA])('%s contains no clock read', (surface) => {
     const offenders: string[] = [];
-    for (const file of filesUnder('core')) {
+    for (const file of filesUnder(surface)) {
       const content = codeOnly(read(file));
       for (const expression of CLOCK_READS) {
         if (content.includes(expression)) offenders.push(`${rel(file)}: ${expression}`);
@@ -180,9 +186,9 @@ describe('AP-04 — vendor concepts stop at the adapter', () => {
     'kafka',
   ];
 
-  it('core names no vendor or national rail', () => {
+  it.each(['core', PRODUCT_MODULES])('%s names no vendor or national rail', (surface) => {
     const offenders: string[] = [];
-    for (const file of filesUnder('core')) {
+    for (const file of filesUnder(surface)) {
       const content = read(file).toLowerCase();
       for (const vendor of VENDOR_NAMES) {
         if (content.includes(vendor)) offenders.push(`${rel(file)}: ${vendor}`);
@@ -191,10 +197,10 @@ describe('AP-04 — vendor concepts stop at the adapter', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('core names no client or institution', () => {
+  it.each(['core', PRODUCT_MODULES])('%s names no client or institution', (surface) => {
     const CLIENT_IDENTIFIERS = ['bank-a', 'fintech-b', 'bank_a', 'fintech_b'];
     const offenders: string[] = [];
-    for (const file of filesUnder('core')) {
+    for (const file of filesUnder(surface)) {
       const content = read(file).toLowerCase();
       for (const client of CLIENT_IDENTIFIERS) {
         if (content.includes(client)) offenders.push(`${rel(file)}: ${client}`);
@@ -203,14 +209,49 @@ describe('AP-04 — vendor concepts stop at the adapter', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('core imports nothing from adapters, config or apps', () => {
+  it.each(['core', PRODUCT_MODULES])('%s imports nothing from adapters, config or apps', (surface) => {
     const offenders: string[] = [];
-    for (const file of filesUnder('core')) {
+    for (const file of filesUnder(surface)) {
       for (const match of read(file).matchAll(/from\s+'([^']+)'/g)) {
         const specifier = match[1] ?? '';
         if (/(^|\/)(adapters|config|apps)\//.test(specifier)) {
           offenders.push(`${rel(file)} imports ${specifier}`);
         }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('the engine imports no product module', () => {
+    // The engine is product-agnostic: it knows applications, decisions and
+    // money, not whether a product is a Murabaha or a term loan. A product
+    // import in core/ is the engine learning a product's shape.
+    // Resolved, not pattern-matched: `core/products/` is the engine's own
+    // product *interface*, and a relative import of it must not read as a
+    // product module import.
+    const modulesDir = join(ROOT, 'products') + '/';
+    const offenders: string[] = [];
+    for (const file of filesUnder('core')) {
+      for (const match of read(file).matchAll(/from\s+'([^']+)'/g)) {
+        const specifier = match[1] ?? '';
+        const target = specifier.startsWith('@sanad/products/')
+          ? join(ROOT, 'products', specifier.slice('@sanad/products/'.length))
+          : specifier.startsWith('.')
+            ? resolve(dirname(file), specifier)
+            : '';
+        if (target.startsWith(modulesDir)) offenders.push(`${rel(file)} imports ${specifier}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('no product module imports another', () => {
+    const offenders: string[] = [];
+    for (const file of filesUnder(PRODUCT_MODULES)) {
+      const own = rel(file).split('/')[1] ?? '';
+      for (const match of read(file).matchAll(/from\s+'([^']+)'/g)) {
+        const m = /(^|\/)products\/([\w-]+)\//.exec(match[1] ?? '');
+        if (m !== null && m[2] !== own) offenders.push(`${rel(file)} imports ${match[1] ?? ''}`);
       }
     }
     expect(offenders).toEqual([]);

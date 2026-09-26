@@ -4,7 +4,7 @@
  * The catalogue below is closed, and every action in it is something a human can
  * legitimately do. None of them advances a transaction through a sequencing
  * gate, and none of them can be composed into something that does — the
- * transitions in `core/sequencing/transitions.ts` take no actor and consult no
+ * transitions in `products/murabaha-scf/sequencing/transitions.ts` take no actor and consult no
  * entitlement, so there is nothing for an elevated role to unlock (SH-05,
  * BR-D10, SDD §6.12).
  *

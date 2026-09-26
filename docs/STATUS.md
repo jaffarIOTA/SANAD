@@ -13,35 +13,41 @@ needs.
 
 ## Where we are in one paragraph
 
-The **domain is built and tested**: the sequencing engine, the gates, pricing,
-obligations, evidence, the leg hash chain, the decisioning engine and the
-charity ledger, with 1,596 lines of SQL carrying the compliance controls as
-database constraints. A **partner API exists and runs** — contract authored
-first, compiled into its own runtime validator, driven over HTTP by 43 tests.
-The **operator workbench** runs all three origination doors — ERP over the API,
-embedded aggregator, maker/checker keying — into one queue, in Arabic and
-English, and the BRD's lifecycle gaps (information from outside, servicing
-failure with a controlled retry ledger, resubmission with a diff, document
-checklist, consent, exceptions, eligibility pre-check) are built and tested.
-**570 tests pass.**
+Sanad was **re-chartered on 25 September 2026** (ADR 0002) as a product-agnostic
+KSA Loan Origination Platform. Since then: the Murabaha engine has been
+**relocated intact** into `products/murabaha-scf/` with its invariants narrowed to
+that directory and a test that the engine imports no product; the **product
+engine** exists — `ProductModule`, tenant catalogues, sourced basis-point rates,
+one platform APR function with golden tests, a disclosure screen; **five product
+modules** are built (Murabaha SCF, personal Tawarruq, BNPL, embedded lending,
+conventional term) and quote end to end through the workbench; **thirteen KSA
+rail adapters** exist on fixtures behind capability-named ports; the workflow
+engine is decided (ADR 0003, Temporal) and the origination store has a
+PostgreSQL implementation with its migration. **679 tests pass, 2 are skipped
+until a database is reachable.**
 
-What does not exist is everything that depends on infrastructure nobody has
-provisioned yet: there is no database, no timestamping authority, no live
-connection to any external system, and nothing is deployed. **3 of 40 modules
-are live.** That is the expected shape at this stage — the hard part was the
-domain and it is done — but it should not be read as "nearly finished".
+What is not done is what needs something outside this repository: no rail has
+made a live sandbox call, no regulatory threshold has its article confirmed, the
+PostgreSQL store has not been run against a database, the Temporal adapter and
+the consumer app do not exist, and nothing is deployed. The shape is right and
+the numbers are honest; it is not nearly finished.
 
 ---
 
 ## Built and tested
 
-### The domain — `core/`, 36 modules
+### The engine — `core/`, 49 modules · the products — `products/`, 5 modules · the rails — `adapters/ksa/`, 13 adapters
 
 The part that makes non-compliant transactions structurally impossible.
 
 | | |
 |---|---|
-| **Sequencing state machine** | States as a discriminated union, so a transition from `PURCHASE_EXECUTED` to `SALE_OFFERED` does not typecheck. No override exists, for any role. |
+| **Product engine** | `ProductModule` (journey shape, `validateTerms`, `quote`, `disclose`, `execute`); per-tenant product catalogue with pricing rules (`FIXED_PROFIT_AMOUNT`, `CATALOGUE_RATE`, `BENCHMARK_PLUS_MARGIN` bounded by the published market range); an Islamic product cannot be enabled without the tenant's board ruling reference. |
+| **Rates and APR** | `Rate = { bp: bigint, basis, period }`, effective-dated and sourced (catalogue / publisher / manual override with approval); **one** APR function in `core/pricing/apr.ts`, fixed-point `bigint` throughout, golden-tested against analytically exact cases; integer reducing-balance and flat schedules that sum exactly. |
+| **Offers and disclosure** | `buildOffer` is the only constructor and stamps `apr.computedBy`; `<Rate>` and `<Disclosure>` render exactly what `disclose()` returned plus the platform APR, in both languages, with the disclosure version in the markup. |
+| **Product modules** | `murabaha-scf` (relocated, trade-first, profit amount, gates intact), `tawarruq-personal` (broker sequence: own → sell → title → onward sale → disburse, board-gated agency), `bnpl` (zero consumer cost, consumer limit, merchant discount), `embedded-lending` (partner-raised, fixed total, revenue-linked collection by tenant permission), `conventional-term` (reducing balance). Every consumer module refuses without a bureau enquiry and queues disbursement and bureau report once, keyed on the transaction. |
+| **Outbox** | Pure aggregate: every external effect carries an idempotency key; a duplicate key is refused. |
+| **Sequencing state machine** | *(Murabaha module)* States as a discriminated union, so a transition from `PURCHASE_EXECUTED` to `SALE_OFFERED` does not typecheck. No override exists, for any role. |
 | **Gate evaluation** | A pure function of (transaction, evidence set). No I/O, no clock read — which is what makes it replayable by the Board and reusable as the acceptance test for both DR and migration. |
 | **Trusted time** | `TsaInstant` is branded and constructible only from a verified RFC 3161 attestation. The module exports no `now()`. Measuring a risk period against a server clock does not compile. |
 | **Money** | Minor-unit `bigint`. No multiply-by-fraction, no percentage helper, no division — those are rate operations. |
@@ -51,12 +57,16 @@ The part that makes non-compliant transactions structurally impossible.
 | **Request lifecycle** | `PENDING_INFORMATION` (from the counterparty, the partner or documents), `SERVICING_UNAVAILABLE` with an attempt ledger and tenant-bounded automatic retry, manual resubmission by a named person with a recorded note, and `resubmit()` after a return — identifier kept, diff recorded, material changes (a tenant-listed field) re-validated. |
 | **Exceptions, consent, documents** | `CaseException` as append-only events with owner, SLA and mandatory resolution; consent records that gate the bureau and screening ports; a per-programme document checklist with validity windows. |
 | **Eligibility pre-check** | The policy version in force, run over a snapshot, answering approve / refer / decline with reason codes and `persisted: false` in the type. Never a price. |
-| **Ports** | Counterparty registry, credit bureau, screening, notifications, applicant snapshot — capability-named, consent-bearing, unavailable as a typed outcome, no personal identifier by value. Adapters wait on vendor access. |
+| **Ports** | Counterparty registry, credit bureau (query **and** reporting duty), screening, notifications, applicant snapshot, rate publisher, workflow, identity authentication, identity verification, document verification, employment verification, tax compliance, account information, payment initiation, bill collection, payments, commodity broker — capability-named, consent-bearing, unavailable as a typed outcome, no personal identifier by value. |
+| **Rail adapters** | Nafath, Yakeen, Tahaqoq, SIMAH, Bayan, Wathq, GOSI, ZATCA (tax status), Open Banking (AIS + PIS), SADAD, payments hub, rate publisher, commodity broker — on a shared `RailAdapter` base (vault credential, circuit breaker, typed outcomes) with a fixture transport for tests and an HTTP transport for production; each README names its verification item. **All BLOCKED until a live sandbox call.** |
 
 ### The API — `services/origination/`
 
 A Node HTTP service, no framework. Five operations plus platform health,
-the fifth being `POST /eligibility`, which creates nothing.
+the fifth being `POST /eligibility`, which creates nothing. The request store
+and the idempotency ledger have PostgreSQL implementations (migration 0006)
+selected by `DATABASE_URL`; without it the service runs in memory and says so
+in its health report.
 
 The load-bearing piece: **the OpenAPI document is compiled into the runtime
 validators**. `additionalProperties: false` stopped being a claim in a
@@ -86,16 +96,16 @@ against the real toolkit. The origination definition is **generated** from the
 that 3.0 cannot express are listed inside the generated file rather than
 dropped silently.
 
-### Tests — 570 across 29 files
+### Tests — 679 across 40 files (2 skipped until a database is reachable)
 
 | Suite | Tests | What it protects |
 |---|---|---|
-| `compliance/` | 172 | Each test *attempts* a prohibited outcome and passes only when it fails |
-| `contract/` | 85 | The published contract, and the running service over HTTP |
-| `unit/` | 77 | Decisioning, eligibility, exceptions, consent, checklist, health aggregation |
-| `architecture/` | 113 | The absences: no rate, no clock in core, no secret, no gateway dependency |
-| `adapters/` | 43 | Partner integration and Tuum authentication |
-| `ui/` | 80 | RTL/LTR parity, logical properties, no rate on a screen |
+| `compliance/` | 183 | Each test *attempts* a prohibited outcome and passes only when it fails |
+| `contract/` | 85 (+2 skipped) | The published contract, and the running service over HTTP |
+| `unit/` | 115 | Decisioning, eligibility, APR goldens, rates, schedules, product engine, product modules, store codec |
+| `architecture/` | 138 | The absences: no rate, no clock in core, no secret, no gateway dependency |
+| `adapters/` | 65 | Partner integration, Tuum authentication, the thirteen KSA rails on fixtures |
+| `ui/` | 93 | RTL/LTR parity, logical properties, no rate on a screen |
 
 ---
 
@@ -109,6 +119,8 @@ dropped silently.
 | **Deployment model** | Sanad is a **product**: our cloud first, then each buying institution's own cluster. |
 | **Datastore** | Supabase is development only. In-Kingdom PostgreSQL from UAT (ADR 0001). |
 | **Contract format** | OpenAPI 3.1 stays the source of truth; a 3.0 artefact is generated for the gateway. |
+| **Charter** | Product-agnostic origination engine with product modules; rates, APR, amount-first journeys and Tawarruq allowed by decision; the no-rate rule scoped to the Murabaha module (ADR 0002). |
+| **Workflow engine** | Temporal, self-hosted on the institution's OpenShift, behind `core/ports/workflow.ts` (ADR 0003). Adapter not yet built. |
 
 ---
 
@@ -150,8 +162,20 @@ Ordered by what it costs to guess wrong.
 2. **R-10** — the internal review API specification. Approve, return and
    reject are deliberately absent from the partner contract; they need their
    own, with their own authentication.
-3. **R-15** — durable idempotency. Works, but in memory. The dialect depends
-   on E-17.
+3. **R-15** — durable idempotency. Built on PostgreSQL (migration 0006);
+   untested against a database until one is reachable (`SANAD_TEST_DATABASE_URL`).
+4. **The Temporal adapter** behind `core/ports/workflow.ts`, and the workers
+   that run the Murabaha and Tawarruq sequences as activities.
+5. **The consumer app** (`apps/consumer`). The disclosure screen exists as a
+   component and is mounted in the workbench; the customer-facing journey is
+   not built.
+6. **Splitting `counterparty-registry`** into business-registry and
+   counterparty-master (WATHQ-DEV-001).
+7. **Every regulatory threshold's citation.** The deduction-ratio cap and the
+   BNPL consumer limit ship as placeholders whose `citation` field says so; the
+   SAMA APR annex examples are to be transcribed into the APR golden tests.
+8. **Merchant onboarding and the checkout API** for BNPL; **partner settlement
+   reconciliation** for embedded lending; the **ZATCA e-invoicing** adapter.
 
 ---
 
@@ -161,10 +185,11 @@ Recorded so they read as decisions rather than omissions.
 
 | | Why |
 |---|---|
-| Commodity broker integration | Organised tawarruq. Excluded by SDD §1.5 and PR-X2. |
-| Embedded lending origination | No identified goods, so no Murabaha. OI-22. |
-| Share-of-sales repayment sweep | No determinate maturity, which is gharar. OI-23. |
-| Any gate override | §1.3. A test asserts no entitlement capable of it can be defined. |
+| A fourth engine outcome for "needs information" | A person asks for information; the engine says what it could not read. |
+| APR inside a product module | One function on the platform computes it; a module supplies cash flows. |
+| A rate inside `products/murabaha-scf/` | M-1. The absence is the control, and it is now scoped to where it belongs. |
+| Any gate override | Murabaha M-3. A test asserts no entitlement capable of it can be defined. |
+| Reading proxy variables inside the HTTP transport | Egress is the institution's; a `fetch` bound to the right dispatcher is injected. |
 | A delta chip on the dashboard | No history to compare against. A fabricated percentage on an operations screen is a lie with a percent sign on it. |
 
 ---

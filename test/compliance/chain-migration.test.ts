@@ -26,7 +26,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { appendLeg, verifyChain, type ContractLeg } from '../../core/legs/leg.ts';
+import { appendLeg, verifyChain, type ContractLeg } from '../../products/murabaha-scf/legs/leg.ts';
 import { tsaInstant, type TsaInstant } from '../../core/time/tsa.ts';
 import { expectOk } from '../../core/kernel/result.ts';
 

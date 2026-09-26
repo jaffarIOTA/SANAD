@@ -19,16 +19,20 @@ import fintechBPolicyV1 from './tenants/fintech-b/credit-policy/wasl-distributor
 import bankAOrigination from './tenants/bank-a/origination/policy.json' with { type: 'json' };
 import fintechBOrigination from './tenants/fintech-b/origination/policy.json' with { type: 'json' };
 import bankAChecklist from './tenants/bank-a/documents/wasl-distributor.json' with { type: 'json' };
+import bankACatalogue from './tenants/bank-a/products/catalogue.json' with { type: 'json' };
+import fintechBCatalogue from './tenants/fintech-b/products/catalogue.json' with { type: 'json' };
 import fintechBChecklist from './tenants/fintech-b/documents/wasl-distributor.json' with { type: 'json' };
 
 import {
   type StructureDefinition,
   parseStructureDefinition,
-} from '../core/structures/definition.ts';
+} from '../products/murabaha-scf/structures/definition.ts';
 import { type CreditPolicy, parseCreditPolicy } from '../core/decisioning/policy.ts';
 import { type OriginationPolicy, parseOriginationPolicy } from '../core/origination/policy.ts';
 import { type DocumentChecklist, parseDocumentChecklist } from '../core/documents/checklist.ts';
 import { type Result, ok, reject } from '../core/kernel/result.ts';
+import { type ProductCatalogue, parseProductCatalogue } from '../core/products/catalogue.ts';
+import { ISLAMIC_PRODUCT_CODES } from '../core/products/registry.ts';
 
 /** The tenant codes this deployment knows about. */
 export const TENANT_CODES = ['bank-a', 'fintech-b'] as const;
@@ -53,6 +57,15 @@ const ORIGINATION_POLICIES: Readonly<Record<TenantCode, unknown>> = {
  * The tenant's intake parameters: expiry, SLAs, approval tiers, agent and
  * partner entitlements. Parsed strictly; a malformed file refuses to activate.
  */
+const PRODUCT_CATALOGUES: Readonly<Record<TenantCode, unknown>> = {
+  'bank-a': bankACatalogue,
+  'fintech-b': fintechBCatalogue,
+};
+
+export function loadProductCatalogue(tenant: TenantCode): Result<ProductCatalogue> {
+  return parseProductCatalogue(PRODUCT_CATALOGUES[tenant], ISLAMIC_PRODUCT_CODES);
+}
+
 export function loadOriginationPolicy(tenant: TenantCode): Result<OriginationPolicy> {
   return parseOriginationPolicy(ORIGINATION_POLICIES[tenant]);
 }

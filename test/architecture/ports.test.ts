@@ -11,12 +11,14 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
-const PORTS = ['counterparty-registry', 'credit-bureau', 'screening', 'notifications', 'applicant-snapshot'];
+const PORTS = ['commodity-broker', 'counterparty-registry', 'credit-bureau', 'screening', 'notifications', 'applicant-snapshot', 'rate-publisher', 'workflow', 'identity-authentication', 'identity-verification', 'document-verification', 'employment-verification', 'tax-compliance', 'account-information', 'payment-initiation', 'bill-collection', 'payments'];
 const src = (p: string) => readFileSync(`${ROOT}core/ports/${p}.ts`, 'utf8');
 const fields = (s: string) => [...s.matchAll(/^\s*readonly\s+(\w+)\??:/gm)].map((m) => m[1] ?? '');
 
 describe('ports declare no rate-shaped field', () => {
-  it.each(PORTS)('%s', (p) => {
+  // The Rate Publisher port exists to carry rates (ADR 0002, CLAUDE.md §4.3);
+  // it is the one port where a rate-shaped field is the point.
+  it.each(PORTS.filter((p) => p !== 'rate-publisher'))('%s', (p) => {
     const bad = fields(src(p)).filter((f) => /rate|percent|margin|yield|coupon/i.test(f) || /^apr$/i.test(f));
     expect(bad).toEqual([]);
   });

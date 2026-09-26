@@ -25,7 +25,19 @@ export type CredentialProviderName =
   | 'CREDIT_BUREAU'
   | 'SCREENING'
   | 'CERTIFICATION_SERVICE_PROVIDER'
-  | 'TIMESTAMP_AUTHORITY';
+  | 'TIMESTAMP_AUTHORITY'
+  // KSA rails (CLAUDE.md §5). Capability names, never vendor names.
+  | 'IDENTITY_AUTHENTICATION'
+  | 'IDENTITY_VERIFICATION'
+  | 'DOCUMENT_VERIFICATION'
+  | 'EMPLOYMENT_VERIFICATION'
+  | 'TAX_COMPLIANCE'
+  | 'OPEN_BANKING'
+  | 'BILL_COLLECTION'
+  | 'PAYMENTS_HUB'
+  | 'RATE_PUBLISHER'
+  | 'COMMODITY_BROKER'
+  | 'WORKFLOW_ENGINE';
 
 export type Environment = 'sandbox' | 'uat' | 'production';
 

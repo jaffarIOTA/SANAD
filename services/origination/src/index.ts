@@ -14,7 +14,9 @@
 import { createService, developmentTimestamps, BASE_PATH } from './server.ts';
 import { createHealthService, type HealthCheck } from './health.ts';
 import { inMemoryIdempotencyStore } from './idempotency.ts';
+import { postgresIdempotencyStore } from './idempotency-postgres.ts';
 import { inMemoryRequestRepository } from './repository.ts';
+import { postgresRequestRepository } from './repository-postgres.ts';
 import { developmentSnapshots } from './snapshots.ts';
 import { isTenantCode, loadAllForTenant } from '@sanad/config/loader.ts';
 import { reject } from '@sanad/core/kernel/result.ts';
@@ -54,18 +56,26 @@ const checks: readonly HealthCheck[] = [
     run: async () => {
       // A trivial read. Enough to prove the store answers, cheap enough to
       // run on every poll.
-      await repository.list({ tenantId: '__health__', partnerId: '__health__', limit: 1 });
-      return { status: 'UP' as const, detail: 'in-memory (development)' };
+      await repository.list({ tenantId: '00000000-0000-4000-8000-000000000000', partnerId: '__health__', limit: 1 });
+      return { status: 'UP' as const, detail: durable ? 'postgresql' : 'in-memory (development only)' };
     },
   },
 ];
 
-const repository = inMemoryRequestRepository();
+/*
+ * The store. PostgreSQL when a connection string is configured (migration
+ * 0006 applied); otherwise in memory, and the health report says so, because
+ * an in-memory store in anything but development is a finding.
+ */
+const databaseUrl = process.env['DATABASE_URL'];
+const durable = databaseUrl !== undefined && databaseUrl.trim().length > 0;
+const repository = durable ? postgresRequestRepository({ connectionString: databaseUrl }) : inMemoryRequestRepository();
+const idempotency = durable ? postgresIdempotencyStore({ connectionString: databaseUrl }) : inMemoryIdempotencyStore();
 
 const server = createService({
   repository,
   health: createHealthService({ checks }),
-  idempotency: inMemoryIdempotencyStore(),
+  idempotency,
   credentials: developmentRegistry(process.env),
   snapshots: developmentSnapshots(),
   creditPolicies: {

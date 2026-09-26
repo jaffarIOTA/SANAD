@@ -36,7 +36,7 @@ export interface RecordedCall {
 }
 
 interface Envelope {
-  readonly method: 'GET' | 'POST';
+  readonly method: 'GET' | 'POST' | 'PUT';
   readonly url: string;
   readonly body?: Readonly<Record<string, unknown>>;
   readonly headers: Readonly<Record<string, string>>;

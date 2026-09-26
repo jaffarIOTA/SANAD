@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "core"
+    "core",
+    "products"
   ],
   "description": "Sanad — Shariah-compliant origination platform. Wasl — SME supply chain finance.",
   "license": "UNLICENSED",
@@ -37,8 +38,10 @@
     "yaml": "^2.9.1"
   },
   "dependencies": {
+    "@types/pg": "^8.23.1",
     "ajv": "^8.20.0",
     "next": "^15.5.25",
+    "pg": "^8.23.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   }

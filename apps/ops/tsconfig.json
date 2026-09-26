@@ -36,6 +36,9 @@
       ],
       "@sanad/config/*": [
         "../../config/*"
+      ],
+      "@sanad/products/*": [
+        "../../products/*"
       ]
     },
     "baseUrl": "."

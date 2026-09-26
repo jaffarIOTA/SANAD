@@ -29,6 +29,12 @@ design, do not fill as written · ➖ out of our scope or the BRD's own out-of-s
 
 ## A. Deliberate deviations — do not "fix" these
 
+> **Superseded in part on 25 September 2026 (ADR 0002).** The rows below that concern
+> amount-first applications, products carrying a pricing reference, and disbursement are
+> no longer deviations: amount-first journeys, rates and APR are platform features, scoped
+> per product module. What remains deliberate is Murabaha-specific and lives in
+> `products/murabaha-scf/INVARIANTS.md`.
+
 | BRD says | Sanad does | Why the deviation is the design |
 |---|---|---|
 | §10 Application header carries an **amount** the maker captures; §29 step 4 "capture loan amount" | The journey starts by **selecting a cleared invoice**; the amount is a property of the trade and is never typed | §6. A Murabaha finances identified goods. An amount typed into a box is a loan with extra steps. This is the Shariah structure made visible. |

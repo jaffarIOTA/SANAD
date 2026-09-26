@@ -13,18 +13,18 @@ import { describe, expect, it } from 'vitest';
 import { TENANT_CODES } from '../../config/loader.ts';
 import { expectOk } from '../../core/kernel/result.ts';
 import { money } from '../../core/kernel/money.ts';
-import { priceMurabaha } from '../../core/pricing/murabaha.ts';
+import { priceMurabaha } from '../../products/murabaha-scf/pricing/murabaha.ts';
 import {
   type Instalment,
   applyEarlySettlementRelief,
   applyPayment,
   createObligation,
   reschedule,
-} from '../../core/obligation/obligation.ts';
-import { disburse, postLateAmount } from '../../core/ledger/charity.ts';
-import { buildLegRenderRequest } from '../../core/documents/render.ts';
-import { appendLeg } from '../../core/legs/leg.ts';
-import { verifyDistinctParties, verifyNoBuyBack } from '../../core/parties/distinctness.ts';
+} from '../../products/murabaha-scf/obligation/obligation.ts';
+import { disburse, postLateAmount } from '../../products/murabaha-scf/ledger/charity.ts';
+import { buildLegRenderRequest } from '../../products/murabaha-scf/documents/render.ts';
+import { appendLeg } from '../../products/murabaha-scf/legs/leg.ts';
+import { verifyDistinctParties, verifyNoBuyBack } from '../../products/murabaha-scf/parties/distinctness.ts';
 import {
   ENTITLEMENT_ACTIONS,
   FORBIDDEN_ENTITLEMENT_PATTERNS,
@@ -35,7 +35,7 @@ import {
   type FinancedInvoiceRecord,
   type FinancedInvoiceRegistryPort,
   assertNotPreviouslyFinanced,
-} from '../../core/trade/financed-invoice-registry.ts';
+} from '../../products/murabaha-scf/trade/financed-invoice-registry.ts';
 import { ANCHOR_CR, DISTRIBUTOR_CR, at, chain, structureFor } from '../support/fixtures.ts';
 
 // -- SH-10: duplicate financing ------------------------------------------------

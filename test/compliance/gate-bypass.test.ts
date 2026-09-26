@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 
 import { TENANT_CODES, type TenantCode } from '../../config/loader.ts';
 import { expectOk } from '../../core/kernel/result.ts';
-import { evaluateGates } from '../../core/sequencing/gates.ts';
+import { evaluateGates } from '../../products/murabaha-scf/sequencing/gates.ts';
 import {
   acceptOffer,
   acquireOwnership,
@@ -25,9 +25,9 @@ import {
   reserveLimit,
   submit,
   type SequencingContext,
-} from '../../core/sequencing/transitions.ts';
+} from '../../products/murabaha-scf/sequencing/transitions.ts';
 import type { EvidenceRecord } from '../../core/evidence/evidence.ts';
-import type { ContractLeg } from '../../core/legs/leg.ts';
+import type { ContractLeg } from '../../products/murabaha-scf/legs/leg.ts';
 import {
   ANCHOR_CR,
   DISTRIBUTOR_CR,

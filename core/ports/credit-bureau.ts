@@ -43,6 +43,24 @@ export type BureauOutcome =
   /** Routes to an exception of type BUREAU_UNAVAILABLE. Never a decline. */
   | { readonly kind: 'UNAVAILABLE'; readonly reason: string; readonly retryAfterSeconds?: number };
 
+/**
+ * The reporting duty: a new facility, and every change to it, is reported
+ * back to the bureau. Sent from the outbox, never fire-and-forget; the
+ * bureau's acknowledgement reference is stored against the facility.
+ */
+export interface FacilityReport {
+  readonly tenantId: string;
+  readonly facilityRef: string;
+  readonly counterpartyId: string;
+  readonly event: 'OPENED' | 'INSTALMENT_PAID' | 'ARREARS' | 'SETTLED' | 'WRITTEN_OFF';
+  readonly amount: Money;
+  readonly asOfEpochSeconds: bigint;
+  /** The outbox event's key; the bureau call is idempotent on it. */
+  readonly idempotencyKey: string;
+  readonly correlationId: string;
+}
+
 export interface CreditBureauPort {
   request(req: BureauRequest): Promise<Result<BureauOutcome>>;
+  report(report: FacilityReport): Promise<Result<{ readonly kind: 'ACKNOWLEDGED'; readonly acknowledgementRef: string } | { readonly kind: 'UNAVAILABLE'; readonly reason: string }>>;
 }

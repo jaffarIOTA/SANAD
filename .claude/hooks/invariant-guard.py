@@ -43,12 +43,7 @@ RULES = [
 
 # ----------------------------------------------------------- path-scoped rules
 # (path fragments, regex, control, message)
-MURABAHA_PATHS = (
-    'products/murabaha',
-    # legacy locations until the relocation in CLAUDE.md §13 step 1 is complete
-    'core/sequencing', 'core/pricing/murabaha', 'core/legs', 'core/obligation',
-    'core/ledger', 'core/structures', 'core/trade',
-)
+MURABAHA_PATHS = ('products/murabaha',)
 
 SCOPED = [
     (MURABAHA_PATHS,

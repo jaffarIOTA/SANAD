@@ -1098,3 +1098,46 @@ Also widened `test/architecture/absences.test.ts` to scan `.yaml` and cover
 `api/` — an OpenAPI document was previously the one place a rate field could
 be added with nothing objecting, which is exactly where an integrating partner
 would ask for one. It immediately caught a rate literal in my own draft.
+
+
+---
+
+## R-16 — Regulatory thresholds ship as placeholders · **Blocking before go-live**
+
+The deduction-ratio cap (`tawarruq-personal`, `conventional-term`) and the BNPL consumer
+limit are tenant configuration that *requires* a `citation` to parse — and the citations
+shipped say `PLACEHOLDER — confirm the article`. The APR golden tests hold analytically
+exact cases, not the SAMA annex examples. None of these products can go live until the
+current article numbers and figures are transcribed from the rulebook into the tenant
+catalogues and the golden tests (CLAUDE.md §3, §11).
+
+## R-17 — The PostgreSQL store has never touched a database · **Material**
+
+Migration 0006 and both implementations exist; the contract test skips itself without
+`SANAD_TEST_DATABASE_URL`. Provision a development PostgreSQL (or point at the Supabase
+instance) and run the two skipped tests before anything depends on the store.
+
+## R-18 — Thirteen rail adapters, zero live calls · **Material**
+
+Each `adapters/ksa/<rail>/README.md` names the one thing only a sandbox call can answer.
+Until it is answered the module stays `BLOCKED` in the workbench, by design. Order the
+sandbox access in the build order of §13 step 3: Nafath, Yakeen, SIMAH, GOSI, Rate
+Publisher first.
+
+## R-19 — `counterparty-registry` mixes two concerns · **Hygiene**
+
+The national registry (Wathq) and the institution's counterparty master share one port;
+the Wathq adapter refuses the master's methods with a typed rejection (WATHQ-DEV-001).
+Split the port before a second implementation appears.
+
+## R-20 — The Temporal adapter and workers do not exist · **Material**
+
+ADR 0003 chose the engine and `core/ports/workflow.ts` is the seam. The adapter, the
+workers that run sequences as activities, and the mapping of tenant retry policy onto
+activity retry options are the next infrastructure item after the database.
+
+## R-21 — There is no consumer app · **Material**
+
+`<Disclosure>` exists and is mounted in the operations workbench for review; the
+customer-facing journey (Nafath login, offer, disclosure, acceptance recording the
+disclosure version) is `apps/consumer` in the layout and unbuilt.

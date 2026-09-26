@@ -26,7 +26,7 @@
  *
  * **Ageing is operational only.** The times below drive display and ordering.
  * No gate is evaluated from them. Gate timing comes from the timestamping
- * authority through `core/sequencing`, which this page cannot reach (SH-06).
+ * authority through `products/murabaha-scf/sequencing`, which this page cannot reach (SH-06).
  */
 
 import { notFound } from 'next/navigation';
