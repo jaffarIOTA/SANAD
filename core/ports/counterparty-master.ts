@@ -1,14 +1,7 @@
 /**
- * Port: the institution's counterparty master (CIF).
- *
- * BRD §8 and BR-004: retrieve an existing customer, or begin onboarding a
- * new one. The shape is SME — a legal entity identified by its commercial
- * registration, with authorised signatories — not a retail applicant with a
- * salary and a date of birth. Distinctness (SH-08) is matched on the
- * registration number, never on a name.
- *
- * Nothing here carries a national identifier of a person in a form that
- * would be logged: signatories are referenced, not embedded (§10).
+ * The institution's own counterparty master (its CIF): who it has onboarded,
+ * under which identifier, with what KYC standing. The platform reads and
+ * begins onboarding; the master owns the record.
  */
 
 import type { Result } from '../kernel/result.ts';
@@ -27,8 +20,8 @@ export interface CounterpartyProfile {
   readonly kycStatus: 'VERIFIED' | 'PENDING' | 'EXPIRED' | 'FAILED';
 }
 
-export interface CounterpartyRegistryPort {
-  /** By commercial registration. Absent means unknown, not an error. */
+export interface CounterpartyMasterPort {
+  /** By commercial registration. Absent means not onboarded, not an error. */
   findByRegistration(tenantId: string, commercialRegistration: string): Promise<Result<CounterpartyProfile | undefined>>;
   get(tenantId: string, counterpartyId: string): Promise<Result<CounterpartyProfile>>;
   /** Begins onboarding; returns the id under which KYC will proceed. */

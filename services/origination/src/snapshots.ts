@@ -16,6 +16,7 @@
 import type { ApplicantSnapshot } from '@sanad/core/decisioning/snapshot.ts';
 import { ok } from '@sanad/core/kernel/result.ts';
 import type { ApplicantSnapshotPort, SnapshotRequest } from '@sanad/core/ports/applicant-snapshot.ts';
+import { type SnapshotSources, assembleSnapshot } from '@sanad/core/decisioning/assemble.ts';
 
 export function developmentSnapshots(): ApplicantSnapshotPort {
   return {
@@ -86,5 +87,14 @@ export function developmentSnapshot(request: SnapshotRequest): ApplicantSnapshot
     programme: { anchorRecourse: 'PARTIAL', programmeLimitMinorUnits: 10_000_000_000n, programmeUtilisedMinorUnits: 1_000_000_000n, sectorCode: 'BUILDING_MATERIALS', goodsCategoryCode: 'CEMENT' },
     exposure: { platformExposureMinorUnits: 0n, coreBankingExposureMinorUnits: 0n, groupExposureMinorUnits: 0n },
     consent: { eInvoicing: true, creditBureau: true, openBanking: true, workforce: true },
+  };
+}
+
+/** The snapshot port over the rails: what production uses once the adapters have made their sandbox calls. */
+export function railSnapshots(sources: SnapshotSources): ApplicantSnapshotPort {
+  return {
+    assemble(request: SnapshotRequest) {
+      return assembleSnapshot(sources, { tenantId: request.tenantId, counterpartyId: request.counterpartyId, programmeId: request.programmeId, snapshotId: `snp-${request.at.epochSeconds.toString()}`, at: request.at, correlationId: `snapshot-${request.counterpartyId}` });
+    },
   };
 }

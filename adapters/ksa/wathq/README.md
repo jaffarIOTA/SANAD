@@ -1,6 +1,6 @@
 # Wathq — business registry
 
-**Port:** `core/ports/counterparty-registry.ts` (the registry half). **Status:** `BLOCKED` — fixture transport only.
+**Port:** `core/ports/business-registry.ts`. **Status:** `BLOCKED` — fixture transport only.
 
 ## Verification item
 

@@ -31,7 +31,7 @@ import type { IdentityVerificationPort } from '../../core/ports/identity-verific
 import type { DocumentVerificationPort } from '../../core/ports/document-verification.ts';
 import type { CreditBureauPort } from '../../core/ports/credit-bureau.ts';
 import type { EmploymentVerificationPort } from '../../core/ports/employment-verification.ts';
-import type { CounterpartyRegistryPort } from '../../core/ports/counterparty-registry.ts';
+import type { BusinessRegistryPort } from '../../core/ports/business-registry.ts';
 import type { TaxCompliancePort } from '../../core/ports/tax-compliance.ts';
 import type { AccountInformationPort } from '../../core/ports/account-information.ts';
 import type { PaymentInitiationPort } from '../../core/ports/payment-initiation.ts';
@@ -113,13 +113,16 @@ describe('answers map to the port, and identifiers do not cross', () => {
     const r = expectOk(await (new SimahAdapter(config('CREDIT_BUREAU'), new Credentials(), t, attest) as CreditBureauPort).report({ tenantId: 't', facilityRef: 'f-1', counterpartyId: 'cp', event: 'OPENED', amount: money(100n), asOfEpochSeconds: 1n, idempotencyKey: 'k-1', correlationId: 'c' }));
     expect(r).toEqual({ kind: 'ACKNOWLEDGED', acknowledgementRef: 'ack-1' });
   });
-  it('Wathq drops signatory identifiers and treats 404 as unknown', async () => {
-    const t = transport({ operation: 'registry.lookup', match: { url: 'https://rail.sandbox.example/v1/commercial-registrations/1010000002' }, response: { nameAr: 'شركة', nameEn: 'Co', legalForm: 'LLC', status: 'ACTIVE', activityClass: 'G46', signatories: [{ ref: 'sig-1', nationalId: 'SHOULD NOT CROSS' }] } });
-    const a = (new WathqAdapter(config('BUSINESS_REGISTRY'), new Credentials(), t) as CounterpartyRegistryPort);
-    const p = expectOk(await a.findByRegistration('t', '1010000002'));
-    expect(p?.signatoryRefs).toEqual(['sig-1']); expect(JSON.stringify(p, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v))).not.toContain('SHOULD NOT CROSS');
-    expect(await a.findByRegistration('t', '12').then((r) => r.ok)).toBe(false);
-    expect((await a.get('t', 'cpt-1')).ok).toBe(false);
+  it('Wathq drops signatory identifiers, keeps activity codes, and reports an unknown registration as NOT_FOUND', async () => {
+    const t = transport({ operation: 'registry.lookup', match: { url: 'https://rail.sandbox.example/v1/commercial-registrations/1010000002' }, response: { nameAr: 'شركة', nameEn: 'Co', legalForm: 'LLC', status: 'ACTIVE', asOf: 1_800_000_000, lookupId: 'lk-1', activities: [{ code: '46900' }], signatories: [{ ref: 'sig-1', nationalId: 'SHOULD NOT CROSS' }] } });
+    const a = new WathqAdapter(config('BUSINESS_REGISTRY'), new Credentials(), t) as BusinessRegistryPort;
+    const r = expectOk(await a.lookup({ tenantId: 't', commercialRegistration: '1010000002', correlationId: 'c' }));
+    expect(r.kind).toBe('ANSWERED');
+    if (r.kind === 'ANSWERED') { expect(r.value.signatoryRefs).toEqual(['sig-1']); expect(r.value.activityCodes).toEqual(['46900']); expect(r.value.lookupRef).toBe('lk-1'); }
+    expect(JSON.stringify(r, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v))).not.toContain('SHOULD NOT CROSS');
+    expect((await a.lookup({ tenantId: 't', commercialRegistration: '12', correlationId: 'c' })).ok).toBe(false);
+    const missing = new WathqAdapter(config('BUSINESS_REGISTRY'), new Credentials(), transport({ operation: 'registry.lookup', match: {}, response: {}, failsWith: 'x' })) as BusinessRegistryPort;
+    expect(expectOk(await missing.lookup({ tenantId: 't', commercialRegistration: '1010000002', correlationId: 'c' })).kind).toBe('UNAVAILABLE');
   });
   it('ZATCA maps an unknown status to UNAVAILABLE, never VALID', async () => {
     const t = transport({ operation: 'tax.certificate', match: {}, response: { status: 'SOMETHING_NEW', asOf: 1 } });

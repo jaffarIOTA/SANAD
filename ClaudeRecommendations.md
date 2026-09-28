@@ -888,7 +888,7 @@ Ans:
 
 *Moved to Closed. See C-01.*
 
-## R-10 — Review endpoints need their own specification · **Material**
+## R-10 — Review endpoints need their own specification · **Material** · ✅ **Done** (`api/openapi/review.v1.yaml`, 2026-09-28)
 
 `api/openapi/origination.v1.yaml` is partner-facing only. Approve, return and
 reject are deliberately absent, because a partner-authenticated API that can
@@ -1124,7 +1124,7 @@ Until it is answered the module stays `BLOCKED` in the workbench, by design. Ord
 sandbox access in the build order of §13 step 3: Nafath, Yakeen, SIMAH, GOSI, Rate
 Publisher first.
 
-## R-19 — `counterparty-registry` mixes two concerns · **Hygiene**
+## R-19 — `counterparty-registry` mixes two concerns · **Hygiene** · ✅ **Done** (split 2026-09-28)
 
 The national registry (Wathq) and the institution's counterparty master share one port;
 the Wathq adapter refuses the master's methods with a typed rejection (WATHQ-DEV-001).

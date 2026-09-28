@@ -175,7 +175,7 @@ only a sandbox call can answer).
 | **Tahaqoq** | `document-verification` | Authenticity check of national digital documents and certificates presented by the applicant | Confirm the exact service scope with the provider before designing the adapter. |
 | **SIMAH** | `credit-bureau` (existing port) | Consumer and commercial credit report, score, existing obligations for DBR; **mandatory reporting** of new facilities back to the bureau | Consent id required on every call. Reporting is an outbox job, never fire-and-forget. |
 | **Bayan** | `credit-bureau` (second implementation) | Alternative licensed bureau; tenant chooses primary and fallback | Same port, adapter selected by tenant configuration. |
-| **Wathq** | `counterparty-registry` (existing port) | Commercial registration, legal form, signatories, CR status for SME applicants | Ministry of Commerce data. |
+| **Wathq** | `business-registry` | Commercial registration, legal form, signatories, CR status for SME applicants | Ministry of Commerce data. |
 | **GOSI** | `employment-verification` | Employment status, employer, registered salary for affordability and salary-assignment products | Consent-gated. Salary is stored as a snapshot with the GOSI reference. |
 | **ZATCA** | `e-invoicing` (existing) + `tax-compliance` | FATOORA invoice clearance for trade products; Zakat/tax certificate status for SME eligibility | |
 | **Open Banking** | `account-information`, `payment-initiation` | Affordability from transaction history (AIS); collection and disbursement instructions (PIS) under the SAMA Open Banking Framework | Through a licensed TPP or the institution's own OB connection; tenant-configured. |

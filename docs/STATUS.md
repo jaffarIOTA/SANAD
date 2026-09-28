@@ -96,7 +96,7 @@ against the real toolkit. The origination definition is **generated** from the
 that 3.0 cannot express are listed inside the generated file rather than
 dropped silently.
 
-### Tests — 713 across 44 files (2 skipped until a database is reachable)
+### Tests — 727 across 46 files (2 skipped until a database is reachable)
 
 | Suite | Tests | What it protects |
 |---|---|---|
@@ -170,8 +170,8 @@ Ordered by what it costs to guess wrong.
 5. ~~The consumer app~~ — built (`apps/consumer`, port 3003): national-identity
    sign-in (development stand-in), amount-first application, disclosure,
    acceptance bound to the disclosure version, merchant checkout.
-6. **Splitting `counterparty-registry`** into business-registry and
-   counterparty-master (WATHQ-DEV-001).
+6. ~~Splitting `counterparty-registry`~~ — done: `core/ports/business-registry.ts`
+   and `core/ports/counterparty-master.ts`; the Wathq adapter implements the first.
 7. **Every regulatory threshold's citation.** The deduction-ratio cap and the
    BNPL consumer limit ship as placeholders whose `citation` field says so; the
    SAMA APR annex examples are to be transcribed into the APR golden tests.
@@ -183,8 +183,14 @@ Ordered by what it costs to guess wrong.
    queue, request and products pages — needs the Figma desktop app open.
 10. **An outbox dispatcher**: events are queued (webhooks, payments, bureau
     reports) but nothing delivers them yet.
-11. **R-10** the internal review API; the consumer session as a signed,
-    encrypted cookie bound to the assertion's expiry (development uses a plain one).
+11. ~~R-10 the internal review API~~ — built: `api/openapi/review.v1.yaml`,
+    served by the workbench at `/api/review/v1` under staff credentials; four
+    eyes and authority tiers refused by the service. Still open: the consumer
+    session as a signed, encrypted cookie bound to the assertion's expiry.
+12. ~~Snapshot assembly from the rails~~ — built: `core/decisioning/assemble.ts`
+    over the registry, screening, bureau, e-invoicing, employment and open-banking
+    ports; consent gates each source; `railSnapshots()` is the port. The service
+    still runs the development snapshot until the adapters have made live calls.
 
 ---
 

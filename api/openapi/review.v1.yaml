@@ -1,0 +1,314 @@
+# Internal review API, v1 (R-10).
+#
+# The institution's own acts on an origination request — approve, return,
+# reject, ask for information, retry the servicing platform — performed by
+# named staff principals authenticated against the institution's identity
+# provider. Deliberately a separate document from the partner API: a partner
+# credential can never reach these paths, and a staff credential never
+# raises a request.
+#
+# Four eyes is enforced by the service, not by the client: the principal is
+# derived from the credential, and a decision on one's own work is refused
+# with `OWN_WORK`. Approval authority tiers are the tenant's configuration and
+# a checker below the tier a request needs is refused with
+# `APPROVAL_AUTHORITY_INSUFFICIENT`. Neither can be overridden here; no
+# endpoint advances a Murabaha gate.
+#
+# Closed schemas, money as strings of minor units, no gateway header, and no
+# tenant in any body — the same load-bearing properties as the partner API.
+openapi: 3.1.0
+info:
+  title: Sanad internal review API
+  version: 1.0.0
+  description: Review of origination requests by the institution's staff.
+servers:
+  - url: /review/v1
+security:
+  - mutualTls: []
+    staffOpenId: [review]
+tags:
+  - name: Queue
+  - name: Decisions
+
+paths:
+  /queue:
+    get:
+      tags: [Queue]
+      operationId: listReviewQueue
+      summary: The requests waiting on the institution, oldest first.
+      parameters:
+        - name: view
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [review, servicing, maker, information, failures, breached, decided]
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: The queue.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReviewItem' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /requests/{requestId}:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags: [Queue]
+      operationId: getRequestForReview
+      summary: One request, with what a reviewer needs to decide.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: The request.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReviewItem' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /requests/{requestId}/decision:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    put:
+      tags: [Decisions]
+      operationId: decideRequest
+      summary: Approve, return, reject, or ask for information.
+      description: |
+        One request, one decision. The principal is the authenticated staff
+        member; the service refuses a decision on the principal's own work
+        (`OWN_WORK`) and an approval beyond the principal's authority
+        (`APPROVAL_AUTHORITY_INSUFFICIENT`). An approval against a servicing
+        decline requires `contraryJustification`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Decision' }
+      responses:
+        '200':
+          description: The request after the decision.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReviewItem' }
+        '400': { $ref: '#/components/responses/Malformed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '422': { $ref: '#/components/responses/ControlRejection' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /requests/{requestId}/servicing-retry:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    put:
+      tags: [Decisions]
+      operationId: retryServicing
+      summary: Retry the servicing platform for a request it could not reach.
+      description: Automatic within the tenant's retry policy; beyond it, a named person with a recorded note.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                note:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  description: Present for a manual resubmission beyond the automatic limit. Recorded on the attempt ledger.
+      responses:
+        '200':
+          description: The request after the retry was queued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReviewItem' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ControlRejection' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+components:
+  securitySchemes:
+    mutualTls:
+      type: mutualTLS
+      description: Client certificate of the workbench or the integrating internal system.
+    staffOpenId:
+      type: openIdConnect
+      openIdConnectUrl: https://idp.institution.example/.well-known/openid-configuration
+      description: The institution's identity provider. The subject is the staff principal; the tenant and the approval authority come from the token's claims, never from the body.
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema: { type: string, format: uuid }
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 64 }
+
+  schemas:
+    Money:
+      type: object
+      additionalProperties: false
+      required: [minorUnits, currency]
+      properties:
+        minorUnits: { type: string, pattern: '^(0|[1-9][0-9]{0,18})$' }
+        currency: { type: string, enum: [SAR] }
+
+    ReviewItem:
+      type: object
+      additionalProperties: false
+      required: [requestId, state, channel, counterpartyId, invoiceNumber, amount, raisedAt]
+      properties:
+        requestId: { type: string }
+        state:
+          type: string
+          enum: [KEYING, AWAITING_SERVICING_RESPONSE, AWAITING_REVIEW, RETURNED_TO_MAKER, PENDING_INFORMATION, SERVICING_UNAVAILABLE, APPROVED, REJECTED, WITHDRAWN, EXPIRED]
+        channel: { type: string }
+        counterpartyId: { type: string }
+        invoiceNumber: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        raisedAt: { type: string, format: date-time }
+        submittedAt: { type: string, format: date-time }
+        makerPrincipalId: { type: string }
+        requiredAuthority: { type: string, enum: [CHECKER, SENIOR_CHECKER, CREDIT_COMMITTEE] }
+        note: { type: string }
+        reasonCode: { type: string }
+        contraryJustification: { type: string }
+        changes:
+          type: object
+          additionalProperties: false
+          required: [fields, material, returnedNote]
+          properties:
+            fields: { type: array, items: { type: string } }
+            material: { type: boolean }
+            returnedNote: { type: string }
+        pending:
+          type: object
+          additionalProperties: false
+          required: [from, items]
+          properties:
+            from: { type: string, enum: [COUNTERPARTY, PARTNER, DOCUMENTS] }
+            items: { type: array, items: { type: string } }
+        attempts:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [at, reason]
+            properties:
+              at: { type: string, format: date-time }
+              reason: { type: string }
+              manualBy: { type: string }
+              manualNote: { type: string }
+
+    Decision:
+      type: object
+      additionalProperties: false
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [APPROVE, RETURN, REJECT, REQUEST_INFORMATION]
+        note: { type: string, minLength: 1, maxLength: 500, description: Required for RETURN. }
+        reasonCode: { type: string, minLength: 1, maxLength: 64, description: Required for REJECT. }
+        contraryJustification: { type: string, minLength: 1, maxLength: 1000, description: Required to APPROVE against a servicing decline. }
+        from: { type: string, enum: [COUNTERPARTY, PARTNER, DOCUMENTS], description: Required for REQUEST_INFORMATION. }
+        items:
+          type: array
+          minItems: 1
+          items: { type: string, minLength: 1, maxLength: 200 }
+          description: Required for REQUEST_INFORMATION.
+
+    ControlCode:
+      type: string
+      enum: [SH-01, SH-02, SH-03, SH-04, SH-05, SH-06, SH-07, SH-08, SH-09, SH-10, SH-11, SH-12, SH-13, SH-14, SH-15, SH-16, SH-17, SH-18, OP-DETERMINACY, OP-CHAIN, OP-LIMIT, PLAT-01, PLAT-02, PLAT-03]
+
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, detail, detailAr, correlationId]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        detail: { type: string }
+        detailAr: { type: string }
+        instance: { type: string, format: uri-reference }
+        correlationId: { type: string, format: uuid }
+        control: { $ref: '#/components/schemas/ControlCode' }
+        reason: { type: string, maxLength: 64 }
+        context:
+          type: object
+          additionalProperties:
+            type: [string, number, boolean]
+
+  responses:
+    Malformed:
+      description: The body could not be accepted as written.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthenticated:
+      description: No valid staff credential.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: Authenticated, but not entitled — including a decision on one's own work (`OWN_WORK`).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: No such request within this tenant.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    IdempotencyConflict:
+      description: The `Idempotency-Key` has been used with a different body.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ControlRejection:
+      description: Well-formed, and refused by the domain — wrong state, insufficient authority, a rule of the tenant's policy.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Internal:
+      description: An unexpected failure. Quote the correlation identifier.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
