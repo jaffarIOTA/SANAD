@@ -179,8 +179,12 @@ Ordered by what it costs to guess wrong.
    e-invoicing~~ — built: `core/merchants`, `core/checkout`,
    `api/openapi/checkout.v1.yaml` served by the consumer app,
    `core/reconciliation/settlement.ts`, `adapters/ksa/zatca-einvoicing`.
-9. **Applying the remaining Figma frames** (Transactions, Loans, Setting) to the
-   queue, request and products pages — needs the Figma desktop app open.
+9. ~~Applying the remaining Figma frames~~ — done 2026-09-28: the queue (Transactions
+   frame: summary cards, tab strip, pill actions, pagination), the request page
+   (Setting frame: tab strip, two-column kit fields, filled primary action) and
+   the products page (Loans frame: four tiles, catalogue table). The kit's
+   tab strip, pills, pagination, tile and field styles live in
+   `packages/design/primitives.tsx`.
 10. ~~An outbox dispatcher~~ — built: `core/outbox/dispatch.ts` (one event, one
     port, DELIVERED / RETRY / DEAD), `core/outbox/store.ts` (leased claims),
     migration 0008 and `services/outbox` worker; development ports until the

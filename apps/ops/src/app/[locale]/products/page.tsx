@@ -24,7 +24,7 @@ import { ProductRegistry } from '@sanad/core/products/registry.ts';
 import { resolvePricingInputs } from '@sanad/core/pricing/quotation.ts';
 import { rate } from '@sanad/core/pricing/rate.ts';
 import { Disclosure } from '@sanad/design/Disclosure.tsx';
-import { Card, Status } from '@sanad/design/primitives.tsx';
+import { Card, PILL_OUTLINE, Status, Tile } from '@sanad/design/primitives.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 import { bnpl } from '@sanad/products/bnpl/index.ts';
 import { conventionalTerm } from '@sanad/products/conventional-term/index.ts';
@@ -65,20 +65,73 @@ export default async function ProductsPage({ params, searchParams }: { readonly 
   const catalogue = loadProductCatalogue(tenant);
   const at = developmentAttestation();
 
+  const entries = catalogue.ok ? catalogue.value.entries : [];
+  const enabled = entries.filter((e) => e.enabled);
+  const islamic = enabled.filter((e) => e.boardRulingRef !== undefined);
+  const consumer = enabled.filter((e) => { const m = REGISTRY.find(e.productCode); return m.ok && m.value.descriptor.consumer; });
+  const programmes = new Set(enabled.flatMap((e) => (e.programmeIds === 'ALL' ? ['ALL'] : [...e.programmeIds])));
+
   return (
-    <div className="flex max-w-4xl flex-col gap-4">
+    <div className="flex flex-col gap-8">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-xl font-semibold text-ink">{t('Products — ', 'المنتجات — ')}<span className="identifier">{tenant}</span></h1>
+        <h2 className="text-h2 font-semibold text-heading">{t('Products — ', 'المنتجات — ')}<span className="identifier">{tenant}</span></h2>
         <nav className="flex gap-2 text-sm">
           {(['bank-a', 'fintech-b'] as const).map((code) => (
-            <a key={code} href={`/${segment}/products?tenant=${code}`} className={`identifier rounded-card border border-line px-3 py-1 ${code === tenant ? 'bg-brand-wash text-brand-deep' : 'text-ink-quiet hover:bg-sunken'}`}>{code}</a>
+            <a key={code} href={`/${segment}/products?tenant=${code}`} className={`identifier press rounded-pill px-4 py-2 ${code === tenant ? 'bg-brand-deep text-white' : 'bg-surface text-ink-quiet hover:bg-sunken'}`}>{code}</a>
           ))}
         </nav>
       </div>
-      <p className="text-sm text-ink-quiet">
-        {t('What this tenant offers, priced by which rule, under which board ruling. Every figure below came out of the engine; the page only renders it. Benchmark-linked products use a development benchmark here, labelled as such.', 'ما تقدّمه هذه المؤسسة، ومُسعَّر بأي قاعدة، وتحت أي قرار من الهيئة. كل رقم أدناه خرج من المحرّك؛ الصفحة تعرضه فقط. المنتجات المرتبطة بمؤشر تستخدم هنا مؤشراً تطويرياً، مُبيَّناً كذلك.')}
-      </p>
-      {!catalogue.ok ? <Card><p className="text-sm text-danger">{catalogue.error.detail}</p></Card> : catalogue.value.entries.map((entry) => {
+
+      {/* -- The Loans frame's four tiles ------------------------------------------ */}
+      <section className="grid gap-[30px] sm:grid-cols-2 xl:grid-cols-4">
+        <Tile icon="store" disc="blue" label={t('Products enabled', 'منتجات مفعّلة')} value={String(enabled.length)} />
+        <Tile icon="shield-check" disc="yellow" label={t('Under a board ruling', 'بقرار من الهيئة')} value={String(islamic.length)} />
+        <Tile icon="people" disc="pink" label={t('Consumer products', 'منتجات للأفراد')} value={String(consumer.length)} />
+        <Tile icon="building" disc="teal" label={t('Programmes', 'البرامج')} value={programmes.has('ALL') ? t('All', 'الكل') : String(programmes.size)} />
+      </section>
+
+      {/* -- The catalogue as the Loans table ------------------------------------- */}
+      <div>
+        <h3 className="mb-4 text-h2 font-semibold text-heading">{t('Catalogue', 'الكتالوج')}</h3>
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-[16px]">
+              <thead>
+                <tr className="border-b border-line text-[16px] text-ink-quiet">
+                  <th className="py-3 pe-3 text-start font-normal">{t('No.', 'م')}</th>
+                  <th className="py-3 pe-3 text-start font-normal">{t('Product', 'المنتج')}</th>
+                  <th className="py-3 pe-3 text-start font-normal">{t('Pricing rule', 'قاعدة التسعير')}</th>
+                  <th className="py-3 pe-3 text-start font-normal">{t('Programmes', 'البرامج')}</th>
+                  <th className="py-3 pe-3 text-start font-normal">{t('Board ruling', 'قرار الهيئة')}</th>
+                  <th className="py-3 pe-3 text-start font-normal">{t('Journey', 'المسار')}</th>
+                  <th className="py-3 text-end font-normal">{t('Disclosure', 'الإفصاح')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((entry, i) => {
+                  const found = REGISTRY.find(entry.productCode);
+                  const module = found.ok ? found.value : undefined;
+                  return (
+                    <tr key={entry.productCode} className="border-b border-line last:border-b-0">
+                      <td className="py-4 pe-3 tabular-nums text-ink">{String(i + 1).padStart(2, '0')}.</td>
+                      <td className="py-4 pe-3"><span className="flex flex-col"><span className="font-medium text-ink">{arabic ? entry.nameAr : entry.nameEn}</span><span className="identifier text-xs text-ink-quiet">{entry.productCode}</span></span></td>
+                      <td className="py-4 pe-3 text-ink"><span className="identifier">{entry.pricingRule.kind}</span>{entry.pricingRule.kind === 'CATALOGUE_RATE' ? <span className="block text-xs text-ink-quiet">{entry.pricingRule.bp} bp {entry.pricingRule.basis}</span> : entry.pricingRule.kind === 'BENCHMARK_PLUS_MARGIN' ? <span className="block text-xs text-ink-quiet">{entry.pricingRule.benchmarkCode} + {entry.pricingRule.marginBp} bp</span> : null}</td>
+                      <td className="py-4 pe-3 text-ink"><span className="identifier">{entry.programmeIds === 'ALL' ? 'ALL' : entry.programmeIds.join(', ')}</span></td>
+                      <td className="py-4 pe-3 text-ink"><span className="identifier">{entry.boardRulingRef ?? '—'}</span></td>
+                      <td className="py-4 pe-3 text-ink-quiet">{module === undefined ? '—' : `${module.descriptor.journeyShape === 'TRADE_FIRST' ? t('trade first', 'يبدأ من الصفقة') : t('amount first', 'يبدأ من المبلغ')}${module.descriptor.consumer ? ` · ${t('consumer', 'أفراد')}` : ''}`}</td>
+                      <td className="py-4 text-end">{!entry.enabled ? <Status tone="blocked" label={t('disabled', 'معطّل')} /> : module === undefined ? <Status tone="progress" label={t('module not built', 'الوحدة غير مبنية')} /> : <a href={`#disclosure-${entry.productCode}`} className={PILL_OUTLINE}>{t('Preview', 'عرض')}</a>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+
+      <h3 className="text-h2 font-semibold text-heading">{t('Worked disclosures', 'إفصاحات عملية')}</h3>
+      <p className="-mt-6 text-sm text-ink-quiet">{t('Every figure below came out of the engine; the page only renders it. Benchmark-linked products use a development benchmark here, labelled as such.', 'كل رقم أدناه خرج من المحرّك؛ الصفحة تعرضه فقط. المنتجات المرتبطة بمؤشر تستخدم هنا مؤشراً تطويرياً، مُبيَّناً كذلك.')}</p>
+      {!catalogue.ok ? <Card><p className="text-sm text-blocked">{catalogue.error.detail}</p></Card> : catalogue.value.entries.filter((e) => e.enabled).map((entry) => {
         const found = REGISTRY.find(entry.productCode);
         const module = found.ok ? found.value : undefined;
         let offer: Offer | undefined;
@@ -98,7 +151,7 @@ export default async function ProductsPage({ params, searchParams }: { readonly 
         const sample = sampleFor(entry.productCode, tenant, at);
         return (
           <Card key={entry.productCode}>
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div id={`disclosure-${entry.productCode}`} className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-base font-semibold text-ink">{arabic ? entry.nameAr : entry.nameEn} <span className="identifier text-xs text-ink-quiet">{entry.productCode}</span></h2>
               <Status tone={!entry.enabled ? 'blocked' : module !== undefined ? 'settled' : 'progress'} label={!entry.enabled ? t('disabled', 'معطّل') : module !== undefined ? t('module built', 'الوحدة مبنية') : t('enabled · module not built', 'مفعّل · الوحدة غير مبنية')} />
             </div>

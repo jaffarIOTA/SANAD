@@ -15,6 +15,7 @@ import { notFound } from 'next/navigation';
 import { BrandMark, LanguageSwitch } from '@sanad/design/primitives.tsx';
 import { Icon } from '@sanad/design/icons.tsx';
 import { LOCALE_SEGMENTS, htmlLang, isRtl, localeFromSegment, type LocaleSegment } from '@sanad/i18n/strings.ts';
+import { HeaderTitle } from './HeaderTitle.tsx';
 import { BottomNav, SideNav } from './SideNav.tsx';
 import '../globals.css';
 
@@ -49,7 +50,7 @@ export default async function OpsLayout({ children, params }: { readonly childre
               <BrandMark size={36} />
               <span className="text-[25px] font-black tracking-tight text-heading">Sanad<span className="text-brand">.</span></span>
             </a>
-            <h1 className="hidden text-h1 font-semibold text-heading lg:block lg:ps-10">{arabic ? 'نظرة عامة' : 'Overview'}</h1>
+            <h1 className="hidden text-h1 font-semibold text-heading lg:block lg:ps-10"><HeaderTitle arabic={arabic} /></h1>
             <div className="ms-auto hidden lg:block">{search}</div>
             <div className="ms-auto flex items-center gap-3 lg:ms-0 lg:gap-[30px] lg:pe-10">
               <a href={`/${segment}/products`} title={arabic ? 'المنتجات' : 'Products'} className="press hidden size-[50px] items-center justify-center rounded-full bg-sunken text-ink-quiet hover:text-brand lg:inline-flex">

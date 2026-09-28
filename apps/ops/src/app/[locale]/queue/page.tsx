@@ -1,41 +1,21 @@
 /**
- * The review queue.
+ * The review queue, to the Figma Transactions frame (applied 2026-09-28):
+ * two summary cards and a small bar chart across the top, a tab strip of
+ * views, the queue as a white table with pill actions, and pagination.
  *
- * A work queue, not a table of everything. It answers one question — what
- * needs a decision from me, oldest first — and keeps the other views a click
- * away rather than mixed in.
- *
- * Four decisions here are worth stating, because each of them is the opposite
- * of what a conventional lending queue does.
- *
- * **Oldest first, always.** A queue sorted newest-first starves its tail, and
- * the tail is where a counterparty has been waiting longest. Ordering is FIFO
- * on the attested submission time and there is no control to reverse it.
- *
- * **Your own work is shown, and blocked.** Four eyes means the maker cannot be
- * the checker. Hiding those rows would be tidier and worse: someone would
- * assume the request was lost. They appear, marked, with the reason, and
- * without an action. The *control* is in the domain, which refuses the
- * transition regardless — this is only the explanation.
- *
- * **No bulk approve.** There is no select-all and no "approve 5 selected".
- * Reviewing means looking at the trade; a checkbox column is a way of not
- * looking at it. If volume makes this painful, the answer is more reviewers or
- * a straight-through policy that is explicit about what it skips — not a
- * button that makes the skipping invisible.
- *
- * **Ageing is operational only.** The times below drive display and ordering.
- * No gate is evaluated from them. Gate timing comes from the timestamping
- * authority through `products/murabaha-scf/sequencing`, which this page cannot reach (SH-06).
+ * What is unchanged from the previous queue, because it is the point of the
+ * screen: oldest first so nothing starves; SLA breach shown in words; a
+ * checker's own work shown but not actionable (the domain refuses it too);
+ * no bulk approve. What is new is only how it looks.
  */
 
 import { notFound } from 'next/navigation';
 
-import { Card, Status } from '@sanad/design/primitives.tsx';
+import { WeekBars } from '@sanad/design/charts.tsx';
 import { Icon } from '@sanad/design/icons.tsx';
 import { defaultNumerals, formatMinorUnits } from '@sanad/design/Money.tsx';
+import { Card, PILL_OUTLINE, Pagination, Status, Tabs } from '@sanad/design/primitives.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
-
 import { isExpired, slaStatus } from '@sanad/core/origination/policy.ts';
 
 import { CHECKER, canReview } from '../../../server/session.ts';
@@ -43,338 +23,170 @@ import { expireOverdueAction } from '../../../server/actions.ts';
 import { listRequests, originationPolicy, type RequestRow } from '../../../server/store.ts';
 
 type View = 'review' | 'servicing' | 'maker' | 'information' | 'failures' | 'breached' | 'decided';
-
 const VIEWS: readonly View[] = ['review', 'servicing', 'maker', 'information', 'failures', 'breached', 'decided'];
-
 const WAITING: readonly RequestRow['state'][] = ['AWAITING_SERVICING_RESPONSE', 'AWAITING_REVIEW', 'RETURNED_TO_MAKER', 'PENDING_INFORMATION', 'SERVICING_UNAVAILABLE'];
-
 const VIEW_STATES: Readonly<Record<View, readonly RequestRow['state'][]>> = {
-  review: ['AWAITING_REVIEW'],
-  servicing: ['AWAITING_SERVICING_RESPONSE'],
-  maker: ['RETURNED_TO_MAKER', 'KEYING'],
-  information: ['PENDING_INFORMATION'],
-  // Integration failures, visible to operations (BRD §21).
-  failures: ['SERVICING_UNAVAILABLE'],
-  // The supervisor's view: anything waiting past its SLA, whichever state.
-  breached: WAITING,
-  decided: ['APPROVED', 'REJECTED', 'WITHDRAWN', 'EXPIRED'],
+  review: ['AWAITING_REVIEW'], servicing: ['AWAITING_SERVICING_RESPONSE'], maker: ['RETURNED_TO_MAKER', 'KEYING'], information: ['PENDING_INFORMATION'],
+  failures: ['SERVICING_UNAVAILABLE'], breached: WAITING, decided: ['APPROVED', 'REJECTED', 'WITHDRAWN', 'EXPIRED'],
 };
-
 const VIEW_LABEL: Readonly<Record<View, { en: string; ar: string }>> = {
-  review: { en: 'Needs your decision', ar: 'بانتظار قرارك' },
-  servicing: { en: 'With the servicing platform', ar: 'لدى نظام الخدمة' },
-  maker: { en: 'With the maker', ar: 'لدى المُدخِل' },
-  information: { en: 'Awaiting information', ar: 'بانتظار معلومات' },
-  failures: { en: 'Integration failures', ar: 'أعطال التكامل' },
-  breached: { en: 'Past SLA', ar: 'تجاوزت المهلة' },
-  decided: { en: 'Decided', ar: 'تم البت فيها' },
+  review: { en: 'Needs your decision', ar: 'بانتظار قرارك' }, servicing: { en: 'With the servicing platform', ar: 'لدى نظام الخدمة' }, maker: { en: 'With the maker', ar: 'لدى المُدخِل' },
+  information: { en: 'Awaiting information', ar: 'بانتظار معلومات' }, failures: { en: 'Integration failures', ar: 'أعطال التكامل' }, breached: { en: 'Past SLA', ar: 'تجاوزت المهلة' }, decided: { en: 'Decided', ar: 'تم البت فيها' },
 };
-
 const VIEW_EMPTY: Readonly<Record<View, { en: string; ar: string }>> = {
-  review: { en: 'Nothing is waiting on you.', ar: 'لا يوجد ما ينتظر قرارك.' },
-  servicing: {
-    en: 'Nothing is with the servicing platform.',
-    ar: 'لا يوجد لدى نظام الخدمة شيء.',
-  },
-  maker: { en: 'Nothing has been returned.', ar: 'لم يُعَد أي طلب.' },
-  information: { en: 'Nothing is waiting on outside information.', ar: 'لا يوجد طلب بانتظار معلومات خارجية.' },
-  failures: { en: 'The servicing platform is reachable for everything.', ar: 'نظام الخدمة متاح لكل الطلبات.' },
-  breached: { en: 'Nothing is past its SLA.', ar: 'لا يوجد طلب تجاوز مهلته.' },
-  decided: { en: 'Nothing has been decided yet.', ar: 'لم يتم البت في أي طلب بعد.' },
+  review: { en: 'Nothing is waiting on you.', ar: 'لا يوجد ما ينتظر قرارك.' }, servicing: { en: 'Nothing is with the servicing platform.', ar: 'لا يوجد لدى نظام الخدمة شيء.' },
+  maker: { en: 'Nothing has been returned.', ar: 'لم يُعَد أي طلب.' }, information: { en: 'Nothing is waiting on outside information.', ar: 'لا يوجد طلب بانتظار معلومات خارجية.' },
+  failures: { en: 'The servicing platform is reachable for everything.', ar: 'نظام الخدمة متاح لكل الطلبات.' }, breached: { en: 'Nothing is past its SLA.', ar: 'لا يوجد طلب تجاوز مهلته.' }, decided: { en: 'Nothing has been decided yet.', ar: 'لم يتم البت في أي طلب بعد.' },
 };
+const PAGE_SIZE = 8;
+const WEEK_EN = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const WEEK_AR = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
 
-function isView(value: string | undefined): value is View {
-  return value !== undefined && (VIEWS as readonly string[]).includes(value);
-}
-
-/**
- * How long a row has been waiting, in the reader's language.
- *
- * Reads the wall clock, deliberately and only here. This is the age of a task
- * in an inbox — the same kind of fact as "unread for two days" — and it is
- * never compared against a Board parameter. The value it is measured from is
- * attested; the comparison is not, and does not need to be.
- */
+const isView = (value: string | undefined): value is View => value !== undefined && (VIEWS as readonly string[]).includes(value);
+const waitingSince = (row: RequestRow): bigint => row.submittedAtEpochSeconds ?? row.raisedAtEpochSeconds;
 function age(sinceEpochSeconds: bigint, nowEpochSeconds: bigint, locale: string): string {
   const seconds = Number(nowEpochSeconds - sinceEpochSeconds);
   const format = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
-
   if (seconds < 60) return format.format(-Math.max(seconds, 1), 'second');
   if (seconds < 3_600) return format.format(-Math.floor(seconds / 60), 'minute');
   if (seconds < 86_400) return format.format(-Math.floor(seconds / 3_600), 'hour');
   return format.format(-Math.floor(seconds / 86_400), 'day');
 }
 
-function waitingSince(row: RequestRow): bigint {
-  return row.submittedAtEpochSeconds ?? row.raisedAtEpochSeconds;
-}
-
-export default async function QueuePage({
-  params,
-  searchParams,
-}: {
-  readonly params: Promise<{ readonly locale: string }>;
-  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function QueuePage({ params, searchParams }: { readonly params: Promise<{ readonly locale: string }>; readonly searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { locale: segment } = await params;
-  const raw = (await searchParams)['show'];
-  const requested = Array.isArray(raw) ? raw[0] : raw;
-  const view: View = isView(requested) ? requested : 'review';
-
+  const query = await searchParams;
+  const one = (k: string) => { const v = query[k]; return Array.isArray(v) ? v[0] : v; };
+  const view: View = isView(one('show')) ? (one('show') as View) : 'review';
   const locale = localeFromSegment(segment);
   if (locale === undefined) notFound();
-
   const arabic = locale === 'ar-SA';
+  const t = (en: string, ar: string): string => (arabic ? ar : en);
   const text = (pair: { en: string; ar: string }): string => (arabic ? pair.ar : pair.en);
   const numerals = defaultNumerals(locale);
-  const sar = (minorUnits: bigint): string =>
-    formatMinorUnits({ minorUnits, currency: 'SAR' }, numerals);
+  const sar = (minorUnits: bigint): string => formatMinorUnits({ minorUnits, currency: 'SAR' }, numerals);
 
   // Read once, so every row on the page is aged against the same instant.
   const nowEpochSeconds = BigInt(Math.floor(Date.now() / 1000));
-
   const all = listRequests();
   const policy = originationPolicy();
-  const breached = (r: RequestRow): boolean =>
-    slaStatus(policy, r.state, waitingSince(r), nowEpochSeconds) === 'BREACHED';
-  const overdue = (r: RequestRow): boolean =>
-    isExpired(policy, r.state, waitingSince(r), nowEpochSeconds);
-  const inView = (v: View, r: RequestRow): boolean =>
-    VIEW_STATES[v].includes(r.state) && (v !== 'breached' || breached(r));
-
-  const counts = Object.fromEntries(
-    VIEWS.map((v) => [v, all.filter((r) => inView(v, r)).length]),
-  ) as Record<View, number>;
+  const breached = (r: RequestRow): boolean => slaStatus(policy, r.state, waitingSince(r), nowEpochSeconds) === 'BREACHED';
+  const overdue = (r: RequestRow): boolean => isExpired(policy, r.state, waitingSince(r), nowEpochSeconds);
+  const inView = (v: View, r: RequestRow): boolean => VIEW_STATES[v].includes(r.state) && (v !== 'breached' || breached(r));
+  const counts = Object.fromEntries(VIEWS.map((v) => [v, all.filter((r) => inView(v, r)).length])) as Record<View, number>;
   const expirable = all.filter((r) => WAITING.includes(r.state) && overdue(r)).length;
-  const justExpired = Number.parseInt(String((await searchParams)['expired'] ?? '0'), 10) || 0;
+  const justExpired = Number.parseInt(one('expired') ?? '0', 10) || 0;
 
-  const rows = all
-    .filter((r) => inView(view, r))
-    .sort((a, b) => {
-      const direction = view === 'decided' ? -1 : 1;
-      const byTime = Number(waitingSince(a) - waitingSince(b));
-      if (byTime !== 0) return direction * byTime;
-      return direction * a.requestId.localeCompare(b.requestId);
-    });
+  const rows = all.filter((r) => inView(view, r)).sort((a, b) => {
+    const direction = view === 'decided' ? -1 : 1;
+    const byTime = Number(waitingSince(a) - waitingSince(b));
+    return byTime !== 0 ? direction * byTime : direction * a.requestId.localeCompare(b.requestId);
+  });
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const page = Math.min(pages, Math.max(1, Number.parseInt(one('page') ?? '1', 10) || 1));
+  const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const blockedCount = all.filter((r) => r.state === 'AWAITING_REVIEW' && !canReview(CHECKER, r.makerPrincipalId).allowed).length;
 
-  const blockedCount = all.filter(
-    (r) => r.state === 'AWAITING_REVIEW' && !canReview(CHECKER, r.makerPrincipalId).allowed,
-  ).length;
+  // The summary cards: what needs you, and what is past its SLA — the oldest of each.
+  const needsYou = all.filter((r) => inView('review', r)).sort((a, b) => Number(waitingSince(a) - waitingSince(b)));
+  const oldest = needsYou[0];
+  const pastSla = all.filter((r) => inView('breached', r));
+  const oldestBreached = pastSla.sort((a, b) => Number(waitingSince(a) - waitingSince(b)))[0];
+
+  // Decided per weekday, last seven days to the latest request on the book.
+  const latest = all.reduce((m, r) => (r.raisedAtEpochSeconds > m ? r.raisedAtEpochSeconds : m), 0n);
+  const weekStart = latest - BigInt(6 * 86_400);
+  const weekIndex = (epoch: bigint) => (new Date(Number(epoch) * 1000).getUTCDay() + 1) % 7;
+  const bars = WEEK_EN.map((_, i) => ({ label: (arabic ? WEEK_AR : WEEK_EN)[i] ?? '', first: 0, second: 0 }));
+  for (const r of all) {
+    if (r.raisedAtEpochSeconds < weekStart) continue;
+    const b = bars[weekIndex(r.raisedAtEpochSeconds)];
+    if (b === undefined) continue;
+    if (r.state === 'APPROVED') b.first += 1;
+    if (r.state === 'REJECTED' || r.state === 'WITHDRAWN' || r.state === 'EXPIRED') b.second += 1;
+  }
+
+  const hrefFor = (p: number) => `/${segment}/queue?show=${view}&page=${String(p)}`;
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold">
-            <Icon name="queue" size={20} />
-            {arabic ? 'قائمة المراجعة' : 'Review queue'}
-          </h1>
-          <p className="mt-1 text-sm text-ink-quiet">
-            {arabic
-              ? 'الأقدم أولاً. الاعتماد يفتح معاملة في حالة مسودة، ولا يتجاوز أي بوابة.'
-              : 'Oldest first. Approving opens a transaction in DRAFT; it passes no gate.'}
-          </p>
+    <div className="flex flex-col gap-8">
+      {/* -- Summary: two cards and the week ------------------------------------ */}
+      <section className="grid gap-[30px] xl:grid-cols-[minmax(0,350fr)_minmax(0,350fr)_minmax(0,350fr)]">
+        <div className="card-lift flex h-[225px] flex-col justify-between overflow-hidden rounded-card bg-[linear-gradient(107deg,#4c49ed_0%,#0a06f4_100%)] text-white">
+          <div className="flex items-start justify-between px-[26px] pt-6">
+            <div><p className="text-xs text-white/70">{t('Needs your decision', 'بانتظار قرارك')}</p><p className="mt-1 text-[28px] font-semibold tabular-nums leading-none">{counts.review}</p></div>
+            <span aria-hidden className="inline-flex size-[35px] items-center justify-center rounded-[6px] bg-white/20"><Icon name="queue" size={18} /></span>
+          </div>
+          <div className="px-[26px] text-xs text-white/70">{oldest !== undefined ? <>{t('Oldest waiting ', 'الأقدم ينتظر ')}<bdi>{age(waitingSince(oldest), nowEpochSeconds, locale)}</bdi> · <span className="identifier text-white">{oldest.requestId}</span></> : t('Nothing is waiting on you.', 'لا يوجد ما ينتظر قرارك.')}</div>
+          <div className="flex h-[70px] items-center justify-between bg-[linear-gradient(180deg,rgba(255,255,255,0.15)_0%,rgba(255,255,255,0)_100%)] px-[26px]">
+            <span className="text-[15px] font-semibold">{t('Four eyes', 'أربع أعين')} · <span className="identifier">{CHECKER.principalId}</span></span>
+            {blockedCount > 0 ? <span className="text-xs text-white/80">{blockedCount} {t('your own work', 'من إدخالك')}</span> : null}
+          </div>
         </div>
-        <span className="rounded-card border border-line bg-surface px-3 py-2 text-xs text-ink-quiet">
-          {arabic ? 'تُراجع بصفة' : 'Reviewing as'}{' '}
-          <span className="identifier text-ink">{CHECKER.principalId}</span>
-        </span>
+        <div className="card-lift flex h-[225px] flex-col justify-between overflow-hidden rounded-card border border-line-strong bg-surface">
+          <div className="flex items-start justify-between px-[26px] pt-6">
+            <div><p className="text-xs text-ink-quiet">{t('Past SLA', 'تجاوزت المهلة')}</p><p className={`mt-1 text-[28px] font-semibold tabular-nums leading-none ${pastSla.length > 0 ? 'text-blocked' : 'text-heading'}`}>{pastSla.length}</p></div>
+            <span aria-hidden className="inline-flex size-[35px] items-center justify-center rounded-[6px] bg-blocked-wash text-blocked"><Icon name="clock" size={18} /></span>
+          </div>
+          <div className="px-[26px] text-xs text-ink-quiet">{oldestBreached !== undefined ? <>{t('Longest breach ', 'أطول تجاوز ')}<bdi>{age(waitingSince(oldestBreached), nowEpochSeconds, locale)}</bdi> · <span className="identifier text-ink">{oldestBreached.requestId}</span></> : t('Every request is inside its SLA.', 'كل الطلبات ضمن مهلتها.')}</div>
+          <div className="flex h-[70px] items-center justify-between border-t border-line-strong px-[26px]">
+            <span className="text-[15px] font-semibold text-heading">{expirable} {t('expirable', 'قابلة للانتهاء')}</span>
+            <form action={expireOverdueAction}><input type="hidden" name="locale" value={segment} /><button type="submit" disabled={expirable === 0} className={`${PILL_OUTLINE} disabled:opacity-40`}>{t('Expire overdue', 'إنهاء المتأخر')}</button></form>
+          </div>
+        </div>
+        <Card>
+          <WeekBars title={t('Decided this week', 'قرارات هذا الأسبوع')} series={[t('Approved', 'معتمد'), t('Declined', 'مرفوض')]} bars={bars} emptyLabel={t('No decisions in the last seven days.', 'لا قرارات خلال الأيام السبعة الأخيرة.')} />
+        </Card>
+      </section>
+
+      {justExpired > 0 ? <p className="rounded-tile bg-brand-wash px-4 py-3 text-sm text-brand-deep">{justExpired} {t('request(s) expired against the tenant policy.', 'طلب(ات) انتهت وفق سياسة المؤسسة.')}</p> : null}
+
+      {/* -- Views -------------------------------------------------------------- */}
+      <div>
+        <h2 className="mb-4 text-h2 font-semibold text-heading">{t('Review queue', 'قائمة المراجعة')}</h2>
+        <Tabs ariaLabel={t('Queue views', 'عروض القائمة')} current={view} items={VIEWS.map((v) => ({ id: v, label: text(VIEW_LABEL[v]), href: `/${segment}/queue?show=${v}`, count: counts[v] }))} />
       </div>
 
-      {/* -- Views ---------------------------------------------------------- */}
-      <nav aria-label={arabic ? 'طرق العرض' : 'Queue views'}>
-        <ul className="flex list-none flex-wrap gap-2 p-0">
-          {VIEWS.map((v) => {
-            const active = v === view;
-            return (
-              <li key={v}>
-                <a
-                  href={`/${segment}/queue?show=${v}`}
-                  aria-current={active ? 'page' : undefined}
-                  className={`inline-flex min-h-tap items-center gap-2 rounded-card border px-3 text-sm ${
-                    active
-                      ? 'border-brand-strong bg-brand-wash font-semibold text-brand-deep'
-                      : 'border-line bg-surface text-ink hover:bg-sunken'
-                  }`}
-                >
-                  {text(VIEW_LABEL[v])}
-                  <span className="rounded-full bg-sunken px-2 text-xs tabular-nums text-ink-quiet">
-                    {counts[v]}
-                  </span>
-                </a>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-
-      {justExpired > 0 ? (
-        <p className="rounded-card border border-line bg-sunken p-3 text-sm text-ink-quiet">
-          {arabic ? `انتهت صلاحية ${String(justExpired)} من الطلبات.` : `${String(justExpired)} request(s) expired.`}
-        </p>
-      ) : null}
-
-      {view === 'breached' ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-sunken p-3 text-sm">
-          <span className="text-ink-quiet">
-            {arabic
-              ? `المهل من إعدادات المؤسسة. ${String(expirable)} من الطلبات تجاوزت مدة الانتظار القصوى ويمكن إنهاؤها.`
-              : `SLAs come from the tenant’s policy. ${String(expirable)} request(s) have waited past the expiry interval and can be expired.`}
-          </span>
-          <form action={expireOverdueAction}>
-            <input type="hidden" name="locale" value={segment} />
-            <button type="submit" disabled={expirable === 0} className="inline-flex min-h-tap items-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink hover:bg-sunken disabled:opacity-50">
-              {arabic ? 'إنهاء الطلبات المتأخرة' : 'Expire overdue requests'}
-            </button>
-          </form>
-        </div>
-      ) : null}
-
-      {view === 'review' && blockedCount > 0 ? (
-        <p className="flex items-start gap-2 rounded-card border border-line bg-sunken p-3 text-sm text-ink-quiet">
-          <Icon name="shield-check" size={16} className="mt-0.5 shrink-0" />
-          <span>
-            {arabic
-              ? `${String(blockedCount)} من هذه الطلبات أدخلتَها بنفسك، فلا يمكنك اعتمادها. تظهر هنا ليعلم غيرك بوجودها.`
-              : `${String(blockedCount)} of these were keyed by you, so you cannot approve them. They are listed so nobody assumes they were lost.`}
-          </span>
-        </p>
-      ) : null}
-
-      {/* -- The queue ------------------------------------------------------ */}
+      {/* -- The queue ---------------------------------------------------------- */}
       <Card>
-        {rows.length === 0 ? (
-          <p className="text-sm text-ink-quiet">{text(VIEW_EMPTY[view])}</p>
-        ) : (
+        {pageRows.length === 0 ? <p className="text-[15px] text-ink-quiet">{text(VIEW_EMPTY[view])}</p> : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <caption className="sr-only">
-                {text(VIEW_LABEL[view])} — {rows.length}
-              </caption>
+            <table className="w-full border-collapse text-[16px]">
+              <caption className="sr-only">{text(VIEW_LABEL[view])} — {rows.length}</caption>
               <thead>
-                <tr className="border-b border-line text-xs uppercase tracking-wider text-ink-quiet">
-                  <th scope="col" className="py-2 pe-3 text-start font-medium">
-                    {arabic ? 'منذ' : 'Waiting'}
-                  </th>
-                  <th scope="col" className="py-2 pe-3 text-start font-medium">
-                    {arabic ? 'العميل' : 'Counterparty'}
-                  </th>
-                  <th scope="col" className="py-2 pe-3 text-start font-medium">
-                    {arabic ? 'الفاتورة' : 'Invoice'}
-                  </th>
-                  <th scope="col" className="py-2 pe-3 text-end font-medium">
-                    {arabic ? 'المبلغ' : 'Amount'}
-                  </th>
-                  <th scope="col" className="py-2 pe-3 text-start font-medium">
-                    {arabic ? 'القناة' : 'Channel'}
-                  </th>
-                  <th scope="col" className="py-2 pe-3 text-start font-medium">
-                    {arabic ? 'نظام الخدمة' : 'Servicing'}
-                  </th>
-                  <th scope="col" className="py-2 text-end font-medium">
-                    {arabic ? 'إجراء' : 'Action'}
-                  </th>
+                <tr className="border-b border-line text-[16px] text-ink-quiet">
+                  <th scope="col" className="py-3 pe-3 text-start font-normal">{t('Waiting', 'منذ')}</th>
+                  <th scope="col" className="py-3 pe-3 text-start font-normal">{t('Counterparty', 'العميل')}</th>
+                  <th scope="col" className="py-3 pe-3 text-start font-normal">{t('Invoice', 'الفاتورة')}</th>
+                  <th scope="col" className="py-3 pe-3 text-end font-normal">{t('Amount', 'المبلغ')}</th>
+                  <th scope="col" className="py-3 pe-3 text-start font-normal">{t('Channel', 'القناة')}</th>
+                  <th scope="col" className="py-3 pe-3 text-start font-normal">{t('Servicing', 'نظام الخدمة')}</th>
+                  <th scope="col" className="py-3 text-end font-normal">{t('Action', 'إجراء')}</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => {
+                {pageRows.map((row) => {
                   const review = canReview(CHECKER, row.makerPrincipalId);
                   const ownWork = view === 'review' && !review.allowed;
                   const declined = row.servicing?.decision === 'DECLINED';
-
                   return (
                     <tr key={row.requestId} className="border-b border-line last:border-b-0">
-                      <td className="py-3 pe-3 text-ink-quiet">
-                        <span className="flex flex-col gap-0.5">
-                          <span>{age(waitingSince(row), nowEpochSeconds, locale)}</span>
-                          {breached(row) ? (
-                            <Status tone="blocked" label={arabic ? 'تجاوز المهلة' : 'past SLA'} />
-                          ) : null}
-                        </span>
-                      </td>
-
-                      <td className="py-3 pe-3">
-                        <span className="font-medium">{row.counterpartyId}</span>
-                        <span className="block text-xs">
-                          <span className="identifier text-ink-quiet">{row.requestId}</span>
-                        </span>
-                      </td>
-
-                      <td className="py-3 pe-3">
-                        <span className="identifier text-ink-quiet">{row.invoiceNumber}</span>
-                      </td>
-
-                      <td className="py-3 pe-3 text-end tabular-nums">
-                        <bdi>{sar(row.amountMinorUnits)}</bdi>
-                        <span className="ms-1 text-xs text-ink-quiet">SAR</span>
-                      </td>
-
-                      <td className="py-3 pe-3 text-ink-quiet">
-                        {row.channel.replaceAll('_', ' ').toLowerCase()}
-                      </td>
-
-                      <td className="py-3 pe-3">
-                        {row.servicing === undefined ? (
-                          <span className="text-ink-quiet">
-                            {row.state === 'AWAITING_SERVICING_RESPONSE'
-                              ? arabic
-                                ? 'بانتظار الرد'
-                                : 'awaiting'
-                              : '—'}
-                          </span>
-                        ) : (
-                          <span className="flex flex-col gap-0.5">
-                            <Status
-                              tone={
-                                row.servicing.decision === 'APPROVED'
-                                  ? 'settled'
-                                  : row.servicing.decision === 'DECLINED'
-                                    ? 'blocked'
-                                    : 'progress'
-                              }
-                              label={row.servicing.decision.toLowerCase()}
-                            />
-                            {declined ? (
-                              <span className="text-xs text-attention">
-                                {arabic
-                                  ? 'الاعتماد يتطلب تسبيباً مكتوباً'
-                                  : 'approval needs a written justification'}
-                              </span>
-                            ) : null}
-                          </span>
+                      <td className="py-4 pe-3 text-ink-quiet"><span className="flex flex-col gap-1"><span className="whitespace-nowrap"><bdi>{age(waitingSince(row), nowEpochSeconds, locale)}</bdi></span>{breached(row) ? <Status tone="blocked" label={t('past SLA', 'تجاوز المهلة')} /> : null}</span></td>
+                      <td className="py-4 pe-3"><span className="flex items-center gap-3"><span aria-hidden className={`inline-flex size-[30px] shrink-0 items-center justify-center rounded-full border ${row.state === 'APPROVED' ? 'border-positive text-positive' : row.state === 'REJECTED' ? 'border-blocked text-blocked' : 'border-line-strong text-ink-quiet'}`}><Icon name={row.state === 'APPROVED' ? 'check-circle' : 'document'} size={14} /></span><span className="flex min-w-0 flex-col"><span className="truncate font-medium text-ink">{row.counterpartyId}</span><span className="identifier text-xs text-ink-quiet">{row.requestId}</span></span></span></td>
+                      <td className="py-4 pe-3"><span className="identifier text-ink-quiet">{row.invoiceNumber}</span></td>
+                      <td className="py-4 pe-3 text-end tabular-nums"><bdi className={row.state === 'REJECTED' ? 'text-blocked' : row.state === 'APPROVED' ? 'text-positive' : 'text-ink'}>{sar(row.amountMinorUnits)}</bdi><span className="ms-1 text-xs text-ink-quiet">SAR</span></td>
+                      <td className="py-4 pe-3 text-ink-quiet">{row.channel.replaceAll('_', ' ').toLowerCase()}</td>
+                      <td className="py-4 pe-3">
+                        {row.servicing === undefined ? <span className="text-ink-quiet">{row.state === 'AWAITING_SERVICING_RESPONSE' ? t('awaiting', 'بانتظار الرد') : '—'}</span> : (
+                          <span className="flex flex-col gap-1"><Status tone={row.servicing.decision === 'APPROVED' ? 'settled' : row.servicing.decision === 'DECLINED' ? 'blocked' : 'progress'} label={row.servicing.decision.toLowerCase()} />{declined ? <span className="text-xs text-attention">{t('approval needs a written justification', 'الاعتماد يتطلب تسبيباً مكتوباً')}</span> : null}</span>
                         )}
                       </td>
-
-                      <td className="py-3 text-end">
+                      <td className="py-4 text-end">
                         {ownWork ? (
-                          // Shown, not hidden, and not actionable. The domain
-                          // refuses this transition too — see `approve()`.
-                          <span
-                            className="inline-flex flex-col items-end text-xs text-ink-quiet"
-                            title={
-                              arabic
-                                ? 'المُدخِل لا يعتمد عمله'
-                                : 'The principal who raised a request cannot approve it'
-                            }
-                          >
-                            <span className="font-medium text-attention">
-                              {arabic ? 'من إدخالك' : 'your own work'}
-                            </span>
-                            <span>{arabic ? 'يلزم مراجع آخر' : 'needs another reviewer'}</span>
-                          </span>
+                          // Shown, not hidden, and not actionable. The domain refuses this transition too.
+                          <span className="inline-flex flex-col items-end text-xs text-ink-quiet" title={t('The principal who raised a request cannot approve it', 'المُدخِل لا يعتمد عمله')}><span className="font-medium text-attention">{t('your own work', 'من إدخالك')}</span><span>{t('needs another reviewer', 'يلزم مراجع آخر')}</span></span>
                         ) : (
-                          <a
-                            href={`/${segment}/requests/${row.requestId}`}
-                            className="inline-flex min-h-tap items-center rounded-card border border-line px-3 text-sm font-medium text-brand-deep hover:bg-sunken"
-                          >
-                            {view === 'review'
-                              ? arabic
-                                ? 'مراجعة'
-                                : 'Review'
-                              : arabic
-                                ? 'فتح'
-                                : 'Open'}
-                          </a>
+                          <a href={`/${segment}/requests/${row.requestId}`} className={PILL_OUTLINE}>{view === 'review' ? t('Review', 'مراجعة') : t('Open', 'فتح')}</a>
                         )}
                       </td>
                     </tr>
@@ -384,13 +196,9 @@ export default async function QueuePage({
             </table>
           </div>
         )}
-
-        <p className="mt-3 border-t border-line pt-3 text-xs text-ink-quiet">
-          {arabic
-            ? 'لا يوجد اعتماد جماعي. المراجعة تعني النظر في الصفقة، وخانة الاختيار وسيلة لعدم النظر فيها.'
-            : 'There is no bulk approve. Reviewing means looking at the trade, and a checkbox column is a way of not looking at it.'}
-        </p>
+        <p className="mt-4 border-t border-line pt-3 text-xs text-ink-quiet">{t('There is no bulk approve. Reviewing means looking at the trade, and a checkbox column is a way of not looking at it.', 'لا يوجد اعتماد جماعي. المراجعة تعني النظر في الصفقة، وخانة الاختيار وسيلة لعدم النظر فيها.')}</p>
       </Card>
+      <Pagination page={page} pages={pages} hrefFor={hrefFor} labels={{ previous: t('Previous', 'السابق'), next: t('Next', 'التالي') }} />
     </div>
   );
 }

@@ -1,298 +1,160 @@
 /**
- * Review a request.
+ * One request, to the Figma Setting frame (applied 2026-09-28): a single
+ * white card with a tab strip, two columns of labelled fields, the decision
+ * as a form with the kit's inputs and a filled primary button.
  *
- * The checker's screen, and the place where the two-stage decision is visible:
- * what the servicing platform said, then what the institution decides with
- * that in front of it.
- *
- * Three things this screen deliberately does not offer. There is no button
- * that books anything — approving produces a transaction in `DRAFT`, with all
- * three gates ahead of it. There is no way to approve your own work; the
- * domain refuses it and the refusal surfaces here with its control code. And
- * approving against a servicing decline is possible but demands a written
- * justification, because a credit judgement the institution is entitled to
- * make is one it has to own.
+ * Nothing about what the screen *decides* changed: four eyes, approval
+ * tiers, the servicing stage before the institution's stage, the lifecycle
+ * controls — all as before, all refused by the domain regardless of what
+ * the screen shows.
  */
 
 import { notFound } from 'next/navigation';
 
-import { Card, ControlRejection, Status } from '@sanad/design/primitives.tsx';
-import { defaultNumerals, formatMinorUnits } from '@sanad/design/Money.tsx';
-import { localeFromSegment } from '@sanad/i18n/strings.ts';
 import { CHANNEL_POLICIES } from '@sanad/core/origination/channel.ts';
-
-import {
-  approveAction,
-  rejectAction,
-  returnAction,
-  servicingRespondAction,
-} from '../../../../server/actions.ts';
-import { findRequest, originationPolicy } from '../../../../server/store.ts';
-import { CHECKER } from '../../../../server/session.ts';
-import { Lifecycle } from './Lifecycle.tsx';
 import { authorityCovers, requiredAuthority } from '@sanad/core/origination/policy.ts';
 import { money } from '@sanad/core/kernel/money.ts';
+import { defaultNumerals, formatMinorUnits } from '@sanad/design/Money.tsx';
+import { BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY, Card, ControlRejection, FIELD_INPUT, FIELD_LABEL, PILL_QUIET, Status, Tabs } from '@sanad/design/primitives.tsx';
+import { localeFromSegment } from '@sanad/i18n/strings.ts';
 
-const INPUT =
-  'mt-1 block w-full min-h-tap rounded-card border border-line bg-surface px-3 text-base text-ink';
-const BUTTON = 'min-h-tap rounded-card px-4 text-sm font-semibold';
+import { approveAction, rejectAction, returnAction, servicingRespondAction } from '../../../../server/actions.ts';
+import { CHECKER } from '../../../../server/session.ts';
+import { findRequest, originationPolicy } from '../../../../server/store.ts';
+import { Lifecycle } from './Lifecycle.tsx';
 
-export default async function ReviewPage({
-  params,
-  searchParams,
-}: {
-  readonly params: Promise<{ readonly locale: string; readonly requestId: string }>;
-  readonly searchParams: Promise<{ readonly control?: string; readonly message?: string }>;
-}) {
+/** A read-only fact, drawn like the kit's input so the page reads as one form. */
+function Field({ label, children, mono = false }: { readonly label: string; readonly children: React.ReactNode; readonly mono?: boolean }) {
+  return (
+    <div>
+      <span className={FIELD_LABEL}>{label}</span>
+      <div className={`${FIELD_INPUT} flex items-center ${mono ? 'identifier' : ''}`}>{children}</div>
+    </div>
+  );
+}
+
+export default async function ReviewPage({ params, searchParams }: { readonly params: Promise<{ readonly locale: string; readonly requestId: string }>; readonly searchParams: Promise<{ readonly control?: string; readonly message?: string; readonly tab?: string }> }) {
   const { locale: segment, requestId } = await params;
-  const { control, message } = await searchParams;
+  const { control, message, tab } = await searchParams;
   const locale = localeFromSegment(segment);
   if (locale === undefined) notFound();
-
   const request = findRequest(requestId);
   if (request === undefined) notFound();
-
   const arabic = locale === 'ar-SA';
+  const t = (en: string, ar: string): string => (arabic ? ar : en);
   const numerals = defaultNumerals(locale);
   const policy = CHANNEL_POLICIES[request.channel];
-
   const awaitingServicing = request.state === 'AWAITING_SERVICING_RESPONSE';
   const awaitingReview = request.state === 'AWAITING_REVIEW';
   const servicingDeclined = request.servicing?.decision === 'DECLINED';
-
-  // The tenant's approval tiers, applied to this amount. Shown before the
-  // button so a checker without the authority learns it here, not from a
-  // refusal after writing a justification. The domain refuses regardless.
   const required = requiredAuthority(originationPolicy(), money(request.amountMinorUnits));
   const held = CHECKER.authority ?? 'CHECKER';
   const mayApprove = authorityCovers(held, required);
+  const current = tab === 'lifecycle' || tab === 'decision' || tab === 'servicing' ? tab : 'request';
+  const base = `/${segment}/requests/${request.requestId}`;
+  const tabs = [
+    { id: 'request', label: t('Request', 'الطلب'), href: `${base}?tab=request` },
+    ...(policy.requiresServicingDecision ? [{ id: 'servicing', label: t('Servicing platform', 'نظام الخدمة'), href: `${base}?tab=servicing` }] : []),
+    { id: 'decision', label: t('Decision', 'القرار'), href: `${base}?tab=decision` },
+    { id: 'lifecycle', label: t('Lifecycle & documents', 'مسار الطلب والمستندات'), href: `${base}?tab=lifecycle` },
+  ];
 
   return (
-    <div className="flex max-w-3xl flex-col gap-5">
-      <div>
-        <a href={`/${segment}`} className="text-sm text-brand-deep underline">
-          {arabic ? 'رجوع إلى لوحة العمليات' : 'Back to dashboard'}
-        </a>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="text-xl font-semibold">
-            <span className="identifier">{request.requestId}</span>
-          </h1>
-          <Status
-            tone={
-              request.state === 'APPROVED'
-                ? 'settled'
-                : request.state === 'REJECTED'
-                  ? 'blocked'
-                  : 'progress'
-            }
-            label={request.state.replaceAll('_', ' ').toLowerCase()}
-          />
+    <div className="flex max-w-5xl flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <a href={`/${segment}/queue`} className={PILL_QUIET}>{t('Back to the queue', 'رجوع إلى القائمة')}</a>
+          <h2 className="text-h2 font-semibold text-heading"><span className="identifier">{request.requestId}</span></h2>
+          <Status tone={request.state === 'APPROVED' ? 'settled' : request.state === 'REJECTED' ? 'blocked' : 'progress'} label={request.state.replaceAll('_', ' ').toLowerCase()} />
         </div>
       </div>
+      {control !== undefined ? <ControlRejection control={control} explanation={message ?? ''} controlLabel={t('Control', 'الضابط')} /> : null}
 
-      {control !== undefined ? (
-        <ControlRejection
-          control={control}
-          explanation={message ?? ''}
-          controlLabel={arabic ? 'الضابط' : 'Control'}
-        />
-      ) : null}
+      <div className="rounded-card bg-surface px-[30px] pb-[30px] pt-6">
+        <Tabs ariaLabel={t('Request sections', 'أقسام الطلب')} current={current} items={tabs} />
 
-      <Card>
-        <dl className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <dt className="text-sm text-ink-quiet">{arabic ? 'العميل' : 'Counterparty'}</dt>
-            <dd className="font-medium">{request.counterpartyId}</dd>
+        {current === 'request' ? (
+          <div className="mt-8 grid gap-x-8 gap-y-6 md:grid-cols-[132px_1fr_1fr]">
+            <div className="hidden md:block">
+              <span aria-hidden className="inline-flex size-[130px] items-center justify-center rounded-full bg-brand-wash text-[28px] font-semibold text-brand-deep">{request.counterpartyId.slice(0, 1)}</span>
+            </div>
+            <Field label={t('Counterparty', 'العميل')}>{request.counterpartyId}</Field>
+            <Field label={t('Invoice', 'الفاتورة')} mono>{request.invoiceNumber}</Field>
+            <div className="hidden md:block" />
+            <Field label={t('Amount', 'المبلغ')}><bdi className="font-semibold tabular-nums">{formatMinorUnits({ minorUnits: request.amountMinorUnits, currency: 'SAR' }, numerals)}</bdi><span className="ms-2 text-xs text-ink-quiet">SAR</span></Field>
+            <Field label={t('Channel', 'القناة')}>{request.channel.replaceAll('_', ' ').toLowerCase()}</Field>
+            <div className="hidden md:block" />
+            <Field label={t('Keyed by', 'أدخله')} mono>{request.makerPrincipalId ?? '—'}</Field>
+            <Field label={t('Four eyes', 'مراجعة من شخصين')}>{policy.requiresFourEyes ? t('Required', 'مطلوبة') : '—'}</Field>
+            <div className="hidden md:block" />
+            <Field label={t('Approval authority required', 'صلاحية الاعتماد المطلوبة')} mono>{required}</Field>
+            <Field label={t('State', 'الحالة')} mono>{request.state}</Field>
           </div>
-          <div>
-            <dt className="text-sm text-ink-quiet">{arabic ? 'الفاتورة' : 'Invoice'}</dt>
-            <dd className="identifier">{request.invoiceNumber}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-ink-quiet">{arabic ? 'المبلغ' : 'Amount'}</dt>
-            <dd className="text-base font-semibold tabular-nums">
-              <bdi>
-                {formatMinorUnits(
-                  { minorUnits: request.amountMinorUnits, currency: 'SAR' },
-                  numerals,
-                )}
-              </bdi>{' '}
-              <span className="text-xs text-ink-quiet">SAR</span>
-            </dd>
-          </div>
-          <div>
-            <dt className="text-sm text-ink-quiet">{arabic ? 'القناة' : 'Channel'}</dt>
-            <dd>{request.channel.replaceAll('_', ' ').toLowerCase()}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-ink-quiet">{arabic ? 'أدخله' : 'Keyed by'}</dt>
-            <dd className="identifier">{request.makerPrincipalId ?? '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-ink-quiet">
-              {arabic ? 'مراجعة من شخصين' : 'Four eyes'}
-            </dt>
-            <dd>{policy.requiresFourEyes ? (arabic ? 'مطلوبة' : 'Required') : '—'}</dd>
-          </div>
-        </dl>
-      </Card>
+        ) : null}
 
-      {/* -- Stage one: the servicing platform ------------------------------ */}
-      {policy.requiresServicingDecision ? (
-        <Card muted={!awaitingServicing}>
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="font-medium">
-              {arabic ? '١ — رد نظام الخدمة' : '1 — Servicing platform response'}
-            </h2>
+        {current === 'servicing' && policy.requiresServicingDecision ? (
+          <div className="mt-8 flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-[16px] font-medium text-ink">{t('1 — Servicing platform response', '١ — رد نظام الخدمة')}</h3>
+              {request.servicing !== undefined ? <Status tone={request.servicing.decision === 'APPROVED' ? 'settled' : 'blocked'} label={request.servicing.decision.toLowerCase()} /> : <Status tone="progress" label={t('awaiting', 'بانتظار الرد')} />}
+            </div>
             {request.servicing !== undefined ? (
-              <Status
-                tone={request.servicing.decision === 'APPROVED' ? 'settled' : 'blocked'}
-                label={request.servicing.decision.toLowerCase()}
-              />
+              <div className="grid gap-6 md:grid-cols-2"><Field label={t('Reference', 'المرجع')} mono>{request.servicing.reference}</Field><Field label={t('Reason code', 'رمز السبب')} mono>{request.servicing.reasonCode ?? '—'}</Field></div>
             ) : (
-              <Status tone="progress" label={arabic ? 'بانتظار الرد' : 'awaiting'} />
+              <>
+                <p className="text-[15px] text-ink-quiet">{t('In production this arrives from the servicing platform through the adapter. These buttons stand in for it.', 'يصل هذا الرد من نظام الخدمة عبر المحوّل. الأزرار هنا للتجربة فقط.')}</p>
+                <div className="flex flex-wrap gap-3">
+                  <form action={servicingRespondAction} className="contents"><input type="hidden" name="locale" value={segment} /><input type="hidden" name="requestId" value={request.requestId} /><input type="hidden" name="decision" value="APPROVED" /><button className={BUTTON_SECONDARY} type="submit">Respond: approved</button></form>
+                  <form action={servicingRespondAction} className="contents"><input type="hidden" name="locale" value={segment} /><input type="hidden" name="requestId" value={request.requestId} /><input type="hidden" name="decision" value="DECLINED" /><input type="hidden" name="reasonCode" value="R_LIMIT_EXCEEDED" /><button className={BUTTON_SECONDARY} type="submit">Respond: declined</button></form>
+                </div>
+              </>
             )}
+            {awaitingServicing ? null : <p className="text-xs text-ink-quiet">{t('This stage is complete.', 'اكتملت هذه المرحلة.')}</p>}
           </div>
+        ) : null}
 
-          {request.servicing !== undefined ? (
-            <p className="mt-2 text-sm text-ink-quiet">
-              <span className="identifier">{request.servicing.reference}</span>
-              {request.servicing.reasonCode !== undefined
-                ? ` — ${request.servicing.reasonCode}`
-                : ''}
-            </p>
-          ) : (
-            <>
-              <p className="mt-2 text-sm text-ink-quiet">
-                {arabic
-                  ? 'يصل هذا الرد من نظام الخدمة عبر المحوّل. الأزرار هنا للتجربة فقط.'
-                  : 'In production this arrives from the servicing platform through the adapter. These buttons stand in for it.'}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <form action={servicingRespondAction} className="contents">
-                  <input type="hidden" name="locale" value={segment} />
-                  <input type="hidden" name="requestId" value={request.requestId} />
-                  <input type="hidden" name="decision" value="APPROVED" />
-                  <button className={`${BUTTON} border border-line`} type="submit">
-                    Respond: approved
-                  </button>
-                </form>
-                <form action={servicingRespondAction} className="contents">
-                  <input type="hidden" name="locale" value={segment} />
-                  <input type="hidden" name="requestId" value={request.requestId} />
-                  <input type="hidden" name="decision" value="DECLINED" />
-                  <input type="hidden" name="reasonCode" value="R_LIMIT_EXCEEDED" />
-                  <button className={`${BUTTON} border border-line`} type="submit">
-                    Respond: declined
-                  </button>
-                </form>
+        {current === 'decision' ? (
+          <div className="mt-8 flex flex-col gap-6">
+            <h3 className="text-[16px] font-medium text-ink">{policy.requiresServicingDecision ? t('2 — The institution decides', '٢ — قرار المؤسسة') : t('The institution decides', 'قرار المؤسسة')}</h3>
+            {request.state === 'APPROVED' ? (
+              <div className="grid gap-6 md:grid-cols-2">
+                <Field label={t('Outcome', 'النتيجة')}>{t('Approved — a transaction opens in DRAFT with all three gates ahead of it.', 'اعتُمد — تنشأ معاملة في حالة المسودة وأمامها البوابات الثلاث.')}</Field>
+                {request.contraryJustification !== undefined ? <Field label={t('Approved against the servicing decline', 'اعتُمد خلافًا لرأي نظام الخدمة')}>{request.contraryJustification}</Field> : null}
               </div>
-            </>
-          )}
-        </Card>
-      ) : null}
-
-      {/* -- Stage two: the institution decides ----------------------------- */}
-      <Lifecycle request={request} segment={segment} arabic={arabic} />
-
-      <Card muted={!awaitingReview}>
-        <h2 className="font-medium">
-          {policy.requiresServicingDecision
-            ? arabic
-              ? '٢ — قرار المؤسسة'
-              : '2 — The institution decides'
-            : arabic
-              ? 'قرار المؤسسة'
-              : 'The institution decides'}
-        </h2>
-
-        {request.state === 'APPROVED' ? (
-          <div className="mt-2">
-            <p className="text-sm text-ink-quiet">
-              {arabic
-                ? 'اعتُمد الطلب. ينشأ عنه معاملة في حالة المسودة — وأمامها البوابات الثلاث كاملة.'
-                : 'Approved. This opens a transaction in DRAFT — with all three gates still ahead of it.'}
-            </p>
-            {request.contraryJustification !== undefined ? (
-              <p className="mt-3 rounded-card border border-attention/40 p-3 text-sm">
-                {arabic ? 'اعتُمد خلافًا لرأي نظام الخدمة: ' : 'Approved against the servicing decline: '}
-                {request.contraryJustification}
-              </p>
+            ) : null}
+            {request.state === 'RETURNED_TO_MAKER' ? <Field label={t('Returned to maker', 'أُعيد إلى المُدخِل')}>{request.note}</Field> : null}
+            {request.state === 'REJECTED' ? <Field label={t('Rejected — reason code', 'مرفوض — رمز السبب')} mono>{request.reasonCode}</Field> : null}
+            {awaitingReview ? (
+              <>
+                <p className={`rounded-tile px-4 py-3 text-[15px] ${mayApprove ? 'bg-sunken text-ink-quiet' : 'bg-blocked-wash text-blocked'}`}>
+                  {t('Approval authority required: ', 'صلاحية الاعتماد المطلوبة: ')}<span className="identifier">{required}</span>{' · '}{t('you hold: ', 'تحمل: ')}<span className="identifier">{held}</span>{mayApprove ? null : t(' — a higher approver is needed', ' — يلزم معتمِد أعلى')}
+                </p>
+                <div className="grid gap-8 md:grid-cols-2">
+                  <form action={approveAction} className="flex flex-col gap-4">
+                    <input type="hidden" name="locale" value={segment} /><input type="hidden" name="requestId" value={request.requestId} />
+                    {servicingDeclined ? <div><label className={FIELD_LABEL} htmlFor="justification">{t('Justification for approving against the decline', 'مبرر الاعتماد خلافًا لرأي نظام الخدمة')}</label><input id="justification" name="justification" className={FIELD_INPUT} required /></div> : <p className="text-[15px] text-ink-quiet">{t('Approving opens the transaction at the start of its sequence. Nothing later.', 'الاعتماد يفتح المعاملة في بداية تسلسلها. لا شيء بعد ذلك.')}</p>}
+                    <button className={BUTTON_PRIMARY} type="submit">{t('Approve', 'اعتماد')}</button>
+                  </form>
+                  <div className="flex flex-col gap-6">
+                    <form action={returnAction} className="flex flex-col gap-4">
+                      <input type="hidden" name="locale" value={segment} /><input type="hidden" name="requestId" value={request.requestId} />
+                      <div><label className={FIELD_LABEL} htmlFor="note">{t('Return to maker — what needs changing?', 'إعادة إلى المُدخِل — ما الذي يحتاج تعديلًا؟')}</label><input id="note" name="note" className={FIELD_INPUT} /></div>
+                      <button className={BUTTON_SECONDARY} type="submit">{t('Return', 'إعادة')}</button>
+                    </form>
+                    <form action={rejectAction} className="flex flex-col gap-4">
+                      <input type="hidden" name="locale" value={segment} /><input type="hidden" name="requestId" value={request.requestId} />
+                      <div><label className={FIELD_LABEL} htmlFor="reasonCode">{t('Reject — reason code', 'رفض — رمز السبب')}</label><input id="reasonCode" name="reasonCode" className={`${FIELD_INPUT} identifier`} placeholder="R_..." /></div>
+                      <button className={BUTTON_DANGER} type="submit">{t('Reject', 'رفض')}</button>
+                    </form>
+                  </div>
+                </div>
+              </>
             ) : null}
           </div>
         ) : null}
 
-        {request.state === 'RETURNED_TO_MAKER' ? (
-          <p className="mt-2 text-sm text-ink-quiet">
-            {arabic ? 'أُعيد إلى المُدخِل: ' : 'Returned to maker: '}
-            {request.note}
-          </p>
-        ) : null}
-
-        {request.state === 'REJECTED' ? (
-          <p className="mt-2 text-sm text-ink-quiet">
-            {arabic ? 'مرفوض: ' : 'Rejected: '}
-            <span className="identifier">{request.reasonCode}</span>
-          </p>
-        ) : null}
-
-        {awaitingReview ? (
-          <div className="mt-3 flex flex-col gap-4">
-            <p className={`rounded-card px-3 py-2 text-xs ${mayApprove ? 'bg-sunken text-ink-quiet' : 'bg-blocked-wash text-blocked'}`}>
-              {arabic ? 'صلاحية الاعتماد المطلوبة: ' : 'Approval authority required: '}
-              <span className="identifier">{required}</span>
-              {' · '}
-              {arabic ? 'تحمل: ' : 'you hold: '}
-              <span className="identifier">{held}</span>
-              {mayApprove ? null : (arabic ? ' — يلزم معتمِد أعلى' : ' — a higher approver is needed')}
-            </p>
-            <form action={approveAction} className="flex flex-col gap-2">
-              <input type="hidden" name="locale" value={segment} />
-              <input type="hidden" name="requestId" value={request.requestId} />
-              {servicingDeclined ? (
-                <div>
-                  <label className="block text-sm font-medium" htmlFor="justification">
-                    {arabic
-                      ? 'مبرر الاعتماد خلافًا لرأي نظام الخدمة'
-                      : 'Justification for approving against the decline'}
-                  </label>
-                  <input id="justification" name="justification" className={INPUT} required />
-                </div>
-              ) : null}
-              <button
-                className={`${BUTTON} bg-brand-strong text-on-brand hover:bg-brand-deep`}
-                type="submit"
-              >
-                {arabic ? 'اعتماد' : 'Approve'}
-              </button>
-            </form>
-
-            <form action={returnAction} className="flex flex-col gap-2">
-              <input type="hidden" name="locale" value={segment} />
-              <input type="hidden" name="requestId" value={request.requestId} />
-              <label className="block text-sm font-medium" htmlFor="note">
-                {arabic ? 'إعادة إلى المُدخِل — ما الذي يحتاج تعديلًا؟' : 'Return to maker — what needs changing?'}
-              </label>
-              <input id="note" name="note" className={INPUT} />
-              <button className={`${BUTTON} border border-line`} type="submit">
-                {arabic ? 'إعادة' : 'Return'}
-              </button>
-            </form>
-
-            <form action={rejectAction} className="flex flex-col gap-2">
-              <input type="hidden" name="locale" value={segment} />
-              <input type="hidden" name="requestId" value={request.requestId} />
-              <label className="block text-sm font-medium" htmlFor="reasonCode">
-                {arabic ? 'رفض — رمز السبب' : 'Reject — reason code'}
-              </label>
-              <input id="reasonCode" name="reasonCode" className={INPUT} placeholder="R_..." />
-              <button className={`${BUTTON} border border-blocked/40 text-blocked`} type="submit">
-                {arabic ? 'رفض' : 'Reject'}
-              </button>
-            </form>
-          </div>
-        ) : null}
-      </Card>
+        {current === 'lifecycle' ? <div className="mt-8 flex flex-col gap-5"><Lifecycle request={request} segment={segment} arabic={arabic} /></div> : null}
+      </div>
     </div>
   );
 }

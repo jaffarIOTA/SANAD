@@ -16,6 +16,8 @@
 
 import type { ReactElement, ReactNode } from 'react';
 
+import { Icon, type IconName } from './icons.tsx';
+
 import {
   LANGUAGE_NAME,
   otherSegment,
@@ -285,3 +287,88 @@ export function LanguageSwitch({
     </a>
   );
 }
+
+// =============================================================================
+// Figma kit pieces (BankDash, applied 2026-09-28): tab strip, pill buttons,
+// pagination, KPI tile, form field. Logical properties throughout.
+// =============================================================================
+
+export interface TabItem {
+  readonly id: string;
+  readonly label: string;
+  readonly href: string;
+  readonly count?: number;
+}
+
+/** The kit's tab strip: 16px medium, muted until active, a 3px accent underline on the active tab, a hairline under the row. */
+export function Tabs({ items, current, ariaLabel }: { readonly items: readonly TabItem[]; readonly current: string; readonly ariaLabel: string }): ReactElement {
+  return (
+    <nav aria-label={ariaLabel} className="border-b border-line">
+      <ul className="flex list-none gap-8 overflow-x-auto p-0">
+        {items.map((item) => {
+          const active = item.id === current;
+          return (
+            <li key={item.id} className="relative shrink-0">
+              <a href={item.href} aria-current={active ? 'page' : undefined} className={`press inline-flex min-h-tap items-center gap-2 pb-2 text-[16px] font-medium ${active ? 'text-brand-deep' : 'text-ink-quiet hover:text-heading'}`}>
+                {item.label}
+                {item.count !== undefined ? <span className={`rounded-full px-2 text-xs tabular-nums ${active ? 'bg-brand-wash text-brand-deep' : 'bg-sunken text-ink-quiet'}`}>{item.count}</span> : null}
+              </a>
+              <span aria-hidden className={`nav-indicator absolute inset-x-0 bottom-0 h-[3px] rounded-t-[10px] bg-brand-deep ${active ? 'opacity-100' : 'opacity-0'}`} />
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+const PILL = 'press inline-flex h-[35px] items-center justify-center gap-2 rounded-pill px-5 text-[15px] font-medium whitespace-nowrap';
+export const PILL_OUTLINE = `${PILL} border border-brand-deep text-brand-deep hover:bg-brand-deep hover:text-white`;
+export const PILL_FILLED = `${PILL} bg-brand-deep text-white hover:bg-brand`;
+export const PILL_QUIET = `${PILL} border border-line-strong text-ink hover:bg-sunken`;
+export const PILL_DANGER = `${PILL} border border-blocked/50 text-blocked hover:bg-blocked-wash`;
+
+export function PillLink({ href, children, variant = 'outline' }: { readonly href: string; readonly children: ReactNode; readonly variant?: 'outline' | 'filled' | 'quiet' }): ReactElement {
+  return <a href={href} className={variant === 'filled' ? PILL_FILLED : variant === 'quiet' ? PILL_QUIET : PILL_OUTLINE}>{children}</a>;
+}
+
+/** Previous · 1 2 3 · Next, the active page a 40px filled square with 10px corners. */
+export function Pagination({ page, pages, hrefFor, labels }: { readonly page: number; readonly pages: number; readonly hrefFor: (page: number) => string; readonly labels: { readonly previous: string; readonly next: string } }): ReactElement | null {
+  if (pages <= 1) return null;
+  const window = Array.from({ length: pages }, (_, i) => i + 1).filter((p) => Math.abs(p - page) <= 2 || p === 1 || p === pages);
+  return (
+    <nav aria-label="pagination" className="flex items-center justify-end gap-2 text-[15px] font-medium text-brand-deep">
+      {page > 1 ? <a href={hrefFor(page - 1)} className="press inline-flex min-h-tap items-center gap-1 px-2 hover:underline"><Icon name="chevron-start" size={14} />{labels.previous}</a> : <span className="inline-flex min-h-tap items-center gap-1 px-2 text-ink-faint"><Icon name="chevron-start" size={14} />{labels.previous}</span>}
+      {window.map((p, i) => (
+        <span key={p} className="contents">
+          {i > 0 && (window[i - 1] ?? 0) < p - 1 ? <span className="px-1 text-ink-faint">…</span> : null}
+          <a href={hrefFor(p)} aria-current={p === page ? 'page' : undefined} className={`press inline-flex size-10 items-center justify-center rounded-[10px] tabular-nums ${p === page ? 'bg-brand-deep text-white' : 'hover:bg-brand-wash'}`}>{p}</a>
+        </span>
+      ))}
+      {page < pages ? <a href={hrefFor(page + 1)} className="press inline-flex min-h-tap items-center gap-1 px-2 hover:underline">{labels.next}<Icon name="chevron-end" size={14} /></a> : <span className="inline-flex min-h-tap items-center gap-1 px-2 text-ink-faint">{labels.next}<Icon name="chevron-end" size={14} /></span>}
+    </nav>
+  );
+}
+
+/** The Loans page tile: a 70px pastel disc with an icon, a muted label, a 20px value. */
+export function Tile({ icon, disc, label, value }: { readonly icon: IconName; readonly disc: 'blue' | 'yellow' | 'pink' | 'teal'; readonly label: string; readonly value: ReactNode }): ReactElement {
+  const bg = disc === 'blue' ? 'bg-disc-blue text-brand-deep' : disc === 'yellow' ? 'bg-disc-yellow text-attention' : disc === 'pink' ? 'bg-blocked-wash text-blocked' : 'bg-disc-teal text-positive';
+  return (
+    <div className="card-lift flex items-center gap-4 rounded-card bg-surface px-6 py-5">
+      <span aria-hidden className={`inline-flex size-[70px] shrink-0 items-center justify-center rounded-full ${bg}`}><Icon name={icon} size={28} /></span>
+      <span className="flex min-w-0 flex-col">
+        <span className="text-[16px] text-ink-quiet">{label}</span>
+        <span className="truncate text-[20px] font-semibold text-ink tabular-nums">{value}</span>
+      </span>
+    </div>
+  );
+}
+
+/** The Setting page field: 16px label, a 50px input with 15px corners and a soft border. */
+export const FIELD_LABEL = 'block text-[16px] text-ink';
+export const FIELD_INPUT = 'mt-2 block h-[50px] w-full rounded-tile border border-line-strong bg-surface px-5 text-[15px] text-ink outline-none placeholder:text-ink-quiet focus:border-brand focus:ring-2 focus:ring-brand/20';
+export const FIELD_TEXTAREA = 'mt-2 block w-full rounded-tile border border-line-strong bg-surface px-5 py-3 text-[15px] text-ink outline-none placeholder:text-ink-quiet focus:border-brand focus:ring-2 focus:ring-brand/20';
+/** The Save button: 190×50, 15px corners, filled. */
+export const BUTTON_PRIMARY = 'press inline-flex h-[50px] min-w-[190px] items-center justify-center rounded-tile bg-brand-deep px-8 text-[18px] font-medium text-white hover:bg-brand';
+export const BUTTON_SECONDARY = 'press inline-flex h-[50px] items-center justify-center rounded-tile border border-line-strong bg-surface px-8 text-[18px] font-medium text-ink hover:bg-sunken';
+export const BUTTON_DANGER = 'press inline-flex h-[50px] items-center justify-center rounded-tile border border-blocked/50 bg-surface px-8 text-[18px] font-medium text-blocked hover:bg-blocked-wash';

@@ -9,7 +9,7 @@
 
 import type { ReactElement } from 'react';
 
-import { Card, Status } from '@sanad/design/primitives.tsx';
+import { BUTTON_SECONDARY, Card, FIELD_INPUT, FIELD_LABEL, FIELD_TEXTAREA, Status } from '@sanad/design/primitives.tsx';
 
 import {
   attachDocumentAction,
@@ -21,9 +21,9 @@ import {
 } from '../../../../server/actions.ts';
 import { checklistFor, originationPolicy, type RequestRow } from '../../../../server/store.ts';
 
-const INPUT = 'mt-1 block w-full min-h-tap rounded-card border border-line bg-surface px-3 text-base text-ink';
-const BUTTON = 'inline-flex min-h-tap items-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink hover:bg-sunken';
-const LABEL = 'block text-sm font-medium text-ink';
+const INPUT = FIELD_INPUT;
+const BUTTON = BUTTON_SECONDARY;
+const LABEL = FIELD_LABEL;
 
 export function Lifecycle({ request, segment, arabic }: { readonly request: RequestRow; readonly segment: string; readonly arabic: boolean }): ReactElement {
   const t = (en: string, ar: string): string => (arabic ? ar : en);
@@ -91,7 +91,7 @@ export function Lifecycle({ request, segment, arabic }: { readonly request: Requ
               </select>
             </label>
             <label className={LABEL}>{t('What, one per line', 'ماذا، عنصر في كل سطر')}
-              <textarea name="items" rows={3} className={INPUT} required />
+              <textarea name="items" rows={3} className={FIELD_TEXTAREA} required />
             </label>
             <button type="submit" className={BUTTON}>{t('Request information', 'طلب معلومات')}</button>
           </form>
