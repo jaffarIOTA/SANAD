@@ -25,7 +25,7 @@ import { describe, expect, it } from 'vitest';
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
 /** Everything that renders. */
-const SURFACES = ['packages/design', 'apps/ops/src', 'apps/sme/src'];
+const SURFACES = ['packages/design', 'apps/ops/src', 'apps/sme/src', 'apps/consumer/src'];
 
 function filesUnder(dir: string, extensions: readonly string[]): string[] {
   const out: string[] = [];

@@ -7,13 +7,13 @@
     "core",
     "products"
   ],
-  "description": "Sanad — Shariah-compliant origination platform. Wasl — SME supply chain finance.",
+  "description": "Sanad \u2014 Shariah-compliant origination platform. Wasl \u2014 SME supply chain finance.",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web-test.json && tsc --noEmit -p services/origination && tsc --noEmit -p apps/sme && tsc --noEmit -p apps/ops",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web-test.json && tsc --noEmit -p services/origination && tsc --noEmit -p apps/sme && tsc --noEmit -p apps/ops && tsc --noEmit -p apps/consumer",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:compliance": "vitest run test/compliance",
@@ -23,7 +23,9 @@
     "dev:ops": "next dev apps/ops --port 3001",
     "build:ops": "next build apps/ops",
     "dev:api": "node --experimental-strip-types services/origination/src/index.ts",
-    "build:apic": "node scripts/build-apic-definition.mjs"
+    "build:apic": "node scripts/build-apic-definition.mjs",
+    "dev:consumer": "next dev apps/consumer --port 3003",
+    "build:consumer": "next build apps/consumer"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

@@ -1,0 +1,52 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "jsx": "preserve",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowJs": true,
+    "noEmit": true,
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@sanad/core/*": [
+        "../../core/*"
+      ],
+      "@sanad/design/*": [
+        "../../packages/design/*"
+      ],
+      "@sanad/i18n/*": [
+        "../../packages/i18n/*"
+      ],
+      "@/*": [
+        "./src/*"
+      ],
+      "@sanad/products/*": [
+        "../../products/*"
+      ],
+      "@sanad/config/*": [
+        "../../config/*"
+      ]
+    },
+    "esModuleInterop": true,
+    "baseUrl": "."
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "next-env.d.ts",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
