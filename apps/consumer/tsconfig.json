@@ -35,6 +35,9 @@
       ],
       "@sanad/config/*": [
         "../../config/*"
+      ],
+      "@sanad/origination/*": [
+        "../../services/origination/src/*"
       ]
     },
     "esModuleInterop": true,

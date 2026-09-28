@@ -50,7 +50,8 @@ describe('tenant product catalogues', () => {
     expect(parseProductCatalogue({ version: 'x', entries: [{ productCode: 'bnpl', enabled: false, nameEn: 'x', nameAr: 'x', programmeIds: 'ALL', pricingRule: { kind: 'FIXED_PROFIT_AMOUNT', profitMinorUnits: '0' }, terms: {}, effectiveFromEpochSeconds: '1', interestRate: 5 }] }, ISLAMIC_PRODUCT_CODES).ok).toBe(false);
     const a = expectOk(loadProductCatalogue('bank-a'));
     expect(entryFor(a, 'murabaha-scf', 'prg-0009', 1_790_000_000n).ok).toBe(false);
-    expect(entryFor(a, 'bnpl', 'prg-0001', 1_790_000_000n).ok).toBe(false); // disabled
+    const disabled = { ...a, entries: a.entries.map((e) => (e.productCode === 'bnpl' ? { ...e, enabled: false } : e)) };
+    expect(entryFor(disabled, 'bnpl', 'prg-0001', 1_790_000_000n).ok).toBe(false); // disabled
     expect(expectOk(entryFor(a, 'murabaha-scf', 'prg-0001', 1_790_000_000n)).boardRulingRef).toBe('SSB-A-2026-014');
   });
 });

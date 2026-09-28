@@ -55,7 +55,7 @@
     },
     {
       "productCode": "bnpl",
-      "enabled": false,
+      "enabled": true,
       "nameEn": "Buy now pay later",
       "nameAr": "اشترِ الآن وادفع لاحقاً",
       "programmeIds": "ALL",

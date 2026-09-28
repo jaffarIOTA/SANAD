@@ -23,6 +23,8 @@ import { SadadAdapter } from '../../adapters/ksa/sadad/adapter.ts';
 import { PaymentsHubAdapter } from '../../adapters/ksa/payments-hub/adapter.ts';
 import { RatePublisherAdapter, percentToBp } from '../../adapters/ksa/rate-publisher/adapter.ts';
 import { CommodityBrokerAdapter } from '../../adapters/ksa/commodity-broker/adapter.ts';
+import { ZatcaEInvoicingAdapter } from '../../adapters/ksa/zatca-einvoicing/adapter.ts';
+import type { EInvoicingProvider } from '../../core/ports/e-invoicing.ts';
 import { type CredentialProvider, type CredentialRef, SecretValue } from '../../core/ports/credentials.ts';
 import type { IdentityAuthenticationPort } from '../../core/ports/identity-authentication.ts';
 import type { IdentityVerificationPort } from '../../core/ports/identity-verification.ts';
@@ -145,5 +147,23 @@ describe('answers map to the port, and identifiers do not cross', () => {
     const third = expectOk(await call());
     expect(third.kind).toBe('UNAVAILABLE'); if (third.kind === 'UNAVAILABLE') expect(third.reason).toBe('circuit open');
     expect(t.calls).toHaveLength(2);
+  });
+});
+
+describe('ZATCA e-invoicing', () => {
+  const einv = (t: FixtureTransport): EInvoicingProvider => new ZatcaEInvoicingAdapter(config('E_INVOICING'), new Credentials(), t);
+  const ref = { invoiceUuid: '3cf5d9a2-0000-4000-8000-000000000001', invoiceHash: 'h' };
+  it('maps a cleared invoice with its lines to minor units', async () => {
+    const t = transport({ operation: 'einvoice.lookup', match: {}, response: { clearanceStatus: 'CLEARED', stampValid: true, sellerCr: '1010000002', buyerCr: '7001000001', totalAmount: '185000.00', issueDate: '2026-09-01', lines: [{ lineNo: 1, amount: '185000.00', classificationCode: '2523', descriptionEn: 'Cement', quantity: '100', unit: 'T' }] } });
+    const v = expectOk(await einv(t).validateInvoice('t', ref, 'c'));
+    expect(v.clearanceStatus).toBe('CLEARED'); expect(v.stampValid).toBe(true); expect(v.totalAmount.minorUnits).toBe(18_500_000n); expect(v.lineItems[0]?.lineAmount.minorUnits).toBe(18_500_000n);
+  });
+  it('an unknown clearance status never validates, an unknown invoice is NOT_FOUND, and a down authority refuses', async () => {
+    expect(expectOk(await einv(transport({ operation: 'einvoice.lookup', match: {}, response: { clearanceStatus: 'PENDING', stampValid: true, sellerCr: '1', buyerCr: '2', totalAmount: '1', issueDate: 'd' } })).validateInvoice('t', ref, 'c')).clearanceStatus).toBe('REJECTED');
+    expect((await einv(transport(down('einvoice.lookup'))).validateInvoice('t', ref, 'c')).ok).toBe(false);
+  });
+  it('refuses an invoice with one unparseable line rather than rounding it', async () => {
+    const t = transport({ operation: 'einvoice.lookup', match: {}, response: { clearanceStatus: 'CLEARED', stampValid: true, sellerCr: '1', buyerCr: '2', totalAmount: '10.00', issueDate: 'd', lines: [{ lineNo: 1, amount: '3.333', classificationCode: 'x' }] } });
+    expect((await einv(t).validateInvoice('t', ref, 'c')).ok).toBe(false);
   });
 });

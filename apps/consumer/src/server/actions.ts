@@ -27,7 +27,8 @@ export async function signInAction(form: FormData): Promise<void> {
   const confirmed = started.ok && started.value.kind === 'ANSWERED' ? await identity.confirmAuthentication({ tenantId: TENANT, transactionRef: started.value.value.transactionRef, correlationId: nextId('cor') }) : undefined;
   if (confirmed === undefined || !confirmed.ok || confirmed.value.kind !== 'ANSWERED') return fail(`/${locale}`, 'IDENTITY_UNAVAILABLE', 'OP-DETERMINACY');
   await setSession({ applicantRef, identityAssertionId: confirmed.value.value.assertionId, identityRef: confirmed.value.value.identityRef });
-  redirect(`/${locale}/apply`);
+  const next = field(form, 'next');
+  redirect(next.startsWith(`/${locale}/`) ? next : `/${locale}/apply`);
 }
 
 export async function signOutAction(form: FormData): Promise<void> {

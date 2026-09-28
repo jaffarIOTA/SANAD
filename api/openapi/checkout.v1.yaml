@@ -1,0 +1,442 @@
+# Merchant checkout API, v1.
+#
+# Authored before the implementation (CLAUDE.md §8). A merchant's system
+# creates a checkout session for a basket, sends the shopper to the platform,
+# and reads the session back. The shopper's identity, the offer, the
+# disclosure and the acceptance happen on the platform's own consumer
+# surface; the merchant never sees the shopper's disclosure and never sets a
+# price — the basket is the amount, the tenant's catalogue is the terms.
+#
+# The same four load-bearing properties as the origination contract apply:
+# closed schemas, money as a string of minor units, tenant and merchant
+# identity from the credential only, no gateway header anywhere.
+openapi: 3.1.0
+info:
+  title: Sanad merchant checkout API
+  version: 1.0.0
+  description: Buy-now-pay-later checkout sessions for onboarded merchants.
+servers:
+  - url: /checkout/v1
+security:
+  - mutualTls: []
+    merchantOAuth: [checkout]
+tags:
+  - name: Sessions
+
+paths:
+  /sessions:
+    post:
+      tags: [Sessions]
+      operationId: createCheckoutSession
+      summary: Create a checkout session for a basket.
+      description: |
+        The basket amount is the financing amount; there is no other amount
+        field. The response carries the URL the shopper is sent to. The
+        session expires if the shopper does not accept within the tenant's
+        window, and can be cancelled by the merchant until the shopper accepts.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCheckoutSession'
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location: { $ref: '#/components/headers/Location' }
+            X-Correlation-Id: { $ref: '#/components/headers/CorrelationId' }
+            Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSession'
+        '400': { $ref: '#/components/responses/Malformed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '422': { $ref: '#/components/responses/ControlRejection' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /sessions/{sessionId}:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      tags: [Sessions]
+      operationId: getCheckoutSession
+      summary: Read a session.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: The session as it stands.
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSession'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /sessions/{sessionId}/cancellation:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    put:
+      tags: [Sessions]
+      operationId: cancelCheckoutSession
+      summary: Cancel a session the shopper has not yet accepted.
+      description: Idempotent. After acceptance the session cannot be cancelled from the shop; the response is `422`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Cancelled, or already cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSession'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ControlRejection' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+webhooks:
+  checkoutSessionChanged:
+    post:
+      operationId: onCheckoutSessionChanged
+      summary: Delivered when a session changes state.
+      description: Emitted through the transactional outbox. Deduplicate on `eventId`; do not infer state by counting deliveries.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutSessionEvent'
+      responses:
+        '204':
+          description: Acknowledged.
+
+components:
+  securitySchemes:
+    mutualTls:
+      type: mutualTLS
+      description: Client certificate, pinned per merchant integration.
+    merchantOAuth:
+      type: oauth2
+      description: The token identifies the merchant; the certificate binds the channel.
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.sanad.example/oauth2/token
+          scopes:
+            checkout: Create, read and cancel checkout sessions.
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Required on every state-changing request (§8). The response is
+        persisted against the key; a replay with the same key and the same
+        body returns the original result verbatim with `Idempotent-Replay:
+        true`. The same key with a different body is a `409`, never a second
+        request.
+
+        Generate a fresh UUID per logical instruction. Reusing a key across
+        two genuinely different instructions will lose one of them.
+      schema:
+        type: string
+        format: uuid
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: |
+        Carried through every log, span and audit record for this instruction.
+        Supply your own to correlate across both systems; one is generated if
+        you do not, and returned either way.
+      schema:
+        type: string
+        format: uuid
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  headers:
+    Location:
+      description: The created request.
+      schema: { type: string, format: uri-reference }
+    CorrelationId:
+      description: The correlation identifier for this instruction.
+      schema: { type: string, format: uuid }
+    IdempotentReplay:
+      description: Present and `true` when this response was replayed from a stored result.
+      schema: { type: boolean }
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema: { type: integer, minimum: 0 }
+
+  schemas:
+    Money:
+      type: object
+      additionalProperties: false
+      required: [minorUnits, currency]
+      description: |
+        An amount in minor units, as a string of digits.
+
+        A string rather than a number on purpose. A JSON number is a double in
+        most parsers, and §8 forbids floating point in the financial path;
+        `48500000` is halalas, so `485,000.00 SAR`. Do not divide it to
+        display it — split on the last two digits.
+      properties:
+        minorUnits:
+          type: string
+          pattern: '^(0|[1-9][0-9]{0,18})$'
+          examples: ['48500000']
+        currency:
+          type: string
+          enum: [SAR]
+          description: Saudi riyal, two minor digits. Extended by agreement, not unilaterally.
+    AttestedInstant:
+      type: object
+      additionalProperties: false
+      required: [instant, attestationRef]
+      description: |
+        A point in time together with the attestation that establishes it.
+
+        Times that carry contractual effect in this system come from an RFC
+        3161 timestamping authority, never from a server clock and never from
+        a client. The attestation reference is what makes the instant
+        replayable by the Board's audit process (SH-18), which is why it
+        travels with the value rather than being held somewhere else.
+      properties:
+        instant:
+          type: string
+          format: date-time
+        attestationRef:
+          type: string
+          minLength: 1
+          maxLength: 128
+    CreateCheckoutSession:
+      type: object
+      additionalProperties: false
+      required: [merchantOrderRef, basket, returnUrl, cancelUrl]
+      properties:
+        merchantOrderRef:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: The merchant's own order reference. Echoed on every event.
+        basket:
+          $ref: '#/components/schemas/Money'
+        returnUrl:
+          type: string
+          format: uri
+          description: Where the shopper is sent after acceptance or refusal. https only.
+        cancelUrl:
+          type: string
+          format: uri
+        shopperHint:
+          type: object
+          additionalProperties: false
+          description: An opaque reference the merchant already holds for the shopper. Never an identifier, phone or email.
+          properties:
+            applicantRef:
+              type: string
+              pattern: '^[a-z0-9-]{3,40}$'
+
+    CheckoutSessionState:
+      type: string
+      enum: [CREATED, IDENTIFIED, OFFERED, ACCEPTED, BOOKED, REFUSED, CANCELLED, EXPIRED]
+
+    CheckoutSession:
+      type: object
+      additionalProperties: false
+      required: [sessionId, state, merchantOrderRef, basket, redirectUrl, createdAt, expiresAt]
+      properties:
+        sessionId: { type: string, format: uuid }
+        state: { $ref: '#/components/schemas/CheckoutSessionState' }
+        merchantOrderRef: { type: string }
+        basket: { $ref: '#/components/schemas/Money' }
+        redirectUrl:
+          type: string
+          format: uri
+          description: Send the shopper here.
+        createdAt: { $ref: '#/components/schemas/AttestedInstant' }
+        expiresAt: { $ref: '#/components/schemas/AttestedInstant' }
+        acceptanceRef:
+          type: string
+          description: Present from `ACCEPTED`. The platform's acceptance record, by reference.
+        transactionId:
+          type: string
+          description: Present on `BOOKED`.
+        refusal:
+          type: object
+          additionalProperties: false
+          required: [control, reason]
+          description: Present on `REFUSED`. The control that refused and why; never a score, never a reason about the shopper's person.
+          properties:
+            control: { $ref: '#/components/schemas/ControlCode' }
+            reason: { type: string, maxLength: 64 }
+
+    CheckoutSessionEvent:
+      type: object
+      additionalProperties: false
+      required: [eventId, sessionId, merchantOrderRef, state, occurredAt]
+      properties:
+        eventId: { type: string, format: uuid }
+        sessionId: { type: string, format: uuid }
+        merchantOrderRef: { type: string }
+        state: { $ref: '#/components/schemas/CheckoutSessionState' }
+        occurredAt: { $ref: '#/components/schemas/AttestedInstant' }
+
+    ControlCode:
+      type: string
+      description: |
+        The control that refused the request. Never a generic decline: the
+        counterparty surface renders this into a specific, respectful Arabic
+        explanation, and the Board's audit workspace indexes on it.
+      enum:
+        - SH-01
+        - SH-02
+        - SH-03
+        - SH-04
+        - SH-05
+        - SH-06
+        - SH-07
+        - SH-08
+        - SH-09
+        - SH-10
+        - SH-11
+        - SH-12
+        - SH-13
+        - SH-14
+        - SH-15
+        - SH-16
+        - SH-17
+        - SH-18
+        - OP-DETERMINACY
+        - OP-CHAIN
+        - OP-LIMIT
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, detail, detailAr, correlationId]
+      description: |
+        RFC 9457 problem details, with two additions.
+
+        `control` and `reason` are the machine-readable pair: the control that
+        refused, and why. `detail`/`detailAr` are both always present —
+        bilingual is a requirement of the product, not a localisation feature,
+        and an English-only refusal cannot be shown to a counterparty.
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        detail: { type: string, description: English. }
+        detailAr: { type: string, description: Arabic. Always present. }
+        instance: { type: string, format: uri-reference }
+        correlationId: { type: string, format: uuid }
+        control: { $ref: '#/components/schemas/ControlCode' }
+        reason:
+          type: string
+          maxLength: 64
+          description: Stable machine reason, e.g. `INVOICE_ALREADY_FINANCED`.
+          examples: [INVOICE_ALREADY_FINANCED]
+        context:
+          type: object
+          description: |
+            Structured context for the audit trail. Scalars only, and never a
+            national identifier, a personal datum or a credential — problem
+            details are logged, forwarded and shown on screens.
+          additionalProperties:
+            type: [string, number, boolean]
+
+  responses:
+    Malformed:
+      description: |
+        The body could not be accepted as written — a missing required field,
+        a wrong type, or an unknown property. An unknown property is an error
+        rather than a silent drop; see the note on closed schemas.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            unknownProperty:
+              summary: A field that does not exist in this system
+              value:
+                type: https://sanad.example/problems/malformed-request
+                title: Malformed request
+                status: 400
+                detail: >-
+                  Unknown property. Return in this system is expressed as a
+                  profit amount added to a disclosed cost, never as a
+                  proportion, and there is no field to carry one.
+                detailAr: >-
+                  حقل غير معروف. يُعبَّر عن العائد بمبلغ ربح يُضاف إلى تكلفة
+                  مُفصح عنها، لا بنسبة، ولا يوجد حقل يحملها.
+                correlationId: 018f3a2f-0000-7000-8000-000000000001
+                control: SH-01
+                reason: UNKNOWN_PROPERTY
+    Unauthenticated:
+      description: No valid credential. The service verifies this itself and does not rely on the gateway.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: |
+        Authenticated, but not entitled — including any attempt to read or act
+        on a request belonging to another partner or another tenant.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: |
+        No such request within this partner's scope. A request that exists for
+        another partner is reported as absent rather than forbidden, so the
+        API does not confirm the existence of other partners' business.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    IdempotencyConflict:
+      description: |
+        The `Idempotency-Key` has been used with a different body. The stored
+        result is not returned and the new instruction is not performed — one
+        of the two is a defect and guessing which would be worse than failing.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ControlRejection:
+      description: Well-formed, and refused by a control — a merchant that is not active, a basket over the consumer limit, a session past acceptance.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    RateLimited:
+      description: Too many requests. Declared in `gateway/`, enforced there, re-checked by the service.
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Internal:
+      description: |
+        An unexpected failure. The correlation identifier is always present;
+        quote it. No internal detail, credential or personal datum appears in
+        this body.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }

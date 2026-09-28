@@ -37,15 +37,24 @@ interface State {
   readonly offers: Map<string, StoredOffer>;
   readonly acceptances: Map<string, Acceptance>;
   sequence: number;
+  lastAttested: bigint;
 }
 
 const KEY = Symbol.for('sanad.consumer.developmentStore');
 const scope = globalThis as unknown as Record<symbol, State | undefined>;
-const state: State = (scope[KEY] ??= { offers: new Map(), acceptances: new Map(), sequence: 0 });
+const state: State = (scope[KEY] ??= { offers: new Map(), acceptances: new Map(), sequence: 0, lastAttested: 0n });
 
-/** Development stand-in for the timestamping authority. Reads the host clock; production attests. */
+/**
+ * Development stand-in for the timestamping authority. Reads the host clock;
+ * production attests. Strictly monotonic, as an authority's genTime is: two
+ * acts inside one second (accept, then book) get distinct, ordered instants.
+ */
 export function developmentAttestation(): TsaInstant {
-  return tsaInstant({ verified: true, genTimeEpochSeconds: BigInt(Math.floor(Date.now() / 1000)), tokenDigest: 'development-substitute', authorityId: 'development' });
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  // A store kept across hot reloads may predate this field.
+  const last = state.lastAttested ?? 0n;
+  state.lastAttested = now > last ? now : last + 1n;
+  return tsaInstant({ verified: true, genTimeEpochSeconds: state.lastAttested, tokenDigest: `development-substitute-${state.lastAttested.toString()}`, authorityId: 'development' });
 }
 
 export function nextId(prefix: string): string {

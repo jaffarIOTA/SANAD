@@ -36,7 +36,7 @@ the numbers are honest; it is not nearly finished.
 
 ## Built and tested
 
-### The engine — `core/`, 49 modules · the products — `products/`, 5 modules · the rails — `adapters/ksa/`, 13 adapters
+### The engine — `core/`, 55 modules · the products — `products/`, 5 modules · the rails — `adapters/ksa/`, 14 adapters · the workflow — `adapters/workflow-temporal/`
 
 The part that makes non-compliant transactions structurally impossible.
 
@@ -96,7 +96,7 @@ against the real toolkit. The origination definition is **generated** from the
 that 3.0 cannot express are listed inside the generated file rather than
 dropped silently.
 
-### Tests — 679 across 40 files (2 skipped until a database is reachable)
+### Tests — 713 across 44 files (2 skipped until a database is reachable)
 
 | Suite | Tests | What it protects |
 |---|---|---|
@@ -164,18 +164,27 @@ Ordered by what it costs to guess wrong.
    own, with their own authentication.
 3. **R-15** — durable idempotency. Built on PostgreSQL (migration 0006);
    untested against a database until one is reachable (`SANAD_TEST_DATABASE_URL`).
-4. **The Temporal adapter** behind `core/ports/workflow.ts`, and the workers
-   that run the Murabaha and Tawarruq sequences as activities.
-5. **The consumer app** (`apps/consumer`). The disclosure screen exists as a
-   component and is mounted in the workbench; the customer-facing journey is
-   not built.
+4. ~~The Temporal adapter~~ — built (`adapters/workflow-temporal/`): programs
+   over effects, activities, worker, in-memory runner; not yet run against a
+   Temporal server (KSA-WF-TEMPORAL-01).
+5. ~~The consumer app~~ — built (`apps/consumer`, port 3003): national-identity
+   sign-in (development stand-in), amount-first application, disclosure,
+   acceptance bound to the disclosure version, merchant checkout.
 6. **Splitting `counterparty-registry`** into business-registry and
    counterparty-master (WATHQ-DEV-001).
 7. **Every regulatory threshold's citation.** The deduction-ratio cap and the
    BNPL consumer limit ship as placeholders whose `citation` field says so; the
    SAMA APR annex examples are to be transcribed into the APR golden tests.
-8. **Merchant onboarding and the checkout API** for BNPL; **partner settlement
-   reconciliation** for embedded lending; the **ZATCA e-invoicing** adapter.
+8. ~~Merchant onboarding, checkout API, settlement reconciliation, ZATCA
+   e-invoicing~~ — built: `core/merchants`, `core/checkout`,
+   `api/openapi/checkout.v1.yaml` served by the consumer app,
+   `core/reconciliation/settlement.ts`, `adapters/ksa/zatca-einvoicing`.
+9. **Applying the remaining Figma frames** (Transactions, Loans, Setting) to the
+   queue, request and products pages — needs the Figma desktop app open.
+10. **An outbox dispatcher**: events are queued (webhooks, payments, bureau
+    reports) but nothing delivers them yet.
+11. **R-10** the internal review API; the consumer session as a signed,
+    encrypted cookie bound to the assertion's expiry (development uses a plain one).
 
 ---
 

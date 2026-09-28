@@ -13,13 +13,13 @@ import { signInAction } from '../../server/actions.ts';
 import { explain } from '../../server/explain.ts';
 import { currentSession } from '../../server/session.ts';
 
-export default async function SignInPage({ params, searchParams }: { readonly params: Promise<{ readonly locale: string }>; readonly searchParams: Promise<{ readonly refused?: string; readonly control?: string }> }) {
+export default async function SignInPage({ params, searchParams }: { readonly params: Promise<{ readonly locale: string }>; readonly searchParams: Promise<{ readonly refused?: string; readonly control?: string; readonly next?: string }> }) {
   const { locale: segment } = await params;
-  const { refused, control } = await searchParams;
+  const { refused, control, next } = await searchParams;
   const locale = localeFromSegment(segment);
   if (locale === undefined) notFound();
   const arabic = locale === 'ar-SA';
-  if ((await currentSession()) !== undefined) redirect(`/${segment}/apply`);
+  if ((await currentSession()) !== undefined) redirect(next !== undefined && next.startsWith(`/${segment}/`) ? next : `/${segment}/apply`);
 
   return (
     <div className="flex flex-col gap-5">
@@ -31,6 +31,7 @@ export default async function SignInPage({ params, searchParams }: { readonly pa
       <Card>
         <form action={signInAction} className="flex flex-col gap-4">
           <input type="hidden" name="locale" value={segment} />
+          {next !== undefined ? <input type="hidden" name="next" value={next} /> : null}
           <label className="flex flex-col gap-1 text-sm font-medium text-ink">
             {arabic ? 'مرجع المتقدّم (بيئة تطوير)' : 'Applicant reference (development)'}
             <input name="applicantRef" defaultValue="applicant-demo" pattern="[a-z0-9-]{3,40}" required className="identifier h-[50px] rounded-pill bg-field ps-5 pe-4 text-base outline-none focus:ring-2 focus:ring-brand/40" />

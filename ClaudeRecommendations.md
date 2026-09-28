@@ -1141,3 +1141,17 @@ activity retry options are the next infrastructure item after the database.
 `<Disclosure>` exists and is mounted in the operations workbench for review; the
 customer-facing journey (Nafath login, offer, disclosure, acceptance recording the
 disclosure version) is `apps/consumer` in the layout and unbuilt.
+
+
+## R-22 — Nothing dispatches the outbox · **Material**
+
+Disbursements, bureau reports, partner callbacks and merchant webhooks are queued
+as outbox events with idempotency keys, and the aggregates refuse duplicates. No
+worker reads the queue and calls the ports. The dispatcher is small (poll, call,
+mark, retry under policy) but until it exists every "queued" is a promise.
+
+## R-23 — The consumer session cookie is a development shortcut · **Blocking before go-live**
+
+`apps/consumer/src/server/session.ts` stores the applicant reference and identity
+assertion in a plain HttpOnly cookie. Production needs it signed and encrypted, bound
+to the assertion's expiry, and issued only by the identity step.
