@@ -1143,7 +1143,7 @@ customer-facing journey (Nafath login, offer, disclosure, acceptance recording t
 disclosure version) is `apps/consumer` in the layout and unbuilt.
 
 
-## R-22 — Nothing dispatches the outbox · **Material**
+## R-22 — Nothing dispatches the outbox · **Material** · ✅ **Done** (`services/outbox`, 2026-09-28)
 
 Disbursements, bureau reports, partner callbacks and merchant webhooks are queued
 as outbox events with idempotency keys, and the aggregates refuse duplicates. No

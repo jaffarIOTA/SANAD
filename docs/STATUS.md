@@ -181,8 +181,10 @@ Ordered by what it costs to guess wrong.
    `core/reconciliation/settlement.ts`, `adapters/ksa/zatca-einvoicing`.
 9. **Applying the remaining Figma frames** (Transactions, Loans, Setting) to the
    queue, request and products pages — needs the Figma desktop app open.
-10. **An outbox dispatcher**: events are queued (webhooks, payments, bureau
-    reports) but nothing delivers them yet.
+10. ~~An outbox dispatcher~~ — built: `core/outbox/dispatch.ts` (one event, one
+    port, DELIVERED / RETRY / DEAD), `core/outbox/store.ts` (leased claims),
+    migration 0008 and `services/outbox` worker; development ports until the
+    adapters go live.
 11. ~~R-10 the internal review API~~ — built: `api/openapi/review.v1.yaml`,
     served by the workbench at `/api/review/v1` under staff credentials; four
     eyes and authority tiers refused by the service. Still open: the consumer

@@ -9,7 +9,7 @@ import type { BnplQuote } from '@sanad/products/bnpl/pricing.ts';
 import { loadProductCatalogue } from '@sanad/config/loader.ts';
 import { entryFor } from '@sanad/core/products/catalogue.ts';
 
-import { findSession, saveSession } from '../../../../server/checkout-store.ts';
+import { findSession, outboxStore, saveSession } from '../../../../server/checkout-store.ts';
 import { TENANT } from '../../../../server/engine.ts';
 import { currentSession } from '../../../../server/session.ts';
 import { accept, developmentAttestation, findOffer, nextId } from '../../../../server/store.ts';
@@ -45,6 +45,8 @@ export async function checkoutAcceptAction(form: FormData): Promise<void> {
   if (!draft.ok) return fail(draft.error.reason, draft.error.control);
   const booked = bookBnpl(draft.value, developmentAttestation());
   if (!booked.ok) return fail(booked.error.reason, booked.error.control);
+  // The booking's effects — merchant settlement, bureau report — go to the same durable outbox the session events use.
+  await outboxStore().append(booked.value.outbox.events);
   saveSession(bookSession(accepted.value, draft.value.core.transactionId, booked.value.bookedAt));
   redirect(`${session.core.returnUrl}${session.core.returnUrl.includes('?') ? '&' : '?'}sessionId=${sessionId}&state=BOOKED`);
 }

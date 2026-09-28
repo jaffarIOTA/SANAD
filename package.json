@@ -13,7 +13,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web-test.json && tsc --noEmit -p services/origination && tsc --noEmit -p apps/sme && tsc --noEmit -p apps/ops && tsc --noEmit -p apps/consumer",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web-test.json && tsc --noEmit -p services/origination && tsc --noEmit -p services/outbox && tsc --noEmit -p apps/sme && tsc --noEmit -p apps/ops && tsc --noEmit -p apps/consumer",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:compliance": "vitest run test/compliance",
@@ -25,7 +25,8 @@
     "dev:api": "node --experimental-strip-types services/origination/src/index.ts",
     "build:apic": "node scripts/build-apic-definition.mjs",
     "dev:consumer": "next dev apps/consumer --port 3003",
-    "build:consumer": "next build apps/consumer"
+    "build:consumer": "next build apps/consumer",
+    "dev:outbox": "node --experimental-strip-types services/outbox/src/index.ts"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
