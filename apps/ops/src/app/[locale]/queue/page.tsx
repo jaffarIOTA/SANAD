@@ -111,15 +111,15 @@ export default async function QueuePage({ params, searchParams }: { readonly par
   return (
     <div className="flex flex-col gap-8">
       {/* -- Summary: two cards and the week ------------------------------------ */}
-      <section className="grid gap-[30px] xl:grid-cols-[minmax(0,350fr)_minmax(0,350fr)_minmax(0,350fr)]">
+      <section className="grid gap-[30px] lg:grid-cols-2 2xl:grid-cols-3">
         <div className="card-lift flex h-[225px] flex-col justify-between overflow-hidden rounded-card bg-[linear-gradient(107deg,#4c49ed_0%,#0a06f4_100%)] text-white">
           <div className="flex items-start justify-between px-[26px] pt-6">
             <div><p className="text-xs text-white/70">{t('Needs your decision', 'بانتظار قرارك')}</p><p className="mt-1 text-[28px] font-semibold tabular-nums leading-none">{counts.review}</p></div>
             <span aria-hidden className="inline-flex size-[35px] items-center justify-center rounded-[6px] bg-white/20"><Icon name="queue" size={18} /></span>
           </div>
           <div className="px-[26px] text-xs text-white/70">{oldest !== undefined ? <>{t('Oldest waiting ', 'الأقدم ينتظر ')}<bdi>{age(waitingSince(oldest), nowEpochSeconds, locale)}</bdi> · <span className="identifier text-white">{oldest.requestId}</span></> : t('Nothing is waiting on you.', 'لا يوجد ما ينتظر قرارك.')}</div>
-          <div className="flex h-[70px] items-center justify-between bg-[linear-gradient(180deg,rgba(255,255,255,0.15)_0%,rgba(255,255,255,0)_100%)] px-[26px]">
-            <span className="text-[15px] font-semibold">{t('Four eyes', 'أربع أعين')} · <span className="identifier">{CHECKER.principalId}</span></span>
+          <div className="flex min-h-[70px] flex-wrap items-center justify-between gap-x-4 gap-y-1 bg-[linear-gradient(180deg,rgba(255,255,255,0.15)_0%,rgba(255,255,255,0)_100%)] px-[26px] py-3">
+            <span className="whitespace-nowrap text-[15px] font-semibold">{t('Four eyes', 'أربع أعين')} · <span className="identifier">{CHECKER.principalId}</span></span>
             {blockedCount > 0 ? <span className="text-xs text-white/80">{blockedCount} {t('your own work', 'من إدخالك')}</span> : null}
           </div>
         </div>
@@ -129,12 +129,12 @@ export default async function QueuePage({ params, searchParams }: { readonly par
             <span aria-hidden className="inline-flex size-[35px] items-center justify-center rounded-[6px] bg-blocked-wash text-blocked"><Icon name="clock" size={18} /></span>
           </div>
           <div className="px-[26px] text-xs text-ink-quiet">{oldestBreached !== undefined ? <>{t('Longest breach ', 'أطول تجاوز ')}<bdi>{age(waitingSince(oldestBreached), nowEpochSeconds, locale)}</bdi> · <span className="identifier text-ink">{oldestBreached.requestId}</span></> : t('Every request is inside its SLA.', 'كل الطلبات ضمن مهلتها.')}</div>
-          <div className="flex h-[70px] items-center justify-between border-t border-line-strong px-[26px]">
+          <div className="flex min-h-[70px] flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-line-strong px-[26px] py-3">
             <span className="text-[15px] font-semibold text-heading">{expirable} {t('expirable', 'قابلة للانتهاء')}</span>
             <form action={expireOverdueAction}><input type="hidden" name="locale" value={segment} /><button type="submit" disabled={expirable === 0} className={`${PILL_OUTLINE} disabled:opacity-40`}>{t('Expire overdue', 'إنهاء المتأخر')}</button></form>
           </div>
         </div>
-        <Card>
+        <Card className="lg:col-span-2 2xl:col-span-1">
           <WeekBars title={t('Decided this week', 'قرارات هذا الأسبوع')} series={[t('Approved', 'معتمد'), t('Declined', 'مرفوض')]} bars={bars} emptyLabel={t('No decisions in the last seven days.', 'لا قرارات خلال الأيام السبعة الأخيرة.')} />
         </Card>
       </section>
@@ -157,9 +157,9 @@ export default async function QueuePage({ params, searchParams }: { readonly par
                 <tr className="border-b border-line text-[16px] text-ink-quiet">
                   <th scope="col" className="py-3 pe-3 text-start font-normal">{t('Waiting', 'منذ')}</th>
                   <th scope="col" className="py-3 pe-3 text-start font-normal">{t('Counterparty', 'العميل')}</th>
-                  <th scope="col" className="py-3 pe-3 text-start font-normal">{t('Invoice', 'الفاتورة')}</th>
+                  <th scope="col" className="hidden py-3 pe-3 text-start font-normal 2xl:table-cell">{t('Invoice', 'الفاتورة')}</th>
                   <th scope="col" className="py-3 pe-3 text-end font-normal">{t('Amount', 'المبلغ')}</th>
-                  <th scope="col" className="py-3 pe-3 text-start font-normal">{t('Channel', 'القناة')}</th>
+                  <th scope="col" className="hidden py-3 pe-3 text-start font-normal xl:table-cell">{t('Channel', 'القناة')}</th>
                   <th scope="col" className="py-3 pe-3 text-start font-normal">{t('Servicing', 'نظام الخدمة')}</th>
                   <th scope="col" className="py-3 text-end font-normal">{t('Action', 'إجراء')}</th>
                 </tr>
@@ -172,16 +172,16 @@ export default async function QueuePage({ params, searchParams }: { readonly par
                   return (
                     <tr key={row.requestId} className="border-b border-line last:border-b-0">
                       <td className="py-4 pe-3 text-ink-quiet"><span className="flex flex-col gap-1"><span className="whitespace-nowrap"><bdi>{age(waitingSince(row), nowEpochSeconds, locale)}</bdi></span>{breached(row) ? <Status tone="blocked" label={t('past SLA', 'تجاوز المهلة')} /> : null}</span></td>
-                      <td className="py-4 pe-3"><span className="flex items-center gap-3"><span aria-hidden className={`inline-flex size-[30px] shrink-0 items-center justify-center rounded-full border ${row.state === 'APPROVED' ? 'border-positive text-positive' : row.state === 'REJECTED' ? 'border-blocked text-blocked' : 'border-line-strong text-ink-quiet'}`}><Icon name={row.state === 'APPROVED' ? 'check-circle' : 'document'} size={14} /></span><span className="flex min-w-0 flex-col"><span className="truncate font-medium text-ink">{row.counterpartyId}</span><span className="identifier text-xs text-ink-quiet">{row.requestId}</span></span></span></td>
-                      <td className="py-4 pe-3"><span className="identifier text-ink-quiet">{row.invoiceNumber}</span></td>
-                      <td className="py-4 pe-3 text-end tabular-nums"><bdi className={row.state === 'REJECTED' ? 'text-blocked' : row.state === 'APPROVED' ? 'text-positive' : 'text-ink'}>{sar(row.amountMinorUnits)}</bdi><span className="ms-1 text-xs text-ink-quiet">SAR</span></td>
-                      <td className="py-4 pe-3 text-ink-quiet">{row.channel.replaceAll('_', ' ').toLowerCase()}</td>
+                      <td className="py-4 pe-3"><span className="flex items-center gap-3"><span aria-hidden className={`inline-flex size-[30px] shrink-0 items-center justify-center rounded-full border ${row.state === 'APPROVED' ? 'border-positive text-positive' : row.state === 'REJECTED' ? 'border-blocked text-blocked' : 'border-line-strong text-ink-quiet'}`}><Icon name={row.state === 'APPROVED' ? 'check-circle' : 'document'} size={14} /></span><span className="flex min-w-0 flex-col"><span className="font-medium leading-snug text-ink">{row.counterpartyId}</span><span className="identifier text-xs text-ink-quiet">{row.requestId}</span></span></span></td>
+                      <td className="hidden whitespace-nowrap py-4 pe-3 2xl:table-cell"><span className="identifier text-ink-quiet">{row.invoiceNumber}</span></td>
+                      <td className="whitespace-nowrap py-4 pe-3 text-end tabular-nums"><bdi className={row.state === 'REJECTED' ? 'text-blocked' : row.state === 'APPROVED' ? 'text-positive' : 'text-ink'}>{sar(row.amountMinorUnits)}</bdi><span className="ms-1 text-xs text-ink-quiet">SAR</span></td>
+                      <td className="hidden whitespace-nowrap py-4 pe-3 text-ink-quiet xl:table-cell">{row.channel.replaceAll('_', ' ').toLowerCase()}</td>
                       <td className="py-4 pe-3">
                         {row.servicing === undefined ? <span className="text-ink-quiet">{row.state === 'AWAITING_SERVICING_RESPONSE' ? t('awaiting', 'بانتظار الرد') : '—'}</span> : (
-                          <span className="flex flex-col gap-1"><Status tone={row.servicing.decision === 'APPROVED' ? 'settled' : row.servicing.decision === 'DECLINED' ? 'blocked' : 'progress'} label={row.servicing.decision.toLowerCase()} />{declined ? <span className="text-xs text-attention">{t('approval needs a written justification', 'الاعتماد يتطلب تسبيباً مكتوباً')}</span> : null}</span>
+                          <span className="flex flex-col gap-1"><Status tone={row.servicing.decision === 'APPROVED' ? 'settled' : row.servicing.decision === 'DECLINED' ? 'blocked' : 'progress'} label={row.servicing.decision.toLowerCase()} />{declined ? <span className="max-w-[11rem] text-xs leading-snug text-attention">{t('approval needs a written justification', 'الاعتماد يتطلب تسبيباً مكتوباً')}</span> : null}</span>
                         )}
                       </td>
-                      <td className="py-4 text-end">
+                      <td className="whitespace-nowrap py-4 text-end">
                         {ownWork ? (
                           // Shown, not hidden, and not actionable. The domain refuses this transition too.
                           <span className="inline-flex flex-col items-end text-xs text-ink-quiet" title={t('The principal who raised a request cannot approve it', 'المُدخِل لا يعتمد عمله')}><span className="font-medium text-attention">{t('your own work', 'من إدخالك')}</span><span>{t('needs another reviewer', 'يلزم مراجع آخر')}</span></span>

@@ -83,7 +83,7 @@ export default async function ProductsPage({ params, searchParams }: { readonly 
       </div>
 
       {/* -- The Loans frame's four tiles ------------------------------------------ */}
-      <section className="grid gap-[30px] sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-[30px] sm:grid-cols-2 2xl:grid-cols-4">
         <Tile icon="store" disc="blue" label={t('Products enabled', 'منتجات مفعّلة')} value={String(enabled.length)} />
         <Tile icon="shield-check" disc="yellow" label={t('Under a board ruling', 'بقرار من الهيئة')} value={String(islamic.length)} />
         <Tile icon="people" disc="pink" label={t('Consumer products', 'منتجات للأفراد')} value={String(consumer.length)} />

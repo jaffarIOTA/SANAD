@@ -164,7 +164,7 @@ export function Status({
 }): ReactElement {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${TONE[tone]}`}
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${TONE[tone]}`}
       data-testid="status"
       data-tone={tone}
     >
@@ -217,15 +217,18 @@ export function ControlRejection({
 export function Card({
   children,
   muted = false,
+  className = '',
 }: {
   readonly children: ReactNode;
   readonly muted?: boolean;
+  /** Layout-only classes from the caller (grid span, min height). Never colour or radius. */
+  readonly className?: string;
 }): ReactElement {
   return (
     <div
-      className={`card-lift rounded-card p-6 ${
+      className={`card-lift min-w-0 rounded-card p-6 ${
         muted ? 'border border-line bg-sunken opacity-80' : 'bg-surface'
-      }`}
+      } ${className}`}
     >
       {children}
     </div>
@@ -304,7 +307,7 @@ export interface TabItem {
 export function Tabs({ items, current, ariaLabel }: { readonly items: readonly TabItem[]; readonly current: string; readonly ariaLabel: string }): ReactElement {
   return (
     <nav aria-label={ariaLabel} className="border-b border-line">
-      <ul className="flex list-none gap-8 overflow-x-auto p-0">
+      <ul className="flex list-none flex-wrap gap-x-8 gap-y-1 p-0">
         {items.map((item) => {
           const active = item.id === current;
           return (

@@ -1,4 +1,7 @@
 @import 'tailwindcss';
+/* The shared design package lives outside this app; Tailwind's automatic source
+   detection does not reach it, and a utility used only there would be dropped. */
+@source '../../../../packages/design';
 
 /*
  * Sanad design tokens.

@@ -28,7 +28,7 @@ export function SideNav({ segment, arabic, current }: { readonly segment: string
     <nav aria-label={arabic ? 'وحدات المنصة' : 'Platform modules'} className="hidden w-[250px] shrink-0 flex-col border-e border-line bg-surface pt-3 lg:flex">
       {MODULE_GROUPS.map((group) => (
         <div key={group.id} className="mb-2 flex flex-col">
-          <h2 className="ps-11 pt-3 pb-1 text-[0.6875rem] font-semibold uppercase tracking-wider text-ink-faint">{arabic ? group.titleAr : group.titleEn}</h2>
+          <h2 className="ps-[30px] pt-3 pb-1 text-[0.6875rem] font-semibold uppercase tracking-wider text-ink-faint">{arabic ? group.titleAr : group.titleEn}</h2>
           <ul className="flex list-none flex-col p-0">
             {group.items.map((item) => {
               const label = arabic ? item.titleAr : item.titleEn;
@@ -40,9 +40,9 @@ export function SideNav({ segment, arabic, current }: { readonly segment: string
                 <>
                   {/* The design's indicator: a 6px bar on the start edge, rounded on the inner side. */}
                   <span aria-hidden className={`nav-indicator absolute inset-y-1 start-0 w-[6px] rounded-e-[10px] bg-brand ${active ? 'opacity-100' : 'opacity-0'}`} />
-                  <Icon name={group.icon} size={22} className={`ms-[43px] shrink-0 ${active ? 'text-brand' : openable ? 'text-ink-faint' : 'text-ink-faint/70'}`} />
+                  <Icon name={group.icon} size={22} className={`ms-[30px] shrink-0 ${active ? 'text-brand' : openable ? 'text-ink-faint' : 'text-ink-faint/70'}`} />
                   <span className="flex min-w-0 flex-col">
-                    <span className={`truncate text-[17px] font-medium leading-tight ${active ? 'text-brand' : openable ? 'text-ink-faint group-hover:text-heading' : 'text-ink-faint/80'}`}>{label}</span>
+                    <span className={`text-[16px] font-medium leading-snug ${active ? 'text-brand' : openable ? 'text-ink-faint group-hover:text-heading' : 'text-ink-faint/80'}`}>{label}</span>
                     {item.readiness.kind !== 'LIVE' ? <span className="text-[0.6875rem] text-ink-faint">{legend[item.readiness.kind]}</span> : null}
                   </span>
                 </>
@@ -50,9 +50,9 @@ export function SideNav({ segment, arabic, current }: { readonly segment: string
               return (
                 <li key={item.id} className="relative">
                   {openable ? (
-                    <a href={href} aria-current={active ? 'page' : undefined} title={item.reference} className="group press relative flex min-h-[52px] items-center gap-[26px] pe-4">{body}</a>
+                    <a href={href} aria-current={active ? 'page' : undefined} title={item.reference} className="group press relative flex min-h-[52px] items-center gap-4 py-2 pe-4">{body}</a>
                   ) : (
-                    <span aria-disabled="true" title={why ?? item.reference} className="relative flex min-h-[44px] items-center gap-[26px] pe-4">{body}</span>
+                    <span aria-disabled="true" title={why ?? item.reference} className="relative flex min-h-[44px] items-center gap-4 py-1.5 pe-4">{body}</span>
                   )}
                 </li>
               );
@@ -81,9 +81,9 @@ export function BottomNav({ segment, arabic, current }: { readonly segment: stri
         const href = `/${segment}${item.href ?? ''}`;
         const active = href === current;
         return (
-          <a key={item.id} href={href} aria-current={active ? 'page' : undefined} className={`press flex min-w-[56px] flex-col items-center gap-1 rounded-tile px-2 py-1 text-[0.6875rem] ${active ? 'text-brand' : 'text-ink-faint'}`}>
+          <a key={item.id} href={href} aria-current={active ? 'page' : undefined} className={`press flex min-w-0 flex-1 flex-col items-center gap-1 rounded-tile px-1 py-1 text-[0.6875rem] ${active ? 'text-brand' : 'text-ink-faint'}`}>
             <Icon name={item.icon} size={22} />
-            <span className="truncate">{arabic ? item.titleAr : item.titleEn}</span>
+            <span className="max-w-full truncate">{arabic ? item.titleAr : item.titleEn}</span>
           </a>
         );
       })}

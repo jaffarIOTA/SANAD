@@ -413,11 +413,8 @@ export function SharePie({
                 <path d={a.d} fill={a.colour} stroke="var(--color-surface)" strokeWidth={2}>
                   <title>{`${a.label}: ${String(a.value)} (${pct(a.share)})`}</title>
                 </path>
-                {a.share >= 0.08 ? (
-                  <text x={a.lx} y={a.ly} textAnchor="middle" fill="#ffffff" fontWeight={700}>
-                    <tspan x={a.lx} dy="-2" fontSize={16}>{pct(a.share)}</tspan>
-                    <tspan x={a.lx} dy="16" fontSize={12}>{a.label.length > 14 ? `${a.label.slice(0, 13)}…` : a.label}</tspan>
-                  </text>
+                {a.share >= 0.12 ? (
+                  <text x={a.lx} y={a.ly} dy="6" textAnchor="middle" fill="#ffffff" fontWeight={700} fontSize={17}>{pct(a.share)}</text>
                 ) : null}
               </g>
             ))}

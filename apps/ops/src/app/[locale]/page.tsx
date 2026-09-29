@@ -108,7 +108,7 @@ export default async function DashboardPage({ params, searchParams }: { readonly
   return (
     <div className="flex flex-col gap-8">
       {/* -- Row 1: products and recent requests --------------------------------- */}
-      <section className="grid gap-8 xl:grid-cols-[minmax(0,730fr)_minmax(0,350fr)]">
+      <section className="grid gap-8 2xl:grid-cols-[minmax(0,730fr)_minmax(0,350fr)]">
         <div className="min-w-0">
           <div className="mb-5 flex items-baseline justify-between">
             <h2 className="text-h2 font-semibold text-heading">{t('Products', 'المنتجات')}</h2>
@@ -119,7 +119,7 @@ export default async function DashboardPage({ params, searchParams }: { readonly
               const dark = i === 0;
               const openCount = all.filter((r) => r.state !== 'REJECTED' && r.state !== 'WITHDRAWN').length;
               return (
-                <a key={entry.productCode} href={`/${segment}/products`} className={`card-lift press relative flex h-[235px] flex-col justify-between overflow-hidden rounded-card ${dark ? 'bg-[linear-gradient(107deg,#4c49ed_0%,#0a06f4_100%)] text-white' : 'border border-line-strong bg-surface text-heading'}`}>
+                <a key={entry.productCode} href={`/${segment}/products`} className={`card-lift press relative flex min-h-[235px] flex-col justify-between gap-4 overflow-hidden rounded-card ${dark ? 'bg-[linear-gradient(107deg,#4c49ed_0%,#0a06f4_100%)] text-white' : 'border border-line-strong bg-surface text-heading'}`}>
                   <div className="flex items-start justify-between px-[26px] pt-6">
                     <div>
                       <p className={`text-xs ${dark ? 'text-white/70' : 'text-ink-quiet'}`}>{t('Pipeline value', 'قيمة قيد المعالجة')}</p>
@@ -128,12 +128,12 @@ export default async function DashboardPage({ params, searchParams }: { readonly
                     <span aria-hidden className={`inline-flex size-[35px] items-center justify-center rounded-[6px] ${dark ? 'bg-white/20' : 'bg-brand-wash text-brand'}`}><Icon name="store" size={18} /></span>
                   </div>
                   <div className="grid grid-cols-2 gap-4 px-[26px]">
-                    <div className="min-w-0"><p className={`text-xs ${dark ? 'text-white/70' : 'text-ink-quiet'}`}>{t('PRODUCT', 'المنتج')}</p><p className="mt-0.5 truncate text-[15px] font-semibold">{arabic ? entry.nameAr : entry.nameEn}</p></div>
-                    <div className="min-w-0"><p className={`text-xs ${dark ? 'text-white/70' : 'text-ink-quiet'}`}>{t('BOARD RULING', 'قرار الهيئة')}</p><p className="mt-0.5 truncate text-[15px] font-semibold"><span className="identifier">{entry.boardRulingRef ?? '—'}</span></p></div>
+                    <div className="min-w-0"><p className={`text-xs ${dark ? 'text-white/70' : 'text-ink-quiet'}`}>{t('PRODUCT', 'المنتج')}</p><p className="mt-0.5 text-[15px] font-semibold leading-snug">{arabic ? entry.nameAr : entry.nameEn}</p></div>
+                    <div className="min-w-0"><p className={`text-xs ${dark ? 'text-white/70' : 'text-ink-quiet'}`}>{t('BOARD RULING', 'قرار الهيئة')}</p><p className="mt-0.5 text-[15px] font-semibold leading-snug"><span className="identifier">{entry.boardRulingRef ?? '—'}</span></p></div>
                   </div>
-                  <div className={`flex h-[70px] items-center justify-between px-[26px] ${dark ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.15)_0%,rgba(255,255,255,0)_100%)]' : 'border-t border-line-strong'}`}>
-                    <span className="identifier text-[22px] font-semibold">{entry.productCode}</span>
-                    <span className={`text-xs ${dark ? 'text-white/80' : 'text-ink-quiet'}`}>{i === 0 ? `${String(openCount)} ${t('open', 'مفتوح')}` : `${String(count('APPROVED'))} ${t('approved', 'معتمد')}`}</span>
+                  <div className={`flex min-h-[70px] flex-wrap items-center justify-between gap-x-4 gap-y-1 px-[26px] py-3 ${dark ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.15)_0%,rgba(255,255,255,0)_100%)]' : 'border-t border-line-strong'}`}>
+                    <span className="identifier text-[20px] font-semibold leading-tight">{entry.productCode}</span>
+                    <span className={`whitespace-nowrap text-xs ${dark ? 'text-white/80' : 'text-ink-quiet'}`}>{i === 0 ? `${String(openCount)} ${t('open', 'مفتوح')}` : `${String(count('APPROVED'))} ${t('approved', 'معتمد')}`}</span>
                   </div>
                 </a>
               );
@@ -150,10 +150,10 @@ export default async function DashboardPage({ params, searchParams }: { readonly
                     <a href={`/${segment}/requests/${r.requestId}`} className="press flex items-center gap-4 rounded-tile py-1 hover:bg-sunken">
                       <span aria-hidden className={`inline-flex size-[55px] shrink-0 items-center justify-center rounded-full ${disc[r.channel].bg}`}><Icon name={disc[r.channel].icon} size={24} /></span>
                       <span className="flex min-w-0 flex-1 flex-col">
-                        <span className="truncate text-[16px] font-medium text-ink">{r.counterpartyId}</span>
+                        <span className="line-clamp-2 text-[16px] font-medium leading-snug text-ink">{r.counterpartyId}</span>
                         <span className="text-[15px] text-ink-quiet"><bdi>{dateOf(r.raisedAtEpochSeconds)}</bdi></span>
                       </span>
-                      <span className={`text-[16px] font-medium tabular-nums ${r.state === 'REJECTED' ? 'text-blocked' : r.state === 'APPROVED' ? 'text-positive' : 'text-ink'}`}><bdi>{sar(r.amountMinorUnits)}</bdi></span>
+                      <span className={`shrink-0 whitespace-nowrap text-[15px] font-medium tabular-nums ${r.state === 'REJECTED' ? 'text-blocked' : r.state === 'APPROVED' ? 'text-positive' : 'text-ink'}`}><bdi>{sar(r.amountMinorUnits)}</bdi></span>
                     </a>
                   </li>
                 ))}
@@ -164,7 +164,7 @@ export default async function DashboardPage({ params, searchParams }: { readonly
       </section>
 
       {/* -- Row 2: weekly activity and share by channel ----------------------------- */}
-      <section className="grid gap-8 xl:grid-cols-[minmax(0,730fr)_minmax(0,350fr)]">
+      <section className="grid gap-8 2xl:grid-cols-[minmax(0,730fr)_minmax(0,350fr)]">
         <div className="min-w-0">
           {sectionTitle('Weekly activity', 'النشاط الأسبوعي')}
           <Card><WeekBars title={t('Requests raised and decided, last seven days', 'الطلبات المرفوعة والمقرَّرة خلال سبعة أيام')} series={[t('Raised', 'مرفوعة'), t('Decided', 'مقرَّرة')]} bars={bars} emptyLabel={t('No activity in the last seven days.', 'لا نشاط خلال الأيام السبعة الأخيرة.')} /></Card>
