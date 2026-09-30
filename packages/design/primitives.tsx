@@ -369,6 +369,8 @@ export function Tile({ icon, disc, label, value }: { readonly icon: IconName; re
 
 /** The Setting page field: 16px label, a 50px input with 15px corners and a soft border. */
 export const FIELD_LABEL = 'block text-[16px] text-ink';
+/** A selectable card in the kit's tile shape; the checked radio inside paints the border. */
+export const CHOICE_CARD = 'flex min-h-tap cursor-pointer items-start gap-4 rounded-tile border border-line-strong bg-surface p-4 transition-colors hover:bg-sunken has-[:checked]:border-brand has-[:checked]:bg-disc-blue/40';
 export const FIELD_INPUT = 'mt-2 block h-[50px] w-full rounded-tile border border-line-strong bg-surface px-5 text-[15px] text-ink outline-none placeholder:text-ink-quiet focus:border-brand focus:ring-2 focus:ring-brand/20';
 export const FIELD_TEXTAREA = 'mt-2 block w-full rounded-tile border border-line-strong bg-surface px-5 py-3 text-[15px] text-ink outline-none placeholder:text-ink-quiet focus:border-brand focus:ring-2 focus:ring-brand/20';
 /** The Save button: 190×50, 15px corners, filled. */

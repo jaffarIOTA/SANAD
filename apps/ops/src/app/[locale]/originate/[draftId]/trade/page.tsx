@@ -3,7 +3,7 @@
  *
  * A list of cleared invoices, each with its goods, its parties and its
  * amount. The operator picks one. The amount is a property of what they
- * picked, and there is no box to type a different one into (§6).
+ * picked, and there is no box to type a different one into.
  *
  * Unavailable invoices are shown, marked and unselectable — with the control
  * that makes them unavailable. Hiding them would be tidier and worse: an
@@ -13,7 +13,7 @@
 
 import { notFound } from 'next/navigation';
 
-import { Card, ControlRejection, DualDate, Status } from '@sanad/design/primitives.tsx';
+import { BUTTON_PRIMARY, BUTTON_SECONDARY, CHOICE_CARD, Card, ControlRejection, DualDate, Status } from '@sanad/design/primitives.tsx';
 import { defaultNumerals, formatMinorUnits } from '@sanad/design/Money.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 
@@ -46,38 +46,38 @@ export default async function TradePage({
   const invoices = listClearedInvoices();
 
   return (
-    <div className="flex max-w-3xl flex-col gap-5">
-      <Steps current="trade" arabic={arabic} />
-      <div>
-        <h1 className="text-xl font-semibold">{arabic ? 'اختر الصفقة' : 'Choose the trade'}</h1>
-        <p className="mt-1 text-sm text-ink-quiet">
-          {arabic ? 'فواتير مُخلَّصة من هيئة الفوترة. المبلغ هو مبلغ الفاتورة.' : 'Cleared invoices from the e-invoicing authority. The amount is the invoice’s amount.'}
-        </p>
-      </div>
+    <div className="flex max-w-4xl flex-col gap-6">
+      <Card>
+        <Steps current="trade" arabic={arabic} />
+        <div className="mt-6">
+          <h2 className="text-h2 font-semibold text-heading">{arabic ? 'اختر الصفقة' : 'Choose the trade'}</h2>
+          <p className="mt-1 text-[15px] text-ink-quiet">
+            {arabic ? 'فواتير مُخلَّصة من هيئة الفوترة. المبلغ هو مبلغ الفاتورة.' : 'Cleared invoices from the e-invoicing authority. The amount is the invoice’s amount.'}
+          </p>
+        </div>
 
-      {control !== undefined ? (
-        <ControlRejection control={control} explanation={message ?? ''} controlLabel={arabic ? 'الضابط' : 'Control'} />
-      ) : null}
+        {control !== undefined ? (
+          <div className="mt-4"><ControlRejection control={control} explanation={message ?? ''} controlLabel={arabic ? 'الضابط' : 'Control'} /></div>
+        ) : null}
 
-      <form action={chooseTradeAction} className="flex flex-col gap-3">
-        <input type="hidden" name="locale" value={segment} />
-        <input type="hidden" name="draftId" value={draftId} />
+        <form action={chooseTradeAction} className="mt-6 flex flex-col gap-3">
+          <input type="hidden" name="locale" value={segment} />
+          <input type="hidden" name="draftId" value={draftId} />
 
-        {invoices.map((inv) => {
-          const why = unavailableReason(inv, financed);
-          const disabled = why !== undefined;
-          return (
-            <Card key={inv.invoiceUuid} muted={disabled}>
-              <label className={`flex items-start gap-3 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-                <input type="radio" name="invoiceUuid" value={inv.invoiceUuid} disabled={disabled} required className="mt-1.5" />
+          {invoices.map((inv) => {
+            const why = unavailableReason(inv, financed);
+            const disabled = why !== undefined;
+            return (
+              <label key={inv.invoiceUuid} className={`${CHOICE_CARD} ${disabled ? 'cursor-not-allowed opacity-70 hover:bg-surface' : ''}`}>
+                <input type="radio" name="invoiceUuid" value={inv.invoiceUuid} disabled={disabled} required className="mt-1.5 size-4 accent-brand-deep" />
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="font-medium">{arabic ? inv.goodsDescriptionAr : inv.goodsDescription}</span>
-                    <span className="text-amount font-semibold tabular-nums">
-                      <bdi>{formatMinorUnits(inv.amount, numerals)}</bdi> <span className="text-sm font-normal text-ink-quiet">SAR</span>
+                  <span className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <span className="text-[16px] font-medium text-heading">{arabic ? inv.goodsDescriptionAr : inv.goodsDescription}</span>
+                    <span className="whitespace-nowrap text-[16px] font-semibold tabular-nums text-ink">
+                      <bdi>{formatMinorUnits(inv.amount, numerals)}</bdi> <span className="text-xs font-normal text-ink-quiet">SAR</span>
                     </span>
                   </span>
-                  <span className="text-sm text-ink-quiet">
+                  <span className="text-[14px] text-ink-quiet">
                     {inv.issuerName} <span aria-hidden>→</span> {inv.recipientName}
                   </span>
                   <span className="flex flex-wrap items-center gap-3 text-xs text-ink-quiet">
@@ -89,17 +89,15 @@ export default async function TradePage({
                   </span>
                 </span>
               </label>
-            </Card>
-          );
-        })}
+            );
+          })}
 
-        <div className="flex items-center justify-between">
-          <a href={`/${segment}/originate`} className="text-sm text-brand-deep underline">{arabic ? 'رجوع' : 'Back'}</a>
-          <button type="submit" className="inline-flex min-h-tap items-center rounded-card bg-brand-strong px-5 text-sm font-semibold text-on-brand hover:bg-brand-deep">
-            {arabic ? 'التالي: الشروط' : 'Next: the terms'}
-          </button>
-        </div>
-      </form>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <a href={`/${segment}/originate`} className={BUTTON_SECONDARY}>{arabic ? 'رجوع' : 'Back'}</a>
+            <button type="submit" className={BUTTON_PRIMARY}>{arabic ? 'التالي: الشروط' : 'Next: the terms'}</button>
+          </div>
+        </form>
+      </Card>
     </div>
   );
 }

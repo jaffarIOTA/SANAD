@@ -184,7 +184,8 @@ Ordered by what it costs to guess wrong.
    (Setting frame: tab strip, two-column kit fields, filled primary action) and
    the products page (Loans frame: four tiles, catalogue table). The kit's
    tab strip, pills, pagination, tile and field styles live in
-   `packages/design/primitives.tsx`.
+   `packages/design/primitives.tsx`. The "Key a request" wizard followed on
+   2026-09-30: step strip in the tab form, choice cards, kit fields and buttons.
 10. ~~An outbox dispatcher~~ — built: `core/outbox/dispatch.ts` (one event, one
     port, DELIVERED / RETRY / DEAD), `core/outbox/store.ts` (leased claims),
     migration 0008 and `services/outbox` worker; development ports until the

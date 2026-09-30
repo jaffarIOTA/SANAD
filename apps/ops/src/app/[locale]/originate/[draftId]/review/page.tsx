@@ -13,7 +13,7 @@
 
 import { notFound } from 'next/navigation';
 
-import { Card, ControlRejection, DualDate } from '@sanad/design/primitives.tsx';
+import { BUTTON_PRIMARY, BUTTON_SECONDARY, Card, ControlRejection, DualDate, FIELD_INPUT, FIELD_LABEL } from '@sanad/design/primitives.tsx';
 import { defaultNumerals, formatMinorUnits } from '@sanad/design/Money.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 import { CHANNEL_POLICIES } from '@sanad/core/origination/channel.ts';
@@ -23,11 +23,12 @@ import { findClearedInvoice } from '../../../../../server/invoices.ts';
 import { findDraft } from '../../../../../server/store.ts';
 import { Steps } from '../../Steps.tsx';
 
-function Row({ label, children }: { readonly label: string; readonly children: React.ReactNode }) {
+/** A read-only kit field: the same shape as an input, so the review reads like the form it summarises. */
+function Field({ label, children, mono = false, wide = false }: { readonly label: string; readonly children: React.ReactNode; readonly mono?: boolean; readonly wide?: boolean }) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line py-2 last:border-b-0">
-      <span className="text-sm text-ink-quiet">{label}</span>
-      <span className="text-sm text-ink">{children}</span>
+    <div className={wide ? 'md:col-span-2' : ''}>
+      <span className={FIELD_LABEL}>{label}</span>
+      <div className={`${FIELD_INPUT} flex h-auto min-h-[50px] flex-wrap items-center gap-x-2 py-3 ${mono ? 'identifier' : ''}`}>{children}</div>
     </div>
   );
 }
@@ -53,60 +54,54 @@ export default async function ReviewPage({
   const policy = CHANNEL_POLICIES[draft.channel];
 
   return (
-    <div className="flex max-w-2xl flex-col gap-5">
-      <Steps current="review" arabic={arabic} />
-      <div>
-        <h1 className="text-xl font-semibold">{arabic ? 'المراجعة والإرسال' : 'Review and submit'}</h1>
-      </div>
-
-      {control !== undefined ? (
-        <ControlRejection control={control} explanation={message ?? ''} controlLabel={arabic ? 'الضابط' : 'Control'} />
-      ) : null}
-
+    <div className="flex max-w-4xl flex-col gap-6">
       <Card>
-        <h2 className="text-sm font-medium text-ink">{arabic ? 'الصفقة' : 'The trade'}</h2>
-        <div className="mt-2">
-          <Row label={arabic ? 'البضاعة' : 'Goods'}>{arabic ? invoice.goodsDescriptionAr : invoice.goodsDescription}</Row>
-          <Row label={arabic ? 'البائع' : 'Seller'}>{invoice.issuerName} <span className="identifier text-ink-quiet">{invoice.issuerCr}</span></Row>
-          <Row label={arabic ? 'المشتري' : 'Buyer'}>{invoice.recipientName} <span className="identifier text-ink-quiet">{invoice.recipientCr}</span></Row>
-          <Row label={arabic ? 'الفاتورة' : 'Invoice'}><span className="identifier">{invoice.invoiceNumber}</span></Row>
-          <Row label={arabic ? 'تاريخ الإصدار' : 'Issued'}><DualDate gregorian={invoice.issuedGregorian} hijri={invoice.issuedHijri} locale={locale} /></Row>
-          <Row label={arabic ? 'التكلفة' : 'Cost'}>
-            <span className="text-amount font-semibold tabular-nums"><bdi>{formatMinorUnits(invoice.amount, numerals)}</bdi></span> <span className="text-ink-quiet">SAR</span>
-          </Row>
+        <Steps current="review" arabic={arabic} />
+        <div className="mt-6">
+          <h2 className="text-h2 font-semibold text-heading">{arabic ? 'المراجعة والإرسال' : 'Review and submit'}</h2>
         </div>
-      </Card>
 
-      <Card>
-        <h2 className="text-sm font-medium text-ink">{arabic ? 'الشروط' : 'The terms'}</h2>
-        <div className="mt-2">
-          <Row label={arabic ? 'البرنامج' : 'Programme'}>{arabic ? 'وصل — تمويل الموزعين' : 'Wasl — distributor finance'}</Row>
-          <Row label={arabic ? 'المدة' : 'Tenor'}>{draft.tenorDays} {arabic ? 'يوماً' : 'days'}</Row>
-          <Row label={arabic ? 'القناة' : 'Channel'}>{draft.channel.replaceAll('_', ' ').toLowerCase()}</Row>
+        {control !== undefined ? (
+          <div className="mt-4"><ControlRejection control={control} explanation={message ?? ''} controlLabel={arabic ? 'الضابط' : 'Control'} /></div>
+        ) : null}
+
+        <h3 className="mt-6 text-[16px] font-semibold text-heading">{arabic ? 'الصفقة' : 'The trade'}</h3>
+        <div className="mt-4 grid gap-5 md:grid-cols-2">
+          <Field label={arabic ? 'البضاعة' : 'Goods'} wide>{arabic ? invoice.goodsDescriptionAr : invoice.goodsDescription}</Field>
+          <Field label={arabic ? 'البائع' : 'Seller'}>{invoice.issuerName} <span className="identifier text-ink-quiet">{invoice.issuerCr}</span></Field>
+          <Field label={arabic ? 'المشتري' : 'Buyer'}>{invoice.recipientName} <span className="identifier text-ink-quiet">{invoice.recipientCr}</span></Field>
+          <Field label={arabic ? 'الفاتورة' : 'Invoice'} mono>{invoice.invoiceNumber}</Field>
+          <Field label={arabic ? 'تاريخ الإصدار' : 'Issued'}><DualDate gregorian={invoice.issuedGregorian} hijri={invoice.issuedHijri} locale={locale} /></Field>
+          <Field label={arabic ? 'التكلفة' : 'Cost'}>
+            <span className="font-semibold tabular-nums"><bdi>{formatMinorUnits(invoice.amount, numerals)}</bdi></span> <span className="text-xs text-ink-quiet">SAR</span>
+          </Field>
+        </div>
+
+        <h3 className="mt-8 text-[16px] font-semibold text-heading">{arabic ? 'الشروط' : 'The terms'}</h3>
+        <div className="mt-4 grid gap-5 md:grid-cols-2">
+          <Field label={arabic ? 'البرنامج' : 'Programme'}>{arabic ? 'وصل — تمويل الموزعين' : 'Wasl — distributor finance'}</Field>
+          <Field label={arabic ? 'المدة' : 'Tenor'}><span className="tabular-nums">{draft.tenorDays}</span> {arabic ? 'يوماً' : 'days'}</Field>
+          <Field label={arabic ? 'القناة' : 'Channel'}>{draft.channel.replaceAll('_', ' ').toLowerCase()}</Field>
           {draft.merchantMandateRef !== undefined ? (
-            <Row label={arabic ? 'تفويض التاجر' : 'Merchant mandate'}><span className="identifier">{draft.merchantMandateRef}</span></Row>
+            <Field label={arabic ? 'تفويض التاجر' : 'Merchant mandate'} mono>{draft.merchantMandateRef}</Field>
           ) : null}
         </div>
-        <p className="mt-3 border-t border-line pt-3 text-xs text-ink-quiet">
+        <p className="mt-5 text-[13px] text-ink-quiet">
           {arabic
             ? 'مبلغ الربح يُحدَّد مرة واحدة عند التسعير، قبل عرض البيع. لا يوجد رقم لعرضه هنا لأنه لم يُقرَّر بعد.'
             : 'The profit amount is fixed once, at quotation, before the sale is offered. There is no figure to show here because nobody has decided it yet.'}
         </p>
-      </Card>
 
-      <Card>
-        <p className="text-sm text-ink">
+        <div className="mt-8 rounded-tile bg-sunken p-5 text-[15px] text-ink">
           {policy.requiresServicingDecision
             ? arabic ? 'سيُستشار نظام الخدمة أولاً، ثم يراجعه شخص ثانٍ.' : 'The servicing platform is consulted first; a second person then reviews it.'
             : arabic ? 'سيراجعه شخص ثانٍ. الاعتماد يفتح معاملة في حالة مسودة، ولا يتجاوز أي بوابة.' : 'A second person reviews it. Approval opens a transaction in DRAFT; it passes no gate.'}
-        </p>
-        <form action={submitDraftAction} className="mt-4 flex items-center justify-between">
+        </div>
+        <form action={submitDraftAction} className="mt-6 flex flex-wrap items-center justify-between gap-3">
           <input type="hidden" name="locale" value={segment} />
           <input type="hidden" name="draftId" value={draftId} />
-          <a href={`/${segment}/originate/${draftId}/terms`} className="text-sm text-brand-deep underline">{arabic ? 'رجوع' : 'Back'}</a>
-          <button type="submit" className="inline-flex min-h-tap items-center rounded-card bg-brand-strong px-5 text-sm font-semibold text-on-brand hover:bg-brand-deep">
-            {arabic ? 'إرسال للمراجعة' : 'Submit for review'}
-          </button>
+          <a href={`/${segment}/originate/${draftId}/terms`} className={BUTTON_SECONDARY}>{arabic ? 'رجوع' : 'Back'}</a>
+          <button type="submit" className={BUTTON_PRIMARY}>{arabic ? 'إرسال للمراجعة' : 'Submit for review'}</button>
         </form>
       </Card>
     </div>
