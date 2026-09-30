@@ -1150,8 +1150,18 @@ as outbox events with idempotency keys, and the aggregates refuse duplicates. No
 worker reads the queue and calls the ports. The dispatcher is small (poll, call,
 mark, retry under policy) but until it exists every "queued" is a promise.
 
-## R-23 — The consumer session cookie is a development shortcut · **Blocking before go-live**
+## R-23 — The consumer session cookie is a development shortcut · **Blocking before go-live** · ✅ **Done** (`apps/consumer/src/server/session-token.ts`, 2026-09-30)
 
-`apps/consumer/src/server/session.ts` stores the applicant reference and identity
-assertion in a plain HttpOnly cookie. Production needs it signed and encrypted, bound
-to the assertion's expiry, and issued only by the identity step.
+`apps/consumer/src/server/session.ts` stored the applicant reference and identity
+assertion in a plain HttpOnly cookie. It is now an opaque token sealed with
+authenticated encryption (AES-256-GCM under a key derived by HKDF from a master
+secret), issued only by the identity step from the rail's confirmed assertion, and
+expiring at a fixed offset (30 minutes) from the moment the rail authenticated the
+applicant — never slid forward by activity. A token altered in any byte, sealed under
+another key, or of the old plaintext shape is refused; the applicant is sent back to
+sign in. Development derives the key from `CONSUMER_SESSION_SECRET` when set and
+otherwise from an ephemeral secret that lives only in the process; a production build
+with no master configured refuses to start rather than fall back. Remaining: read the
+master from the vault reference once the vault client is wired into the app, and let
+a tenant shorten the lifetime in its origination policy. Tests:
+`test/unit/consumer-session.test.ts`.

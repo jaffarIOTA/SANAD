@@ -96,7 +96,7 @@ against the real toolkit. The origination definition is **generated** from the
 that 3.0 cannot express are listed inside the generated file rather than
 dropped silently.
 
-### Tests — 727 across 46 files (2 skipped until a database is reachable)
+### Tests — 736 across 47 files (2 skipped until a database is reachable)
 
 | Suite | Tests | What it protects |
 |---|---|---|
@@ -191,8 +191,8 @@ Ordered by what it costs to guess wrong.
     adapters go live.
 11. ~~R-10 the internal review API~~ — built: `api/openapi/review.v1.yaml`,
     served by the workbench at `/api/review/v1` under staff credentials; four
-    eyes and authority tiers refused by the service. Still open: the consumer
-    session as a signed, encrypted cookie bound to the assertion's expiry.
+    eyes and authority tiers refused by the service. The consumer session is a
+    sealed token bound to the assertion's time (R-23, 2026-09-30).
 12. ~~Snapshot assembly from the rails~~ — built: `core/decisioning/assemble.ts`
     over the registry, screening, bureau, e-invoicing, employment and open-banking
     ports; consent gates each source; `railSnapshots()` is the port. The service

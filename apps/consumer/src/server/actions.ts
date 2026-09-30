@@ -11,7 +11,7 @@ import { redirect } from 'next/navigation';
 
 import { developmentIdentity } from './identity.ts';
 import { TENANT, maturityDates, quoteFor } from './engine.ts';
-import { clearSession, currentSession, setSession } from './session.ts';
+import { clearSession, currentSession, startSession } from './session.ts';
 import { accept, developmentAttestation, findOffer, nextId, saveOffer } from './store.ts';
 
 const field = (form: FormData, name: string): string => { const v = form.get(name); return typeof v === 'string' ? v.trim() : ''; };
@@ -26,7 +26,7 @@ export async function signInAction(form: FormData): Promise<void> {
   if (!started.ok || started.value.kind !== 'ANSWERED') fail(`/${locale}`, 'IDENTITY_UNAVAILABLE', 'OP-DETERMINACY');
   const confirmed = started.ok && started.value.kind === 'ANSWERED' ? await identity.confirmAuthentication({ tenantId: TENANT, transactionRef: started.value.value.transactionRef, correlationId: nextId('cor') }) : undefined;
   if (confirmed === undefined || !confirmed.ok || confirmed.value.kind !== 'ANSWERED') return fail(`/${locale}`, 'IDENTITY_UNAVAILABLE', 'OP-DETERMINACY');
-  await setSession({ applicantRef, identityAssertionId: confirmed.value.value.assertionId, identityRef: confirmed.value.value.identityRef });
+  await startSession({ applicantRef, identityAssertionId: confirmed.value.value.assertionId, identityRef: confirmed.value.value.identityRef, authenticatedAtEpochSeconds: confirmed.value.value.authenticatedAtEpochSeconds });
   const next = field(form, 'next');
   redirect(next.startsWith(`/${locale}/`) ? next : `/${locale}/apply`);
 }
