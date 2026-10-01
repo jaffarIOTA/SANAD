@@ -34,7 +34,19 @@ Repeat per credential. Typical set:
 | Provider | Keys you will likely need |
 |---|---|
 | `TUUM` | `client_id`, `client_secret`, `base_url` |
-| `NUTRIENT` | `api_key`, `base_url`, `jwt_signing_key` |
+| `NUTRIENT` | `web_sdk_license_key`, `document_engine_base_url`, `document_engine_api_token`, `jwt_private_key` |
+
+For `NUTRIENT`: the **Web SDK licence key** is domain-bound and is handed to the browser
+by the viewer page, so it is configuration rather than a secret — it is kept here anyway
+so the adapter reads its whole configuration from one place and so it is never committed.
+The **Document Engine API token** and the **JWT private key** (which signs the short-lived
+tokens the viewer presents to Document Engine) are secrets. Document Engine's own
+**activation key** is not a Sanad credential: it goes to the Document Engine container's
+environment on the in-Kingdom host, nowhere else. See
+`adapters/nutrient/verification/README.md` for what to check first.
+
+In development, before the database is reachable, the same four keys go in `.env.local`
+under the names `.env.example` lists; the adapter cannot tell the difference.
 
 `base_url` is not secret but is stored alongside so an adapter reads its whole
 configuration from one place. Keep it here for consistency.

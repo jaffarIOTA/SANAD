@@ -24,9 +24,15 @@ export const SECRET_SHAPED =
  * credentials file — including the API Connect toolkit's `credentials.json` —
  * so the omission would have let exactly the files most worth catching
  * through.
+ *
+ * The whitespace around the separator is `[ \t]*`, never `\s*`. With `\s*` an
+ * empty assignment at the end of a line (`SOME_CREDENTIAL=`) ran on across the
+ * newline and took the next line's variable name as its "value" — which is
+ * exactly the shape of a names-only `.env.example`, and it flagged every other
+ * line of it.
  */
 export const OPAQUE_ASSIGNMENT =
-  /(token|secret|password|api[_-]?key|credential)\w*['"`]?\s*[:=]\s*['"`]?([A-Za-z0-9_\-+/=.]{24,})['"`]?/gi;
+  /(token|secret|password|api[_-]?key|credential)\w*['"`]?[ \t]*[:=][ \t]*['"`]?([A-Za-z0-9_\-+/=.]{24,})['"`]?/gi;
 
 /**
  * Files that are credential bundles by name, whatever is inside them.

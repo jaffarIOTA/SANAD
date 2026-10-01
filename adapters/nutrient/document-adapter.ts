@@ -451,13 +451,16 @@ export class NutrientDocumentAdapter
     correlationId = '',
   ): Promise<Result<Readonly<Record<string, unknown>>>> {
     try {
-      const apiKey = await this.credential('api_key', correlationId);
+      // Key name as saved in the vault (docs/SAVING-CREDENTIALS.md). The header
+      // form is verification item V-02; the Document Engine API documents a
+      // token scheme, which is what is assumed here until the first live call.
+      const apiToken = await this.credential('document_engine_api_token', correlationId);
       const body = await this.breaker.execute(() =>
         this.transport.call(
           operation,
           { ...payload, tenantReference: tenantId },
           {
-            Authorization: `Bearer ${apiKey.expose()}`,
+            Authorization: `Token token=${apiToken.expose()}`,
             ...(correlationId === '' ? {} : { 'X-Correlation-Id': correlationId }),
           },
         ),

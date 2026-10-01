@@ -76,6 +76,14 @@ describe('§4 — no secret is committed', () => {
    * long opaque string assigned to a secret-named thing. Deliberately narrow,
    * because a scanner that cries wolf gets switched off.
    */
+  it('does not read a names-only file as a value when an empty assignment precedes a long name', async () => {
+    const { OPAQUE_ASSIGNMENT } = await import('../../scripts/secret-patterns.mjs');
+    const namesOnly = 'SANAD_CREDENTIAL_DOCUMENT_PLATFORM_SANDBOX_WEB_SDK_LICENSE_KEY=\nSANAD_CREDENTIAL_DOCUMENT_PLATFORM_SANDBOX_DOCUMENT_ENGINE_BASE_URL=\n';
+    expect([...namesOnly.matchAll(OPAQUE_ASSIGNMENT)]).toHaveLength(0);
+    const withValue = 'SOME_API_TOKEN=' + 'a'.repeat(32) + '\n';
+    expect([...withValue.matchAll(OPAQUE_ASSIGNMENT)]).toHaveLength(1);
+  });
+
   it('assigns no long opaque literal to a secret-named field', () => {
     const assignment =
       /(token|secret|password|api[_-]?key|credential)\w*\s*[:=]\s*['"`]([A-Za-z0-9_\-+/=.]{24,})['"`]/gi;
