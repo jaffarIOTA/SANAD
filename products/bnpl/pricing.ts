@@ -4,7 +4,7 @@ import type { Disclosure, Fee, Quote, QuoteRequest } from '@sanad/core/products/
 import { roundDiv } from '@sanad/core/pricing/rate.ts';
 import { cashFlows, flatInstalments, type Schedule } from '@sanad/core/pricing/schedule.ts';
 
-import type { BnplTerms } from './terms.ts';
+import { BNPL_RULES, type BnplTerms } from './terms.ts';
 
 export interface BnplQuote extends Quote {
   readonly productCode: 'bnpl';
@@ -17,8 +17,11 @@ export interface BnplQuote extends Quote {
 
 export function quoteBnpl(terms: BnplTerms, request: QuoteRequest): Result<BnplQuote> {
   if (request.requestedAmount.minorUnits <= 0n) return reject('OP-DETERMINACY', 'REQUESTED_AMOUNT_NOT_POSITIVE', 'A basket has a positive amount');
+  if (request.requestedAmount.currency !== 'SAR') {
+    return reject('OP-DETERMINACY', 'BNPL_CURRENCY_NOT_SAR', 'Goods and services are purchased in Saudi riyals; another currency needs a SAMA non-objection the tenant does not hold', { currency: request.requestedAmount.currency, citation: `${BNPL_RULES}, Art. 20(5)` });
+  }
   if (request.pricing.profitAmount !== undefined && request.pricing.profitAmount.minorUnits !== 0n) {
-    return reject('OP-DETERMINACY', 'BNPL_CONSUMER_COST_REFUSED', 'The consumer pays the basket price and nothing more (B-1)');
+    return reject('OP-DETERMINACY', 'BNPL_CONSUMER_COST_REFUSED', 'The consumer pays the basket price and nothing more (B-1)', { citation: `${BNPL_RULES}, Art. 1 (definition of BNPL activity), Art. 20(1)` });
   }
   const outstanding = request.affordability?.outstandingSameClass ?? money(0n);
   if (add(outstanding, request.requestedAmount).minorUnits > terms.consumerLimit.minorUnits) {

@@ -35,13 +35,14 @@ export async function checkoutAcceptAction(form: FormData): Promise<void> {
   if (!accepted.ok) return fail(accepted.error.reason, accepted.error.control);
   saveSession(accepted.value);
 
-  // Book the facility: the module's execute (bureau enquiry and consent are development references here) and book.
+  // Book the facility: the module's execute (bureau enquiry, consent and the eligibility facts are development
+  // stand-ins here; in production they come from the bureau, the consent store and the identity rail) and book.
   const stored = findOffer(session.offerId);
   const catalogue = loadProductCatalogue(TENANT);
   const entry = catalogue.ok ? entryFor(catalogue.value, 'bnpl', 'prg-0001', at.epochSeconds) : undefined;
   const terms = entry !== undefined && entry.ok ? bnpl.validateTerms(entry.value.terms) : undefined;
   if (stored === undefined || terms === undefined || !terms.ok) return fail('PRODUCT_NOT_ENABLED', 'OP-DETERMINACY');
-  const draft = bnpl.execute(terms.value, { state: 'APPROVED', core: { tenantId: TENANT } } as never, stored.offer.quote as BnplQuote, { transactionId: nextId('txn'), applicantRef: identity.applicantRef, merchantRef: session.core.merchantId, bureauEnquiryRef: `dev-bureau-${identity.applicantRef}`, consentId: `dev-consent-${identity.applicantRef}`, openedAt: at, correlationId: session.core.correlationId });
+  const draft = bnpl.execute(terms.value, { state: 'APPROVED', core: { tenantId: TENANT } } as never, stored.offer.quote as BnplQuote, { transactionId: nextId('txn'), applicantRef: identity.applicantRef, merchantRef: session.core.merchantId, bureauEnquiryRef: `dev-bureau-${identity.applicantRef}`, consentId: `dev-consent-${identity.applicantRef}`, eligibility: { ageHijriYears: 30, residentInKingdom: true, identityVerificationRef: identity.identityRef }, openedAt: at, correlationId: session.core.correlationId });
   if (!draft.ok) return fail(draft.error.reason, draft.error.control);
   const booked = bookBnpl(draft.value, developmentAttestation());
   if (!booked.ok) return fail(booked.error.reason, booked.error.control);

@@ -68,7 +68,7 @@
         "intervalDays": 30,
         "consumerLimitMinorUnits": "500000",
         "merchantDiscountPerTenThousand": 400,
-        "citation": "PLACEHOLDER — SAMA Rules for Regulating BNPL Companies (2023): confirm the article setting the consumer limit before go-live"
+        "citation": "SAMA Rules for Regulating BNPL Companies, Nov 2023 (Jumada I 1445H), Art. 22(1): total outstanding financing per consumer natural person not to exceed SAR 10,000; tenant applies SAR 5,000. Art. 22(2): at most 12 instalments."
       },
       "effectiveFromEpochSeconds": "1780000000"
     }

@@ -121,11 +121,50 @@ describe('BNPL', () => {
   it('books nothing without the bureau, and booking carries the bureau-reporting event', () => {
     const q = expectOk(bnpl.quote(bnplTerms, request(100_000n)));
     const bApproved = { state: 'APPROVED' as const, core: { tenantId: 'fintech-b' } } as unknown as Parameters<typeof bnpl.execute>[1];
-    const ctx = { transactionId: 'txn-b1', applicantRef: 'app-2', merchantRef: 'mer-1', bureauEnquiryRef: 'enq-9', consentId: 'cns-9', openedAt: at(T0), correlationId: 'c' };
+    const eligibility = { ageHijriYears: 24, residentInKingdom: true, identityVerificationRef: 'idv-1' };
+    const ctx = { transactionId: 'txn-b1', applicantRef: 'app-2', merchantRef: 'mer-1', bureauEnquiryRef: 'enq-9', consentId: 'cns-9', eligibility, openedAt: at(T0), correlationId: 'c' };
     expect(bnpl.execute(bnplTerms, bApproved, q, { ...ctx, bureauEnquiryRef: '' }).ok).toBe(false);
     const booked = expectOk(book(expectOk(bnpl.execute(bnplTerms, bApproved, q, ctx)), at(T0 + 1)));
     expect(eventsOfKind(booked.outbox, 'BUREAU_REPORT')).toHaveLength(1);
     expect(eventsOfKind(booked.outbox, 'PAYMENT_DISBURSE')[0]?.payload['minorUnits']).toBe('96000'); // basket less the merchant discount
+  });
+
+  // SAMA Rules for Regulating BNPL Companies (Nov 2023), Chapter IV. Each attempt below is one the Rules forbid.
+  const rawTerms = { instalments: 4, intervalDays: 30, consumerLimitMinorUnits: '500000', merchantDiscountPerTenThousand: 400, citation: 'SAMA Rules for Regulating BNPL Companies, Art. 22' };
+  it('Art. 22(2): a term sheet granting more than twelve instalments does not parse', () => {
+    const r = bnpl.validateTerms({ ...rawTerms, instalments: 13 });
+    expect(r.ok).toBe(false); if (!r.ok) { expect(r.error.reason).toBe('TERMS_INSTALMENTS'); expect(String(r.error.context?.['citation'])).toContain('Art. 22(2)'); }
+    expect(bnpl.validateTerms({ ...rawTerms, instalments: 12 }).ok).toBe(true);
+  });
+  it('Art. 22(1): a consumer limit above SAR 10,000 needs the SAMA decision that varied it', () => {
+    const over = bnpl.validateTerms({ ...rawTerms, consumerLimitMinorUnits: '1000001' });
+    expect(over.ok).toBe(false); if (!over.ok) { expect(over.error.reason).toBe('TERMS_LIMIT_ABOVE_RULES'); expect(String(over.error.context?.['citation'])).toContain('Art. 22(1)'); }
+    expect(bnpl.validateTerms({ ...rawTerms, consumerLimitMinorUnits: '1000000' }).ok).toBe(true);
+    expect(bnpl.validateTerms({ ...rawTerms, consumerLimitMinorUnits: '1000001', samaLimitVariationRef: 'SAMA-DEC-2027-0042' }).ok).toBe(true);
+  });
+  it('Art. 22(3): cash is not a collection method', () => {
+    const r = bnpl.validateTerms({ ...rawTerms, collectionMethods: ['SADAD', 'CASH'] });
+    expect(r.ok).toBe(false); if (!r.ok) expect(r.error.reason).toBe('TERMS_COLLECTION_NOT_ELECTRONIC');
+    expect(expectOk(bnpl.validateTerms(rawTerms)).collectionMethods).not.toContain('CASH');
+  });
+  it('Art. 20(5): a basket in another currency is refused', () => {
+    // The currency type admits only SAR, so the compiler closes this first; the cast reaches the runtime guard behind it.
+    const r = bnpl.quote(bnplTerms, { ...request(100_000n), requestedAmount: { minorUnits: 100_000n, currency: 'USD' as unknown as 'SAR' } });
+    expect(r.ok).toBe(false); if (!r.ok) expect(r.error.reason).toBe('BNPL_CURRENCY_NOT_SAR');
+  });
+  it('Art. 19(6), 20(3), 20(4): no dealing with an unverified, under-age or non-resident consumer', () => {
+    const q = expectOk(bnpl.quote(bnplTerms, request(100_000n)));
+    const bApproved = { state: 'APPROVED' as const, core: { tenantId: 'fintech-b' } } as unknown as Parameters<typeof bnpl.execute>[1];
+    const ok = { ageHijriYears: 18, residentInKingdom: true, identityVerificationRef: 'idv-1' };
+    const ctx = (eligibility: typeof ok & { nonResidentNonObjectionRef?: string }) => ({ transactionId: 'txn-b2', applicantRef: 'app-2', merchantRef: 'mer-1', bureauEnquiryRef: 'enq-9', consentId: 'cns-9', eligibility, openedAt: at(T0), correlationId: 'c' });
+    expect(bnpl.execute(bnplTerms, bApproved, q, ctx(ok)).ok).toBe(true);
+    const reasons = [
+      bnpl.execute(bnplTerms, bApproved, q, ctx({ ...ok, identityVerificationRef: '' })),
+      bnpl.execute(bnplTerms, bApproved, q, ctx({ ...ok, ageHijriYears: 17 })),
+      bnpl.execute(bnplTerms, bApproved, q, ctx({ ...ok, residentInKingdom: false })),
+    ].map((r) => (r.ok ? 'OK' : r.error.reason));
+    expect(reasons).toEqual(['IDENTITY_NOT_VERIFIED', 'BNPL_CONSUMER_UNDER_AGE', 'BNPL_CONSUMER_NON_RESIDENT']);
+    expect(bnpl.execute(bnplTerms, bApproved, q, ctx({ ...ok, residentInKingdom: false, nonResidentNonObjectionRef: 'SAMA-NO-2027-0007' })).ok).toBe(true);
   });
 });
 

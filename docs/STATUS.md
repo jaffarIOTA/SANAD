@@ -172,9 +172,12 @@ Ordered by what it costs to guess wrong.
    acceptance bound to the disclosure version, merchant checkout.
 6. ~~Splitting `counterparty-registry`~~ — done: `core/ports/business-registry.ts`
    and `core/ports/counterparty-master.ts`; the Wathq adapter implements the first.
-7. **Every regulatory threshold's citation.** The deduction-ratio cap and the
-   BNPL consumer limit ship as placeholders whose `citation` field says so; the
-   SAMA APR annex examples are to be transcribed into the APR golden tests.
+7. **Every regulatory threshold's citation.** The BNPL ceilings now cite the
+   SAMA Rules for Regulating BNPL Companies (Nov 2023): Art. 22(1) SAR 10,000,
+   Art. 22(2) twelve instalments, Art. 22(3) electronic collection, Art. 20(3)–(5)
+   age, residency, riyals, Art. 19(6) identity (2026-10-02). Still placeholders:
+   the deduction-ratio cap (Responsible Lending Principles for Retail Consumers)
+   and the SAMA APR annex examples for the APR golden tests.
 8. ~~Merchant onboarding, checkout API, settlement reconciliation, ZATCA
    e-invoicing~~ — built: `core/merchants`, `core/checkout`,
    `api/openapi/checkout.v1.yaml` served by the consumer app,

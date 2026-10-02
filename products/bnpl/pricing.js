@@ -4,7 +4,7 @@ import { ok, reject } from '../../core/kernel/result.js';
 import { roundDiv } from '../../core/pricing/rate.js';
 import { cashFlows, flatInstalments, } from '../../core/pricing/schedule.js';
 
-
+import { BNPL_RULES, } from './terms.js';
 
 
 
@@ -17,8 +17,11 @@ import { cashFlows, flatInstalments, } from '../../core/pricing/schedule.js';
 
 export function quoteBnpl(terms, request) {
   if (request.requestedAmount.minorUnits <= 0n) return reject('OP-DETERMINACY', 'REQUESTED_AMOUNT_NOT_POSITIVE', 'A basket has a positive amount');
+  if (request.requestedAmount.currency !== 'SAR') {
+    return reject('OP-DETERMINACY', 'BNPL_CURRENCY_NOT_SAR', 'Goods and services are purchased in Saudi riyals; another currency needs a SAMA non-objection the tenant does not hold', { currency: request.requestedAmount.currency, citation: `${BNPL_RULES}, Art. 20(5)` });
+  }
   if (request.pricing.profitAmount !== undefined && request.pricing.profitAmount.minorUnits !== 0n) {
-    return reject('OP-DETERMINACY', 'BNPL_CONSUMER_COST_REFUSED', 'The consumer pays the basket price and nothing more (B-1)');
+    return reject('OP-DETERMINACY', 'BNPL_CONSUMER_COST_REFUSED', 'The consumer pays the basket price and nothing more (B-1)', { citation: `${BNPL_RULES}, Art. 1 (definition of BNPL activity), Art. 20(1)` });
   }
   const outstanding = _nullishCoalesce(_optionalChain([request, 'access', _ => _.affordability, 'optionalAccess', _2 => _2.outstandingSameClass]), () => ( money(0n)));
   if (add(outstanding, request.requestedAmount).minorUnits > terms.consumerLimit.minorUnits) {
