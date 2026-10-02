@@ -6,6 +6,19 @@ contract set, the promissory note first among them. Neither is verified. This fi
 list of checks that turn the adapter's assumptions into findings, in the order the
 findings are needed.
 
+## Check 0 — the adapter without the vendor (runs today)
+
+```bash
+npx vitest run test/adapters/nutrient-document.test.ts
+```
+
+Seventeen cases against a scripted transport: explicit template version or nothing, no
+substitution into an undeclared field, confidence floored and never rounded up, a
+signature refused without a verified timestamp or when the signed hash differs, an empty
+redaction set treated as a refusal, the saved credential key name, the token in no
+outcome, and the breaker opening after the threshold. Green here means the adapter keeps
+its own promises. It says nothing about the vendor — that is what V-01 to V-08 are for.
+
 ## What is required before the first check
 
 | | Needed | Why |
