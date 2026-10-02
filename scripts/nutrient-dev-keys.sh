@@ -27,14 +27,17 @@ PRIV_B64="$(base64 < "${TMP}/jwt.key" | tr -d '\n')"
 } > "${COMPOSE_ENV}"
 
 touch "${LOCAL_ENV}"
+# A Web SDK licence key already saved is kept: it comes from the vendor, not from this script.
+EXISTING_WEB_KEY="$(grep '^SANAD_CREDENTIAL_DOCUMENT_PLATFORM_SANDBOX_WEB_SDK_LICENSE_KEY=' "${LOCAL_ENV}" | head -1 | cut -d= -f2- || true)"
 grep -v '^SANAD_CREDENTIAL_DOCUMENT_PLATFORM_SANDBOX_' "${LOCAL_ENV}" > "${TMP}/local" || true
 {
   cat "${TMP}/local"
-  echo "SANAD_CREDENTIAL_DOCUMENT_PLATFORM_SANDBOX_WEB_SDK_LICENSE_KEY="
+  echo "SANAD_CREDENTIAL_DOCUMENT_PLATFORM_SANDBOX_WEB_SDK_LICENSE_KEY=${EXISTING_WEB_KEY}"
   echo "SANAD_CREDENTIAL_DOCUMENT_PLATFORM_SANDBOX_DOCUMENT_ENGINE_BASE_URL=http://127.0.0.1:5000"
   echo "SANAD_CREDENTIAL_DOCUMENT_PLATFORM_SANDBOX_DOCUMENT_ENGINE_API_TOKEN=${API_TOKEN}"
   echo "SANAD_CREDENTIAL_DOCUMENT_PLATFORM_SANDBOX_JWT_PRIVATE_KEY=${PRIV_B64}"
 } > "${LOCAL_ENV}"
 
 echo "wrote ${COMPOSE_ENV#${ROOT}/} and the four credential lines in .env.local"
-echo "next: paste ACTIVATION_KEY into compose/.env, and the Web SDK licence key into .env.local if you have one"
+echo "next: open .env.local in your editor (for example: code .env.local) and put the Web SDK licence key after the = on its line;"
+echo "      the Document Engine stack needs ACTIVATION_KEY in compose/.env and is optional until you hold one"
