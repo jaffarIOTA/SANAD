@@ -42,7 +42,16 @@ report as the licensed feature set (forms, electronic signatures, digital signat
 redaction, document editor)? The feature list decides which port methods have a vendor
 behind them.
 
+**Run 2026-10-02, without a licence key** (`@nutrient-sdk/viewer` 1.22.0, assets served
+same-origin from `apps/ops/public/nutrient/`): the SDK loads in evaluation mode and renders
+the synthetic commercial invoice at `/en/documents/sample-commercial-invoice` with the
+"For Evaluation Purposes Only" watermark; the page reports "evaluation mode — no licence
+key". So the viewer path works end to end on this origin; the licensed feature set is
+still unanswered until the key is saved under `web_sdk_license_key` and the page is
+reloaded.
+
 ### V-02 — Document Engine answers
+Start the stack in `adapters/nutrient/compose/` (its README has the four commands), then
 `GET {base_url}/healthcheck`, then an authenticated call with the API token. **Question:**
 is the engine reachable from the server only (not from the browser), and does the token
 authenticate? Confirm the current authentication header form against the vendor's
@@ -87,6 +96,17 @@ Document Engine API token absent from every response, bundle and header the brow
 Redact the identity-number field on the identity sample for recipient class
 `EXTERNAL_COUNSEL`, download, search the bytes. **Question:** is the value gone from the
 file, not merely covered?
+
+## Where the pieces are
+
+| | |
+|---|---|
+| Adapter (ports → operations) | `adapters/nutrient/document-adapter.ts`, tested without the vendor in `test/adapters/nutrient-document.test.ts` |
+| Live transport (operations → engine HTTP) | `adapters/nutrient/live-transport.ts`; every route names the check that confirms it |
+| Viewer token (browser → engine, no API token) | `adapters/nutrient/viewer-token.ts` |
+| Local Document Engine | `adapters/nutrient/compose/` + `scripts/nutrient-dev-keys.sh` |
+| Viewer in the workbench | `/[locale]/documents`, assets by `npm run nutrient:assets` |
+| Synthetic samples | `npm run nutrient:samples` → `adapters/nutrient/verification/samples/` (gitignored) |
 
 ## After the checks
 

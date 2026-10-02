@@ -19,6 +19,10 @@ terms and signatures, and NFR-05 admits no exception — including for logs and 
 This is the requirement that makes the residency position defensible (SDD §4.8), and it is
 the reason this platform fits at all.
 
+For development verification there is a local stack in `compose/` and a runbook in
+`verification/README.md`. The viewer in the workbench loads the Web SDK from this origin,
+never from the vendor's CDN, for the same reason.
+
 ## Verification status
 
 Unverified, as with the core banking adapter. Two Phase 0 spikes must complete before

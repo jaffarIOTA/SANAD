@@ -197,6 +197,12 @@ Ordered by what it costs to guess wrong.
     served by the workbench at `/api/review/v1` under staff credentials; four
     eyes and authority tiers refused by the service. The consumer session is a
     sealed token bound to the assertion's time (R-23, 2026-09-30).
+13. **Document platform verification** — in progress (2026-10-02). The adapter
+    is tested without the vendor; the live transport, viewer token, local
+    Document Engine stack and synthetic samples exist; the Web SDK viewer runs
+    in the workbench in evaluation mode (check V-01, first half). Waiting on the
+    trial licence, the engine activation key and a signing certificate for
+    V-01 (second half) to V-08 — `adapters/nutrient/verification/README.md`.
 12. ~~Snapshot assembly from the rails~~ — built: `core/decisioning/assemble.ts`
     over the registry, screening, bureau, e-invoicing, employment and open-banking
     ports; consent gates each source; `railSnapshots()` is the port. The service

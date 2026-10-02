@@ -14,6 +14,7 @@ const TITLES: Readonly<Record<string, { readonly en: string; readonly ar: string
   queue: { en: 'Review queue', ar: 'قائمة المراجعة' },
   requests: { en: 'Request', ar: 'الطلب' },
   products: { en: 'Products', ar: 'المنتجات' },
+  documents: { en: 'Documents', ar: 'المستندات' },
   originate: { en: 'Key a request', ar: 'إدخال طلب' },
 };
 

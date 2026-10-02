@@ -39,6 +39,9 @@
       ],
       "@sanad/products/*": [
         "../../products/*"
+      ],
+      "@sanad/adapters/*": [
+        "../../adapters/*"
       ]
     },
     "baseUrl": "."

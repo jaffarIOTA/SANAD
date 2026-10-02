@@ -1,0 +1,44 @@
+# Document Engine for development verification (adapters/nutrient/verification/README.md).
+#
+# Nothing real goes through this stack. The activation key, API token and the
+# JWT public key come from `adapters/nutrient/compose/.env`, which is gitignored
+# (`.env.*` and `.env` in the root .gitignore) and written by
+# `scripts/nutrient-dev-keys.sh`. Variable names are the engine's own and are an
+# assumption to confirm against the vendor's Document Engine configuration
+# reference on first start (check V-02).
+services:
+  document-engine:
+    image: pspdfkit/document-engine:1.7.0
+    environment:
+      ACTIVATION_KEY: ${ACTIVATION_KEY:?set in compose/.env from the trial licence}
+      API_AUTH_TOKEN: ${API_AUTH_TOKEN:?written by scripts/nutrient-dev-keys.sh}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?written by scripts/nutrient-dev-keys.sh}
+      JWT_ALGORITHM: RS256
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?written by scripts/nutrient-dev-keys.sh}
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-dashboard}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:?written by scripts/nutrient-dev-keys.sh}
+      PGUSER: engine
+      PGPASSWORD: ${PGPASSWORD:?written by scripts/nutrient-dev-keys.sh}
+      PGDATABASE: document_engine
+      PGHOST: db
+      PGPORT: "5432"
+    ports:
+      - "127.0.0.1:5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: engine
+      POSTGRES_PASSWORD: ${PGPASSWORD:?written by scripts/nutrient-dev-keys.sh}
+      POSTGRES_DB: document_engine
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U engine -d document_engine"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - engine-db:/var/lib/postgresql/data
+volumes:
+  engine-db:

@@ -181,6 +181,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
     titleEn: 'Documents',
     titleAr: 'المستندات',
     items: [
+      { id: 'viewer', titleEn: 'Document viewer', titleAr: 'عارض المستندات', href: '/documents', readiness: live(), reference: 'Web SDK on synthetic samples; evaluation mode until a licence key is saved — check V-01 in adapters/nutrient/verification/README.md' },
       { id: 'templates', titleEn: 'Templates & versions', titleAr: 'القوالب والإصدارات', readiness: soon(), reference: 'BR-G02' },
       {
         id: 'generated',
