@@ -23,10 +23,13 @@ export function Viewer({ documentUrl, licenseKey, arabic }: { readonly documentU
       try {
         const mod = await import('@nutrient-sdk/viewer');
         const NutrientViewer = mod.default;
+        const baseUrl = `${window.location.origin}/nutrient/`;
+        // The WebAssembly artefacts compile once per page; starting early keeps the first document from waiting on them.
+        NutrientViewer.preloadWorker({ baseUrl });
         await NutrientViewer.load({
           container: node,
           document: documentUrl,
-          baseUrl: `${window.location.origin}/nutrient/`,
+          baseUrl,
           locale: arabic ? 'ar' : 'en',
           ...(licenseKey === undefined ? {} : { licenseKey }),
         });
@@ -35,7 +38,8 @@ export function Viewer({ documentUrl, licenseKey, arabic }: { readonly documentU
       } catch (error) {
         if (unloaded) return;
         setState('failed');
-        setDetail(error instanceof Error ? error.name : 'unknown');
+        // The vendor's message names the cause (an expired or domain-bound licence, a bad document); it is operational text, not a secret.
+        setDetail(error instanceof Error ? error.message.replace(/\s+/g, ' ').slice(0, 240) : 'unknown');
       }
     })();
     return () => { unloaded = true; try { sdk?.unload(node); } catch { /* already gone */ } };
@@ -46,7 +50,7 @@ export function Viewer({ documentUrl, licenseKey, arabic }: { readonly documentU
       <div ref={container} className="h-[75vh] min-h-[480px] w-full overflow-hidden rounded-tile border border-line-strong bg-sunken" />
       {state !== 'ready' ? (
         <p role="status" className="mt-3 text-[14px] text-ink-quiet">
-          {state === 'loading' ? (arabic ? 'جارٍ تحميل العارض…' : 'Loading the viewer…') : (arabic ? `تعذّر تحميل العارض (${detail}).` : `The viewer could not load (${detail}).`)}
+          {state === 'loading' ? (arabic ? 'جارٍ تحميل العارض…' : 'Loading the viewer…') : (arabic ? `تعذّر تحميل العارض: ${detail}` : `The viewer could not load: ${detail}`)}
         </p>
       ) : null}
     </div>

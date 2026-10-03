@@ -50,6 +50,16 @@ key". So the viewer path works end to end on this origin; the licensed feature s
 still unanswered until the key is saved under `web_sdk_license_key` and the page is
 reloaded.
 
+**Run 2026-10-03, with the demo key** (saved through the admin app into the vault; the ops
+viewer read it from the vault, source `VAULT`, and reported "licence active"): the SDK
+accepted the key's form and refused to initialise — console: *"Nutrient Licensing Issue:
+Your Nutrient demo key expired (valid until 2026-09-17 03:00:00)"*. So the vault → viewer
+path is proven end to end, the key is read and presented correctly, and **the key itself
+is expired**. V-01 completes when Nutrient issues a current key; rotate it under the same
+name in the admin app and reload. Two vendor warnings recorded for later: the SDK prefers
+`preloadWorker()` before `load()` (now done), and copying assets out of the npm package is
+deprecated in favour of the vendor's self-hosting guide.
+
 ### V-02 — Document Engine answers
 Start the stack in `adapters/nutrient/compose/` (its README has the four commands), then
 `GET {base_url}/healthcheck`, then an authenticated call with the API token. **Question:**
