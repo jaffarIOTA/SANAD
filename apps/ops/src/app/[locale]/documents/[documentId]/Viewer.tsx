@@ -23,16 +23,16 @@ export function Viewer({ documentUrl, licenseKey, arabic }: { readonly documentU
       try {
         const mod = await import('@nutrient-sdk/viewer');
         const NutrientViewer = mod.default;
-        const baseUrl = `${window.location.origin}/nutrient/`;
-        // The WebAssembly artefacts compile once per page; starting early keeps the first document from waiting on them.
-        NutrientViewer.preloadWorker({ baseUrl });
-        await NutrientViewer.load({
+        const configuration = {
           container: node,
           document: documentUrl,
-          baseUrl,
+          baseUrl: `${window.location.origin}/nutrient/`,
           locale: arabic ? 'ar' : 'en',
           ...(licenseKey === undefined ? {} : { licenseKey }),
-        });
+        };
+        // The WebAssembly artefacts compile once per page; starting early keeps the first document from waiting on them.
+        NutrientViewer.preloadWorker(configuration);
+        await NutrientViewer.load(configuration);
         sdk = NutrientViewer;
         if (!unloaded) setState('ready');
       } catch (error) {
