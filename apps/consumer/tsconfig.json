@@ -38,6 +38,9 @@
       ],
       "@sanad/origination/*": [
         "../../services/origination/src/*"
+      ],
+      "@sanad/auth/*": [
+        "../../packages/auth/*"
       ]
     },
     "esModuleInterop": true,

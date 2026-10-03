@@ -162,8 +162,10 @@ Ordered by what it costs to guess wrong.
 2. **R-10** — the internal review API specification. Approve, return and
    reject are deliberately absent from the partner contract; they need their
    own, with their own authentication.
-3. **R-15** — durable idempotency. Built on PostgreSQL (migration 0006);
-   untested against a database until one is reachable (`SANAD_TEST_DATABASE_URL`).
+3. ~~**R-15** — durable idempotency~~ — tested 2026-10-03 against the local
+   Supabase database (`npx supabase start`, migrations 0001–0008 applied); the
+   PostgreSQL store and vault contract tests run when `SANAD_TEST_DATABASE_URL`
+   is set.
 4. ~~The Temporal adapter~~ — built (`adapters/workflow-temporal/`): programs
    over effects, activities, worker, in-memory runner; not yet run against a
    Temporal server (KSA-WF-TEMPORAL-01).
@@ -197,6 +199,12 @@ Ordered by what it costs to guess wrong.
     served by the workbench at `/api/review/v1` under staff credentials; four
     eyes and authority tiers refused by the service. The consumer session is a
     sealed token bound to the assertion's time (R-23, 2026-09-30).
+14. **Administration app** — begun 2026-10-03: `apps/admin` (port 3004) with
+    the credentials area: sign-in with the platform operations token (sealed
+    30-minute session), save or rotate a credential into the vault, list names
+    and dates, revoke. Products, rails, staff identity (SSO) and partner
+    entitlements are listed as not built. `SANAD_DATABASE_URL` switches every
+    app from the environment credential provider to the vault.
 13. **Document platform verification** — in progress (2026-10-02). The adapter
     is tested without the vendor; the live transport, viewer token, local
     Document Engine stack and synthetic samples exist; the Web SDK viewer runs
@@ -229,7 +237,9 @@ Recorded so they read as decisions rather than omissions.
 
 Worth stating plainly, because a green test suite can flatter.
 
-- **There is no database.** Both stores are in memory and lost on restart.
+- **The database is local only.** A local Supabase stack (Docker) carries the schema and
+  the vault for development; the apps still run their in-memory request stores
+  until the repository split lands them on PostgreSQL.
 - **There is no timestamping authority.** A development substitute produces
   attestations, clearly named so it is obvious in a diff. Nothing it produces
   may feed a gate in a deployed environment.

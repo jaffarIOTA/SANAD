@@ -7,13 +7,13 @@
     "core",
     "products"
   ],
-  "description": "Sanad — Shariah-compliant origination platform. Wasl — SME supply chain finance.",
+  "description": "Sanad \u2014 Shariah-compliant origination platform. Wasl \u2014 SME supply chain finance.",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web-test.json && tsc --noEmit -p services/origination && tsc --noEmit -p services/outbox && tsc --noEmit -p apps/sme && tsc --noEmit -p apps/ops && tsc --noEmit -p apps/consumer",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web-test.json && tsc --noEmit -p services/origination && tsc --noEmit -p services/outbox && tsc --noEmit -p apps/sme && tsc --noEmit -p apps/ops && tsc --noEmit -p apps/consumer && tsc --noEmit -p apps/admin",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:compliance": "vitest run test/compliance",
@@ -28,7 +28,8 @@
     "build:consumer": "next build apps/consumer",
     "dev:outbox": "node --experimental-strip-types services/outbox/src/index.ts",
     "nutrient:assets": "node scripts/nutrient-assets.mjs",
-    "nutrient:samples": "node scripts/nutrient-samples.mjs"
+    "nutrient:samples": "node scripts/nutrient-samples.mjs",
+    "dev:admin": "next dev apps/admin --port 3004"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

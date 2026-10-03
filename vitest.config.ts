@@ -13,6 +13,7 @@ export default defineConfig({
       '@sanad/core': dir('./core'),
       '@sanad/design': dir('./packages/design'),
       '@sanad/i18n': dir('./packages/i18n'),
+      '@sanad/auth': dir('./packages/auth'),
       '@sanad/config': dir('./config'),
       '@sanad/products': dir('./products'),
     },

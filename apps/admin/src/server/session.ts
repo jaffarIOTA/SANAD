@@ -1,0 +1,64 @@
+/**
+ * Who is administering.
+ *
+ * Development: an operator signs in once with the platform operations token
+ * (compared by digest, constant time) and receives a sealed session cookie
+ * good for thirty minutes from sign-in. Production: the institution's
+ * identity provider (SAML or OIDC) issues the principal and this module reads
+ * the session, with nothing that calls it changing.
+ */
+
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { cookies } from 'next/headers';
+
+import { type SealKey, deriveSealKey, ephemeralMasterSecret, open, seal } from '@sanad/auth/sealed-token.ts';
+
+export interface AdminPrincipal { readonly principalId: string; readonly role: 'PLATFORM_ADMIN' }
+
+const COOKIE = 'sanad_admin';
+export const ADMIN_SESSION_SECONDS = 1_800n;
+
+interface KeyState { key?: SealKey }
+const keyState: KeyState = ((globalThis as { __sanadAdminKey?: KeyState }).__sanadAdminKey ??= {});
+
+function sealKey(): SealKey {
+  if (keyState.key !== undefined) return keyState.key;
+  const raw = process.env['ADMIN_SESSION_SECRET'];
+  if (process.env['NODE_ENV'] === 'production' && (raw === undefined || raw.trim().length === 0)) throw new Error('admin session master secret is not configured');
+  const master = raw === undefined || raw.trim().length === 0 ? ephemeralMasterSecret() : new Uint8Array(Buffer.from(raw.trim(), /^[0-9a-f]+$/i.test(raw.trim()) ? 'hex' : 'base64'));
+  keyState.key = deriveSealKey(master, 'admin-session-v1');
+  return keyState.key;
+}
+
+const now = (): bigint => BigInt(Math.floor(Date.now() / 1000));
+const digest = (s: string): Buffer => createHash('sha256').update(s, 'utf8').digest();
+
+/** Development sign-in: the presented token must equal the platform operations token, compared in constant time. */
+export function acceptsDevelopmentToken(presented: string): boolean {
+  const expected = process.env['PLATFORM_OPS_DEV_TOKEN'];
+  if (process.env['NODE_ENV'] === 'production' || expected === undefined || expected.trim().length === 0) return false;
+  return timingSafeEqual(digest(presented), digest(expected.trim()));
+}
+
+interface Payload { readonly p: string; readonly r: 'PLATFORM_ADMIN' }
+const isPayload = (v: Readonly<Record<string, unknown>>): v is Payload & Record<string, string> => typeof v['p'] === 'string' && v['p'].length > 0 && v['r'] === 'PLATFORM_ADMIN';
+
+export async function currentAdmin(): Promise<AdminPrincipal | undefined> {
+  const jar = await cookies();
+  const raw = jar.get(COOKIE)?.value;
+  if (raw === undefined) return undefined;
+  const opened = open(raw, sealKey(), now(), ADMIN_SESSION_SECONDS, isPayload);
+  return opened.kind === 'VALID' ? { principalId: opened.value.payload.p, role: 'PLATFORM_ADMIN' } : undefined;
+}
+
+export async function startAdminSession(principalId: string): Promise<void> {
+  const issued = now();
+  const token = seal({ payload: { p: principalId, r: 'PLATFORM_ADMIN' }, issuedAtEpochSeconds: issued, expiresAtEpochSeconds: issued + ADMIN_SESSION_SECONDS }, sealKey());
+  const jar = await cookies();
+  jar.set(COOKIE, token, { httpOnly: true, sameSite: 'strict', secure: process.env['NODE_ENV'] === 'production', path: '/', maxAge: Number(ADMIN_SESSION_SECONDS) });
+}
+
+export async function endAdminSession(): Promise<void> {
+  const jar = await cookies();
+  jar.delete(COOKIE);
+}

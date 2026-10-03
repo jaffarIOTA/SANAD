@@ -1,0 +1,4 @@
+/* The administration surface shares the workbench's design tokens and kit. */
+@import '../../../ops/src/app/globals.css';
+/* Tailwind's automatic detection runs from the repository root; this app's sources are named. */
+@source '../';

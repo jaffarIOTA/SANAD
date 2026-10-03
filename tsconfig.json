@@ -41,6 +41,9 @@
       ],
       "@sanad/products/*": [
         "products/*"
+      ],
+      "@sanad/auth/*": [
+        "packages/auth/*"
       ]
     }
   },

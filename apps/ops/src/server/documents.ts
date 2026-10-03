@@ -11,7 +11,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { CredentialNotConfiguredError, EnvironmentCredentialProvider } from '@sanad/adapters/kernel/credentials-environment.ts';
+import { CredentialNotConfiguredError } from '@sanad/adapters/kernel/credentials-environment.ts';
+import { credentialProviderFromEnvironment, credentialSource } from '@sanad/origination/credentials.ts';
 
 const SAMPLES = join(process.cwd(), '..', '..', 'adapters', 'nutrient', 'verification', 'samples');
 
@@ -38,18 +39,23 @@ export function readSampleBytes(doc: ViewerDocument): Uint8Array | undefined {
   return existsSync(path) ? new Uint8Array(readFileSync(path)) : undefined;
 }
 
-export interface ViewerLicence { readonly kind: 'LICENSED'; readonly licenseKey: string }
-export interface ViewerEvaluation { readonly kind: 'EVALUATION' }
+export interface ViewerLicence { readonly kind: 'LICENSED'; readonly licenseKey: string; readonly source: 'VAULT' | 'ENVIRONMENT' }
+export interface ViewerEvaluation { readonly kind: 'EVALUATION'; readonly source: 'VAULT' | 'ENVIRONMENT' }
 
-/** The Web SDK licence key is domain-bound configuration handed to the browser; it is still never committed. */
+/**
+ * The Web SDK licence key is domain-bound configuration handed to the browser;
+ * it is still never committed. Read through whichever credential provider the
+ * environment selects: the vault when a database is reachable, else the
+ * development environment provider. A key not yet saved is evaluation mode.
+ */
 export async function viewerLicence(): Promise<ViewerLicence | ViewerEvaluation> {
-  if (process.env['NODE_ENV'] === 'production') return { kind: 'EVALUATION' }; // the vault provider is wired here when the database is
-  const provider = new EnvironmentCredentialProvider(() => undefined);
+  const source = credentialSource();
   try {
-    const key = await provider.get({ tenantId: 'bank-a', provider: 'DOCUMENT_PLATFORM', environment: 'sandbox', keyName: 'web_sdk_license_key' }, 'viewer');
-    return { kind: 'LICENSED', licenseKey: key.expose() };
+    const key = await credentialProviderFromEnvironment().get({ tenantId: 'bank-a', provider: 'DOCUMENT_PLATFORM', environment: 'sandbox', keyName: 'web_sdk_license_key' }, 'viewer');
+    return { kind: 'LICENSED', licenseKey: key.expose(), source };
   } catch (error) {
-    if (error instanceof CredentialNotConfiguredError) return { kind: 'EVALUATION' };
+    if (error instanceof CredentialNotConfiguredError) return { kind: 'EVALUATION', source };
+    if (error instanceof Error && /no credential/.test(error.message)) return { kind: 'EVALUATION', source };
     throw error;
   }
 }

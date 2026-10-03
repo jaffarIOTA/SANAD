@@ -1,5 +1,15 @@
 # Saving the Tuum and Nutrient API keys
 
+> **The usual route is the administration app.** Start it with `npm run dev:admin`, open
+> http://localhost:3004, sign in with the platform operations token from your `.env.local`,
+> and use **Credentials → Save or rotate**. The screen calls the same
+> `config.set_integration_credential` function described below, shows names and dates only,
+> and never displays a value. The SQL route remains for environments without the app.
+>
+> Locally the database is `npx supabase start` (migrations apply on start); its connection
+> string goes in `SANAD_DATABASE_URL` in `.env.local`, which is what switches every app from
+> the environment credential provider to the vault.
+
 **Do not paste keys into chat, a ticket, a commit, or a `.env` that is tracked.**
 Run these yourself, from the Supabase SQL editor (which connects as a privileged role)
 or a service-role psql session.
