@@ -33,11 +33,20 @@ function sealKey(): SealKey {
 const now = (): bigint => BigInt(Math.floor(Date.now() / 1000));
 const digest = (s: string): Buffer => createHash('sha256').update(s, 'utf8').digest();
 
-/** Development sign-in: the presented token must equal the platform operations token, compared in constant time. */
-export function acceptsDevelopmentToken(presented: string): boolean {
-  const expected = process.env['PLATFORM_OPS_DEV_TOKEN'];
-  if (process.env['NODE_ENV'] === 'production' || expected === undefined || expected.trim().length === 0) return false;
-  return timingSafeEqual(digest(presented), digest(expected.trim()));
+/**
+ * Development sign-in: the presented token is compared, in constant time, to
+ * the two development tokens, each mapped to one administrator. Two, so four
+ * eyes can be exercised locally: what one proposes the other decides.
+ */
+export function developmentPrincipalFor(presented: string): string | undefined {
+  if (process.env['NODE_ENV'] === 'production') return undefined;
+  const candidates: readonly [string | undefined, string][] = [[process.env['PLATFORM_OPS_DEV_TOKEN'], 'adm-dev-01'], [process.env['STAFF_DEV_TOKEN_SENIOR'], 'adm-dev-02']];
+  const presentedDigest = digest(presented);
+  let found: string | undefined;
+  for (const [token, principal] of candidates) {
+    if (token !== undefined && token.trim().length > 0 && timingSafeEqual(digest(token.trim()), presentedDigest)) found = principal;
+  }
+  return found;
 }
 
 interface Payload { readonly p: string; readonly r: 'PLATFORM_ADMIN' }

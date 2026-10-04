@@ -199,6 +199,17 @@ Ordered by what it costs to guess wrong.
     served by the workbench at `/api/review/v1` under staff credentials; four
     eyes and authority tiers refused by the service. The consumer session is a
     sealed token bound to the assertion's time (R-23, 2026-09-30).
+15. **Configuration revisions under maker-checker** — built 2026-10-04:
+    migration 0009 (`config.revision`, four-eyes constraint, immutability
+    trigger, `audit.record_event` hash chain), `core/config/revision.ts` (the
+    same rules in pure code for the compliance suite), the catalogue resolver
+    (`services/origination/src/catalogue.ts`: the approved revision in force,
+    else the file) wired into the ops and consumer apps, and the admin
+    **Products & modules** area: propose a term-sheet change validated by the
+    module's own parser, approve or reject as a different administrator.
+    Two development administrators (`adm-dev-01`, `adm-dev-02`) so four eyes
+    can be exercised locally. Next areas in order: Rails & adapters, Staff
+    identity (SSO), Partner entitlements.
 14. **Administration app** — begun 2026-10-03: `apps/admin` (port 3004) with
     the credentials area: sign-in with the platform operations token (sealed
     30-minute session), save or rotate a credential into the vault, list names

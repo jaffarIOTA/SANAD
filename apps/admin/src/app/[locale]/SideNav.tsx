@@ -11,7 +11,7 @@ interface Area { readonly id: string; readonly href?: string; readonly icon: Ico
 
 export const AREAS: readonly Area[] = [
   { id: 'credentials', href: '/credentials', icon: 'shield-check', en: 'Credentials', ar: 'بيانات الاعتماد', state: 'LIVE' },
-  { id: 'products', icon: 'store', en: 'Products & modules', ar: 'المنتجات والوحدات', state: 'NOT_BUILT' },
+  { id: 'products', href: '/products', icon: 'store', en: 'Products & modules', ar: 'المنتجات والوحدات', state: 'LIVE' },
   { id: 'rails', icon: 'plug', en: 'Rails & adapters', ar: 'قنوات التكامل', state: 'NOT_BUILT' },
   { id: 'identity', icon: 'settings', en: 'Staff identity (SSO)', ar: 'هوية الموظفين (الدخول الموحّد)', state: 'NOT_BUILT' },
   { id: 'partners', icon: 'document', en: 'Partner entitlements', ar: 'صلاحيات الشركاء', state: 'NOT_BUILT' },

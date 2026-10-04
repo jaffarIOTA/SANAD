@@ -10,7 +10,10 @@ import { notFound, redirect } from 'next/navigation';
 import { Card, ControlRejection } from '@sanad/design/primitives.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 import { quoteAction } from '../../../server/actions.ts';
-import { DEV_AFFORDABILITY, consumerProducts } from '../../../server/engine.ts';
+import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
+
+import { DEV_AFFORDABILITY, TENANT, consumerProducts } from '../../../server/engine.ts';
+import { developmentAttestation } from '../../../server/store.ts';
 import { explain } from '../../../server/explain.ts';
 import { currentSession } from '../../../server/session.ts';
 import { formatMinorUnits, defaultNumerals } from '@sanad/design/Money.tsx';
@@ -23,7 +26,7 @@ export default async function ApplyPage({ params, searchParams }: { readonly par
   const arabic = locale === 'ar-SA';
   const session = await currentSession();
   if (session === undefined) redirect(`/${segment}`);
-  const products = consumerProducts();
+  const products = consumerProducts((await resolveProductCatalogue(TENANT, developmentAttestation().epochSeconds)).catalogue);
   const numerals = defaultNumerals(locale);
 
   return (

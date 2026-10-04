@@ -1,0 +1,66 @@
+/**
+ * The Products & modules area: the catalogue in force, and a proposed change
+ * to one entry, validated by the same parsers production uses before it may
+ * be proposed. A change is the whole catalogue with one entry replaced, so a
+ * revision is self-contained and reproducible.
+ */
+
+import { randomUUID } from 'node:crypto';
+
+import type { TenantCode } from '@sanad/config/loader.ts';
+import { proposeRevision as proposePure } from '@sanad/core/config/revision.ts';
+import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
+import { type CatalogueEntry, type ProductCatalogue, parseProductCatalogue } from '@sanad/core/products/catalogue.ts';
+import { ISLAMIC_PRODUCT_CODES, ProductRegistry } from '@sanad/core/products/registry.ts';
+import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
+import { bnpl } from '@sanad/products/bnpl/index.ts';
+import { conventionalTerm } from '@sanad/products/conventional-term/index.ts';
+import { embeddedLending } from '@sanad/products/embedded-lending/index.ts';
+import { murabahaScf } from '@sanad/products/murabaha-scf/index.ts';
+import { tawarruqPersonal } from '@sanad/products/tawarruq-personal/index.ts';
+
+export const REGISTRY = new ProductRegistry().register(murabahaScf).register(tawarruqPersonal).register(bnpl).register(embeddedLending).register(conventionalTerm);
+
+export { resolveProductCatalogue };
+
+/** The catalogue as JSON again: bigint fields back to the strings the file format uses. */
+export function catalogueToJson(c: ProductCatalogue): unknown {
+  return {
+    version: c.version,
+    entries: c.entries.map((e) => ({
+      productCode: e.productCode, enabled: e.enabled, nameEn: e.nameEn, nameAr: e.nameAr, programmeIds: e.programmeIds,
+      ...(e.boardRulingRef === undefined ? {} : { boardRulingRef: e.boardRulingRef }),
+      pricingRule: e.pricingRule, terms: e.terms, effectiveFromEpochSeconds: e.effectiveFromEpochSeconds.toString(),
+    })),
+  };
+}
+
+export interface EntryChange {
+  readonly productCode: string;
+  readonly enabled: boolean;
+  /** The term sheet as JSON text, validated by the module's own parser. */
+  readonly termsJson: string;
+  readonly boardRulingRef?: string;
+}
+
+/** The whole catalogue with one entry changed, parsed as production would parse it. Refuses before anything is proposed. */
+export function catalogueWithChange(current: ProductCatalogue, change: EntryChange): Result<{ readonly payload: unknown; readonly parsed: ProductCatalogue }> {
+  const found = REGISTRY.find(change.productCode);
+  if (!found.ok) return found;
+  let terms: unknown;
+  try { terms = JSON.parse(change.termsJson); } catch { return reject('OP-DETERMINACY', 'TERMS_NOT_JSON', 'The term sheet is not valid JSON'); }
+  const validTerms = found.value.validateTerms(terms);
+  if (!validTerms.ok) return validTerms;
+  const existing = current.entries.find((e) => e.productCode === change.productCode);
+  if (existing === undefined) return reject('OP-DETERMINACY', 'PRODUCT_NOT_IN_CATALOGUE', 'Adding a product to the catalogue is a separate change', { productCode: change.productCode });
+  const next: CatalogueEntry = { ...existing, enabled: change.enabled, terms, ...(change.boardRulingRef === undefined ? {} : { boardRulingRef: change.boardRulingRef }) };
+  const payload = catalogueToJson({ version: current.version, entries: current.entries.map((e) => (e.productCode === change.productCode ? next : e)) });
+  const parsed = parseProductCatalogue(payload, ISLAMIC_PRODUCT_CODES);
+  if (!parsed.ok) return parsed;
+  return ok({ payload, parsed: parsed.value });
+}
+
+/** The pure rule set's view of a proposal, so the screen refuses exactly what the database would. */
+export function checkProposal(p: { readonly tenant: TenantCode; readonly payload: unknown; readonly summary: string; readonly effectiveFromEpochSeconds: bigint; readonly proposedBy: string; readonly nowEpochSeconds: bigint }): Result<unknown> {
+  return proposePure({ id: randomUUID(), tenantId: p.tenant, area: 'PRODUCTS', rawPayload: p.payload, summary: p.summary, effectiveFromEpochSeconds: p.effectiveFromEpochSeconds, proposedBy: p.proposedBy, proposedAtEpochSeconds: p.nowEpochSeconds, parse: (raw) => parseProductCatalogue(raw, ISLAMIC_PRODUCT_CODES) });
+}

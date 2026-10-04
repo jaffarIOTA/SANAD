@@ -9,6 +9,8 @@
 
 import { redirect } from 'next/navigation';
 
+import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
+
 import { developmentIdentity } from './identity.ts';
 import { TENANT, maturityDates, quoteFor } from './engine.ts';
 import { clearSession, currentSession, startSession } from './session.ts';
@@ -46,7 +48,7 @@ export async function quoteAction(form: FormData): Promise<void> {
   if (!Number.isFinite(amountMajor) || amountMajor <= 0) fail(`/${locale}/apply`, 'AMOUNT_NOT_POSITIVE', 'OP-DETERMINACY');
   if (!Number.isFinite(months) || months <= 0) fail(`/${locale}/apply`, 'MONTHS_NOT_POSITIVE', 'OP-DETERMINACY');
   const at = developmentAttestation();
-  const quoted = quoteFor(productCode, BigInt(amountMajor) * 100n, months, session.applicantRef, at);
+  const quoted = quoteFor(productCode, BigInt(amountMajor) * 100n, months, session.applicantRef, at, (await resolveProductCatalogue(TENANT, at.epochSeconds)).catalogue);
   if (!quoted.ok) return fail(`/${locale}/apply`, quoted.error.reason, quoted.error.control);
   const dates = maturityDates(at, quoted.value.offer.quote.tenorDays);
   const offerId = nextId('ofr');

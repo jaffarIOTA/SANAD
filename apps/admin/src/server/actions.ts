@@ -9,16 +9,20 @@
 import { redirect } from 'next/navigation';
 
 import { ENVIRONMENTS, type Environment, VAULT_PROVIDERS, type VaultProvider, revokeCredential, saveCredential, store } from './credentials.ts';
-import { acceptsDevelopmentToken, currentAdmin, endAdminSession, startAdminSession } from './session.ts';
+import { catalogueWithChange, checkProposal, resolveProductCatalogue } from './products.ts';
+import { decideRevision, proposeRevision } from './revisions.ts';
+import { isTenantCode } from '@sanad/config/loader.ts';
+import { randomUUID } from 'node:crypto';
+import { currentAdmin, developmentPrincipalFor, endAdminSession, startAdminSession } from './session.ts';
 
 const field = (form: FormData, name: string): string => { const v = form.get(name); return typeof v === 'string' ? v.trim() : ''; };
 const back = (to: string, notice: string): never => redirect(`${to}${to.includes('?') ? '&' : '?'}notice=${encodeURIComponent(notice)}`);
 
 export async function signInAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
-  const token = field(form, 'token');
-  if (!acceptsDevelopmentToken(token)) back(`/${locale}`, 'SIGN_IN_REFUSED');
-  await startAdminSession('adm-dev-01');
+  const principal = developmentPrincipalFor(field(form, 'token'));
+  if (principal === undefined) return back(`/${locale}`, 'SIGN_IN_REFUSED');
+  await startAdminSession(principal);
   redirect(`/${locale}/credentials`);
 }
 
@@ -65,4 +69,54 @@ export async function revokeCredentialAction(form: FormData): Promise<void> {
   if (s.kind !== 'READY') return;
   try { await revokeCredential(s.pool, id); } catch { back(to, 'REVOKE_FAILED'); }
   back(to, 'REVOKED');
+}
+
+const nowEpoch = (): bigint => BigInt(Math.floor(Date.now() / 1000));
+
+export async function proposeProductChangeAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'ar';
+  const tenant = field(form, 'tenant');
+  const to = `/${locale}/products?tenant=${encodeURIComponent(tenant)}`;
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${locale}`);
+  if (!isTenantCode(tenant)) return back(to, 'TENANT_UNKNOWN');
+  const s = store();
+  if (s.kind !== 'READY') return back(to, 'NO_DATABASE');
+  const now = nowEpoch();
+  const current = await resolveProductCatalogue(tenant, now);
+  if (!current.catalogue.ok) return back(to, 'CATALOGUE_UNREADABLE');
+  const effectiveRaw = field(form, 'effectiveFrom');
+  const effectiveMs = effectiveRaw === '' ? Date.now() : Date.parse(effectiveRaw);
+  if (!Number.isFinite(effectiveMs)) return back(to, 'EFFECTIVE_FROM_MALFORMED');
+  const boardRulingRef = field(form, 'boardRulingRef');
+  const changed = catalogueWithChange(current.catalogue.value, { productCode: field(form, 'productCode'), enabled: form.get('enabled') === 'on', termsJson: field(form, 'terms'), ...(boardRulingRef === '' ? {} : { boardRulingRef }) });
+  if (!changed.ok) return back(to, `REFUSED:${changed.error.reason}`);
+  const summary = field(form, 'summary');
+  const checked = checkProposal({ tenant, payload: changed.value.payload, summary, effectiveFromEpochSeconds: BigInt(Math.floor(effectiveMs / 1000)), proposedBy: admin?.principalId ?? '', nowEpochSeconds: now });
+  if (!checked.ok) return back(to, `REFUSED:${checked.error.reason}`);
+  try {
+    await proposeRevision(s.pool, { tenantCode: tenant, area: 'PRODUCTS', payload: changed.value.payload, summary, effectiveFromEpochSeconds: BigInt(Math.floor(effectiveMs / 1000)), proposedBy: admin?.principalId ?? '', correlationId: randomUUID() });
+  } catch { return back(to, 'PROPOSE_FAILED'); }
+  back(to, 'PROPOSED');
+}
+
+export async function decideRevisionAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'ar';
+  const tenant = field(form, 'tenant');
+  const to = `/${locale}/products?tenant=${encodeURIComponent(tenant)}`;
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${locale}`);
+  const s = store();
+  if (s.kind !== 'READY') return back(to, 'NO_DATABASE');
+  const id = field(form, 'revisionId');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return back(to, 'REVISION_ID_MALFORMED');
+  const approve = field(form, 'decision') === 'approve';
+  const reason = field(form, 'reason');
+  if (!approve && reason.length < 3) return back(to, 'REJECTION_REASON_REQUIRED');
+  try {
+    await decideRevision(s.pool, { id, decidedBy: admin?.principalId ?? '', approve, ...(approve ? {} : { reason }), correlationId: randomUUID() });
+  } catch (error) {
+    return back(to, /FOUR_EYES/.test(error instanceof Error ? error.message : '') ? 'REFUSED:FOUR_EYES_SELF_DECISION' : 'DECIDE_FAILED');
+  }
+  back(to, approve ? 'APPROVED' : 'REJECTED');
 }

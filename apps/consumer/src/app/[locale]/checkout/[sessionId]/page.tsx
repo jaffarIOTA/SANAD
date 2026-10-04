@@ -13,6 +13,8 @@ import { Disclosure } from '@sanad/design/Disclosure.tsx';
 import { Card, ControlRejection } from '@sanad/design/primitives.tsx';
 import { formatMinorUnits, defaultNumerals } from '@sanad/design/Money.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
+import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
+
 import { quoteFor, maturityDates, TENANT } from '../../../../server/engine.ts';
 import { explain } from '../../../../server/explain.ts';
 import { currentSession } from '../../../../server/session.ts';
@@ -39,7 +41,7 @@ export default async function CheckoutPage({ params, searchParams }: { readonly 
     if (!identified.ok) { session = expireOrRefuse(session, identified.error.control, identified.error.reason); } else { session = identified.value; saveSession(session); }
   }
   if (session.state === 'IDENTIFIED') {
-    const quoted = quoteFor('bnpl', session.core.basket.minorUnits, 4, identity.applicantRef, at);
+    const quoted = quoteFor('bnpl', session.core.basket.minorUnits, 4, identity.applicantRef, at, (await resolveProductCatalogue(TENANT, at.epochSeconds)).catalogue);
     if (!quoted.ok) { session = refuseSession(session, quoted.error.control, quoted.error.reason); saveSession(session); }
     else {
       const offerId = nextId('ofr');

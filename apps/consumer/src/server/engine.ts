@@ -8,7 +8,7 @@
 import { type TenantCode, loadProductCatalogue } from '@sanad/config/loader.ts';
 import { money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
-import { type CatalogueEntry, entryFor } from '@sanad/core/products/catalogue.ts';
+import { type CatalogueEntry, type ProductCatalogue, entryFor } from '@sanad/core/products/catalogue.ts';
 import type { AnyProductModule } from '@sanad/core/products/module.ts';
 import { type Offer, buildOffer } from '@sanad/core/products/offer.ts';
 import { ProductRegistry } from '@sanad/core/products/registry.ts';
@@ -27,8 +27,8 @@ const DEV_BENCHMARK = { code: 'SAIBOR-3M', rate: rate(560n, 'REDUCING'), asOfEpo
 const DEV_RANGE = { productClass: 'PERSONAL', lowBp: 600n, medianBp: 900n, highBp: 1_500n, asOfEpochSeconds: 0n, referenceId: 'dev-range' };
 export const DEV_AFFORDABILITY = { monthlyIncome: money(1_500_000n), existingMonthlyObligations: money(0n), outstandingSameClass: money(0n), incomeSourceRef: 'dev-employment-verification' };
 
-export function consumerProducts(): readonly { readonly entry: CatalogueEntry; readonly module: AnyProductModule }[] {
-  const catalogue = loadProductCatalogue(TENANT);
+/** The catalogue defaults to the tenant's file; the pages pass the effective revision when a database is present. */
+export function consumerProducts(catalogue: Result<ProductCatalogue> = loadProductCatalogue(TENANT)): readonly { readonly entry: CatalogueEntry; readonly module: AnyProductModule }[] {
   if (!catalogue.ok) return [];
   return catalogue.value.entries.flatMap((entry) => {
     const found = REGISTRY.find(entry.productCode);
@@ -36,8 +36,7 @@ export function consumerProducts(): readonly { readonly entry: CatalogueEntry; r
   });
 }
 
-export function quoteFor(productCode: string, amountMinorUnits: bigint, months: number, applicantRef: string, at: TsaInstant): Result<{ readonly offer: Offer; readonly programmeId: string }> {
-  const catalogue = loadProductCatalogue(TENANT);
+export function quoteFor(productCode: string, amountMinorUnits: bigint, months: number, applicantRef: string, at: TsaInstant, catalogue: Result<ProductCatalogue> = loadProductCatalogue(TENANT)): Result<{ readonly offer: Offer; readonly programmeId: string }> {
   if (!catalogue.ok) return catalogue;
   const entry = entryFor(catalogue.value, productCode, 'prg-0001', at.epochSeconds);
   if (!entry.ok) return entry;

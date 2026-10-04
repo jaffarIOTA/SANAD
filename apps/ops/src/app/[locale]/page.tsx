@@ -18,14 +18,15 @@
 
 import { notFound } from 'next/navigation';
 
-import { type TenantCode, loadProductCatalogue } from '@sanad/config/loader.ts';
+import type { TenantCode } from '@sanad/config/loader.ts';
+import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
 import { AreaTrend, Indicator, SharePie, WeekBars } from '@sanad/design/charts.tsx';
 import { Icon } from '@sanad/design/icons.tsx';
 import { defaultNumerals, formatMinorUnits } from '@sanad/design/Money.tsx';
 import { Card, Status } from '@sanad/design/primitives.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 import { channelCards } from '../../server/origination.ts';
-import { listRequests, type RequestRow } from '../../server/store.ts';
+import { developmentAttestation, listRequests, type RequestRow } from '../../server/store.ts';
 
 const TENANT: TenantCode = 'bank-a';
 const DAY = 86_400;
@@ -51,7 +52,7 @@ export default async function DashboardPage({ params, searchParams }: { readonly
 
   const [channels] = await Promise.all([channelCards()]);
   const all = listRequests();
-  const catalogue = loadProductCatalogue(TENANT);
+  const catalogue = (await resolveProductCatalogue(TENANT, developmentAttestation().epochSeconds)).catalogue;
 
   // The header search narrows the table only. Everything else counts the whole
   // book — a filtered figure presented as a total is how an operator reports

@@ -16,7 +16,8 @@
 
 import type { ReactElement } from 'react';
 
-import { type TenantCode, isTenantCode, loadProductCatalogue } from '@sanad/config/loader.ts';
+import { type TenantCode, isTenantCode } from '@sanad/config/loader.ts';
+import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
 import { money } from '@sanad/core/kernel/money.ts';
 import type { QuoteRequest } from '@sanad/core/products/module.ts';
 import { buildOffer, type Offer } from '@sanad/core/products/offer.ts';
@@ -62,8 +63,9 @@ export default async function ProductsPage({ params, searchParams }: { readonly 
   const arabic = locale === 'ar-SA';
   const t = (en: string, ar: string): string => (arabic ? ar : en);
   const tenant: TenantCode = tenantParam !== undefined && isTenantCode(tenantParam) ? tenantParam : 'bank-a';
-  const catalogue = loadProductCatalogue(tenant);
   const at = developmentAttestation();
+  const resolved = await resolveProductCatalogue(tenant, at.epochSeconds);
+  const catalogue = resolved.catalogue;
 
   const entries = catalogue.ok ? catalogue.value.entries : [];
   const enabled = entries.filter((e) => e.enabled);

@@ -6,7 +6,7 @@ import { accept as acceptSession, book as bookSession } from '@sanad/core/checko
 import { book as bookBnpl } from '@sanad/products/bnpl/execution.ts';
 import { bnpl } from '@sanad/products/bnpl/index.ts';
 import type { BnplQuote } from '@sanad/products/bnpl/pricing.ts';
-import { loadProductCatalogue } from '@sanad/config/loader.ts';
+import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
 import { entryFor } from '@sanad/core/products/catalogue.ts';
 
 import { findSession, outboxStore, saveSession } from '../../../../server/checkout-store.ts';
@@ -38,7 +38,7 @@ export async function checkoutAcceptAction(form: FormData): Promise<void> {
   // Book the facility: the module's execute (bureau enquiry, consent and the eligibility facts are development
   // stand-ins here; in production they come from the bureau, the consent store and the identity rail) and book.
   const stored = findOffer(session.offerId);
-  const catalogue = loadProductCatalogue(TENANT);
+  const catalogue = (await resolveProductCatalogue(TENANT, at.epochSeconds)).catalogue;
   const entry = catalogue.ok ? entryFor(catalogue.value, 'bnpl', 'prg-0001', at.epochSeconds) : undefined;
   const terms = entry !== undefined && entry.ok ? bnpl.validateTerms(entry.value.terms) : undefined;
   if (stored === undefined || terms === undefined || !terms.ok) return fail('PRODUCT_NOT_ENABLED', 'OP-DETERMINACY');
