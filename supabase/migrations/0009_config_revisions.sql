@@ -231,15 +231,29 @@ security definer
 set search_path = config, public
 as $$ select payload from config.revision where id = p_id $$;
 
-revoke all on function audit.record_event(uuid,text,uuid,text,jsonb,jsonb,text,uuid) from anon, authenticated, public;
-revoke all on function config.propose_revision(uuid,text,jsonb,text,timestamptz,text,uuid) from anon, authenticated, public;
-revoke all on function config.decide_revision(uuid,text,boolean,text,uuid) from anon, authenticated, public;
-revoke all on function config.effective_revision(uuid,text,timestamptz) from anon, authenticated, public;
-revoke all on function config.list_revisions(uuid,text) from anon, authenticated, public;
-revoke all on function config.revision_payload(uuid) from anon, authenticated, public;
-grant execute on function audit.record_event(uuid,text,uuid,text,jsonb,jsonb,text,uuid) to service_role;
-grant execute on function config.propose_revision(uuid,text,jsonb,text,timestamptz,text,uuid) to service_role;
-grant execute on function config.decide_revision(uuid,text,boolean,text,uuid) to service_role;
-grant execute on function config.effective_revision(uuid,text,timestamptz) to service_role;
-grant execute on function config.list_revisions(uuid,text) to service_role;
-grant execute on function config.revision_payload(uuid) to service_role;
+-- Platform roles exist only on hosted Supabase; every revoke and grant against
+-- them is conditional so the migration also applies to the in-Kingdom PostgreSQL.
+do $$
+declare
+  r text;
+  f text;
+  fns text[] := array[
+    'audit.record_event(uuid,text,uuid,text,jsonb,jsonb,text,uuid)',
+    'config.propose_revision(uuid,text,jsonb,text,timestamptz,text,uuid)',
+    'config.decide_revision(uuid,text,boolean,text,uuid)',
+    'config.effective_revision(uuid,text,timestamptz)',
+    'config.list_revisions(uuid,text)',
+    'config.revision_payload(uuid)'
+  ];
+begin
+  foreach f in array fns loop
+    execute format('revoke all on function %s from public', f);
+    foreach r in array core.hosted_platform_roles() loop
+      execute format('revoke all on function %s from %I', f, r);
+    end loop;
+    if exists (select 1 from pg_catalog.pg_roles where rolname = 'service_role') then
+      execute format('grant execute on function %s to service_role', f);
+    end if;
+  end loop;
+end;
+$$;

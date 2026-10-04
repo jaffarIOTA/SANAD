@@ -21,13 +21,14 @@ describe.skipIf(url === undefined)('configuration revisions in the database (SAN
     id = (await pool.query<{ id: string }>("select config.propose_revision($1::uuid, 'PARTNERS', '{\"probe\": true}'::jsonb, 'contract probe', now() + interval '1 hour', 'adm-contract-01', $2::uuid) as id", [t, cor])).rows[0]?.id ?? '';
     expect(id).toMatch(/^[0-9a-f-]{36}$/);
     await expect(pool.query("select config.decide_revision($1::uuid, 'adm-contract-01', true, null, $2::uuid)", [id, cor])).rejects.toThrow(/FOUR_EYES/);
-    const eff = await pool.query("select id from config.effective_revision($1::uuid, 'PARTNERS', now() + interval '2 hours')", [t]);
-    expect(eff.rows).toHaveLength(0);
+    // Earlier runs leave approved rows behind (they are immutable), so the assertion is about this revision, not the count.
+    const eff = await pool.query<{ id: string }>("select id from config.effective_revision($1::uuid, 'PARTNERS', now() + interval '2 hours')", [t]);
+    expect(eff.rows[0]?.id).not.toBe(id);
   });
   it('approved by another it is effective from its moment; before that moment it is not', async () => {
     const t = await tenant();
     await pool.query("select config.decide_revision($1::uuid, 'adm-contract-02', true, null, $2::uuid)", [id, cor]);
-    expect((await pool.query("select id from config.effective_revision($1::uuid, 'PARTNERS', now())", [t])).rows).toHaveLength(0);
+    expect((await pool.query<{ id: string }>("select id from config.effective_revision($1::uuid, 'PARTNERS', now())", [t])).rows[0]?.id).not.toBe(id);
     expect((await pool.query<{ id: string }>("select id from config.effective_revision($1::uuid, 'PARTNERS', now() + interval '2 hours')", [t])).rows[0]?.id).toBe(id);
   });
   it('is immutable once decided: no edit, no delete, no second decision', async () => {
