@@ -17,6 +17,8 @@ import type { Pool } from 'pg';
 import type { OriginationRequest } from '@sanad/core/origination/request.ts';
 import { decodeRequest, encodeRequest } from '@sanad/origination/codec.ts';
 import { sharedPool, tenantUuidByCode } from '@sanad/origination/credentials.ts';
+import { type IdempotencyStore, inMemoryIdempotencyStore } from '@sanad/origination/idempotency.ts';
+import { postgresIdempotencyStore } from '@sanad/origination/idempotency-postgres.ts';
 
 export interface PersistedRequest {
   readonly requestId: string;
@@ -35,6 +37,25 @@ export function persistenceUrl(env: Readonly<Record<string, string | undefined>>
 export function persistencePool(env: Readonly<Record<string, string | undefined>> = process.env): Pool | undefined {
   const url = persistenceUrl(env);
   return url === undefined ? undefined : sharedPool(url);
+}
+
+/**
+ * The partner API's idempotency ledger: the database's when one is
+ * configured (migration 0006), so a replay is recognised after a restart and
+ * across processes; this process's memory otherwise. The ledger's table keys
+ * on the tenant's uuid and the API's principal carries the tenant's code, so
+ * the code is translated here, at the boundary.
+ */
+export function idempotencyLedger(env: Readonly<Record<string, string | undefined>> = process.env): IdempotencyStore {
+  const pool = persistencePool(env);
+  if (pool === undefined) return inMemoryIdempotencyStore();
+  const durable = postgresIdempotencyStore(pool);
+  const uuid = (code: string): Promise<string> => tenantUuidByCode(pool, code);
+  return {
+    reserve: async (p) => durable.reserve({ ...p, tenantId: await uuid(p.tenantId) }),
+    complete: async (p) => durable.complete({ ...p, tenantId: await uuid(p.tenantId) }),
+    release: async (p) => durable.release({ ...p, tenantId: await uuid(p.tenantId) }),
+  };
 }
 
 /** Who the row belongs to for the partner feed: the partner on the partner channel, the workbench otherwise. */

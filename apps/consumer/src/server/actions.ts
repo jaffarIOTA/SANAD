@@ -11,6 +11,7 @@ import { redirect } from 'next/navigation';
 
 import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
 
+import { flushConsumerStore } from './durable.ts';
 import { developmentIdentity } from './identity.ts';
 import { TENANT, maturityDates, quoteFor } from './engine.ts';
 import { clearSession, currentSession, startSession } from './session.ts';
@@ -53,6 +54,8 @@ export async function quoteAction(form: FormData): Promise<void> {
   const dates = maturityDates(at, quoted.value.offer.quote.tenorDays);
   const offerId = nextId('ofr');
   saveOffer({ offerId, tenantId: TENANT, applicantRef: session.applicantRef, productCode, offer: quoted.value.offer, maturityDateGregorian: dates.gregorian, maturityDateHijri: dates.hijri, expiresAtEpochSeconds: at.epochSeconds + 7n * 86_400n });
+  // The offer is durable before the customer is shown it.
+  await flushConsumerStore();
   redirect(`/${locale}/offer/${offerId}`);
 }
 
@@ -66,5 +69,8 @@ export async function acceptAction(form: FormData): Promise<void> {
   if (field(form, 'confirm') !== 'yes') fail(`/${locale}/offer/${offerId}`, 'CONFIRMATION_REQUIRED', 'OP-DETERMINACY');
   const result = accept({ offerId, identityAssertionId: session.identityAssertionId, localeShown: locale === 'ar' ? 'ar-SA' : 'en-SA', disclosureVersionShown: field(form, 'disclosureVersion'), at: developmentAttestation() });
   if (!result.ok) return fail(`/${locale}/offer/${offerId}`, result.error.reason, result.error.control);
+  // The acceptance is durable before the customer is told it was recorded. If the database refuses it
+  // (the offer was accepted elsewhere a moment ago), this throws and no confirmation is shown.
+  await flushConsumerStore();
   redirect(`/${locale}/offer/${offerId}/accepted`);
 }

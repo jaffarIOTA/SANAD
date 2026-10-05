@@ -38,6 +38,9 @@ interface State {
   readonly acceptances: Map<string, Acceptance>;
   sequence: number;
   lastAttested: bigint;
+  /** Written since the last flush to the database. Optional: a state kept across hot reloads may predate these. */
+  dirtyOffers?: Set<string>;
+  dirtyAcceptances?: Set<string>;
 }
 
 const KEY = Symbol.for('sanad.consumer.developmentStore');
@@ -62,7 +65,11 @@ export function nextId(prefix: string): string {
   return `${prefix}_${String(state.sequence).padStart(5, '0')}`;
 }
 
-export function saveOffer(offer: StoredOffer): void { state.offers.set(offer.offerId, offer); }
+export function saveOffer(offer: StoredOffer): void {
+  state.offers.set(offer.offerId, offer);
+  state.dirtyOffers ??= new Set<string>();
+  state.dirtyOffers.add(offer.offerId);
+}
 export function findOffer(offerId: string): StoredOffer | undefined { return state.offers.get(offerId); }
 export function acceptanceFor(offerId: string): Acceptance | undefined { return [...state.acceptances.values()].find((a) => a.offerId === offerId); }
 
@@ -78,5 +85,35 @@ export function accept(params: { readonly offerId: string; readonly identityAsse
   if (params.disclosureVersionShown !== offer.offer.disclosureVersion) return reject('OP-DETERMINACY', 'DISCLOSURE_VERSION_MISMATCH', 'The disclosure shown is not the current one; read it again');
   const acceptance: Acceptance = { acceptanceId: nextId('acc'), offerId: params.offerId, disclosureVersion: offer.offer.disclosureVersion, identityAssertionId: params.identityAssertionId, localeShown: params.localeShown, acceptedAt: params.at };
   state.acceptances.set(acceptance.acceptanceId, acceptance);
+  state.dirtyAcceptances ??= new Set<string>();
+  state.dirtyAcceptances.add(acceptance.acceptanceId);
   return ok(acceptance);
+}
+
+// -- For the durability layer (durable.ts) -------------------------------------
+
+/** What has been written since the last flush. Read, saved, then cleared by id — never cleared unsaved. */
+export function unsavedOffers(): readonly StoredOffer[] {
+  return [...(state.dirtyOffers ?? [])].flatMap((id) => { const o = state.offers.get(id); return o === undefined ? [] : [o]; });
+}
+export function unsavedAcceptances(): readonly Acceptance[] {
+  return [...(state.dirtyAcceptances ?? [])].flatMap((id) => { const a = state.acceptances.get(id); return a === undefined ? [] : [a]; });
+}
+export function markSaved(offerIds: readonly string[], acceptanceIds: readonly string[]): void {
+  for (const id of offerIds) state.dirtyOffers?.delete(id);
+  for (const id of acceptanceIds) state.dirtyAcceptances?.delete(id);
+}
+
+/** Puts stored records back into the working set without marking them as changed. */
+export function restore(offers: readonly StoredOffer[], acceptances: readonly Acceptance[]): void {
+  for (const o of offers) state.offers.set(o.offerId, o);
+  for (const a of acceptances) state.acceptances.set(a.acceptanceId, a);
+}
+
+/** The id sequence continues from the highest number already issued, so a restart never reissues an id. */
+export function continueSequenceFrom(ids: readonly string[]): void {
+  for (const id of ids) {
+    const numbered = /_(\d+)$/.exec(id);
+    if (numbered !== null) state.sequence = Math.max(state.sequence, Number.parseInt(numbered[1] ?? '0', 10));
+  }
 }

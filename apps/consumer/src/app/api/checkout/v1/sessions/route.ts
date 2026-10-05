@@ -8,6 +8,7 @@ import { fromRejection, problem } from '@sanad/origination/problem.ts';
 import { consumerBaseUrl, contract, correlation, json, merchantOr401, refuse, toWire } from '../shared.ts';
 import { merchantById } from '@/server/merchants.ts';
 import { findSession, rememberIdempotency, saveSession, sessionIdFor } from '@/server/checkout-store.ts';
+import { flushConsumerStore, syncConsumerStore } from '@/server/durable.ts';
 import { developmentAttestation } from '@/server/store.ts';
 
 const validate = contract.validatorFor('CreateCheckoutSession');
@@ -21,6 +22,8 @@ export async function POST(request: Request): Promise<Response> {
   if (merchant instanceof Response) return merchant;
   const key = request.headers.get('idempotency-key');
   if (key === null || !/^[0-9a-f-]{36}$/i.test(key)) return refuse(problem({ status: 400, kind: 'malformed-request', title: 'Malformed request', detail: 'A state-changing request requires an Idempotency-Key header carrying a UUID.', reason: 'IDEMPOTENCY_KEY_MISSING', correlationId }));
+  // Sessions and idempotency keys are loaded from the database first: a replay must be recognised after a restart.
+  await syncConsumerStore();
   const replay = sessionIdFor(merchant.merchantId, key);
   if (replay !== undefined) { const existing = findSession(replay); if (existing !== undefined) return json(201, toWire(existing, consumerBaseUrl(request)), correlationId, { 'idempotent-replay': 'true' }); }
 
@@ -40,5 +43,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!created.ok) return refuse(fromRejection(created.error, correlationId));
   saveSession(created.value);
   rememberIdempotency(merchant.merchantId, key, created.value.core.sessionId);
+  // Durable before it is acknowledged: the merchant is told 201 only once the session and its key are stored.
+  await flushConsumerStore();
   return json(201, toWire(created.value, consumerBaseUrl(request)), correlationId, { location: `/checkout/v1/sessions/${created.value.core.sessionId}` });
 }

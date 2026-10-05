@@ -12,6 +12,7 @@ import { BrandMark, LanguageSwitch } from '@sanad/design/primitives.tsx';
 import { LOCALE_SEGMENTS, htmlLang, isRtl, localeFromSegment, type LocaleSegment } from '@sanad/i18n/strings.ts';
 import { currentSession } from '../../server/session.ts';
 import { signOutAction } from '../../server/actions.ts';
+import { syncConsumerStore } from '../../server/durable.ts';
 import '../globals.css';
 
 export const metadata = { title: 'سند — Sanad', description: 'التمويل الشخصي' };
@@ -25,6 +26,8 @@ export default async function ConsumerLayout({ children, params }: { readonly ch
   const locale = localeFromSegment(segment);
   if (locale === undefined) notFound();
   const arabic = locale === 'ar-SA';
+  // Offers, acceptances and checkout sessions are loaded from the database before any page reads them.
+  await syncConsumerStore();
   const session = await currentSession();
 
   return (

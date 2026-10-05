@@ -21,7 +21,9 @@ import { randomUUID } from 'node:crypto';
 import { correlation, json, principalOr401, refuse } from '../shared.ts';
 
 import { validatorFor } from '@sanad/origination/contract.ts';
-import { fingerprint, inMemoryIdempotencyStore, type IdempotencyStore } from '@sanad/origination/idempotency.ts';
+import { fingerprint, type IdempotencyStore } from '@sanad/origination/idempotency.ts';
+
+import { idempotencyLedger } from '../../../../../server/persistence.ts';
 import { hasScope } from '@sanad/origination/principal.ts';
 import { fromRejection, problem } from '@sanad/origination/problem.ts';
 import { toWire, type RaiseRequestBody } from '@sanad/origination/representation.ts';
@@ -32,8 +34,9 @@ import { flushStore, keyRequest, listPartnerRequests, submit, findPartnerRequest
 const validateRaise = validatorFor('RaiseRequest');
 
 const IDEMPOTENCY_KEY = Symbol.for('sanad.ops.idempotency');
+// The database's ledger when one is configured, so a replay is recognised after a restart; this process's memory otherwise.
 const idempotency: IdempotencyStore = ((globalThis as Record<symbol, IdempotencyStore | undefined>)[IDEMPOTENCY_KEY] ??=
-  inMemoryIdempotencyStore());
+  idempotencyLedger());
 
 
 

@@ -162,11 +162,18 @@ Ordered by what it costs to guess wrong.
    load per process, every change written in a transaction before the response
    that reports it. Proven by restart: a decision and a partner request both
    survive, the id sequence continues, the SH-10 registry is rebuilt from the
-   book, and an API call works before any page has rendered. **Still in
-   memory:** half-completed drafts (screen state by design), presented
-   documents (the evidence store), the partner API's idempotency ledger in the
-   workbench, and the consumer app's offers and checkout sessions. The
-   standalone service and the workbench copy of the routes collapse next.
+   book, and an API call works before any page has rendered. Same day: the
+   partner API's idempotency ledger in the workbench, and the consumer app's
+   offers, acceptances, checkout sessions, merchant idempotency keys and
+   outbox (migration 0011, `apps/consumer/src/server/{persistence,durable}.ts`).
+   An acceptance is append-only and "accepted once" is a uniqueness constraint,
+   so the database refuses a second acceptance whoever raced past the check.
+   Proven by restart: a checkout session survives, and the same idempotency key
+   replays the same session and the same request instead of creating a second.
+   **Still in memory:** half-completed drafts (screen state by design),
+   presented documents (the evidence store, next), merchants (a development
+   fixture until merchant onboarding has a screen). The standalone service and
+   the workbench copy of the routes collapse after that.
 2. **R-10** — the internal review API specification. Approve, return and
    reject are deliberately absent from the partner contract; they need their
    own, with their own authentication.

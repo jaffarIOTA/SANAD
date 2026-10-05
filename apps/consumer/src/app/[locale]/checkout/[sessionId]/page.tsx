@@ -19,6 +19,7 @@ import { quoteFor, maturityDates, TENANT } from '../../../../server/engine.ts';
 import { explain } from '../../../../server/explain.ts';
 import { currentSession } from '../../../../server/session.ts';
 import { findSession, saveSession } from '../../../../server/checkout-store.ts';
+import { flushConsumerStore } from '../../../../server/durable.ts';
 import { developmentAttestation, findOffer, nextId, saveOffer } from '../../../../server/store.ts';
 import { checkoutAcceptAction } from './actions.ts';
 
@@ -51,6 +52,9 @@ export default async function CheckoutPage({ params, searchParams }: { readonly 
       if (offered.ok) { session = offered.value; saveSession(session); }
     }
   }
+
+  // The session's advance and the offer just issued are durable before the disclosure is rendered.
+  await flushConsumerStore();
 
   const stored = session.state === 'OFFERED' || session.state === 'ACCEPTED' || session.state === 'BOOKED' ? findOffer(session.offerId) : undefined;
   if (session.state === 'BOOKED') redirect(`${session.core.returnUrl}${session.core.returnUrl.includes('?') ? '&' : '?'}sessionId=${sessionId}&state=BOOKED`);

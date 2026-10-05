@@ -10,6 +10,7 @@ import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
 import { entryFor } from '@sanad/core/products/catalogue.ts';
 
 import { findSession, outboxStore, saveSession } from '../../../../server/checkout-store.ts';
+import { flushConsumerStore, syncConsumerStore } from '../../../../server/durable.ts';
 import { TENANT } from '../../../../server/engine.ts';
 import { currentSession } from '../../../../server/session.ts';
 import { accept, developmentAttestation, findOffer, nextId } from '../../../../server/store.ts';
@@ -24,6 +25,7 @@ export async function checkoutAcceptAction(form: FormData): Promise<void> {
   const fail = (reason: string, control: string): never => redirect(`${back}?refused=${encodeURIComponent(reason)}&control=${encodeURIComponent(control)}`);
   const identity = await currentSession();
   if (identity === undefined) redirect(`/${locale}?next=${encodeURIComponent(back)}`);
+  await syncConsumerStore();
   const session = findSession(sessionId);
   if (session === undefined || session.state !== 'OFFERED' || session.applicantRef !== identity.applicantRef) fail('OFFER_NOT_FOUND', 'OP-DETERMINACY');
   if (session === undefined || session.state !== 'OFFERED') return;
@@ -46,8 +48,11 @@ export async function checkoutAcceptAction(form: FormData): Promise<void> {
   if (!draft.ok) return fail(draft.error.reason, draft.error.control);
   const booked = bookBnpl(draft.value, developmentAttestation());
   if (!booked.ok) return fail(booked.error.reason, booked.error.control);
-  // The booking's effects — merchant settlement, bureau report — go to the same durable outbox the session events use.
-  await outboxStore().append(booked.value.outbox.events);
   saveSession(bookSession(accepted.value, draft.value.core.transactionId, booked.value.bookedAt));
+  // The acceptance and the booked session are durable first; then the booking's effects — merchant
+  // settlement, bureau report — go to the same durable outbox the session events use. Only then is
+  // the shopper sent back to the shop as BOOKED.
+  await flushConsumerStore();
+  await outboxStore().append(booked.value.outbox.events);
   redirect(`${session.core.returnUrl}${session.core.returnUrl.includes('?') ? '&' : '?'}sessionId=${sessionId}&state=BOOKED`);
 }
