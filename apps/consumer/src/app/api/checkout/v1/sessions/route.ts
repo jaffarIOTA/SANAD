@@ -6,7 +6,7 @@ import { money } from '@sanad/core/kernel/money.ts';
 import { fromRejection, problem } from '@sanad/origination/problem.ts';
 
 import { consumerBaseUrl, contract, correlation, json, merchantOr401, refuse, toWire } from '../shared.ts';
-import { merchantById } from '@/server/merchants.ts';
+import { merchantById, refreshMerchants } from '@/server/merchants.ts';
 import { findSession, rememberIdempotency, saveSession, sessionIdFor } from '@/server/checkout-store.ts';
 import { flushConsumerStore, syncConsumerStore } from '@/server/durable.ts';
 import { developmentAttestation } from '@/server/store.ts';
@@ -35,6 +35,8 @@ export async function POST(request: Request): Promise<Response> {
     return refuse(problem({ status: 400, kind: 'malformed-request', title: 'Malformed request', detail: unknown === undefined ? failures.map((f) => `${f.path || 'body'} ${f.message}`).join(' ') : 'Unknown property. The basket is the amount and the tenant’s catalogue is the terms; there is no field for a price.', reason: unknown === undefined ? 'SCHEMA_VALIDATION_FAILED' : 'UNKNOWN_PROPERTY', correlationId }));
   }
   const body = parsed as Body;
+  // Read from the database now: a merchant suspended a moment ago in the workbench is refused here.
+  await refreshMerchants();
   const record = merchantById(merchant.merchantId);
   if (record === undefined || !canTransact(record)) return refuse(problem({ status: 422, kind: 'control-rejection', title: 'Refused', detail: 'This merchant is not active.', reason: 'MERCHANT_NOT_ACTIVE', control: 'OP-DETERMINACY', correlationId }));
 

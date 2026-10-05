@@ -14,7 +14,9 @@
 
 import type { Pool } from 'pg';
 
+import type { PresentedDocument } from '@sanad/core/documents/checklist.ts';
 import type { OriginationRequest } from '@sanad/core/origination/request.ts';
+import { tsaInstant } from '@sanad/core/time/tsa.ts';
 import { decodeRequest, encodeRequest } from '@sanad/origination/codec.ts';
 import { sharedPool, tenantUuidByCode } from '@sanad/origination/credentials.ts';
 import { type IdempotencyStore, inMemoryIdempotencyStore } from '@sanad/origination/idempotency.ts';
@@ -90,6 +92,61 @@ export async function loadRequests(pool: Pool, tenantCode: string): Promise<read
       ...(row.partner_reference === null ? {} : { partnerReference: row.partner_reference }),
     };
   });
+}
+
+export interface PersistedDocument {
+  readonly requestId: string;
+  /** Position among the request's documents, in the order presented. */
+  readonly position: number;
+  readonly document: PresentedDocument;
+}
+
+/** Every document presented against the tenant's requests, in the order presented (`evidence.presented_document`, migration 0012). */
+export async function loadDocuments(pool: Pool, tenantCode: string): Promise<readonly PersistedDocument[]> {
+  const tenant = await tenantUuidByCode(pool, tenantCode);
+  const { rows } = await pool.query<{ request_id: string; position: number; document_type: string; validation_status: PresentedDocument['validationStatus']; captured_at_epoch: string; captured_tsa_digest: string; captured_tsa_authority: string }>(
+    `select request_id, position, document_type, validation_status,
+            captured_at_epoch::text, captured_tsa_digest, captured_tsa_authority
+       from evidence.presented_document
+      where tenant_id = $1::uuid
+      order by request_id, position`,
+    [tenant],
+  );
+  return rows.map((r) => ({
+    requestId: r.request_id,
+    position: r.position,
+    document: {
+      documentType: r.document_type,
+      validationStatus: r.validation_status,
+      // Rebuilt through the one function allowed to establish an attested instant.
+      capturedAt: tsaInstant({ verified: true, genTimeEpochSeconds: BigInt(r.captured_at_epoch), tokenDigest: r.captured_tsa_digest, authorityId: r.captured_tsa_authority }),
+    },
+  }));
+}
+
+/** Appends. The table refuses an update, and a position already written is left as it was. */
+export async function saveDocuments(pool: Pool, tenantCode: string, documents: readonly PersistedDocument[], presentedBy: string): Promise<void> {
+  if (documents.length === 0) return;
+  const tenant = await tenantUuidByCode(pool, tenantCode);
+  const client = await pool.connect();
+  try {
+    await client.query('begin');
+    for (const d of documents) {
+      await client.query(
+        `insert into evidence.presented_document
+           (tenant_id, request_id, document_type, validation_status, captured_at_epoch, captured_tsa_digest, captured_tsa_authority, position, correlation_id, created_by)
+         values ($1::uuid, $2, $3, $4, $5::bigint, $6, $7, $8, $9, $10)
+         on conflict (tenant_id, request_id, position) do nothing`,
+        [tenant, d.requestId, d.document.documentType, d.document.validationStatus, d.document.capturedAt.epochSeconds.toString(), d.document.capturedAt.tokenDigest, d.document.capturedAt.authorityId, d.position, d.requestId, presentedBy],
+      );
+    }
+    await client.query('commit');
+  } catch (error) {
+    await client.query('rollback');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /** Upserts each record in one transaction: either the whole change is durable or none of it is. */

@@ -48,7 +48,10 @@ import { loadOriginationPolicy } from '@sanad/config/loader.ts';
 import type { OriginationPolicy } from '@sanad/core/origination/policy.ts';
 import { resolveOriginationPolicy } from '@sanad/origination/origination-policy.ts';
 
-import { type PersistedRequest, loadRequests, persistencePool, persistenceUrl, saveRequests } from './persistence.ts';
+import type { Pool } from 'pg';
+
+import { type PersistedDocument, type PersistedRequest, loadDocuments, loadRequests, persistencePool, persistenceUrl, saveDocuments, saveRequests } from './persistence.ts';
+import { MAKER } from './session.ts';
 
 /**
  * The tenant's intake policy. The checked-in file loads once at start-up (a
@@ -112,6 +115,8 @@ interface DevelopmentState {
   seeded: boolean;
   /** Requests changed since the last write to the database. Optional: a state kept across hot reloads may predate it. */
   dirty?: Set<string>;
+  /** Documents presented since the last write to the database, with their position among the request's documents. */
+  unsavedDocuments?: PersistedDocument[];
   /** Whether the book has been loaded from the database in this process. */
   hydrated?: boolean;
 }
@@ -534,7 +539,11 @@ export function presentedDocuments(requestId: string): readonly PresentedDocumen
 
 export function attachDocument(requestId: string, documentType: string): void {
   const list = state.documents.get(requestId) ?? [];
-  state.documents.set(requestId, [...list, { documentType, capturedAt: developmentAttestation(), validationStatus: 'VALID' }]);
+  const document: PresentedDocument = { documentType, capturedAt: developmentAttestation(), validationStatus: 'VALID' };
+  state.documents.set(requestId, [...list, document]);
+  // Appended to the evidence store on the next flush, at the position it was presented in.
+  state.unsavedDocuments ??= [];
+  state.unsavedDocuments.push({ requestId, position: list.length, document });
 }
 
 export function checklistFor(request: RequestRow): { readonly checklist: DocumentChecklist; readonly report: readonly ItemReport[] } | undefined {
@@ -752,8 +761,20 @@ export const storeBacking = (): 'POSTGRESQL' | 'MEMORY' => (persistenceUrl() ===
  */
 export async function flushStore(): Promise<void> {
   const pool = persistencePool();
+  if (pool === undefined) return;
+  await flushRequests(pool);
+  // Documents after requests: a document row refers to its request's row.
+  const documents = state.unsavedDocuments ?? [];
+  if (documents.length > 0) {
+    await saveDocuments(pool, TENANT_CODE, documents, MAKER.principalId);
+    const saved = new Set(documents);
+    state.unsavedDocuments = (state.unsavedDocuments ?? []).filter((d) => !saved.has(d));
+  }
+}
+
+async function flushRequests(pool: Pool): Promise<void> {
   const dirty = state.dirty;
-  if (pool === undefined || dirty === undefined || dirty.size === 0) return;
+  if (dirty === undefined || dirty.size === 0) return;
   const ids = [...dirty];
   const records = ids.flatMap((requestId) => {
     const request = REQUESTS.get(requestId);
@@ -781,6 +802,11 @@ async function hydrateStore(): Promise<void> {
   } else {
     state.seeded = true;
     for (const record of persisted) restore(record);
+    for (const d of await loadDocuments(pool, TENANT_CODE)) {
+      const list = state.documents.get(d.requestId) ?? [];
+      list[d.position] = d.document;
+      state.documents.set(d.requestId, list);
+    }
   }
   state.hydrated = true;
 }

@@ -30,10 +30,19 @@ export interface MerchantCore {
   readonly settlementAccountRef: string;
   /** The partner or aggregator that introduced the merchant, where one did. */
   readonly introducedByPartnerRef?: string;
+  /** The member of staff who began the onboarding. They may not be the one who verifies it. */
+  readonly onboardedBy: string;
   readonly correlationId: string;
 }
 
 export interface Verification {
+  /**
+   * Reference of the executed store contract. The contract between the
+   * institution and a store is a condition of dealing through it (SAMA Rules
+   * for Regulating BNPL Companies, Nov 2023, Art. 27; Art. 19(7) obliges the
+   * store, through it, not to pass fees to the consumer).
+   */
+  readonly agreementRef: string;
   readonly registryLookupRef: string;
   readonly registryStatus: 'ACTIVE' | 'SUSPENDED' | 'CLOSED';
   readonly screeningResultRef: string;
@@ -55,11 +64,19 @@ export function beginOnboarding(core: MerchantCore, at: TsaInstant): Result<Pend
   if (core.legalNameAr.trim().length === 0 || core.legalNameEn.trim().length === 0) return reject('OP-DETERMINACY', 'LEGAL_NAME_REQUIRED', 'Both legal names are required');
   if (core.settlementAccountRef.trim().length === 0) return reject('OP-DETERMINACY', 'SETTLEMENT_ACCOUNT_REQUIRED', 'A settlement account reference is required');
   if (/^\d{8,}$/.test(core.settlementAccountRef) || /^SA\d{2}/i.test(core.settlementAccountRef)) return reject('OP-DETERMINACY', 'SETTLEMENT_ACCOUNT_BY_VALUE', 'The settlement account is referenced, never given by number');
+  if (core.onboardedBy.trim().length === 0) return reject('OP-DETERMINACY', 'ONBOARDED_BY_REQUIRED', 'An onboarding names who began it');
   return ok({ status: 'PENDING_VERIFICATION', core, begunAt: at });
 }
 
-/** Active only when the registry says active, screening is clear and the activity is permitted. Anything else stays pending. */
+/**
+ * Active only when a second person verifies it, the store contract is on
+ * record, the registry says active, screening is clear and the activity is
+ * permitted. Anything else stays pending.
+ */
 export function verify(m: PendingVerification, v: Verification): Result<Active> {
+  if (v.verifiedBy.trim().length === 0) return reject('OP-DETERMINACY', 'VERIFIED_BY_REQUIRED', 'A verification names who performed it');
+  if (v.verifiedBy === m.core.onboardedBy) return reject('OP-DETERMINACY', 'FOUR_EYES_SELF_VERIFICATION', 'The person who onboarded a merchant may not verify it', { onboardedBy: m.core.onboardedBy });
+  if (v.agreementRef.trim().length === 0) return reject('OP-DETERMINACY', 'MERCHANT_AGREEMENT_REQUIRED', 'A store transacts only under an executed contract with the institution', { citation: 'SAMA Rules for Regulating BNPL Companies, Nov 2023 (Jumada I 1445H), Art. 27' });
   if (v.registryLookupRef.length === 0 || v.screeningResultRef.length === 0) return reject('OP-DETERMINACY', 'VERIFICATION_EVIDENCE_REQUIRED', 'Verification cites the registry lookup and the screening result');
   if (v.registryStatus !== 'ACTIVE') return reject('OP-DETERMINACY', 'REGISTRATION_NOT_ACTIVE', 'The commercial registration is not active', { status: v.registryStatus });
   if (v.screeningOutcome !== 'CLEAR') return reject('SH-12', 'SCREENING_NOT_CLEAR', 'Screening did not clear the merchant', { outcome: v.screeningOutcome });

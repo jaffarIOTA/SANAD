@@ -13,8 +13,8 @@ import { tsaInstant } from '@sanad/core/time/tsa.ts';
 
 const at = (s: number) => tsaInstant({ verified: true, genTimeEpochSeconds: BigInt(s), tokenDigest: `t${String(s)}`, authorityId: 'test' });
 const T0 = 1_791_000_000;
-const core = { merchantId: 'mer-1', tenantId: 'bank-a', commercialRegistration: '4030000004', legalNameAr: 'متجر', legalNameEn: 'Store', categoryCode: 'RETAIL', settlementAccountRef: 'hub-ref-1', correlationId: 'c' };
-const clear = { registryLookupRef: 'w-1', registryStatus: 'ACTIVE' as const, screeningResultRef: 's-1', screeningOutcome: 'CLEAR' as const, activityPermitted: true, verifiedBy: 'ops', verifiedAt: at(T0) };
+const core = { merchantId: 'mer-1', tenantId: 'bank-a', commercialRegistration: '4030000004', legalNameAr: 'متجر', legalNameEn: 'Store', categoryCode: 'RETAIL', settlementAccountRef: 'hub-ref-1', onboardedBy: 'stf-maker-01', correlationId: 'c' };
+const clear = { agreementRef: 'AGR-2026-0001', registryLookupRef: 'w-1', registryStatus: 'ACTIVE' as const, screeningResultRef: 's-1', screeningOutcome: 'CLEAR' as const, activityPermitted: true, verifiedBy: 'ops', verifiedAt: at(T0) };
 
 describe('merchant onboarding', () => {
   it('becomes active only on registry, screening and activity evidence', () => {
@@ -29,6 +29,14 @@ describe('merchant onboarding', () => {
     expect(canTransact(suspended)).toBe(false);
     expect(canTransact(reinstate(suspended, at(T0 + 2)))).toBe(true);
     expect(expectOk(close(active, 'ops', 'merchant request', at(T0 + 3))).status).toBe('CLOSED');
+  });
+  it('a store transacts only under an executed contract (SAMA BNPL Rules Art. 27), verified by someone other than whoever onboarded it', () => {
+    const pending = expectOk(beginOnboarding(core, at(T0)));
+    const noContract = verify(pending, { ...clear, agreementRef: ' ' });
+    expect(noContract.ok).toBe(false); if (!noContract.ok) { expect(noContract.error.reason).toBe('MERCHANT_AGREEMENT_REQUIRED'); expect(String(noContract.error.context?.['citation'])).toContain('Art. 27'); }
+    const self = verify(pending, { ...clear, verifiedBy: 'stf-maker-01' });
+    expect(self.ok).toBe(false); if (!self.ok) expect(self.error.reason).toBe('FOUR_EYES_SELF_VERIFICATION');
+    expect(beginOnboarding({ ...core, onboardedBy: '' }, at(T0)).ok).toBe(false);
   });
   it('refuses an account by value and a malformed registration', () => {
     expect(beginOnboarding({ ...core, settlementAccountRef: 'SA0380000000608010167519' }, at(T0)).ok).toBe(false);

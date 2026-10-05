@@ -170,10 +170,24 @@ Ordered by what it costs to guess wrong.
    so the database refuses a second acceptance whoever raced past the check.
    Proven by restart: a checkout session survives, and the same idempotency key
    replays the same session and the same request instead of creating a second.
-   **Still in memory:** half-completed drafts (screen state by design),
-   presented documents (the evidence store, next), merchants (a development
-   fixture until merchant onboarding has a screen). The standalone service and
-   the workbench copy of the routes collapse after that.
+   2026-10-06, migration 0012: presented documents are appended to
+   `evidence.presented_document` in the order presented and never edited, and
+   merchants are rows in `core.merchant` read by both the workbench and the
+   checkout API. **Still in memory:** half-completed drafts (screen state by
+   design) and merchant API credentials (development tokens from the
+   environment). The standalone service and the workbench copy of the routes
+   collapse next.
+19. **Merchants screen** — built 2026-10-06 (`/merchants` in the workbench):
+    onboarding begun by the maker, verified by the checker on a store contract
+    (SAMA BNPL Rules Art. 27), a registry lookup and a screening result;
+    suspend, reinstate and close by a named person with a reason; a chained
+    audit event for each. The domain now refuses a verification by whoever
+    onboarded the merchant, and a verification without a contract reference —
+    the BNPL README had claimed the second before the code enforced it. One
+    commercial registration is one merchant per tenant, by constraint. Walked
+    end to end: a merchant suspended in the workbench is refused by the
+    checkout API on its next call with MERCHANT_NOT_ACTIVE. The registry and
+    screening references are typed until those rails are live.
 2. **R-10** — the internal review API specification. Approve, return and
    reject are deliberately absent from the partner contract; they need their
    own, with their own authentication.
