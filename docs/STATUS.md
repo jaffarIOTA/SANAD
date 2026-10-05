@@ -208,8 +208,17 @@ Ordered by what it costs to guess wrong.
     **Products & modules** area: propose a term-sheet change validated by the
     module's own parser, approve or reject as a different administrator.
     Two development administrators (`adm-dev-01`, `adm-dev-02`) so four eyes
-    can be exercised locally. Next areas in order: Rails & adapters, Staff
-    identity (SSO), Partner entitlements.
+    can be exercised locally.
+16. **Rails & adapters** — built 2026-10-05: `core/config/rails.ts` (the
+    tenant's rail configuration, vendor-free; the adapter catalogue is an
+    input), `adapters/catalogue.ts` (which adapter codes may serve each
+    capability), a rail file per tenant, the resolver
+    (`services/origination/src/rails.ts`) and the admin area, proposing and
+    deciding through the same revision mechanism. Beyond the sandbox a rail
+    is TLS only; a fallback is a different adapter; a base URL carries no
+    path. Not yet consumed by the adapter composition root — the apps still
+    run development ports until a rail goes live. Next: Staff identity (SSO),
+    then Partner entitlements.
 14. **Administration app** — begun 2026-10-03: `apps/admin` (port 3004) with
     the credentials area: sign-in with the platform operations token (sealed
     30-minute session), save or rotate a credential into the vault, list names

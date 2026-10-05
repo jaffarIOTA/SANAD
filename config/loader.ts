@@ -22,12 +22,15 @@ import bankAChecklist from './tenants/bank-a/documents/wasl-distributor.json' wi
 import bankACatalogue from './tenants/bank-a/products/catalogue.json' with { type: 'json' };
 import fintechBCatalogue from './tenants/fintech-b/products/catalogue.json' with { type: 'json' };
 import fintechBChecklist from './tenants/fintech-b/documents/wasl-distributor.json' with { type: 'json' };
+import bankARails from './tenants/bank-a/rails/rails.json' with { type: 'json' };
+import fintechBRails from './tenants/fintech-b/rails/rails.json' with { type: 'json' };
 
 import {
   type StructureDefinition,
   parseStructureDefinition,
 } from '../products/murabaha-scf/structures/definition.ts';
 import { type CreditPolicy, parseCreditPolicy } from '../core/decisioning/policy.ts';
+import { type AdapterCatalogue, type RailsConfiguration, parseRailsConfiguration } from '../core/config/rails.ts';
 import { type OriginationPolicy, parseOriginationPolicy } from '../core/origination/policy.ts';
 import { type DocumentChecklist, parseDocumentChecklist } from '../core/documents/checklist.ts';
 import { type Result, ok, reject } from '../core/kernel/result.ts';
@@ -64,6 +67,16 @@ const PRODUCT_CATALOGUES: Readonly<Record<TenantCode, unknown>> = {
 
 export function loadProductCatalogue(tenant: TenantCode): Result<ProductCatalogue> {
   return parseProductCatalogue(PRODUCT_CATALOGUES[tenant], ISLAMIC_PRODUCT_CODES);
+}
+
+const RAILS: Readonly<Record<TenantCode, unknown>> = {
+  'bank-a': bankARails,
+  'fintech-b': fintechBRails,
+};
+
+/** The rails the tenant consumes, checked against the adapter catalogue the caller supplies (the engine names no vendor). */
+export function loadRailsConfiguration(tenant: TenantCode, allowed: AdapterCatalogue): Result<RailsConfiguration> {
+  return parseRailsConfiguration(RAILS[tenant], allowed);
 }
 
 export function loadOriginationPolicy(tenant: TenantCode): Result<OriginationPolicy> {

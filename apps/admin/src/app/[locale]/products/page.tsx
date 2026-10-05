@@ -111,7 +111,7 @@ export default async function ProductsAdminPage({ params, searchParams }: { read
                 </span>
                 {r.status === 'PROPOSED' ? (
                   <form action={decideRevisionAction} className="flex flex-wrap items-center gap-2">
-                    <input type="hidden" name="locale" value={segment} /><input type="hidden" name="tenant" value={tenantCode} /><input type="hidden" name="revisionId" value={r.id} />
+                    <input type="hidden" name="locale" value={segment} /><input type="hidden" name="tenant" value={tenantCode} /><input type="hidden" name="area" value="products" /><input type="hidden" name="revisionId" value={r.id} />
                     <input name="reason" placeholder={arabic ? 'سبب الرفض' : 'reason, if rejecting'} className={`${FIELD_INPUT} mt-0 h-[38px] w-[220px] text-[14px]`} />
                     <button type="submit" name="decision" value="reject" disabled={r.proposedBy === admin.principalId} className={`${BUTTON_DANGER} h-[38px] px-4 text-[14px] disabled:opacity-40`}>{arabic ? 'رفض' : 'Reject'}</button>
                     <button type="submit" name="decision" value="approve" disabled={r.proposedBy === admin.principalId} className={`${BUTTON_PRIMARY} h-[38px] min-w-0 px-4 text-[14px] disabled:opacity-40`}>{arabic ? 'اعتماد' : 'Approve'}</button>

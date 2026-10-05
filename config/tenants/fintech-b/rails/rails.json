@@ -1,0 +1,117 @@
+{
+  "version": "2026-10-05",
+  "rails": [
+    {
+      "capability": "IDENTITY_AUTHENTICATION",
+      "adapter": "NAFATH",
+      "environment": "sandbox",
+      "enabled": false,
+      "note": "Sandbox credentials not yet issued; adapter on fixtures"
+    },
+    {
+      "capability": "IDENTITY_VERIFICATION",
+      "adapter": "YAKEEN",
+      "environment": "sandbox",
+      "enabled": false
+    },
+    {
+      "capability": "DOCUMENT_VERIFICATION",
+      "adapter": "TAHAQOQ",
+      "environment": "sandbox",
+      "enabled": false,
+      "note": "Service scope to confirm with the provider"
+    },
+    {
+      "capability": "CREDIT_BUREAU",
+      "adapter": "SIMAH",
+      "fallbackAdapter": "BAYAN",
+      "environment": "sandbox",
+      "enabled": false
+    },
+    {
+      "capability": "BUSINESS_REGISTRY",
+      "adapter": "WATHQ",
+      "environment": "sandbox",
+      "enabled": false
+    },
+    {
+      "capability": "EMPLOYMENT_VERIFICATION",
+      "adapter": "GOSI",
+      "environment": "sandbox",
+      "enabled": false
+    },
+    {
+      "capability": "E_INVOICING",
+      "adapter": "ZATCA",
+      "environment": "sandbox",
+      "enabled": false
+    },
+    {
+      "capability": "TAX_COMPLIANCE",
+      "adapter": "ZATCA",
+      "environment": "sandbox",
+      "enabled": false
+    },
+    {
+      "capability": "OPEN_BANKING",
+      "adapter": "OPEN_BANKING",
+      "environment": "sandbox",
+      "enabled": false,
+      "note": "Through the licensed TPP the institution contracts"
+    },
+    {
+      "capability": "BILL_COLLECTION",
+      "adapter": "SADAD",
+      "environment": "sandbox",
+      "enabled": false
+    },
+    {
+      "capability": "PAYMENTS_HUB",
+      "adapter": "PAYMENTS_HUB",
+      "environment": "sandbox",
+      "enabled": false
+    },
+    {
+      "capability": "RATE_PUBLISHER",
+      "adapter": "RATE_PUBLISHER",
+      "environment": "sandbox",
+      "enabled": false
+    },
+    {
+      "capability": "DOCUMENT_PLATFORM",
+      "adapter": "NUTRIENT",
+      "environment": "sandbox",
+      "baseUrl": "http://127.0.0.1:5000",
+      "enabled": true,
+      "note": "Web SDK viewer live; Document Engine awaits an activation key"
+    },
+    {
+      "capability": "CORE_BANKING",
+      "adapter": "TUUM",
+      "environment": "sandbox",
+      "enabled": false,
+      "note": "Sandbox credentials unverified (R-01)"
+    },
+    {
+      "capability": "WORKFLOW_ENGINE",
+      "adapter": "WORKFLOW_ENGINE",
+      "environment": "sandbox",
+      "enabled": false,
+      "note": "In-memory runner until a server is reachable (ADR 0003)"
+    },
+    {
+      "capability": "TIMESTAMP_AUTHORITY",
+      "adapter": "TSA",
+      "environment": "sandbox",
+      "enabled": false,
+      "note": "E-04: no accredited authority procured; development substitute only"
+    },
+    {
+      "capability": "CERTIFICATION_SERVICE_PROVIDER",
+      "adapter": "CSP",
+      "environment": "sandbox",
+      "enabled": false,
+      "note": "BR-G04: provider not yet selected"
+    }
+  ]
+}
