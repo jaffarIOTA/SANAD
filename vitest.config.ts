@@ -14,6 +14,7 @@ export default defineConfig({
       '@sanad/design': dir('./packages/design'),
       '@sanad/i18n': dir('./packages/i18n'),
       '@sanad/auth': dir('./packages/auth'),
+      '@sanad/origination': dir('./services/origination/src'),
       '@sanad/config': dir('./config'),
       '@sanad/products': dir('./products'),
     },

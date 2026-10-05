@@ -44,6 +44,9 @@
       ],
       "@sanad/auth/*": [
         "packages/auth/*"
+      ],
+      "@sanad/origination/*": [
+        "services/origination/src/*"
       ]
     }
   },
