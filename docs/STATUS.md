@@ -217,8 +217,16 @@ Ordered by what it costs to guess wrong.
     deciding through the same revision mechanism. Beyond the sandbox a rail
     is TLS only; a fallback is a different adapter; a base URL carries no
     path. Not yet consumed by the adapter composition root — the apps still
-    run development ports until a rail goes live. Next: Staff identity (SSO),
-    then Partner entitlements.
+    run development ports until a rail goes live.
+17. **Staff identity (SSO) configuration** — built 2026-10-05:
+    `core/config/staff-identity.ts` (provider: SAML, OIDC or a development
+    stand-in that does not parse under a deployed profile; groups → MAKER,
+    the approval tiers, PLATFORM_ADMIN; session lifetime ≤ 1 hour; optional
+    step-up window; no secret accepted in the configuration), a file per
+    tenant, the resolver and the admin area. The admin session lifetime now
+    follows the configuration in force. **Not built:** the SAML/OIDC sign-in
+    handshake itself — it is built when a provider exists to test against.
+    Next: Partner entitlements.
 14. **Administration app** — begun 2026-10-03: `apps/admin` (port 3004) with
     the credentials area: sign-in with the platform operations token (sealed
     30-minute session), save or rotate a credential into the vault, list names

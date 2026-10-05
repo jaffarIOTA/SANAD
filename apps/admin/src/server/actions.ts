@@ -15,6 +15,8 @@ import { railsWithChange, resolveRailsConfiguration } from './rails.ts';
 import { parseRailsConfiguration } from '@sanad/core/config/rails.ts';
 import { ADAPTER_CATALOGUE } from '@sanad/adapters/catalogue.ts';
 import { proposeRevision as proposePure } from '@sanad/core/config/revision.ts';
+import { deploymentProfile, identityFromForm, resolveStaffIdentity } from './identity.ts';
+import { parseStaffIdentity } from '@sanad/core/config/staff-identity.ts';
 import { isTenantCode } from '@sanad/config/loader.ts';
 import { randomUUID } from 'node:crypto';
 import { currentAdmin, developmentPrincipalFor, endAdminSession, startAdminSession } from './session.ts';
@@ -26,7 +28,9 @@ export async function signInAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
   const principal = developmentPrincipalFor(field(form, 'token'));
   if (principal === undefined) return back(`/${locale}`, 'SIGN_IN_REFUSED');
-  await startAdminSession(principal);
+  // The session lifetime is the tenant's staff identity configuration in force, bounded by the session layer.
+  const identity = await resolveStaffIdentity('bank-a', nowEpoch());
+  await startAdminSession(principal, identity.identity.ok ? BigInt(identity.identity.value.sessionLifetimeSeconds) : undefined);
   redirect(`/${locale}/credentials`);
 }
 
@@ -107,7 +111,8 @@ export async function proposeProductChangeAction(form: FormData): Promise<void> 
 export async function decideRevisionAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
   const tenant = field(form, 'tenant');
-  const area = field(form, 'area') === 'rails' ? 'rails' : 'products';
+  const areaField = field(form, 'area');
+  const area = areaField === 'rails' || areaField === 'identity' ? areaField : 'products';
   const to = `/${locale}/${area}?tenant=${encodeURIComponent(tenant)}`;
   const admin = await currentAdmin();
   if (admin === undefined) redirect(`/${locale}`);
@@ -151,6 +156,35 @@ export async function proposeRailChangeAction(form: FormData): Promise<void> {
   if (!checked.ok) return back(to, `REFUSED:${checked.error.reason}`);
   try {
     await proposeRevision(s.pool, { tenantCode: tenant, area: 'RAILS', payload: changed.value.payload, summary, effectiveFromEpochSeconds, proposedBy: admin?.principalId ?? '', correlationId: randomUUID() });
+  } catch { return back(to, 'PROPOSE_FAILED'); }
+  back(to, 'PROPOSED');
+}
+
+export async function proposeIdentityChangeAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'ar';
+  const tenant = field(form, 'tenant');
+  const to = `/${locale}/identity?tenant=${encodeURIComponent(tenant)}`;
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${locale}`);
+  if (!isTenantCode(tenant)) return back(to, 'TENANT_UNKNOWN');
+  const s = store();
+  if (s.kind !== 'READY') return back(to, 'NO_DATABASE');
+  const now = nowEpoch();
+  const effectiveRaw = field(form, 'effectiveFrom');
+  const effectiveMs = effectiveRaw === '' ? Date.now() : Date.parse(effectiveRaw);
+  if (!Number.isFinite(effectiveMs)) return back(to, 'EFFECTIVE_FROM_MALFORMED');
+  const opt = (name: string): string | undefined => { const v = field(form, name); return v === '' ? undefined : v; };
+  // Checked under the profile the form names, so a configuration meant for deployment is refused now, not on deployment day.
+  const profile = field(form, 'profile') === 'DEPLOYED' ? 'DEPLOYED' : deploymentProfile();
+  const metadataUrl = opt('metadataUrl'); const clientId = opt('clientId'); const stepUp = opt('stepUpForApprovalSeconds');
+  const built = identityFromForm({ protocol: field(form, 'protocol'), issuer: field(form, 'issuer'), groupsClaim: field(form, 'groupsClaim'), mappingsText: field(form, 'mappings'), sessionLifetimeSeconds: field(form, 'sessionLifetimeSeconds'), version: field(form, 'version') || new Date(effectiveMs).toISOString().slice(0, 10), ...(metadataUrl === undefined ? {} : { metadataUrl }), ...(clientId === undefined ? {} : { clientId }), ...(stepUp === undefined ? {} : { stepUpForApprovalSeconds: stepUp }) }, profile);
+  if (!built.ok) return back(to, `REFUSED:${built.error.reason}`);
+  const summary = field(form, 'summary');
+  const effectiveFromEpochSeconds = BigInt(Math.floor(effectiveMs / 1000));
+  const checked = proposePure({ id: randomUUID(), tenantId: tenant, area: 'STAFF_IDENTITY', rawPayload: built.value.payload, summary, effectiveFromEpochSeconds, proposedBy: admin?.principalId ?? '', proposedAtEpochSeconds: now, parse: (raw) => parseStaffIdentity(raw, profile) });
+  if (!checked.ok) return back(to, `REFUSED:${checked.error.reason}`);
+  try {
+    await proposeRevision(s.pool, { tenantCode: tenant, area: 'STAFF_IDENTITY', payload: built.value.payload, summary, effectiveFromEpochSeconds, proposedBy: admin?.principalId ?? '', correlationId: randomUUID() });
   } catch { return back(to, 'PROPOSE_FAILED'); }
   back(to, 'PROPOSED');
 }

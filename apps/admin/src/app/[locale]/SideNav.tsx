@@ -13,7 +13,7 @@ export const AREAS: readonly Area[] = [
   { id: 'credentials', href: '/credentials', icon: 'shield-check', en: 'Credentials', ar: 'بيانات الاعتماد', state: 'LIVE' },
   { id: 'products', href: '/products', icon: 'store', en: 'Products & modules', ar: 'المنتجات والوحدات', state: 'LIVE' },
   { id: 'rails', href: '/rails', icon: 'plug', en: 'Rails & adapters', ar: 'قنوات التكامل', state: 'LIVE' },
-  { id: 'identity', icon: 'settings', en: 'Staff identity (SSO)', ar: 'هوية الموظفين (الدخول الموحّد)', state: 'NOT_BUILT' },
+  { id: 'identity', href: '/identity', icon: 'settings', en: 'Staff identity (SSO)', ar: 'هوية الموظفين (الدخول الموحّد)', state: 'LIVE' },
   { id: 'partners', icon: 'document', en: 'Partner entitlements', ar: 'صلاحيات الشركاء', state: 'NOT_BUILT' },
 ];
 

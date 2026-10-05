@@ -24,6 +24,8 @@ import fintechBCatalogue from './tenants/fintech-b/products/catalogue.json' with
 import fintechBChecklist from './tenants/fintech-b/documents/wasl-distributor.json' with { type: 'json' };
 import bankARails from './tenants/bank-a/rails/rails.json' with { type: 'json' };
 import fintechBRails from './tenants/fintech-b/rails/rails.json' with { type: 'json' };
+import bankAIdentity from './tenants/bank-a/identity/staff-identity.json' with { type: 'json' };
+import fintechBIdentity from './tenants/fintech-b/identity/staff-identity.json' with { type: 'json' };
 
 import {
   type StructureDefinition,
@@ -31,6 +33,7 @@ import {
 } from '../products/murabaha-scf/structures/definition.ts';
 import { type CreditPolicy, parseCreditPolicy } from '../core/decisioning/policy.ts';
 import { type AdapterCatalogue, type RailsConfiguration, parseRailsConfiguration } from '../core/config/rails.ts';
+import { type DeploymentProfile, type StaffIdentityConfiguration, parseStaffIdentity } from '../core/config/staff-identity.ts';
 import { type OriginationPolicy, parseOriginationPolicy } from '../core/origination/policy.ts';
 import { type DocumentChecklist, parseDocumentChecklist } from '../core/documents/checklist.ts';
 import { type Result, ok, reject } from '../core/kernel/result.ts';
@@ -77,6 +80,15 @@ const RAILS: Readonly<Record<TenantCode, unknown>> = {
 /** The rails the tenant consumes, checked against the adapter catalogue the caller supplies (the engine names no vendor). */
 export function loadRailsConfiguration(tenant: TenantCode, allowed: AdapterCatalogue): Result<RailsConfiguration> {
   return parseRailsConfiguration(RAILS[tenant], allowed);
+}
+
+const STAFF_IDENTITY: Readonly<Record<TenantCode, unknown>> = {
+  'bank-a': bankAIdentity,
+  'fintech-b': fintechBIdentity,
+};
+
+export function loadStaffIdentity(tenant: TenantCode, profile: DeploymentProfile): Result<StaffIdentityConfiguration> {
+  return parseStaffIdentity(STAFF_IDENTITY[tenant], profile);
 }
 
 export function loadOriginationPolicy(tenant: TenantCode): Result<OriginationPolicy> {

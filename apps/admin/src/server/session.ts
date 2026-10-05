@@ -16,7 +16,9 @@ import { type SealKey, deriveSealKey, ephemeralMasterSecret, open, seal } from '
 export interface AdminPrincipal { readonly principalId: string; readonly role: 'PLATFORM_ADMIN' }
 
 const COOKIE = 'sanad_admin';
+/** The default when no staff identity configuration says otherwise; the ceiling is the configuration's own. */
 export const ADMIN_SESSION_SECONDS = 1_800n;
+const ADMIN_SESSION_CEILING = 3_600n;
 
 interface KeyState { key?: SealKey }
 const keyState: KeyState = ((globalThis as { __sanadAdminKey?: KeyState }).__sanadAdminKey ??= {});
@@ -56,15 +58,17 @@ export async function currentAdmin(): Promise<AdminPrincipal | undefined> {
   const jar = await cookies();
   const raw = jar.get(COOKIE)?.value;
   if (raw === undefined) return undefined;
-  const opened = open(raw, sealKey(), now(), ADMIN_SESSION_SECONDS, isPayload);
+  const opened = open(raw, sealKey(), now(), ADMIN_SESSION_CEILING, isPayload);
   return opened.kind === 'VALID' ? { principalId: opened.value.payload.p, role: 'PLATFORM_ADMIN' } : undefined;
 }
 
-export async function startAdminSession(principalId: string): Promise<void> {
+/** `lifetimeSeconds` comes from the tenant's staff identity configuration in force; it is bounded here regardless. */
+export async function startAdminSession(principalId: string, lifetimeSeconds: bigint = ADMIN_SESSION_SECONDS): Promise<void> {
+  const life = lifetimeSeconds <= 0n ? ADMIN_SESSION_SECONDS : lifetimeSeconds > ADMIN_SESSION_CEILING ? ADMIN_SESSION_CEILING : lifetimeSeconds;
   const issued = now();
-  const token = seal({ payload: { p: principalId, r: 'PLATFORM_ADMIN' }, issuedAtEpochSeconds: issued, expiresAtEpochSeconds: issued + ADMIN_SESSION_SECONDS }, sealKey());
+  const token = seal({ payload: { p: principalId, r: 'PLATFORM_ADMIN' }, issuedAtEpochSeconds: issued, expiresAtEpochSeconds: issued + life }, sealKey());
   const jar = await cookies();
-  jar.set(COOKIE, token, { httpOnly: true, sameSite: 'strict', secure: process.env['NODE_ENV'] === 'production', path: '/', maxAge: Number(ADMIN_SESSION_SECONDS) });
+  jar.set(COOKIE, token, { httpOnly: true, sameSite: 'strict', secure: process.env['NODE_ENV'] === 'production', path: '/', maxAge: Number(life) });
 }
 
 export async function endAdminSession(): Promise<void> {
