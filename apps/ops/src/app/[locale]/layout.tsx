@@ -17,7 +17,7 @@ import { Icon } from '@sanad/design/icons.tsx';
 import { LOCALE_SEGMENTS, htmlLang, isRtl, localeFromSegment, type LocaleSegment } from '@sanad/i18n/strings.ts';
 import { HeaderTitle } from './HeaderTitle.tsx';
 import { BottomNav, SideNav } from './SideNav.tsx';
-import { developmentAttestation, syncOriginationPolicy } from '../../server/store.ts';
+import { developmentAttestation, syncOriginationPolicy, syncStore } from '../../server/store.ts';
 import '../globals.css';
 
 export const metadata = { title: 'Sanad — Operations', description: 'Origination and review' };
@@ -33,6 +33,8 @@ export default async function OpsLayout({ children, params }: { readonly childre
   const arabic = locale === 'ar-SA';
   // The policy the workbench acts under is the approved revision in force at this moment.
   await syncOriginationPolicy(developmentAttestation().epochSeconds);
+  // The request book is loaded from the database once per process, and anything changed is written before the page reads it.
+  await syncStore();
 
   const search = (
     <form action={`/${segment}`} method="get" role="search" className="w-full lg:w-[255px]">

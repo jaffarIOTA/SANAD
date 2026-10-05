@@ -209,7 +209,7 @@ Rules for every rail:
 | API gateway | IBM API Connect / DataPower | Integration layer; services stay independent of it. See §8. |
 | Services | Node + TypeScript | One language across the stack. |
 | Cache | Redis | Freshness windows, limit reservations, idempotency keys. |
-| Database | PostgreSQL | Supabase for development only; in-Kingdom PostgreSQL from UAT (ADR 0001). **The in-memory stores are to be replaced now**, not later. |
+| Database | PostgreSQL | Supabase for development and UAT, synthetic data only (ADR 0004, amending ADR 0001); in-Kingdom PostgreSQL for production. **The in-memory stores are to be replaced now**, not later. |
 | Workflow | Durable workflow engine, **to be selected in the first week** (Temporal or equivalent) | Multi-day origination and Murabaha sequencing both need it. |
 | Secrets | Vault (Supabase Vault in development, in-Kingdom HSM-backed store in production) | See §7. |
 
@@ -225,8 +225,10 @@ Rules for every rail:
 - Credentials are stored via `config.set_integration_credential()` and read server-side
   via `config.get_integration_credential()`; every read is audited. Never commit, log,
   or return a key. See `docs/SAVING-CREDENTIALS.md`.
-- All customer data is processed and stored in-Kingdom in every non-development
-  environment (SAMA cloud and outsourcing rules, PDPL, NDMO). Residency is a
+- All customer data is processed and stored in-Kingdom (SAMA cloud and outsourcing
+  rules, PDPL, NDMO). Development and UAT run on Supabase outside the Kingdom and
+  therefore hold **synthetic data only** (ADR 0004); an environment that must hold
+  customer data is an in-Kingdom deployment. Residency is a
   `config.deployment_profile` property, asserted by a test.
 
 ---

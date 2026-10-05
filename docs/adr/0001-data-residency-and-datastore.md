@@ -28,6 +28,11 @@ platform that cannot be deployed.
 **Supabase is a development and design-partner datastore only. It is not the production
 datastore, and it is not the UAT datastore.**
 
+> **Amended 2026-10-05 by ADR 0004.** By decision of the product owner, Supabase is the
+> datastore for development **and UAT**, on the condition that UAT holds synthetic data
+> only. Production remains in-Kingdom PostgreSQL with a customer-managed HSM, as decided
+> here. Everything else in this ADR stands.
+
 The production deployment is self-hosted PostgreSQL in an in-Kingdom region, inside the
 same trust boundary as the application — the same position already taken for the document
 platform, for the same reason (SDD §4.8).

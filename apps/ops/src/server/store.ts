@@ -48,6 +48,8 @@ import { loadOriginationPolicy } from '@sanad/config/loader.ts';
 import type { OriginationPolicy } from '@sanad/core/origination/policy.ts';
 import { resolveOriginationPolicy } from '@sanad/origination/origination-policy.ts';
 
+import { type PersistedRequest, loadRequests, persistencePool, persistenceUrl, saveRequests } from './persistence.ts';
+
 /**
  * The tenant's intake policy. The checked-in file loads once at start-up (a
  * malformed file throws here rather than silently defaulting a limit away);
@@ -108,6 +110,10 @@ interface DevelopmentState {
   readonly financed: Map<string, string>;
   sequence: number;
   seeded: boolean;
+  /** Requests changed since the last write to the database. Optional: a state kept across hot reloads may predate it. */
+  dirty?: Set<string>;
+  /** Whether the book has been loaded from the database in this process. */
+  hydrated?: boolean;
 }
 
 /**
@@ -146,6 +152,17 @@ const state: DevelopmentState = (globalScope[GLOBAL_KEY] ??= {
 });
 
 const REQUESTS = state.requests;
+
+/**
+ * Every write to the book goes through here, so the request is marked for
+ * the database as well as held in the working set. `flushStore()` writes the
+ * marked ones; nothing else writes `REQUESTS`.
+ */
+function putRequest(requestId: string, request: OriginationRequest): void {
+  REQUESTS.set(requestId, request);
+  state.dirty ??= new Set<string>();
+  state.dirty.add(requestId);
+}
 
 function nextRequestId(): string {
   state.sequence += 1;
@@ -345,7 +362,7 @@ export function keyRequest(input: KeyRequestInput): Result<RequestRow> {
 
   INVOICE_NUMBERS.set(requestId, input.invoiceNumber);
   if (input.partnerReference !== undefined) state.partnerReferences.set(requestId, input.partnerReference);
-  REQUESTS.set(requestId, keyed.value);
+  putRequest(requestId,keyed.value);
   return ok(toRow(requestId, keyed.value));
 }
 
@@ -356,7 +373,7 @@ export function submit(requestId: string): Result<RequestRow> {
   const next = submitForReview(current as Keying, developmentAttestation());
   if (!next.ok) return next;
 
-  REQUESTS.set(requestId, next.value);
+  putRequest(requestId,next.value);
   return ok(toRow(requestId, next.value));
 }
 
@@ -378,7 +395,7 @@ export function applyServicingOutcome(
   const next = recordServicingOutcome(current as AwaitingServicingResponse, outcome);
   if (!next.ok) return next;
 
-  REQUESTS.set(requestId, next.value);
+  putRequest(requestId,next.value);
   return ok(toRow(requestId, next.value));
 }
 
@@ -399,7 +416,7 @@ export function approveRequest(
   );
   if (!next.ok) return next;
 
-  REQUESTS.set(requestId, next.value);
+  putRequest(requestId,next.value);
   return ok(toRow(requestId, next.value));
 }
 
@@ -414,7 +431,7 @@ export function returnRequest(
   const next = returnToMaker(current as AwaitingReview, reviewer, note);
   if (!next.ok) return next;
 
-  REQUESTS.set(requestId, next.value);
+  putRequest(requestId,next.value);
   return ok(toRow(requestId, next.value));
 }
 
@@ -429,7 +446,7 @@ export function declineRequest(
   const next = rejectRequest(current as AwaitingReview, reviewer, reasonCode);
   if (!next.ok) return next;
 
-  REQUESTS.set(requestId, next.value);
+  putRequest(requestId,next.value);
   return ok(toRow(requestId, next.value));
 }
 
@@ -449,7 +466,7 @@ export function expireOverdue(observedAt: TsaInstant): readonly string[] {
     ) continue;
     const result = expire(request, originationPolicy(), observedAt);
     if (result.ok) {
-      REQUESTS.set(requestId, result.value);
+      putRequest(requestId,result.value);
       expired.push(requestId);
     }
   }
@@ -463,7 +480,7 @@ export function requestInformation(requestId: string, reviewer: Principal, from:
   if (current?.state !== 'AWAITING_REVIEW') return notInState(requestId, 'AWAITING_REVIEW');
   const next = requestInformationTransition(current as AwaitingReview, reviewer, from, items, developmentAttestation());
   if (!next.ok) return next;
-  REQUESTS.set(requestId, next.value);
+  putRequest(requestId,next.value);
   return ok(toRow(requestId, next.value));
 }
 
@@ -471,7 +488,7 @@ export function provideInformation(requestId: string): Result<RequestRow> {
   const current = REQUESTS.get(requestId);
   if (current?.state !== 'PENDING_INFORMATION') return notInState(requestId, 'PENDING_INFORMATION');
   const next = provideInformationTransition(current as PendingInformation, developmentAttestation());
-  REQUESTS.set(requestId, next);
+  putRequest(requestId,next);
   return ok(toRow(requestId, next));
 }
 
@@ -481,7 +498,7 @@ export function failServicing(requestId: string, reason: string): Result<Request
   if (current?.state !== 'AWAITING_SERVICING_RESPONSE' && current?.state !== 'SERVICING_UNAVAILABLE') return notInState(requestId, 'AWAITING_SERVICING_RESPONSE');
   const next = recordServicingFailure(current as AwaitingServicingResponse | ServicingUnavailable, developmentAttestation(), reason);
   if (!next.ok) return next;
-  REQUESTS.set(requestId, next.value);
+  putRequest(requestId,next.value);
   return ok(toRow(requestId, next.value));
 }
 
@@ -490,7 +507,7 @@ export function retryServicing(requestId: string, manual?: { readonly by: Princi
   if (current?.state !== 'SERVICING_UNAVAILABLE') return notInState(requestId, 'SERVICING_UNAVAILABLE');
   const next = retryServicingTransition(current as ServicingUnavailable, developmentAttestation(), originationPolicy(), manual);
   if (!next.ok) return next;
-  REQUESTS.set(requestId, next.value);
+  putRequest(requestId,next.value);
   return ok(toRow(requestId, next.value));
 }
 
@@ -505,7 +522,7 @@ export function reviseAndResubmit(requestId: string, patch: { readonly programme
   };
   const next = resubmit(current as ReturnedToMaker, revised, developmentAttestation(), originationPolicy());
   if (!next.ok) return next;
-  REQUESTS.set(requestId, next.value);
+  putRequest(requestId,next.value);
   return ok(toRow(requestId, next.value));
 }
 
@@ -671,7 +688,9 @@ const SEEDS: readonly Seed[] = [
   },
 ];
 
-if (!state.seeded) {
+/** The development book: six requests in the states the screens need to demonstrate. */
+function seedDevelopmentBook(): void {
+  if (state.seeded) return;
   state.seeded = true;
 
   for (const seed of SEEDS) {
@@ -716,3 +735,74 @@ if (!state.seeded) {
     }
   }
 }
+
+// -- Durability ---------------------------------------------------------------
+
+const TENANT_CODE = 'bank-a';
+
+/** Where the book lives: the database when one is configured, this process's memory otherwise. */
+export const storeBacking = (): 'POSTGRESQL' | 'MEMORY' => (persistenceUrl() === undefined ? 'MEMORY' : 'POSTGRESQL');
+
+/**
+ * Writes every request changed since the last flush, in one transaction.
+ * Called before a response that reports a change is sent: by `syncStore()`
+ * on every page render, and directly by the actions and routes that mutate.
+ * A failed write keeps the requests marked, so the next flush retries them,
+ * and rethrows so the caller does not report a change that is not durable.
+ */
+export async function flushStore(): Promise<void> {
+  const pool = persistencePool();
+  const dirty = state.dirty;
+  if (pool === undefined || dirty === undefined || dirty.size === 0) return;
+  const ids = [...dirty];
+  const records = ids.flatMap((requestId) => {
+    const request = REQUESTS.get(requestId);
+    if (request === undefined) return [];
+    const invoiceNumber = state.invoiceNumbers.get(requestId);
+    const partnerReference = state.partnerReferences.get(requestId);
+    return [{ requestId, request, ...(invoiceNumber === undefined ? {} : { invoiceNumber }), ...(partnerReference === undefined ? {} : { partnerReference }) }];
+  });
+  await saveRequests(pool, TENANT_CODE, records);
+  for (const id of ids) dirty.delete(id);
+}
+
+/**
+ * Loads the tenant's book from the database once per process. An empty
+ * database is seeded with the development book, which is then written to it,
+ * so a first start and every later start show the same requests.
+ */
+async function hydrateStore(): Promise<void> {
+  if (state.hydrated === true) return;
+  const pool = persistencePool();
+  if (pool === undefined) return;
+  const persisted = await loadRequests(pool, TENANT_CODE);
+  if (persisted.length === 0) {
+    seedDevelopmentBook();
+  } else {
+    state.seeded = true;
+    for (const record of persisted) restore(record);
+  }
+  state.hydrated = true;
+}
+
+/** Puts one stored request back into the working set, with the things derived from it. */
+function restore(record: PersistedRequest): void {
+  REQUESTS.set(record.requestId, record.request);
+  if (record.invoiceNumber !== undefined) state.invoiceNumbers.set(record.requestId, record.invoiceNumber);
+  if (record.partnerReference !== undefined) state.partnerReferences.set(record.requestId, record.partnerReference);
+  // SH-10: the registry is rebuilt from the book, so an invoice financed before a restart is still refused after it.
+  const trade = record.request.core.tradeReference;
+  if (trade.type === 'CLEARED_INVOICE' && trade.invoiceUuid !== undefined) state.financed.set(trade.invoiceUuid, record.requestId);
+  // The id sequence continues from the highest number already issued.
+  const numbered = /^req_(\d+)$/.exec(record.requestId);
+  if (numbered !== null) state.sequence = Math.max(state.sequence, Number.parseInt(numbered[1] ?? '0', 10));
+}
+
+/** Brings the working set and the database into step. Awaited by the layout before any page reads the book. */
+export async function syncStore(): Promise<void> {
+  await hydrateStore();
+  await flushStore();
+}
+
+// Without a database the book is this process's memory, seeded at load as it always was.
+if (persistenceUrl() === undefined) seedDevelopmentBook();

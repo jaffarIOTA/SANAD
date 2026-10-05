@@ -27,7 +27,7 @@ import { fromRejection, problem } from '@sanad/origination/problem.ts';
 import { toWire, type RaiseRequestBody } from '@sanad/origination/representation.ts';
 
 import { MAKER } from '../../../../../server/session.ts';
-import { keyRequest, listPartnerRequests, submit, findPartnerRequest } from '../../../../../server/store.ts';
+import { flushStore, keyRequest, listPartnerRequests, submit, findPartnerRequest, syncStore } from '../../../../../server/store.ts';
 
 const validateRaise = validatorFor('RaiseRequest');
 
@@ -52,6 +52,8 @@ export async function POST(request: Request): Promise<Response> {
     return refuse(problem({ status: 400, kind: 'malformed-request', title: 'Malformed request', detail: 'A state-changing request requires an Idempotency-Key header carrying a UUID.', reason: 'IDEMPOTENCY_KEY_MISSING', correlationId }));
   }
 
+  // The book is loaded from the database before it is read or written; a call may arrive before any page has rendered.
+  await syncStore();
   const raw = await request.text();
   const reservation = await idempotency.reserve({ tenantId: principal.tenantId, partnerId: principal.partnerId, key, fingerprint: fingerprint('POST', '/requests', raw) });
   if (reservation.kind === 'REPLAY') return json(reservation.response.status, reservation.response.body, correlationId, { 'idempotent-replay': 'true' });
@@ -115,6 +117,8 @@ export async function POST(request: Request): Promise<Response> {
   if (stored === undefined) return finish(500, problem({ status: 500, title: 'Internal error', detail: 'Quote the correlation identifier.', reason: 'INTERNAL', correlationId }));
 
   const wire = toWire(stored.request, stored.partnerReference);
+  // Durable before it is acknowledged: the partner is told 201 only once the request is in the database.
+  await flushStore();
   await idempotency.complete({ tenantId: principal.tenantId, partnerId: principal.partnerId, key, response: { status: 201, body: wire } });
   return json(201, wire, correlationId, { location: `/api/origination/v1/requests/${keyed.value.requestId}` });
 }
@@ -124,6 +128,7 @@ export async function GET(request: Request): Promise<Response> {
   const principal = principalOr401(request, correlationId);
   if (principal instanceof Response) return principal;
 
+  await syncStore();
   const items = listPartnerRequests(principal.partnerId).map((r) => toWire(r.request, r.partnerReference));
   return json(200, { items, nextCursor: null }, correlationId);
 }

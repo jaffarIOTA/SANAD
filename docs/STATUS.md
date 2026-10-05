@@ -117,7 +117,7 @@ dropped silently.
 | **Production gateway** | The bank's own DataPower on their OpenShift. We neither host nor pay for it. |
 | **Cluster** | The bank's **on-premises** OpenShift, in-Kingdom. This removed the Azure region timing from the critical path. |
 | **Deployment model** | Sanad is a **product**: our cloud first, then each buying institution's own cluster. |
-| **Datastore** | Supabase is development only. In-Kingdom PostgreSQL from UAT (ADR 0001). |
+| **Datastore** | Supabase for development **and UAT**, synthetic data only (ADR 0004, 2026-10-05, amending ADR 0001). In-Kingdom PostgreSQL with a customer-managed HSM for production. |
 | **Contract format** | OpenAPI 3.1 stays the source of truth; a 3.0 artefact is generated for the gateway. |
 | **Charter** | Product-agnostic origination engine with product modules; rates, APR, amount-first journeys and Tawarruq allowed by decision; the no-rate rule scoped to the Murabaha module (ADR 0002). |
 | **Workflow engine** | Temporal, self-hosted on the institution's OpenShift, behind `core/ports/workflow.ts` (ADR 0003). Adapter not yet built. |
@@ -155,10 +155,18 @@ Ordered by what it costs to guess wrong.
 
 ### Buildable now, nothing blocking
 
-1. **The repository split.** Worked around for development by hosting the
-   partner API inside the workbench, so every channel lands in one queue. The
-   standalone service still holds its own in-memory store; both collapse onto
-   the database, and the workbench copy of the routes goes at that point.
+1. **The repository split** — first half done 2026-10-05: the workbench's
+   request book is on PostgreSQL (`core.origination_request`, migrations 0006
+   and 0010) when `SANAD_DATABASE_URL` is set. The store keeps its synchronous
+   working set and `apps/ops/src/server/persistence.ts` makes it durable: one
+   load per process, every change written in a transaction before the response
+   that reports it. Proven by restart: a decision and a partner request both
+   survive, the id sequence continues, the SH-10 registry is rebuilt from the
+   book, and an API call works before any page has rendered. **Still in
+   memory:** half-completed drafts (screen state by design), presented
+   documents (the evidence store), the partner API's idempotency ledger in the
+   workbench, and the consumer app's offers and checkout sessions. The
+   standalone service and the workbench copy of the routes collapse next.
 2. **R-10** — the internal review API specification. Approve, return and
    reject are deliberately absent from the partner contract; they need their
    own, with their own authentication.
@@ -274,9 +282,20 @@ Recorded so they read as decisions rather than omissions.
 
 Worth stating plainly, because a green test suite can flatter.
 
-- **The database is local only.** A local Supabase stack (Docker) carries the schema and
-  the vault for development; the apps still run their in-memory request stores
-  until the repository split lands them on PostgreSQL.
+- **The database in use is the local one.** A local Supabase stack (Docker) carries the
+  schema, the vault, the configuration revisions and the workbench's request book. The
+  hosted project chosen for development and UAT (ADR 0004) has no migrations applied yet:
+  its direct host is IPv6-only and unreachable from the development machine, and its
+  Session pooler connection string has not been supplied. `npm run db:push` applies all
+  ten migrations once `SANAD_DATABASE_URL` points at it.
+- **The invariant-guard hook did not see most of October's code.** It fires on the Write
+  and Edit tools; a long stretch of this build was written through the shell. A
+  retroactive run of the hook over all 298 source files found no credential, no table in
+  the exposed schema and no floating-point money or rate. It flags five fields whose
+  names begin with `instalment` and are counts, ordinals or intervals rather than money
+  (`instalmentCount`, `instalmentNo`, `instalments`, `instalmentIntervalDays`), three of
+  which predate October. They are the hook's name-based rule meeting a non-money number;
+  the hook's own guidance is to rename them, and that decision is open.
 - **There is no timestamping authority.** A development substitute produces
   attestations, clearly named so it is obvious in a diff. Nothing it produces
   may feed a gate in a deployed environment.

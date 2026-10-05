@@ -29,7 +29,9 @@
     "dev:outbox": "node --experimental-strip-types services/outbox/src/index.ts",
     "nutrient:assets": "node scripts/nutrient-assets.mjs",
     "nutrient:samples": "node scripts/nutrient-samples.mjs",
-    "dev:admin": "next dev apps/admin --port 3004"
+    "dev:admin": "next dev apps/admin --port 3004",
+    "db:push": "supabase db push --db-url \"$SANAD_DATABASE_URL\"",
+    "db:start": "supabase start"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

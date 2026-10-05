@@ -1,7 +1,7 @@
 import { toWire } from '@sanad/origination/representation.ts';
 import { problem } from '@sanad/origination/problem.ts';
 
-import { findPartnerRequest } from '../../../../../../server/store.ts';
+import { findPartnerRequest, syncStore } from '../../../../../../server/store.ts';
 import { correlation, principalOr401 } from '../../shared.ts';
 
 export async function GET(request: Request, context: { params: Promise<{ requestId: string }> }): Promise<Response> {
@@ -10,6 +10,7 @@ export async function GET(request: Request, context: { params: Promise<{ request
   if (principal instanceof Response) return principal;
 
   const { requestId } = await context.params;
+  await syncStore();
   const stored = findPartnerRequest(requestId, principal.partnerId);
   const headers = { 'x-correlation-id': correlationId, 'cache-control': 'no-store' };
   if (stored === undefined) {

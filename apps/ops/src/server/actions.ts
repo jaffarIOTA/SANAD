@@ -33,6 +33,7 @@ import {
   reviseAndResubmit,
   financedInvoices,
   findDraft,
+  flushStore,
   startDraft,
   updateDraft,
   approveRequest,
@@ -44,7 +45,14 @@ import {
 
 const field = (form: FormData, name: string): string => String(form.get(name) ?? '').trim();
 
-function refresh(locale: string, requestId?: string): void {
+/**
+ * Every action that changed the book ends here before it redirects: the
+ * change is written to the database first, so the page the browser is sent to
+ * never reports something that is not durable. A failed write throws, and the
+ * action fails rather than redirecting to a success.
+ */
+async function settle(locale: string, requestId?: string): Promise<void> {
+  await flushStore();
   revalidatePath(`/${locale}`);
   revalidatePath(`/${locale}/originate`);
   if (requestId !== undefined) revalidatePath(`/${locale}/requests/${requestId}`);
@@ -86,7 +94,7 @@ export async function servicingRespondAction(form: FormData): Promise<void> {
     failTo(`/${locale}/requests/${requestId}`, result.error.control, result.error.detail);
   }
 
-  refresh(locale, requestId);
+  await settle(locale, requestId);
   redirect(`/${locale}/requests/${requestId}`);
 }
 
@@ -104,7 +112,7 @@ export async function approveAction(form: FormData): Promise<void> {
     failTo(`/${locale}/requests/${requestId}`, result.error.control, result.error.detail);
   }
 
-  refresh(locale, requestId);
+  await settle(locale, requestId);
   redirect(`/${locale}/requests/${requestId}`);
 }
 
@@ -117,7 +125,7 @@ export async function returnAction(form: FormData): Promise<void> {
     failTo(`/${locale}/requests/${requestId}`, result.error.control, result.error.detail);
   }
 
-  refresh(locale, requestId);
+  await settle(locale, requestId);
   redirect(`/${locale}/requests/${requestId}`);
 }
 
@@ -130,7 +138,7 @@ export async function rejectAction(form: FormData): Promise<void> {
     failTo(`/${locale}/requests/${requestId}`, result.error.control, result.error.detail);
   }
 
-  refresh(locale, requestId);
+  await settle(locale, requestId);
   redirect(`/${locale}/requests/${requestId}`);
 }
 
@@ -264,7 +272,7 @@ export async function submitDraftAction(form: FormData): Promise<void> {
   }
 
   discardDraft(draftId);
-  refresh(locale, keyed.value.requestId);
+  await settle(locale, keyed.value.requestId);
   redirect(`/${locale}/requests/${keyed.value.requestId}`);
 }
 
@@ -287,7 +295,7 @@ export async function expireOverdueAction(form: FormData): Promise<void> {
       authorityId: 'development',
     }),
   );
-  refresh(locale);
+  await settle(locale);
   redirect(`/${locale}/queue?show=${expired.length > 0 ? 'decided' : 'breached'}&expired=${String(expired.length)}`);
 }
 
@@ -302,7 +310,7 @@ export async function requestInformationAction(form: FormData): Promise<void> {
   const items = field(form, 'items').split('\n').map((i) => i.trim()).filter((i) => i.length > 0);
   const result = requestInformation(requestId, CHECKER, field(form, 'from') as 'COUNTERPARTY' | 'PARTNER' | 'DOCUMENTS', items);
   if (!result.ok) failTo(back(locale, requestId), result.error.control, result.error.detail);
-  refresh(locale, requestId); redirect(back(locale, requestId));
+  await settle(locale, requestId); redirect(back(locale, requestId));
 }
 
 export async function provideInformationAction(form: FormData): Promise<void> {
@@ -310,7 +318,7 @@ export async function provideInformationAction(form: FormData): Promise<void> {
   const requestId = field(form, 'requestId');
   const result = provideInformation(requestId);
   if (!result.ok) failTo(back(locale, requestId), result.error.control, result.error.detail);
-  refresh(locale, requestId); redirect(back(locale, requestId));
+  await settle(locale, requestId); redirect(back(locale, requestId));
 }
 
 /** Development stand-in for the adapter reporting the platform unreachable. */
@@ -319,7 +327,7 @@ export async function failServicingAction(form: FormData): Promise<void> {
   const requestId = field(form, 'requestId');
   const result = failServicing(requestId, field(form, 'reason') || 'simulated: platform unreachable');
   if (!result.ok) failTo(back(locale, requestId), result.error.control, result.error.detail);
-  refresh(locale, requestId); redirect(back(locale, requestId));
+  await settle(locale, requestId); redirect(back(locale, requestId));
 }
 
 export async function retryServicingAction(form: FormData): Promise<void> {
@@ -328,7 +336,7 @@ export async function retryServicingAction(form: FormData): Promise<void> {
   const note = field(form, 'note');
   const result = retryServicing(requestId, field(form, 'mode') === 'manual' ? { by: CHECKER, note } : undefined);
   if (!result.ok) failTo(back(locale, requestId), result.error.control, result.error.detail);
-  refresh(locale, requestId); redirect(back(locale, requestId));
+  await settle(locale, requestId); redirect(back(locale, requestId));
 }
 
 export async function reviseAction(form: FormData): Promise<void> {
@@ -340,12 +348,12 @@ export async function reviseAction(form: FormData): Promise<void> {
     ...(Number.isFinite(tenor) && tenor > 0 ? { tenorDays: tenor } : {}),
   });
   if (!result.ok) failTo(back(locale, requestId), result.error.control, result.error.detail);
-  refresh(locale, requestId); redirect(back(locale, requestId));
+  await settle(locale, requestId); redirect(back(locale, requestId));
 }
 
 export async function attachDocumentAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'en';
   const requestId = field(form, 'requestId');
   attachDocument(requestId, field(form, 'documentType'));
-  refresh(locale, requestId); redirect(back(locale, requestId));
+  await settle(locale, requestId); redirect(back(locale, requestId));
 }

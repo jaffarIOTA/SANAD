@@ -80,12 +80,15 @@ export function postgresRequestRepository(config: PoolConfig | Pool): RequestRep
     async list({ tenantId, partnerId, states, cursor, limit }): Promise<Page> {
       const before = cursor === undefined ? null : Number.parseInt(cursor, 10);
       const { rows } = await pool.query<Row>(
-        `select request_id, tenant_id, partner_id, request, partner_reference, sequence::text
-           from core.origination_request
-          where tenant_id = $1 and partner_id = $2
-            and ($3::text[] is null or state = any($3::text[]))
-            and ($4::bigint is null or sequence < $4::bigint)
-          order by sequence desc
+        // The ORDER BY names the table's column. A bare `sequence` there resolves to the
+        // output column, which is the text cast, and text sorts '8' above '23': the feed
+        // came back out of order from the tenth row on.
+        `select r.request_id, r.tenant_id, r.partner_id, r.request, r.partner_reference, r.sequence::text as sequence
+           from core.origination_request r
+          where r.tenant_id = $1 and r.partner_id = $2
+            and ($3::text[] is null or r.state = any($3::text[]))
+            and ($4::bigint is null or r.sequence < $4::bigint)
+          order by r.sequence desc
           limit $5`,
         [tenantId, partnerId, states ?? null, Number.isFinite(before) ? before : null, limit + 1],
       );

@@ -5,6 +5,8 @@
  * 0006 applied. Without it the suite reports itself skipped rather than
  * green — a store that has never touched a database is not a tested store.
  */
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import { loadOriginationPolicy } from '@sanad/config/loader.ts';
@@ -37,7 +39,17 @@ describe.skipIf(url === undefined)('PostgreSQL store (SANAD_TEST_DATABASE_URL)',
     expect(await repo.find(TENANT, 'partner-other', id)).toBeUndefined();
     const page = await repo.list({ tenantId: TENANT, partnerId: 'partner-dev-01', limit: 1 });
     expect(page.items[0]?.requestId).toBe(id);
+    // Newest first means numerically: the feed once sorted the sequence as text, so 8 came before 23.
+    const feed = await repo.list({ tenantId: TENANT, partnerId: 'partner-dev-01', limit: 100 });
+    const sequences = feed.items.map((i) => Number(i.sequence));
+    expect(sequences).toEqual([...sequences].sort((a, b) => b - a));
     await repo.close();
+  });
+
+  it('orders the feed by the stored sequence, not by its text rendering', () => {
+    const source = readFileSync(new URL('../../services/origination/src/repository-postgres.ts', import.meta.url), 'utf8');
+    expect(source).toMatch(/order by r\.sequence desc/);
+    expect(source).not.toMatch(/order by sequence desc/);
   });
 
   it('reserves a key atomically, replays with the same fingerprint and conflicts on a different one', async () => {
