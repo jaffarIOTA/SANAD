@@ -226,7 +226,16 @@ Ordered by what it costs to guess wrong.
     tenant, the resolver and the admin area. The admin session lifetime now
     follows the configuration in force. **Not built:** the SAML/OIDC sign-in
     handshake itself — it is built when a provider exists to test against.
-    Next: Partner entitlements.
+18. **Partner entitlements** — built 2026-10-05: the origination policy
+    (partners, aggregators, agents, approval tiers, expiries, SLAs) is now a
+    revision area; a resolver prefers the approved revision; the workbench
+    syncs the policy in force on every request, so a partner suspended in the
+    admin app is refused by the partner API on its next call (walked end to
+    end). The admin area proposes partner changes; agents and tiers change
+    through the same mechanism and get their own forms next. **All five
+    admin areas now exist.** Open: the SAML/OIDC handshake, the adapter
+    composition root reading the rail configuration, a per-field term-sheet
+    form in place of JSON.
 14. **Administration app** — begun 2026-10-03: `apps/admin` (port 3004) with
     the credentials area: sign-in with the platform operations token (sealed
     30-minute session), save or rotate a credential into the vault, list names

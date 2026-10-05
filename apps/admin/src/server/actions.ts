@@ -17,6 +17,8 @@ import { ADAPTER_CATALOGUE } from '@sanad/adapters/catalogue.ts';
 import { proposeRevision as proposePure } from '@sanad/core/config/revision.ts';
 import { deploymentProfile, identityFromForm, resolveStaffIdentity } from './identity.ts';
 import { parseStaffIdentity } from '@sanad/core/config/staff-identity.ts';
+import { policyWithPartner, resolveOriginationPolicy } from './partners.ts';
+import { parseOriginationPolicy } from '@sanad/core/origination/policy.ts';
 import { isTenantCode } from '@sanad/config/loader.ts';
 import { randomUUID } from 'node:crypto';
 import { currentAdmin, developmentPrincipalFor, endAdminSession, startAdminSession } from './session.ts';
@@ -112,7 +114,7 @@ export async function decideRevisionAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
   const tenant = field(form, 'tenant');
   const areaField = field(form, 'area');
-  const area = areaField === 'rails' || areaField === 'identity' ? areaField : 'products';
+  const area = areaField === 'rails' || areaField === 'identity' || areaField === 'partners' ? areaField : 'products';
   const to = `/${locale}/${area}?tenant=${encodeURIComponent(tenant)}`;
   const admin = await currentAdmin();
   if (admin === undefined) redirect(`/${locale}`);
@@ -185,6 +187,33 @@ export async function proposeIdentityChangeAction(form: FormData): Promise<void>
   if (!checked.ok) return back(to, `REFUSED:${checked.error.reason}`);
   try {
     await proposeRevision(s.pool, { tenantCode: tenant, area: 'STAFF_IDENTITY', payload: built.value.payload, summary, effectiveFromEpochSeconds, proposedBy: admin?.principalId ?? '', correlationId: randomUUID() });
+  } catch { return back(to, 'PROPOSE_FAILED'); }
+  back(to, 'PROPOSED');
+}
+
+export async function proposePartnerChangeAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'ar';
+  const tenant = field(form, 'tenant');
+  const to = `/${locale}/partners?tenant=${encodeURIComponent(tenant)}`;
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${locale}`);
+  if (!isTenantCode(tenant)) return back(to, 'TENANT_UNKNOWN');
+  const s = store();
+  if (s.kind !== 'READY') return back(to, 'NO_DATABASE');
+  const now = nowEpoch();
+  const current = await resolveOriginationPolicy(tenant, now);
+  if (!current.policy.ok) return back(to, 'POLICY_UNREADABLE');
+  const effectiveRaw = field(form, 'effectiveFrom');
+  const effectiveMs = effectiveRaw === '' ? Date.now() : Date.parse(effectiveRaw);
+  if (!Number.isFinite(effectiveMs)) return back(to, 'EFFECTIVE_FROM_MALFORMED');
+  const changed = policyWithPartner(current.policy.value, { partnerId: field(form, 'partnerId'), status: field(form, 'status'), channel: field(form, 'channel'), programmesText: field(form, 'programmes'), maxRequestMinorUnits: field(form, 'maxRequestMinorUnits').replace(/[^\d]/g, '') });
+  if (!changed.ok) return back(to, `REFUSED:${changed.error.reason}`);
+  const summary = field(form, 'summary');
+  const effectiveFromEpochSeconds = BigInt(Math.floor(effectiveMs / 1000));
+  const checked = proposePure({ id: randomUUID(), tenantId: tenant, area: 'ORIGINATION_POLICY', rawPayload: changed.value.payload, summary, effectiveFromEpochSeconds, proposedBy: admin?.principalId ?? '', proposedAtEpochSeconds: now, parse: parseOriginationPolicy });
+  if (!checked.ok) return back(to, `REFUSED:${checked.error.reason}`);
+  try {
+    await proposeRevision(s.pool, { tenantCode: tenant, area: 'ORIGINATION_POLICY', payload: changed.value.payload, summary, effectiveFromEpochSeconds, proposedBy: admin?.principalId ?? '', correlationId: randomUUID() });
   } catch { return back(to, 'PROPOSE_FAILED'); }
   back(to, 'PROPOSED');
 }

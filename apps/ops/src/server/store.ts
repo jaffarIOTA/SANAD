@@ -45,13 +45,26 @@ import { loadDocumentChecklist } from '@sanad/config/loader.ts';
 import { checklistReport, type DocumentChecklist, type ItemReport, type PresentedDocument } from '@sanad/core/documents/checklist.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
 import { loadOriginationPolicy } from '@sanad/config/loader.ts';
+import type { OriginationPolicy } from '@sanad/core/origination/policy.ts';
+import { resolveOriginationPolicy } from '@sanad/origination/origination-policy.ts';
 
 /**
- * The tenant's intake policy, loaded once. A malformed file throws here, at
- * start-up, rather than silently defaulting a limit away at request time.
+ * The tenant's intake policy. The checked-in file loads once at start-up (a
+ * malformed file throws here rather than silently defaulting a limit away);
+ * `syncOriginationPolicy()` then replaces it, per request, with the approved
+ * revision in force when a database is present. Pages and routes read the
+ * sync accessor; the layout syncs before they render.
  */
-const POLICY = expectOk(loadOriginationPolicy('bank-a'));
-export const originationPolicy = (): typeof POLICY => POLICY;
+const FILE_POLICY = expectOk(loadOriginationPolicy('bank-a'));
+interface PolicyState { policy: OriginationPolicy; source: 'FILE' | 'REVISION' }
+const policyState: PolicyState = ((globalThis as { __sanadOpsPolicy?: PolicyState }).__sanadOpsPolicy ??= { policy: FILE_POLICY, source: 'FILE' });
+export const originationPolicy = (): OriginationPolicy => policyState.policy;
+export const originationPolicySource = (): 'FILE' | 'REVISION' => policyState.source;
+
+export async function syncOriginationPolicy(atEpochSeconds: bigint): Promise<void> {
+  const resolved = await resolveOriginationPolicy('bank-a', atEpochSeconds);
+  if (resolved.policy.ok) { policyState.policy = resolved.policy.value; policyState.source = resolved.source; }
+}
 
 /**
  * Stands in for the timestamping authority adapter.
@@ -313,7 +326,7 @@ export function keyRequest(input: KeyRequestInput): Result<RequestRow> {
   };
 
   // The policy is what makes an agent's or partner's limit real.
-  const keyed = raise({ core, maker: input.maker, policy: POLICY });
+  const keyed = raise({ core, maker: input.maker, policy: originationPolicy() });
   if (!keyed.ok) return keyed;
 
   // SH-10. Written at the moment the request is raised, not at settlement:
@@ -382,7 +395,7 @@ export function approveRequest(
     checker,
     developmentAttestation(),
     contraryJustification,
-    POLICY,
+    originationPolicy(),
   );
   if (!next.ok) return next;
 
@@ -434,7 +447,7 @@ export function expireOverdue(observedAt: TsaInstant): readonly string[] {
       request.state !== 'AWAITING_REVIEW' &&
       request.state !== 'RETURNED_TO_MAKER'
     ) continue;
-    const result = expire(request, POLICY, observedAt);
+    const result = expire(request, originationPolicy(), observedAt);
     if (result.ok) {
       REQUESTS.set(requestId, result.value);
       expired.push(requestId);
@@ -475,7 +488,7 @@ export function failServicing(requestId: string, reason: string): Result<Request
 export function retryServicing(requestId: string, manual?: { readonly by: Principal; readonly note: string }): Result<RequestRow> {
   const current = REQUESTS.get(requestId);
   if (current?.state !== 'SERVICING_UNAVAILABLE') return notInState(requestId, 'SERVICING_UNAVAILABLE');
-  const next = retryServicingTransition(current as ServicingUnavailable, developmentAttestation(), POLICY, manual);
+  const next = retryServicingTransition(current as ServicingUnavailable, developmentAttestation(), originationPolicy(), manual);
   if (!next.ok) return next;
   REQUESTS.set(requestId, next.value);
   return ok(toRow(requestId, next.value));
@@ -490,7 +503,7 @@ export function reviseAndResubmit(requestId: string, patch: { readonly programme
     ...(patch.programmeId === undefined ? {} : { programmeId: patch.programmeId }),
     ...(patch.tenorDays === undefined ? {} : { requestedTenorDays: patch.tenorDays }),
   };
-  const next = resubmit(current as ReturnedToMaker, revised, developmentAttestation(), POLICY);
+  const next = resubmit(current as ReturnedToMaker, revised, developmentAttestation(), originationPolicy());
   if (!next.ok) return next;
   REQUESTS.set(requestId, next.value);
   return ok(toRow(requestId, next.value));

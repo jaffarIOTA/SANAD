@@ -14,7 +14,7 @@ export const AREAS: readonly Area[] = [
   { id: 'products', href: '/products', icon: 'store', en: 'Products & modules', ar: 'المنتجات والوحدات', state: 'LIVE' },
   { id: 'rails', href: '/rails', icon: 'plug', en: 'Rails & adapters', ar: 'قنوات التكامل', state: 'LIVE' },
   { id: 'identity', href: '/identity', icon: 'settings', en: 'Staff identity (SSO)', ar: 'هوية الموظفين (الدخول الموحّد)', state: 'LIVE' },
-  { id: 'partners', icon: 'document', en: 'Partner entitlements', ar: 'صلاحيات الشركاء', state: 'NOT_BUILT' },
+  { id: 'partners', href: '/partners', icon: 'document', en: 'Partner entitlements', ar: 'صلاحيات الشركاء', state: 'LIVE' },
 ];
 
 export function SideNav({ segment, arabic, signedIn }: { readonly segment: string; readonly arabic: boolean; readonly signedIn: boolean }): ReactElement {
