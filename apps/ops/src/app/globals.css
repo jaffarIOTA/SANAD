@@ -19,142 +19,155 @@
  */
 
 @theme static {
-  /* -- Brand, from the Figma design system (BankDash kit, file fPK7qBFIWwuWn8LMwXAYU0)
-        Primary 2 #343C6A (headings) · Primary 3 #2D60FF (accent) · Secondary #FE5C73
-        Applied 2026-09-26. Client branding remains a token override, never a fork. -- */
-  --color-brand: #2d60ff; /* Primary 3. White on it measures 5.0:1 */
-  --color-brand-strong: #2d60ff; /* interactive */
-  --color-brand-deep: #1814f3; /* pressed, hover, chart series 1 */
-  --color-brand-wash: #e7edff; /* tinted surface, icon discs */
-  --color-heading: #343c6a; /* Primary 2 */
+  /* -- Brand, from the Figma "Loan management web application" kit
+        (file 8JEiEaANFyhRInRwYeILO1, Loan Officer VD), applied 2026-10-08.
+        Schemes/Primary #474DDD · Primary Container #F2F1FF · On Surface #2E2C46.
+        Client branding remains a token override, never a fork. -- */
+  --color-brand: #474ddd; /* White on it measures 6.2:1 */
+  --color-brand-strong: #474ddd; /* interactive */
+  --color-brand-deep: #3a3fc4; /* pressed, hover; 7.0:1 on the wash */
+  --color-brand-wash: #f2f1ff; /* Primary Container: pills, active navigation */
+  --color-heading: #2e2c46; /* On Surface */
   --color-mark-mono: #4d4d4d;
 
-  /* -- Chart series, fixed by the design. Series colours never carry text. -- */
-  --color-series-1: #1814f3;
-  --color-series-2: #16dbcc;
-  --color-slice-1: #343c6a;
-  --color-slice-2: #fc7900;
-  --color-slice-3: #fa00ff;
-  --color-slice-4: #1814f3;
-  --color-area-line: #1814f3;
+  /* -- Chart series. Series colours never carry text. -- */
+  --color-series-1: #474ddd;
+  --color-series-2: #16a41d;
+  --color-slice-1: #2e2c46;
+  --color-slice-2: #f59e0b;
+  --color-slice-3: #8a8deb;
+  --color-slice-4: #474ddd;
+  --color-area-line: #474ddd;
 
   /* -- Ordinal ramp for stage charts: one hue, monotone lightness. -- */
-  --color-stage-1: #c7d2fe;
-  --color-stage-2: #93a5f5;
-  --color-stage-3: #5e7bf0;
-  --color-stage-4: #2d60ff;
-  --color-stage-5: #1814f3;
+  --color-stage-1: #dcdcfb;
+  --color-stage-2: #b4b6f3;
+  --color-stage-3: #8a8deb;
+  --color-stage-4: #5f64e2;
+  --color-stage-5: #3a3fc4;
 
   /* -- Surface ------------------------------------------------------------- */
-  --color-page: #f5f7fa;
+  --color-page: #f8f9fd; /* Surface Container Highest */
   --color-surface: #ffffff;
-  --color-sunken: #f5f7fa;
-  --color-line: #e6eff5;
-  --color-line-strong: #dfeaf2;
-  --color-field: #edf1f7; /* input pills */
+  --color-sunken: #f8f9fd;
+  --color-line: #e5e5ec; /* Outline */
+  --color-line-strong: #dcdce6;
+  --color-field: #f8f9fd;
 
-  /* -- Text ---------------------------------------------------------------- */
-  --color-ink: #232323;
-  --color-ink-quiet: #718ebf;
-  --color-ink-faint: #b1b1b1; /* inactive navigation */
+  /* -- Text. The design's On Surface Variant (#7F879E) measures 3.6:1 on
+        white, below the 4.5:1 body text needs (NFR-09); this is the same grey
+        one step darker, 5.1:1. ------------------------------------------- */
+  --color-ink: #2e2c46;
+  --color-ink-quiet: #666d84;
+  --color-ink-faint: #9aa0b4; /* inactive navigation, never body text */
   --color-on-brand: #ffffff;
 
-  /* -- Meaning. The design's marks are kept as drawn; text on white uses a
-        darker derivative so labels clear 4.5:1 (NFR-09). ------------------- */
-  --color-positive: #178f6b;
-  --color-positive-mark: #41d4a8;
-  --color-attention: #b45309;
-  --color-attention-mark: #fc7900;
-  --color-blocked: #d93a53;
-  --color-blocked-mark: #fe5c73;
-  --color-blocked-wash: #ffe8ec;
-  --color-disc-yellow: #fff5d9;
-  --color-disc-blue: #e7edff;
-  --color-disc-teal: #dcfaf8;
+  /* -- Meaning. The design's marks are kept as drawn (Tertiary #16A41D,
+        Error #E32E34); text on their containers uses a darker derivative so
+        labels clear 4.5:1 (NFR-09). ---------------------------------------- */
+  --color-positive: #0f7a15; /* 4.7:1 on the green container */
+  --color-positive-mark: #16a41d;
+  --color-positive-wash: #d8f3e1; /* Tertiary Container */
+  --color-attention: #a3530a; /* 4.9:1 on the amber wash */
+  --color-attention-mark: #f59e0b;
+  --color-attention-wash: #fdf0dc;
+  --color-blocked: #c41f25; /* 5.1:1 on the red container */
+  --color-blocked-mark: #e32e34;
+  --color-blocked-wash: #fceaeb; /* Error Container */
+  --color-disc-yellow: #fdf0dc;
+  --color-disc-blue: #f2f1ff;
+  --color-disc-teal: #d8f3e1;
 
-  /* -- Type. Inter throughout, per the design; Arabic keeps its own face. -- */
-  --font-arabic: 'Noto Kufi Arabic', 'Segoe UI', system-ui, sans-serif;
-  --font-latin: 'Inter', system-ui, -apple-system, sans-serif;
+  /* -- Type. DM Sans, per the design, self-hosted by the layout; Arabic keeps its own face. -- */
+  --font-arabic: var(--font-noto-kufi), 'Noto Kufi Arabic', 'Segoe UI', system-ui, sans-serif;
+  --font-latin: var(--font-dm-sans), 'DM Sans', system-ui, -apple-system, sans-serif;
 
   --text-amount: 1.5rem;
   --text-amount--line-height: 2rem;
-  --text-h1: 1.75rem; /* Heading one Semibold 28 */
-  --text-h2: 1.375rem; /* Heading two Semibold 22 */
-  --text-h3: 1.125rem; /* Heading three Medium 18 */
+  --text-display: 2.25rem; /* M3 headline large: Bold 36/44 */
+  --text-display--line-height: 2.75rem;
+  --text-h1: 1.75rem; /* M3 headline medium: Bold 28/36 */
+  --text-h2: 1.25rem;
+  --text-h3: 1.125rem;
 
-  --radius-card: 1.5625rem; /* 25px cards */
-  --radius-tile: 0.9375rem; /* 15px */
-  --radius-pill: 2.5rem; /* 40px search and inputs */
+  --radius-card: 0.75rem; /* 12px */
+  --radius-tile: 0.5rem; /* Corner/Small 8px */
+  --radius-pill: 2.5rem;
 
-  --shadow-card: 4px 4px 18px -2px rgb(231 228 232 / 0.8); /* Shadow 1 */
+  --shadow-card: 0 1px 2px rgb(46 44 70 / 0.04), 0 1px 3px rgb(46 44 70 / 0.05);
 
   /* Sized for the mid-range Android that is the SME's primary hardware,
      not for a desktop pointer (NFR-10, FP-05). */
   --spacing-tap: 2.75rem;
 }
 
+/* Dark: the same indigo brand, lifted for the dark surface — never a different hue. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --color-page: #0f1424;
-    --color-surface: #171d33;
-    --color-sunken: #121829;
-    --color-line: #26304d;
-    --color-line-strong: #34406a;
-    --color-field: #1f2742;
-    --color-ink: #eef1f8;
-    --color-ink-quiet: #9fb0d8;
-    --color-ink-faint: #6b7590;
-    --color-heading: #eef1f8;
-    --color-brand: #6d8dff;
-    --color-brand-strong: #6d8dff;
-    --color-brand-deep: #9db1ff;
-    --color-brand-wash: #22305e;
+    --color-page: #121320;
+    --color-surface: #1b1c2c;
+    --color-sunken: #161726;
+    --color-line: #2b2d42;
+    --color-line-strong: #3a3c56;
+    --color-field: #1f2033;
+    --color-ink: #ecebf5;
+    --color-ink-quiet: #a6abc0;
+    --color-ink-faint: #6f748c;
+    --color-heading: #ecebf5;
+    --color-brand: #8c91ff;
+    --color-brand-strong: #8c91ff;
+    --color-brand-deep: #b0b3ff;
+    --color-brand-wash: #25264f;
     --color-mark-mono: #b8b6b3;
     /* Re-stepped for the dark surface, not flipped. */
-    --color-stage-1: #2a3a7a;
-    --color-stage-2: #3b52b3;
-    --color-stage-3: #5570e6;
-    --color-stage-4: #7d95ff;
-    --color-stage-5: #b3c2ff;
-    --color-positive: #55d3a5;
+    --color-stage-1: #2a2c63;
+    --color-stage-2: #3c3f99;
+    --color-stage-3: #5a5fd0;
+    --color-stage-4: #8c91ff;
+    --color-stage-5: #b8bbff;
+    --color-positive: #5fd067;
+    --color-positive-wash: #173d22;
     --color-attention: #f0a45c;
-    --color-blocked: #ff8a9b;
-    --color-blocked-wash: #3a1a22;
-    --color-disc-yellow: #3d3520;
-    --color-disc-blue: #22305e;
-    --color-disc-teal: #163a37;
+    --color-attention-wash: #3d3020;
+    --color-blocked: #ff8a8f;
+    --color-blocked-wash: #3d1a1d;
+    --color-disc-yellow: #3d3020;
+    --color-disc-blue: #25264f;
+    --color-disc-teal: #173d22;
     --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.04);
   }
 }
 
 :root[data-theme='dark'] {
-  --color-page: #0f1424;
-  --color-surface: #171d33;
-  --color-sunken: #121829;
-  --color-line: #26304d;
-  --color-line-strong: #34406a;
-  --color-field: #1f2742;
-  --color-ink: #eef1f8;
-  --color-ink-quiet: #9fb0d8;
-  --color-ink-faint: #6b7590;
-  --color-heading: #eef1f8;
-  --color-brand: #6d8dff;
-  --color-brand-strong: #6d8dff;
-  --color-brand-deep: #9db1ff;
-  --color-brand-wash: #22305e;
+  --color-page: #121320;
+  --color-surface: #1b1c2c;
+  --color-sunken: #161726;
+  --color-line: #2b2d42;
+  --color-line-strong: #3a3c56;
+  --color-field: #1f2033;
+  --color-ink: #ecebf5;
+  --color-ink-quiet: #a6abc0;
+  --color-ink-faint: #6f748c;
+  --color-heading: #ecebf5;
+  --color-brand: #8c91ff;
+  --color-brand-strong: #8c91ff;
+  --color-brand-deep: #b0b3ff;
+  --color-brand-wash: #25264f;
   --color-mark-mono: #b8b6b3;
-  --color-stage-1: #2a3a7a;
-  --color-stage-2: #3b52b3;
-  --color-stage-3: #5570e6;
-  --color-stage-4: #7d95ff;
-  --color-stage-5: #b3c2ff;
-  --color-positive: #55d3a5;
+  --color-stage-1: #2a2c63;
+  --color-stage-2: #3c3f99;
+  --color-stage-3: #5a5fd0;
+  --color-stage-4: #8c91ff;
+  --color-stage-5: #b8bbff;
+  --color-positive: #5fd067;
+  --color-positive-wash: #173d22;
   --color-attention: #f0a45c;
-  --color-blocked: #ff8a9b;
-  --color-blocked-wash: #3a1a22;
-  --color-disc-yellow: #3d3520;
-  --color-disc-blue: #22305e;
-  --color-disc-teal: #163a37;
+  --color-attention-wash: #3d3020;
+  --color-blocked: #ff8a8f;
+  --color-blocked-wash: #3d1a1d;
+  --color-disc-yellow: #3d3020;
+  --color-disc-blue: #25264f;
+  --color-disc-teal: #173d22;
   --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.04);
 }
 
@@ -202,8 +215,8 @@ html[lang='en'] body {
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 .card-lift:hover {
-  transform: translateY(-2px);
-  box-shadow: 4px 8px 24px -4px rgb(231 228 232 / 0.9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px -2px rgb(46 44 70 / 0.08);
 }
 .press {
   transition: transform 120ms ease, background-color 160ms ease, color 160ms ease;

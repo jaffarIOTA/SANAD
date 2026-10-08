@@ -25,11 +25,11 @@ export function SideNav({ segment, arabic, current }: { readonly segment: string
   const legend = arabic ? LEGEND_AR : LEGEND_EN;
 
   return (
-    <nav aria-label={arabic ? 'وحدات المنصة' : 'Platform modules'} className="hidden w-[250px] shrink-0 flex-col border-e border-line bg-surface pt-3 lg:flex">
+    <nav aria-label={arabic ? 'وحدات المنصة' : 'Platform modules'} className="hidden w-[248px] shrink-0 flex-col border-e border-line bg-surface pt-4 lg:flex">
       {MODULE_GROUPS.map((group) => (
-        <div key={group.id} className="mb-2 flex flex-col">
-          <h2 className="ps-[30px] pt-3 pb-1 text-[0.6875rem] font-semibold uppercase tracking-wider text-ink-faint">{arabic ? group.titleAr : group.titleEn}</h2>
-          <ul className="flex list-none flex-col p-0">
+        <div key={group.id} className="mb-3 flex flex-col">
+          <h2 className="ps-6 pt-2 pb-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-ink-faint">{arabic ? group.titleAr : group.titleEn}</h2>
+          <ul className="flex list-none flex-col gap-0.5 px-3">
             {group.items.map((item) => {
               const label = arabic ? item.titleAr : item.titleEn;
               const openable = item.readiness.kind === 'LIVE' && item.href !== undefined;
@@ -38,11 +38,9 @@ export function SideNav({ segment, arabic, current }: { readonly segment: string
               const why = note(item.readiness);
               const body = (
                 <>
-                  {/* The design's indicator: a 6px bar on the start edge, rounded on the inner side. */}
-                  <span aria-hidden className={`nav-indicator absolute inset-y-1 start-0 w-[6px] rounded-e-[10px] bg-brand ${active ? 'opacity-100' : 'opacity-0'}`} />
-                  <Icon name={group.icon} size={22} className={`ms-[30px] shrink-0 ${active ? 'text-brand' : openable ? 'text-ink-faint' : 'text-ink-faint/70'}`} />
+                  <Icon name={group.icon} size={20} className={`ms-3 shrink-0 ${active ? 'text-brand' : openable ? 'text-ink-quiet group-hover:text-heading' : 'text-ink-faint/70'}`} />
                   <span className="flex min-w-0 flex-col">
-                    <span className={`text-[16px] font-medium leading-snug ${active ? 'text-brand' : openable ? 'text-ink-faint group-hover:text-heading' : 'text-ink-faint/80'}`}>{label}</span>
+                    <span className={`text-[14px] font-medium leading-snug ${active ? 'text-brand-deep' : openable ? 'text-ink group-hover:text-heading' : 'text-ink-faint'}`}>{label}</span>
                     {item.readiness.kind !== 'LIVE' ? <span className="text-[0.6875rem] text-ink-faint">{legend[item.readiness.kind]}</span> : null}
                   </span>
                 </>
@@ -50,9 +48,9 @@ export function SideNav({ segment, arabic, current }: { readonly segment: string
               return (
                 <li key={item.id} className="relative">
                   {openable ? (
-                    <a href={href} aria-current={active ? 'page' : undefined} title={item.reference} className="group press relative flex min-h-[52px] items-center gap-4 py-2 pe-4">{body}</a>
+                    <a href={href} aria-current={active ? 'page' : undefined} title={item.reference} className={`group press relative flex min-h-[40px] items-center gap-3 rounded-tile py-2 pe-3 ${active ? 'bg-brand-wash' : 'hover:bg-sunken'}`}>{body}</a>
                   ) : (
-                    <span aria-disabled="true" title={why ?? item.reference} className="relative flex min-h-[44px] items-center gap-4 py-1.5 pe-4">{body}</span>
+                    <span aria-disabled="true" title={why ?? item.reference} className="relative flex min-h-[36px] items-center gap-3 py-1.5 pe-3">{body}</span>
                   )}
                 </li>
               );

@@ -1,15 +1,21 @@
 /**
- * The operations workbench shell, to the Figma design (BankDash kit, applied
- * 2026-09-26): a 100px white header with the logo, the page title, a search
- * pill, two round icon buttons and the identity disc; a 250px sidebar; the
- * page on a #F5F7FA field. Below the desktop breakpoint the sidebar becomes
- * the design's bottom bar and the search drops under the header.
+ * The operations workbench shell, to the Figma "Loan management web
+ * application" kit (Loan Officer VD, applied 2026-10-08): a slim 64px app bar
+ * with the mark, where you are, search, the icon buttons and who you are; a
+ * labelled sidebar (the kit's icon rail, widened, because this platform has
+ * forty modules and an unlabelled rail of forty icons is a guessing game);
+ * the page on the kit's pale neutral field. Below the desktop breakpoint the
+ * sidebar becomes a bottom bar and the search drops under the header.
+ *
+ * Fonts are self-hosted by Next.js at build time, so a staff browser never
+ * calls a font CDN at run time.
  *
  * Composed in logical properties: Arabic is the design default and English
  * is the mirror. The Figma frames are LTR; this is their RTL composition.
  */
 
 import type { ReactNode } from 'react';
+import { DM_Sans, Noto_Kufi_Arabic } from 'next/font/google';
 import { notFound } from 'next/navigation';
 
 import { BrandMark, LanguageSwitch } from '@sanad/design/primitives.tsx';
@@ -21,6 +27,9 @@ import { developmentAttestation, syncOriginationPolicy, syncStore } from '../../
 import '../globals.css';
 
 export const metadata = { title: 'Sanad — Operations', description: 'Origination and review' };
+
+const dmSans = DM_Sans({ subsets: ['latin'], weight: ['300', '400', '500', '600', '700'], variable: '--font-dm-sans', display: 'swap' });
+const notoKufi = Noto_Kufi_Arabic({ subsets: ['arabic'], weight: ['400', '500', '600', '700'], variable: '--font-noto-kufi', display: 'swap' });
 
 export function generateStaticParams(): { locale: LocaleSegment }[] {
   return LOCALE_SEGMENTS.map((locale) => ({ locale }));
@@ -37,46 +46,47 @@ export default async function OpsLayout({ children, params }: { readonly childre
   await syncStore();
 
   const search = (
-    <form action={`/${segment}`} method="get" role="search" className="w-full lg:w-[255px]">
-      <label className="flex h-[50px] items-center gap-3 rounded-pill bg-sunken ps-6 pe-4 focus-within:ring-2 focus-within:ring-brand/40">
-        <Icon name="search" size={20} className="shrink-0 text-ink-quiet" />
+    <form action={`/${segment}`} method="get" role="search" className="w-full lg:w-[320px]">
+      <label className="flex h-10 items-center gap-2.5 rounded-tile border border-line bg-sunken ps-3.5 pe-3 focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20">
+        <Icon name="search" size={18} className="shrink-0 text-ink-quiet" />
         <span className="sr-only">{arabic ? 'بحث في الطلبات' : 'Search requests'}</span>
-        <input type="search" name="q" autoComplete="off" placeholder={arabic ? 'ابحث عن شيء' : 'Search for something'} className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-[#8ba3cb]" />
+        <input type="search" name="q" autoComplete="off" placeholder={arabic ? 'ابحث برقم الطلب أو العميل أو الفاتورة' : 'Search by request, counterparty or invoice'} className="w-full bg-transparent text-[14px] text-ink outline-none placeholder:text-ink-quiet" />
       </label>
     </form>
   );
 
   return (
-    <html lang={htmlLang(locale)} dir={isRtl(locale) ? 'rtl' : 'ltr'}>
+    <html lang={htmlLang(locale)} dir={isRtl(locale) ? 'rtl' : 'ltr'} className={`${dmSans.variable} ${notoKufi.variable}`}>
       <body className="min-h-dvh bg-page text-ink antialiased">
         <header className="sticky top-0 z-10 border-b border-line bg-surface">
-          <div className="flex h-[70px] items-center gap-4 px-4 lg:h-[100px] lg:px-0">
-            <a href={`/${segment}`} className="flex w-auto items-center gap-3 lg:w-[250px] lg:ps-[38px]">
-              <BrandMark size={36} />
-              <span className="text-[25px] font-black tracking-tight text-heading">Sanad<span className="text-brand">.</span></span>
+          <div className="flex h-16 items-center gap-4 px-4 lg:px-0">
+            <a href={`/${segment}`} className="flex w-auto items-center gap-2.5 lg:w-[248px] lg:ps-6">
+              <BrandMark size={30} />
+              <span className="text-[20px] font-bold tracking-tight text-heading">Sanad</span>
             </a>
-            <h1 className="hidden text-h1 font-semibold text-heading lg:block lg:ps-10"><HeaderTitle arabic={arabic} /></h1>
+            <p className="hidden text-[14px] font-medium text-ink-quiet lg:block lg:ps-8"><HeaderTitle arabic={arabic} /></p>
             <div className="ms-auto hidden lg:block">{search}</div>
-            <div className="ms-auto flex items-center gap-3 lg:ms-0 lg:gap-[30px] lg:pe-10">
-              <a href={`/${segment}/products`} title={arabic ? 'المنتجات' : 'Products'} className="press hidden size-[50px] items-center justify-center rounded-full bg-sunken text-ink-quiet hover:text-brand lg:inline-flex">
-                <Icon name="settings" size={22} />
+            <div className="ms-auto flex items-center gap-2 lg:ms-4 lg:gap-3 lg:pe-8">
+              <a href={`/${segment}/products`} title={arabic ? 'المنتجات' : 'Products'} className="press hidden size-9 items-center justify-center rounded-tile text-ink-quiet hover:bg-sunken hover:text-brand lg:inline-flex">
+                <Icon name="settings" size={20} />
               </a>
-              <a href={`/${segment}/queue`} title={arabic ? 'قائمة المراجعة' : 'Review queue'} className="press relative hidden size-[50px] items-center justify-center rounded-full bg-sunken text-ink-quiet hover:text-brand lg:inline-flex">
-                <Icon name="bell" size={22} />
-                <span aria-hidden className="absolute end-[14px] top-[13px] size-2 rounded-full bg-blocked-mark ring-2 ring-surface" />
+              <a href={`/${segment}/queue`} title={arabic ? 'قائمة المراجعة' : 'Review queue'} className="press relative hidden size-9 items-center justify-center rounded-tile text-ink-quiet hover:bg-sunken hover:text-brand lg:inline-flex">
+                <Icon name="bell" size={20} />
+                <span aria-hidden className="absolute end-2 top-2 size-2 rounded-full bg-blocked-mark ring-2 ring-surface" />
               </a>
               <LanguageSwitch current={segment as LocaleSegment} />
+              <span aria-hidden className="mx-1 hidden h-7 w-px bg-line lg:block" />
               {/*
                 Who you are acting as. Under four eyes the maker may not be the
                 checker, so the identity a screen acts under is operational
                 information. This build holds both development identities at
                 once, and says so rather than presenting a tidy single user.
               */}
-              <div className="flex items-center gap-3" title={arabic ? 'مُدخِل ومُراجِع معاً — لا يجوز في الإنتاج' : 'maker and checker — not permitted in production'}>
-                <span aria-hidden className="inline-flex size-[44px] items-center justify-center rounded-full bg-brand-wash text-xs font-bold text-brand lg:size-[60px]">DEV</span>
+              <div className="flex items-center gap-2.5" title={arabic ? 'مُدخِل ومُراجِع معاً — لا يجوز في الإنتاج' : 'maker and checker — not permitted in production'}>
+                <span aria-hidden className="inline-flex size-9 items-center justify-center rounded-full bg-brand-wash text-[11px] font-bold text-brand-deep">DEV</span>
                 <span className="hidden flex-col leading-tight xl:flex">
-                  <span className="text-sm font-medium text-heading">{arabic ? 'جلسة تطوير' : 'Development session'}</span>
-                  <span className="text-[0.6875rem] text-attention">{arabic ? 'مُدخِل ومُراجِع معاً' : 'maker and checker'}</span>
+                  <span className="text-[13px] font-semibold text-heading">{arabic ? 'جلسة تطوير' : 'Development session'}</span>
+                  <span className="text-[11px] text-attention">{arabic ? 'مُدخِل ومُراجِع معاً' : 'maker and checker'}</span>
                 </span>
               </div>
             </div>
@@ -84,9 +94,9 @@ export default async function OpsLayout({ children, params }: { readonly childre
           <div className="px-4 pb-3 lg:hidden">{search}</div>
         </header>
 
-        <div className="flex min-h-[calc(100dvh-100px)]">
+        <div className="flex min-h-[calc(100dvh-64px)]">
           <SideNav segment={segment} arabic={arabic} current={`/${segment}`} />
-          <main className="min-w-0 flex-1 overflow-x-clip px-4 pb-24 pt-6 lg:px-10 lg:pb-10">{children}</main>
+          <main className="min-w-0 flex-1 overflow-x-clip px-4 pb-24 pt-6 lg:px-8 lg:pb-10 lg:pt-8">{children}</main>
         </div>
         <BottomNav segment={segment} arabic={arabic} current={`/${segment}`} />
       </body>

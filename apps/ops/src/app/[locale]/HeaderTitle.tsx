@@ -10,7 +10,7 @@
 import { usePathname } from 'next/navigation';
 
 const TITLES: Readonly<Record<string, { readonly en: string; readonly ar: string }>> = {
-  '': { en: 'Overview', ar: 'نظرة عامة' },
+  '': { en: 'Dashboard', ar: 'لوحة المتابعة' },
   queue: { en: 'Review queue', ar: 'قائمة المراجعة' },
   requests: { en: 'Request', ar: 'الطلب' },
   products: { en: 'Products', ar: 'المنتجات' },
