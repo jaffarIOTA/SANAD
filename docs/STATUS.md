@@ -163,7 +163,12 @@ Ordered by what it costs to guess wrong.
   core would price the product by a rate. A Sanad catalogue entry can carry
   an optional `coreBankingProductCode`, and the screen shows whether the
   core knows it. Port `core/ports/core-banking-catalogue.ts`, adapter
-  `adapters/tuum/product-catalogue.ts`.
+  `adapters/tuum/product-catalogue.ts`. Every product module now declares a
+  booking shape: Murabaha SCF books as account postings and the catalogue
+  parser refuses a core product code on it (SH-01); the others book under a
+  core product type. The ops workbench's Products page shows each product's
+  mapping to staff. Customer screens do not show it, and nothing is booked
+  through Tuum yet: the booking transport is still unwritten.
 
 ### Buildable now, nothing blocking
 

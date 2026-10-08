@@ -36,6 +36,12 @@ const NOTICE: Readonly<Record<string, { en: string; ar: string; tone: 'settled' 
 
 const fmt = (iso: string, locale: string): string => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
 
+/** A product booked as account postings carries no core product code; the parser refuses one (SH-01). */
+function accountPosted(productCode: string): boolean {
+  const m = REGISTRY.find(productCode);
+  return m.ok && m.value.descriptor.bookingShape === 'ACCOUNT_POSTINGS';
+}
+
 /** The currency the tenant's products are denominated in; the core's list is filtered to it unless the operator asks for all. */
 const TENANT_CURRENCY = 'SAR';
 
@@ -107,7 +113,7 @@ export default async function ProductsAdminPage({ params, searchParams }: { read
                     <td className="py-3 pe-3"><Status tone={e.enabled ? 'settled' : 'blocked'} label={e.enabled ? (arabic ? 'مفعّل' : 'enabled') : (arabic ? 'معطّل' : 'disabled')} /></td>
                     <td className="hidden py-3 pe-3 lg:table-cell"><span className="identifier text-ink-quiet">{e.boardRulingRef ?? '—'}</span></td>
                     <td className="hidden py-3 pe-3 lg:table-cell">
-                      {mapped === undefined ? <span className="text-ink-quiet">{arabic ? 'غير مرتبط' : 'not mapped'}</span> : (
+                      {m.ok && m.value.descriptor.bookingShape === 'ACCOUNT_POSTINGS' ? <span className="text-ink-quiet">{arabic ? 'قيود حسابات' : 'account postings'}</span> : mapped === undefined ? <span className="text-ink-quiet">{arabic ? 'غير مرتبط' : 'not mapped'}</span> : (
                         <span className="flex flex-wrap items-center gap-2">
                           <a href={`${base}&coreProduct=${encodeURIComponent(mapped)}#core`} className="identifier text-brand underline-offset-2 hover:underline">{mapped}</a>
                           {coreProducts.length > 0 ? <Status tone={known ? 'settled' : 'blocked'} label={known ? (arabic ? 'موجود في النظام' : 'in the core') : (arabic ? 'غير موجود في النظام' : 'not in the core')} /> : null}
@@ -235,11 +241,17 @@ export default async function ProductsAdminPage({ params, searchParams }: { read
             <label className={FIELD_LABEL}>{arabic ? 'قرار الهيئة الشرعية (للمنتجات الإسلامية)' : 'Board ruling reference (Islamic products)'}
               <input name="boardRulingRef" defaultValue={editing.boardRulingRef ?? ''} className={`${FIELD_INPUT} identifier`} />
             </label>
-            <label className={FIELD_LABEL}>{arabic ? 'منتج النظام المصرفي (اختياري)' : 'Core banking product code (optional)'}
-              <input name="coreBankingProductCode" list="core-product-codes" defaultValue={editing.coreBankingProductCode ?? ''} maxLength={64} placeholder={arabic ? 'رمز نوع المنتج في النظام المصرفي' : 'the core’s product type code'} className={`${FIELD_INPUT} identifier`} />
-              <datalist id="core-product-codes">{coreProducts.map((p) => <option key={`${p.unit}/${p.code}`} value={p.code}>{p.description}</option>)}</datalist>
-              <span className="mt-2 block text-[13px] text-ink-quiet">{arabic ? 'فارغ لمنتج يُحجز كقيود حسابات لا كعقد تمويل في النظام المصرفي.' : 'Leave empty for a product booked as account postings rather than as a facility in the core.'}</span>
-            </label>
+            {accountPosted(editing.productCode) ? (
+              <div className={FIELD_LABEL}>{arabic ? 'منتج النظام المصرفي' : 'Core banking product code'}
+                <p className="mt-2 text-[14px] text-ink-quiet">{arabic ? 'لا يُربط هذا المنتج بمنتج في النظام المصرفي: سعره المؤجل ثابت، فيُحجز كقيود حسابات ويبقى الجدول والربح في سند. منتجات التمويل في النظام المصرفي تُسعَّر بمعدّل (SH-01).' : 'This product is not mapped to a core product: its deferred price is fixed, so it books as account postings with the schedule and profit held in Sanad. The core’s lending products price by a rate (SH-01).'}</p>
+              </div>
+            ) : (
+              <label className={FIELD_LABEL}>{arabic ? 'منتج النظام المصرفي (اختياري)' : 'Core banking product code (optional)'}
+                <input name="coreBankingProductCode" list="core-product-codes" defaultValue={editing.coreBankingProductCode ?? ''} maxLength={64} placeholder={arabic ? 'رمز نوع المنتج في النظام المصرفي' : 'the core’s product type code'} className={`${FIELD_INPUT} identifier`} />
+                <datalist id="core-product-codes">{coreProducts.map((p) => <option key={`${p.unit}/${p.code}`} value={p.code}>{p.description}</option>)}</datalist>
+                <span className="mt-2 block text-[13px] text-ink-quiet">{arabic ? 'اختر من القائمة أدناه «في النظام المصرفي الأساسي». فارغ = غير مرتبط.' : 'Pick from the list under “In the core banking platform” below. Empty = not mapped.'}</span>
+              </label>
+            )}
             <label className={FIELD_LABEL}>{arabic ? 'ملخص التغيير' : 'Summary of the change'}
               <input name="summary" required minLength={3} maxLength={400} placeholder={arabic ? 'مثال: رفع حد BNPL إلى ٧٬٠٠٠ ريال' : 'e.g. raise the BNPL limit to SAR 7,000'} className={FIELD_INPUT} />
             </label>

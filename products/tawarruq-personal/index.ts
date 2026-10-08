@@ -33,6 +33,7 @@ export const tawarruqPersonal: ProductModule<TawarruqTerms, TawarruqQuote, Tawar
     family: 'ISLAMIC',
     consumer: true,
     requiresBoardRuling: true,
+    bookingShape: 'CORE_FACILITY',
   },
   validateTerms: parseTawarruqTerms,
   quote: quoteTawarruq,

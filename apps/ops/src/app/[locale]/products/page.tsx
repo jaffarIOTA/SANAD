@@ -41,6 +41,17 @@ const SAMPLE_TRADE = { type: 'CLEARED_INVOICE' as const, invoiceUuid: '3cf5d9a2-
 const DEV_BENCHMARK = { code: 'SAIBOR-3M', rate: rate(560n, 'REDUCING'), asOfEpochSeconds: 0n, referenceId: 'dev-benchmark' };
 const DEV_RANGE = { productClass: 'PERSONAL', lowBp: 600n, medianBp: 900n, highBp: 1_500n, asOfEpochSeconds: 0n, referenceId: 'dev-range' };
 
+/**
+ * How the product reaches the core banking platform, in words for staff.
+ * The mapping is configuration (Admin → Products & modules, under four eyes);
+ * this page only reports it. Never shown to a customer.
+ */
+function coreBookingLabel(entry: { readonly coreBankingProductCode?: string }, bookingShape: 'CORE_FACILITY' | 'ACCOUNT_POSTINGS' | undefined, t: (en: string, ar: string) => string): { readonly code?: string; readonly text: string; readonly tone: 'settled' | 'progress' | 'blocked' } {
+  if (bookingShape === 'ACCOUNT_POSTINGS') return { text: t('account postings · schedule and profit held in Sanad', 'قيود حسابات · الجدول والربح في سند'), tone: 'settled' };
+  if (entry.coreBankingProductCode !== undefined) return { code: entry.coreBankingProductCode, text: t('core product type', 'نوع منتج في النظام المصرفي'), tone: 'settled' };
+  return { text: t('not mapped yet', 'غير مرتبط بعد'), tone: 'progress' };
+}
+
 /** A sample request per journey shape. Amounts and facts are illustrative. */
 function sampleFor(code: string, tenantId: string, at: QuoteRequest['asOf']): { readonly principal: bigint; readonly tenorDays: number; readonly build: (pricing: QuoteRequest['pricing']) => QuoteRequest; readonly note: { en: string; ar: string } } {
   const base = { tenantId, programmeId: 'prg-0001', counterpartyId: 'sample', asOf: at };
@@ -106,6 +117,7 @@ export default async function ProductsPage({ params, searchParams }: { readonly 
                   <th className="py-3 pe-3 text-start font-normal">{t('Programmes', 'البرامج')}</th>
                   <th className="py-3 pe-3 text-start font-normal">{t('Board ruling', 'قرار الهيئة')}</th>
                   <th className="py-3 pe-3 text-start font-normal">{t('Journey', 'المسار')}</th>
+                  <th className="py-3 pe-3 text-start font-normal">{t('Books in core banking as', 'يُحجز في النظام المصرفي كـ')}</th>
                   <th className="py-3 text-end font-normal">{t('Disclosure', 'الإفصاح')}</th>
                 </tr>
               </thead>
@@ -121,6 +133,7 @@ export default async function ProductsPage({ params, searchParams }: { readonly 
                       <td className="py-4 pe-3 text-ink"><span className="identifier">{entry.programmeIds === 'ALL' ? 'ALL' : entry.programmeIds.join(', ')}</span></td>
                       <td className="py-4 pe-3 text-ink"><span className="identifier">{entry.boardRulingRef ?? '—'}</span></td>
                       <td className="py-4 pe-3 text-ink-quiet">{module === undefined ? '—' : `${module.descriptor.journeyShape === 'TRADE_FIRST' ? t('trade first', 'يبدأ من الصفقة') : t('amount first', 'يبدأ من المبلغ')}${module.descriptor.consumer ? ` · ${t('consumer', 'أفراد')}` : ''}`}</td>
+                      <td className="py-4 pe-3">{(() => { const c = coreBookingLabel(entry, module?.descriptor.bookingShape, t); return <span className="flex flex-col gap-1">{c.code === undefined ? null : <span className="identifier text-ink">{c.code}</span>}<Status tone={c.tone} label={c.text} /></span>; })()}</td>
                       <td className="py-4 text-end">{!entry.enabled ? <Status tone="blocked" label={t('disabled', 'معطّل')} /> : module === undefined ? <Status tone="progress" label={t('module not built', 'الوحدة غير مبنية')} /> : <a href={`#disclosure-${entry.productCode}`} className={PILL_OUTLINE}>{t('Preview', 'عرض')}</a>}</td>
                     </tr>
                   );
@@ -162,6 +175,7 @@ export default async function ProductsPage({ params, searchParams }: { readonly 
               <dt className="text-ink-quiet">{t('Programmes', 'البرامج')}</dt><dd className="identifier">{entry.programmeIds === 'ALL' ? 'ALL' : entry.programmeIds.join(', ')}</dd>
               <dt className="text-ink-quiet">{t('Board ruling', 'قرار الهيئة')}</dt><dd className="identifier">{entry.boardRulingRef ?? t('— (not an Islamic product)', '— (ليس منتجاً إسلامياً)')}</dd>
               <dt className="text-ink-quiet">{t('Journey · family', 'المسار · النوع')}</dt><dd className="identifier">{module === undefined ? '—' : `${module.descriptor.journeyShape} · ${module.descriptor.family}${module.descriptor.consumer ? ' · consumer' : ''}`}</dd>
+              <dt className="text-ink-quiet">{t('Core banking', 'النظام المصرفي')}</dt><dd>{(() => { const c = coreBookingLabel(entry, module?.descriptor.bookingShape, t); return c.code === undefined ? <span className="text-ink-quiet">{c.text}</span> : <span><span className="identifier">{c.code}</span> <span className="text-ink-quiet">· {c.text}</span></span>; })()}</dd>
             </dl>
             {offer !== undefined ? (
               <div className="mt-4">

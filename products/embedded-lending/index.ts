@@ -110,7 +110,7 @@ export function book(t: Draft, at: TsaInstant): Result<Booked> {
 }
 
 export const embeddedLending: ProductModule<EmbeddedTerms, EmbeddedQuote, EmbeddedExecutionContext, Draft> = {
-  descriptor: { code: 'embedded-lending', nameEn: 'Embedded lending', nameAr: 'التمويل المدمج', journeyShape: 'AMOUNT_FIRST', family: 'CONVENTIONAL', consumer: false, requiresBoardRuling: false },
+  descriptor: { code: 'embedded-lending', nameEn: 'Embedded lending', nameAr: 'التمويل المدمج', journeyShape: 'AMOUNT_FIRST', family: 'CONVENTIONAL', consumer: false, requiresBoardRuling: false, bookingShape: 'CORE_FACILITY' },
   validateTerms: parseEmbeddedTerms,
   quote: quoteEmbedded,
   disclose: discloseEmbedded,

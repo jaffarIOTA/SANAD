@@ -8,6 +8,8 @@
 import { type Result, ok, reject } from '../kernel/result.ts';
 import type { RateBasis } from '../pricing/rate.ts';
 
+import { ACCOUNT_POSTED_PRODUCT_CODES } from './registry.ts';
+
 export type PricingRule =
   | { readonly kind: 'FIXED_PROFIT_AMOUNT'; readonly profitMinorUnits: string }
   /** Profit amount = cost × rate × tenor, with the rate from the tenant's own catalogue. The rate lives here, not in the product. */
@@ -52,7 +54,7 @@ const bad = (reason: string, detail: string, context?: Record<string, string>): 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isIntString = (v: unknown): v is string => typeof v === 'string' && /^-?\d+$/.test(v);
 
-export function parseProductCatalogue(raw: unknown, islamicProductCodes: ReadonlySet<string>): Result<ProductCatalogue> {
+export function parseProductCatalogue(raw: unknown, islamicProductCodes: ReadonlySet<string>, accountPostedProductCodes: ReadonlySet<string> = ACCOUNT_POSTED_PRODUCT_CODES): Result<ProductCatalogue> {
   if (!isRecord(raw) || typeof raw['version'] !== 'string' || !Array.isArray(raw['entries'])) {
     return bad('CATALOGUE_MALFORMED', 'A catalogue has a version and an entries list');
   }
@@ -74,6 +76,11 @@ export function parseProductCatalogue(raw: unknown, islamicProductCodes: Readonl
     }
     const coreCode = e['coreBankingProductCode'];
     if (coreCode !== undefined && (typeof coreCode !== 'string' || coreCode.trim().length === 0 || coreCode.length > 64)) return bad('CATALOGUE_CORE_PRODUCT_CODE', 'coreBankingProductCode is a non-empty string of at most 64 characters when present', { productCode: code });
+    if (coreCode !== undefined && accountPostedProductCodes.has(code)) {
+      // The core's lending products price by a rate. A product whose price is a fixed amount is booked as
+      // account postings with its schedule held here; mapping it onto a core product would persist a rate against it.
+      return reject('SH-01', 'CORE_PRODUCT_NOT_FOR_ACCOUNT_POSTED_PRODUCT', 'A product booked as account postings carries no core banking product code', { productCode: code });
+    }
     const rule = parseRule(e['pricingRule']);
     if (!rule.ok) return rule;
     entries.push({

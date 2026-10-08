@@ -93,7 +93,7 @@ export function disburse(t: Draft, at: TsaInstant): Result<Disbursed> {
 }
 
 export const conventionalTerm: ProductModule<TermLoanTerms, TermLoanQuote, TermLoanExecutionContext, Draft> = {
-  descriptor: { code: 'conventional-term', nameEn: 'Term loan', nameAr: 'قرض لأجل', journeyShape: 'AMOUNT_FIRST', family: 'CONVENTIONAL', consumer: true, requiresBoardRuling: false },
+  descriptor: { code: 'conventional-term', nameEn: 'Term loan', nameAr: 'قرض لأجل', journeyShape: 'AMOUNT_FIRST', family: 'CONVENTIONAL', consumer: true, requiresBoardRuling: false, bookingShape: 'CORE_FACILITY' },
   validateTerms: parseTermLoanTerms,
   quote: quoteTermLoan,
   disclose: discloseTermLoan,

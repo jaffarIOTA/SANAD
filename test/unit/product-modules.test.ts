@@ -35,6 +35,13 @@ describe('every module registers and every catalogue entry validates against its
       expect(module.descriptor.requiresBoardRuling).toBe(module.descriptor.family === 'ISLAMIC');
     }
   });
+  it('Murabaha books as account postings and every other module under a core product; a module that disagrees with the list does not register', () => {
+    for (const code of registry.codes()) {
+      expect(expectOk(registry.find(code)).descriptor.bookingShape, code).toBe(code === 'murabaha-scf' ? 'ACCOUNT_POSTINGS' : 'CORE_FACILITY');
+    }
+    const disguised = { ...murabahaScf, descriptor: { ...murabahaScf.descriptor, bookingShape: 'CORE_FACILITY' as const } };
+    expect(() => new ProductRegistry().register(disguised)).toThrow(/booking shape/);
+  });
 });
 
 describe('embedded lending', () => {

@@ -64,6 +64,21 @@ describe('a configuration that could not be loaded cannot be proposed', () => {
     const r = propose(stripped);
     expect(r.ok).toBe(false); if (!r.ok) expect(r.error.control).toBe('SH-18');
   });
+  it('Murabaha cannot be mapped onto a core banking product by configuration (SH-01): its fixed price would be booked under a rate', () => {
+    const mapped = { ...bankA, entries: bankA.entries.map((e) => (e.productCode === 'murabaha-scf' ? { ...e, coreBankingProductCode: 'TAWRROUQ' } : e)) };
+    const r = propose(mapped);
+    expect(r.ok).toBe(false);
+    const parsed = parse(mapped);
+    expect(parsed.ok).toBe(false); if (!parsed.ok) { expect(parsed.error.control).toBe('SH-01'); expect(parsed.error.reason).toBe('CORE_PRODUCT_NOT_FOR_ACCOUNT_POSTED_PRODUCT'); }
+  });
+  it('a rate-priced product may carry a core product code, and only a well-formed one', () => {
+    const withCode = (code: unknown) => ({ ...bankA, entries: bankA.entries.map((e) => (e.productCode === 'tawarruq-personal' ? { ...e, coreBankingProductCode: code } : e)) });
+    expect(propose(withCode('TAWRROUQ')).ok).toBe(true);
+    for (const bad of ['', '   ', 42, 'x'.repeat(65)]) {
+      const r = parse(withCode(bad));
+      expect(r.ok, String(bad)).toBe(false); if (!r.ok) expect(r.error.reason).toBe('CATALOGUE_CORE_PRODUCT_CODE');
+    }
+  });
   it('a BNPL term sheet over the Art. 22(1) limit without a SAMA variation is refused by the module parser the screen runs before proposing', () => {
     const entry = bankA.entries.find((e) => e.productCode === 'bnpl');
     expect(entry).toBeDefined();

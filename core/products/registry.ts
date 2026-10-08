@@ -13,6 +13,15 @@ import type { AnyProductModule } from './module.ts';
 
 export const ISLAMIC_PRODUCT_CODES: ReadonlySet<string> = new Set(['murabaha-scf', 'tawarruq-personal']);
 
+/**
+ * Products booked as account postings rather than under a core banking
+ * product type. The catalogue parser refuses a core product code on these, so
+ * a fixed-price product cannot be mapped onto a rate-priced core product by
+ * configuration (SH-01). Kept here, beside the Islamic list, for the same
+ * reason: the parser has to know which codes a rule applies to.
+ */
+export const ACCOUNT_POSTED_PRODUCT_CODES: ReadonlySet<string> = new Set(['murabaha-scf']);
+
 export class ProductRegistry {
   readonly #modules = new Map<string, AnyProductModule>();
 
@@ -21,6 +30,9 @@ export class ProductRegistry {
     if (this.#modules.has(code)) throw new Error(`product module registered twice: ${code}`);
     if (module.descriptor.family === 'ISLAMIC' !== ISLAMIC_PRODUCT_CODES.has(code)) {
       throw new Error(`product ${code}: family and the Islamic product list disagree`);
+    }
+    if (module.descriptor.bookingShape === 'ACCOUNT_POSTINGS' !== ACCOUNT_POSTED_PRODUCT_CODES.has(code)) {
+      throw new Error(`product ${code}: booking shape and the account-posted product list disagree`);
     }
     this.#modules.set(code, module);
     return this;

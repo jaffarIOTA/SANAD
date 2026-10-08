@@ -21,6 +21,19 @@ import type { RateSnapshot } from '../pricing/rate.ts';
 
 export type JourneyShape = 'AMOUNT_FIRST' | 'TRADE_FIRST';
 export type ProductFamily = 'ISLAMIC' | 'CONVENTIONAL';
+/**
+ * How an executed product reaches the core banking platform.
+ *
+ * `CORE_FACILITY`: booked under one of the core's own product types, which
+ * the tenant maps in its catalogue (`coreBankingProductCode`). The core's
+ * lending products price by a rate, so this shape is for rate-priced products.
+ * `ACCOUNT_POSTINGS`: booked as postings against accounts, with the schedule
+ * and the profit amount held in Sanad; the core's product set is not used and
+ * the catalogue entry carries no core product code. A Murabaha takes this
+ * shape because its deferred price is fixed (OI-02, Finding 1, in the core
+ * banking adapter's README).
+ */
+export type BookingShape = 'CORE_FACILITY' | 'ACCOUNT_POSTINGS';
 
 export interface ProductDescriptor {
   /** Stable identifier; the directory name under products/. */
@@ -33,6 +46,7 @@ export interface ProductDescriptor {
   readonly consumer: boolean;
   /** An Islamic product cannot be enabled for a tenant without that tenant's board ruling. */
   readonly requiresBoardRuling: boolean;
+  readonly bookingShape: BookingShape;
 }
 
 /**

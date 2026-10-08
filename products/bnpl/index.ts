@@ -19,7 +19,7 @@ export interface BnplExecutionContext {
 }
 
 export const bnpl: ProductModule<BnplTerms, BnplQuote, BnplExecutionContext, Draft> = {
-  descriptor: { code: 'bnpl', nameEn: 'Buy now, pay later', nameAr: 'اشترِ الآن وادفع لاحقاً', journeyShape: 'AMOUNT_FIRST', family: 'CONVENTIONAL', consumer: true, requiresBoardRuling: false },
+  descriptor: { code: 'bnpl', nameEn: 'Buy now, pay later', nameAr: 'اشترِ الآن وادفع لاحقاً', journeyShape: 'AMOUNT_FIRST', family: 'CONVENTIONAL', consumer: true, requiresBoardRuling: false, bookingShape: 'CORE_FACILITY' },
   validateTerms: parseBnplTerms,
   quote: quoteBnpl,
   disclose: discloseBnpl,
