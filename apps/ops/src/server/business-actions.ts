@@ -40,9 +40,9 @@ import {
   BUSINESS_ROLES,
   approveStraightThrough,
   decideInCommittee,
-  flushBusiness,
   generateOffer,
   getApplication,
+  mutateBusiness,
   presentDocument,
   proposeFigures,
   recordAssessmentInputs,
@@ -78,19 +78,23 @@ async function contextOf(form: FormData): Promise<Context> {
   return { locale, tenant: j.tenant, applicationId, path };
 }
 
-/** Settle the change, then send the browser back with a notice; a refusal — the service's or the save's — goes back with its codes. */
-async function finish(ctx: Context, result: Result<unknown>, notice: string): Promise<never> {
-  if (!result.ok) redirect(`${ctx.path}?${refusalQuery(result.error.control, result.error.reason)}`);
-  // Durable before it is reported: a failed write throws rather than redirecting to a success; a stale one is refused.
-  const settled = await flushBusiness();
+/**
+ * Make the change and save it as one unit under the tenant's lock, then send
+ * the browser back with a notice. A refusal — the service's, or the save's
+ * (STALE_APPLICATION, PERSISTENCE_FAILED: nothing was written) — goes back
+ * with its codes only; the domain's detail stays on the server.
+ */
+async function finish(ctx: Context, change: () => Promise<Result<unknown>>, notice: string): Promise<never> {
+  const result = await mutateBusiness(ctx.tenant, change);
   revalidatePath(`/${ctx.locale}/business`);
   if (ctx.applicationId !== '') revalidatePath(ctx.path);
-  if (!settled.ok) redirect(`${ctx.path}?${refusalQuery(settled.error.control, settled.error.reason)}`);
+  if (!result.ok) redirect(`${ctx.path}?${refusalQuery(result.error.control, result.error.reason)}`);
   redirect(`${ctx.path}?${new URLSearchParams({ notice }).toString()}`);
 }
 
-function refused(reason: string, message: string): Result<never> {
-  return { ok: false, error: { control: 'OP-DETERMINACY', reason, detail: message } };
+/** A refusal made here, before the service is called: the reason code is what travels; the detail never leaves the server. */
+function refused(reason: string, detail: string): () => Promise<Result<never>> {
+  return () => Promise.resolve({ ok: false, error: { control: 'OP-DETERMINACY', reason, detail } });
 }
 
 /** A whole number of minor units from a digit string, or from a major-unit amount with up to two decimals. No float. */
@@ -114,13 +118,12 @@ export async function proposeFigureAction(form: FormData): Promise<void> {
   const amount = minorUnits(field(form, 'amount'));
   if (amount === undefined) return finish(ctx, refused('AMOUNT_MALFORMED', 'Enter the amount as a number with at most two decimals'), '');
   const negative = field(form, 'negative') === 'true';
-  const result = await proposeFigures(ctx.tenant, ctx.applicationId, [{
+  return finish(ctx, () => proposeFigures(ctx.tenant, ctx.applicationId, [{
     metric: field(form, 'metric') as FinancialMetric,
     periodLabel: field(form, 'periodLabel'),
     minorUnits: negative ? -amount : amount,
     sourceRef: field(form, 'sourceRef'),
-  }], BUSINESS_ROLES.officer);
-  return finish(ctx, result, 'FIGURE_PROPOSED');
+  }], BUSINESS_ROLES.officer), 'FIGURE_PROPOSED');
 }
 
 /**
@@ -145,16 +148,14 @@ export async function verifyFigureAction(form: FormData): Promise<void> {
   const correctedMinor = corrected === '' ? undefined : minorUnits(corrected);
   if (corrected !== '' && correctedMinor === undefined) return finish(ctx, refused('AMOUNT_MALFORMED', 'Enter the corrected amount as a number with at most two decimals'), '');
   const figureId = field(form, 'figureId');
-  const verifier = await verifierFor(ctx, figureId);
-  const result = await verifyFigure(ctx.tenant, ctx.applicationId, figureId, verifier, correctedMinor);
-  return finish(ctx, result, correctedMinor === undefined ? 'FIGURE_VERIFIED' : 'FIGURE_CORRECTED');
+  // The verifier is read from the stored figure inside the same locked unit as the verification.
+  return finish(ctx, async () => verifyFigure(ctx.tenant, ctx.applicationId, figureId, await verifierFor(ctx, figureId), correctedMinor), correctedMinor === undefined ? 'FIGURE_VERIFIED' : 'FIGURE_CORRECTED');
 }
 
 /** The officer presents a document by reference; it is PENDING until the checker validates it. */
 export async function presentDocumentAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form);
-  const result = await presentDocument(ctx.tenant, ctx.applicationId, { documentType: field(form, 'documentType'), documentRef: field(form, 'documentRef') }, BUSINESS_ROLES.officer);
-  return finish(ctx, result, 'DOCUMENT_PRESENTED');
+  return finish(ctx, () => presentDocument(ctx.tenant, ctx.applicationId, { documentType: field(form, 'documentType'), documentRef: field(form, 'documentRef') }, BUSINESS_ROLES.officer), 'DOCUMENT_PRESENTED');
 }
 
 /** The checker validates a presented document: decision VALID or INVALID. */
@@ -162,8 +163,7 @@ export async function validateDocumentAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form);
   const decision = field(form, 'decision');
   if (decision !== 'VALID' && decision !== 'INVALID') return finish(ctx, refused('DOCUMENT_DECISION_INVALID', 'A document is validated as VALID or INVALID'), '');
-  const result = await validateDocument(ctx.tenant, ctx.applicationId, field(form, 'documentRef'), decision, BUSINESS_ROLES.checker);
-  return finish(ctx, result, decision === 'VALID' ? 'DOCUMENT_VALIDATED' : 'DOCUMENT_REJECTED');
+  return finish(ctx, () => validateDocument(ctx.tenant, ctx.applicationId, field(form, 'documentRef'), decision, BUSINESS_ROLES.checker), decision === 'VALID' ? 'DOCUMENT_VALIDATED' : 'DOCUMENT_REJECTED');
 }
 
 export async function recordAssessmentInputsAction(form: FormData): Promise<void> {
@@ -181,7 +181,7 @@ export async function recordAssessmentInputsAction(form: FormData): Promise<void
   if (Object.values(numbers).some((v) => v === undefined) || !/^\d{1,6}$/.test(employees)) {
     return finish(ctx, refused('INPUT_MALFORMED', 'Every assessment input is a whole number; the collateral value an amount'), '');
   }
-  const result = await recordAssessmentInputs(ctx.tenant, ctx.applicationId, {
+  return finish(ctx, () => recordAssessmentInputs(ctx.tenant, ctx.applicationId, {
     bureau: { reportRef: field(form, 'bureauReportRef'), consentId: field(form, 'bureauConsentId'), score: numbers.score as bigint },
     fullTimeEmployees: Number.parseInt(employees, 10),
     relevantExperienceYears: numbers.experience as bigint,
@@ -192,13 +192,12 @@ export async function recordAssessmentInputsAction(form: FormData): Promise<void
     portfolioRepaymentPerTenThousand: numbers.portfolio as bigint,
     failedFilesRatePerTenThousand: numbers.failed as bigint,
     collateralValueMinorUnits: numbers.collateral as bigint,
-  }, BUSINESS_ROLES.officer);
-  return finish(ctx, result, 'INPUTS_RECORDED');
+  }, BUSINESS_ROLES.officer), 'INPUTS_RECORDED');
 }
 
 export async function submitForAssessmentAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form);
-  return finish(ctx, await submitForAssessment(ctx.tenant, ctx.applicationId, BUSINESS_ROLES.officer), 'SUBMITTED');
+  return finish(ctx, () => submitForAssessment(ctx.tenant, ctx.applicationId, BUSINESS_ROLES.officer), 'SUBMITTED');
 }
 
 // -- Stage 6 -------------------------------------------------------------------
@@ -206,19 +205,18 @@ export async function submitForAssessmentAction(form: FormData): Promise<void> {
 /** Run by the checker: the officer who submitted the case does not score it. */
 export async function runAssessmentAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form);
-  return finish(ctx, await runAssessment(ctx.tenant, ctx.applicationId, BUSINESS_ROLES.checker), 'ASSESSED');
+  return finish(ctx, () => runAssessment(ctx.tenant, ctx.applicationId, BUSINESS_ROLES.checker), 'ASSESSED');
 }
 
 export async function approveStraightThroughAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form);
-  return finish(ctx, await approveStraightThrough(ctx.tenant, ctx.applicationId, BUSINESS_ROLES.checker), 'APPROVED');
+  return finish(ctx, () => approveStraightThrough(ctx.tenant, ctx.applicationId, BUSINESS_ROLES.checker), 'APPROVED');
 }
 
 export async function committeeDecisionAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form);
   const approved = field(form, 'approved') === 'true';
-  const result = await decideInCommittee(ctx.tenant, ctx.applicationId, { decidedBy: BUSINESS_ROLES.committee, approved, reason: field(form, 'reason') });
-  return finish(ctx, result, approved ? 'COMMITTEE_APPROVED' : 'COMMITTEE_DECLINED');
+  return finish(ctx, () => decideInCommittee(ctx.tenant, ctx.applicationId, { decidedBy: BUSINESS_ROLES.committee, approved, reason: field(form, 'reason') }), approved ? 'COMMITTEE_APPROVED' : 'COMMITTEE_DECLINED');
 }
 
 // -- Stage 7 -------------------------------------------------------------------
@@ -227,29 +225,28 @@ export async function generateOfferAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form);
   const disbursementDate = field(form, 'disbursementDate');
   const firstDueDate = field(form, 'firstDueDate');
-  const result = await generateOffer(ctx.tenant, ctx.applicationId, BUSINESS_ROLES.officer, {
+  return finish(ctx, () => generateOffer(ctx.tenant, ctx.applicationId, BUSINESS_ROLES.officer, {
     ...(disbursementDate === '' ? {} : { disbursementDate }),
     ...(firstDueDate === '' ? {} : { firstDueDate }),
-  });
-  return finish(ctx, result, 'OFFER_GENERATED');
+  }), 'OFFER_GENERATED');
 }
 
 /** Sending the same letter version twice is a no-op in the service; a resend needs a new version. */
 export async function sendOfferAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form);
-  return finish(ctx, await sendOffer(ctx.tenant, ctx.applicationId, BUSINESS_ROLES.officer), 'OFFER_SENT');
+  return finish(ctx, () => sendOffer(ctx.tenant, ctx.applicationId, BUSINESS_ROLES.officer), 'OFFER_SENT');
 }
 
 /** Stands in for the UAE Pass signing callback: records a fixture signature on the letter version the form names. */
 export async function recordSignedAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form);
-  return finish(ctx, await recordSigned(ctx.tenant, ctx.applicationId, { letterVersion: field(form, 'letterVersion') }, BUSINESS_ROLES.officer), 'SIGNED');
+  return finish(ctx, () => recordSigned(ctx.tenant, ctx.applicationId, { letterVersion: field(form, 'letterVersion') }, BUSINESS_ROLES.officer), 'SIGNED');
 }
 
 /** Stands in for the partner bank's payment confirmation: records a fixture payment reference. Released by the finance principal. */
 export async function recordDisbursedAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form);
-  return finish(ctx, await recordDisbursed(ctx.tenant, ctx.applicationId, BUSINESS_ROLES.finance), 'DISBURSED');
+  return finish(ctx, () => recordDisbursed(ctx.tenant, ctx.applicationId, BUSINESS_ROLES.finance), 'DISBURSED');
 }
 
 // -- Stages 8–9, withdrawal ------------------------------------------------------
@@ -259,10 +256,10 @@ export async function recordPortfolioStatusAction(form: FormData): Promise<void>
   const days = field(form, 'daysPastDue');
   const arrears = minorUnits(field(form, 'arrears') || '0');
   if (!/^\d{1,5}$/.test(days) || arrears === undefined) return finish(ctx, refused('INPUT_MALFORMED', 'Days past due is a whole number; arrears an amount'), '');
-  return finish(ctx, await recordPortfolioStatus(ctx.tenant, ctx.applicationId, { daysPastDue: Number.parseInt(days, 10), arrearsMinorUnits: arrears }, BUSINESS_ROLES.officer), 'PORTFOLIO_RECORDED');
+  return finish(ctx, () => recordPortfolioStatus(ctx.tenant, ctx.applicationId, { daysPastDue: Number.parseInt(days, 10), arrearsMinorUnits: arrears }, BUSINESS_ROLES.officer), 'PORTFOLIO_RECORDED');
 }
 
 export async function withdrawApplicationAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form);
-  return finish(ctx, await withdrawApplication(ctx.tenant, ctx.applicationId, field(form, 'reason'), BUSINESS_ROLES.officer), 'WITHDRAWN');
+  return finish(ctx, () => withdrawApplication(ctx.tenant, ctx.applicationId, field(form, 'reason'), BUSINESS_ROLES.officer), 'WITHDRAWN');
 }

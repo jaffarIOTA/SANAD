@@ -104,7 +104,9 @@ export default async function OfferPage({ params, searchParams }: { readonly par
         <Rate rate={rate(terms.aprBp, 'APR', 'ANNUAL')} locale={f.arabic ? 'ar-SA' : 'en-SA'} label={t('APR (computed by the platform)', 'معدل النسبة السنوي (تحسبه المنصة)')} />
         {/* The rate's source reference is stored with the offer (terms.rateSourceRef) but not shown: in this tenant's catalogue it is a free-text provenance note that names a vendor. */}
         <span className="text-[12px] text-ink-quiet">{t('Rate source: the fund’s rate card (ILLUSTRATIVE), recorded with the offer.', 'مصدر المعدل: جدول أسعار الصندوق (توضيحي)، مسجّل مع العرض.')}</span>
-        <span className="w-full text-[12px] text-ink-quiet">{t('Both are the figures stored with this offer: the rate snapshot taken at quotation and the APR computed from the quoted cash flows. The letter states the same rate; it does not yet state the APR.', 'كلاهما من الأرقام المحفوظة مع هذا العرض: لقطة المعدل عند التسعير ومعدل النسبة السنوي المحسوب من التدفقات النقدية المسعّرة. يذكر الخطاب المعدل نفسه، ولا يذكر معدل النسبة السنوي بعد.')}</span>
+        <span className="w-full text-[12px] text-ink-quiet">{offer.letter.terms.some((r) => r.code === 'APR')
+          ? t('Both are the figures stored with this offer: the rate snapshot taken at quotation and the APR computed from the quoted cash flows. The letter states both.', 'كلاهما من الأرقام المحفوظة مع هذا العرض: لقطة المعدل عند التسعير ومعدل النسبة السنوي المحسوب من التدفقات النقدية المسعّرة. ويذكرهما الخطاب كليهما.')
+          : t('Both are the figures stored with this offer: the rate snapshot taken at quotation and the APR computed from the quoted cash flows. The letter states the same rate; this version of it does not state the APR.', 'كلاهما من الأرقام المحفوظة مع هذا العرض: لقطة المعدل عند التسعير ومعدل النسبة السنوي المحسوب من التدفقات النقدية المسعّرة. يذكر الخطاب المعدل نفسه، ولا يذكر هذا الإصدار منه معدل النسبة السنوي.')}</span>
       </section>
 
       {/* -- Schedule ------------------------------------------------------------------------------ */}
@@ -167,8 +169,8 @@ export default async function OfferPage({ params, searchParams }: { readonly par
             <Field label={t('Planned date', 'التاريخ المخطط')}>{f.isoDate(terms.disbursementDate)}</Field>
           </dl>
           <p className="mt-4 rounded-tile bg-sunken px-3 py-2.5 text-[12px] text-ink-quiet">{f.arabic
-            ? <>التسلسل: يوقّع العميل ← يُطلق المراجِع (<Id>{BUSINESS_ROLES.checker}</Id>) أمر الدفع ← يدفع البنك الشريك ← يقيّد نظام القروض التمويل (المرحلة {f.n(8)}).</>
-            : <>Flow: the applicant signs → the checker (<Id>{BUSINESS_ROLES.checker}</Id>) releases the payment instruction → the partner bank pays → the loan system books the facility (stage 8).</>}</p>
+            ? <>التسلسل: يوقّع العميل ← يُطلق مسؤول المالية (<Id>{BUSINESS_ROLES.finance}</Id>) أمر الدفع — لا المعتمِد ولا الموظف الذي أحال الطلب ← يدفع البنك الشريك ← يقيّد نظام القروض التمويل (المرحلة {f.n(8)}).</>
+            : <>Flow: the applicant signs → the finance principal (<Id>{BUSINESS_ROLES.finance}</Id>) — neither the approver nor the submitting officer — releases the payment instruction → the partner bank pays → the loan system books the facility (stage 8).</>}</p>
         </SectionCard>
       </div>
 
@@ -199,7 +201,7 @@ export default async function OfferPage({ params, searchParams }: { readonly par
         </details>
 
         <div className="mt-5 border-t border-line pt-5">
-          <NextStep segment={segment} view={view} letterVersion={a.offer?.letterVersion} f={f} />
+          <NextStep segment={segment} view={view} letterVersion={a.offer?.letterVersion} latestVersion={offer.letter.version} f={f} />
         </div>
       </SectionCard>
     </ApplicationShell>
@@ -336,7 +338,7 @@ function LetterPreview({ letter }: { readonly letter: OfferLetter }): ReactEleme
   );
 }
 
-function NextStep({ segment, view, letterVersion, f }: { readonly segment: string; readonly view: NonNullable<Awaited<ReturnType<typeof getApplication>>>; readonly letterVersion: string | undefined; readonly f: Formatters }): ReactElement {
+function NextStep({ segment, view, letterVersion, latestVersion, f }: { readonly segment: string; readonly view: NonNullable<Awaited<ReturnType<typeof getApplication>>>; readonly letterVersion: string | undefined; readonly latestVersion: string | undefined; readonly f: Formatters }): ReactElement {
   const { t } = f;
   const a = view.application;
   const ctx = <FormContext segment={segment} applicationId={a.applicationId} screen="offer" />;
@@ -349,21 +351,41 @@ function NextStep({ segment, view, letterVersion, f }: { readonly segment: strin
           <button type="submit" className={BTN_PRIMARY}>{t(SEND_LABEL.en, SEND_LABEL.ar)}</button>
         </form>
       );
-    case 'OFFER_SENT':
+    case 'OFFER_SENT': {
+      // A sent version is sent once; a resend needs a new version. A newer, unsent version is offered for sending here.
+      const unsent = latestVersion !== undefined && latestVersion !== letterVersion;
       return (
-        <form action={recordSignedAction} className="flex flex-wrap items-center justify-between gap-3">
-          {ctx}
-          <input type="hidden" name="letterVersion" value={letterVersion ?? ''} />
-          <p className="text-[13px] text-ink-quiet">{t('Waiting for the applicant’s signature. This records the UAE Pass signing callback (fixture) on the letter version that was sent — and no other.', 'بانتظار توقيع العميل. يسجّل هذا إشعار التوقيع من الهوية الرقمية (تجريبي) على إصدار الخطاب المرسل — ولا غيره.')}</p>
-          <button type="submit" className={BTN_PRIMARY}>{t('Record signature', 'تسجيل التوقيع')}</button>
-        </form>
+        <div className="flex flex-col gap-4">
+          <form action={recordSignedAction} className="flex flex-wrap items-center justify-between gap-3">
+            {ctx}
+            <input type="hidden" name="letterVersion" value={letterVersion ?? ''} />
+            <p className="text-[13px] text-ink-quiet">{t('Waiting for the applicant’s signature. This records the UAE Pass signing callback (fixture) on the letter version that was sent — and no other.', 'بانتظار توقيع العميل. يسجّل هذا إشعار التوقيع من الهوية الرقمية (تجريبي) على إصدار الخطاب المرسل — ولا غيره.')}</p>
+            <button type="submit" className={BTN_PRIMARY}>{t('Record signature', 'تسجيل التوقيع')}</button>
+          </form>
+          {unsent ? (
+            <form action={sendOfferAction} className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4" data-send-new-version>
+              {ctx}
+              <p className="text-[13px] text-ink-quiet">{t('A newer letter version has been generated and not sent. Sending it replaces the sent version as the one to sign.', 'أُعدّ إصدار أحدث من الخطاب ولم يُرسل بعد. إرساله يجعله الإصدار المعتمد للتوقيع بدلاً من الإصدار المرسل.')}</p>
+              <button type="submit" className={BTN_SECONDARY}>{t('Send the new version', 'إرسال الإصدار الجديد')}</button>
+            </form>
+          ) : (
+            <form action={generateOfferAction} className="flex flex-wrap items-end gap-3 border-t border-line pt-4" data-generate-new-version>
+              {ctx}
+              <p className="w-full text-[13px] text-ink-quiet">{t('Sending the same version again sends nothing: to resend the offer, generate a new version, then send it. The letter is re-quoted as of today; a letter identical to the sent one is the same version, so change a date if nothing else has changed.', 'إعادة إرسال الإصدار نفسه لا ترسل شيئاً: لإعادة إرسال العرض أعدّ إصداراً جديداً ثم أرسله. يُعاد تسعير الخطاب بتاريخ اليوم؛ والخطاب المطابق للمرسل هو الإصدار نفسه، فغيّر تاريخاً إن لم يتغير شيء آخر.')}</p>
+              <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">{t('Disbursement date', 'تاريخ الصرف')}<input type="date" name="disbursementDate" className={INPUT} /></label>
+              <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">{t('First due date', 'تاريخ أول قسط')}<input type="date" name="firstDueDate" className={INPUT} /></label>
+              <button type="submit" className={BTN_SECONDARY}>{t('Generate a new version', 'إعداد إصدار جديد')}</button>
+            </form>
+          )}
+        </div>
       );
+    }
     case 'SIGNED':
       return (
         <form action={recordDisbursedAction} className="flex flex-wrap items-center justify-between gap-3">
           {ctx}
-          <p className="text-[13px] text-ink-quiet">{t(`Signed${a.signature === undefined ? '' : ` on ${f.epochDate(a.signature.atEpochSeconds)}`}. The checker`, `وُقّع${a.signature === undefined ? '' : ` بتاريخ ${f.epochDate(a.signature.atEpochSeconds)}`}. يُطلق المراجِع`)} (<Id>{BUSINESS_ROLES.checker}</Id>) {t('releases the payment; the partner bank’s confirmation is a fixture reference.', 'الدفعة؛ تأكيد البنك الشريك مرجع تجريبي.')}</p>
-          <button type="submit" className={BTN_PRIMARY}>{t('Release disbursement', 'إطلاق الصرف')}</button>
+          <p className="text-[13px] text-ink-quiet" data-releases-disbursement>{t(`Signed${a.signature === undefined ? '' : ` on ${f.epochDate(a.signature.atEpochSeconds)}`}. The finance principal`, `وُقّع${a.signature === undefined ? '' : ` بتاريخ ${f.epochDate(a.signature.atEpochSeconds)}`}. يُطلق مسؤول المالية`)} (<Id>{BUSINESS_ROLES.finance}</Id>) {t('releases the payment — not the approver and not the submitting officer; the partner bank’s confirmation is a fixture reference.', 'الدفعة — لا المعتمِد ولا الموظف الذي أحال الطلب؛ تأكيد البنك الشريك مرجع تجريبي.')}</p>
+          <button type="submit" className={BTN_PRIMARY}>{t('Release disbursement as finance', 'إطلاق الصرف بصفة المالية')}</button>
         </form>
       );
     case 'DISBURSED':

@@ -7,7 +7,9 @@
  * sidebar because they are true — a navigation that lists only what works
  * hides the product, and one that lists everything as if it worked is worse.
  *
- * Narrowed by the deployment's jurisdiction (ADR 0005) — see navigation.ts.
+ * Narrowed by the deployment's jurisdiction (ADR 0005) through navigationFor
+ * in navigation.ts, which reads each module's own `jurisdictions` tag in
+ * server/modules.ts — never a list of ids.
  *
  * A client component only to read the path, so the item for the page you are
  * on — including every screen under it, such as /business/FR-…/offer — is
@@ -38,7 +40,8 @@ function note(readiness: ModuleReadiness): string | undefined {
 function NavLabel({ text }: { readonly text: string }): ReactElement {
   const split = latinSuffix(text);
   if (split === undefined) return <>{text}</>;
-  return <>{split.before} <bdi dir="ltr" className="whitespace-nowrap">{split.latin}</bdi></>;
+  // A no-break space keeps the name with the words it qualifies; the isolate keeps its parentheses the right way round.
+  return <>{split.before}{' '}<bdi dir="ltr" className="whitespace-nowrap">{split.latin}</bdi></>;
 }
 
 export function SideNav({ segment, arabic, jurisdiction }: { readonly segment: string; readonly arabic: boolean; readonly jurisdiction: NavJurisdiction }): ReactElement {

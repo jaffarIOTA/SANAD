@@ -439,7 +439,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "409":
-          $ref: "#/components/responses/IdempotencyConflict"
+          $ref: "#/components/responses/HandoverConflict"
         "422":
           $ref: "#/components/responses/ControlRejection"
         "429":
@@ -1292,6 +1292,24 @@ components:
         No such request within this partner's scope. A request that exists for
         another partner is reported as absent rather than forbidden, so the
         API does not confirm the existence of other partners' business.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    HandoverConflict:
+      description: |
+        The hand-over was not performed, and nothing was saved. The problem's
+        `reason` says which conflict:
+
+        - `IDEMPOTENCY_KEY_REUSED` — the `Idempotency-Key` has been used with a
+          different body;
+        - `IDEMPOTENCY_KEY_IN_FLIGHT` — a request with this key is still being
+          processed;
+        - `STALE_APPLICATION` — the application was changed by another process
+          between reading and writing it. This response is stored against the
+          `Idempotency-Key` like any other, so retry the same body under a new
+          key; the hand-over itself is idempotent on `upstreamRef`, so a retry
+          never creates a second application.
       content:
         application/problem+json:
           schema:

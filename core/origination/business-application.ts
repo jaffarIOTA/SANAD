@@ -90,8 +90,17 @@ export interface Transition { readonly application: BusinessApplication; readonl
 
 const bad = (reason: string, detail: string, context?: Readonly<Record<string, string>>): Result<never> => reject('OP-DETERMINACY', reason, detail, context);
 
-/** An identity-number shape (e.g. 784-YYYY-NNNNNNN-N), with or without separators. */
-const IDENTITY_NUMBER = /[0-9]{3}-?[0-9]{4}-?[0-9]{7}-?[0-9]/;
+/**
+ * The identity-number shapes of both jurisdictions:
+ *
+ *   - the UAE national identity card number, 784-YYYY-NNNNNNN-N (fifteen
+ *     digits), with dashes, spaces or no separators;
+ *   - the Saudi national id and iqama, ten digits starting 1 (citizen) or 2
+ *     (resident), as a run of exactly ten digits — not part of a longer run.
+ */
+const AE_IDENTITY_NUMBER = /\d{3}[- ]?\d{4}[- ]?\d{7}[- ]?\d/;
+const SA_IDENTITY_NUMBER = /(?<!\d)[12]\d{9}(?!\d)/;
+const IDENTITY_NUMBERS: readonly RegExp[] = [AE_IDENTITY_NUMBER, SA_IDENTITY_NUMBER];
 
 /**
  * Whether any string anywhere in a value — nested objects and arrays
@@ -100,9 +109,13 @@ const IDENTITY_NUMBER = /[0-9]{3}-?[0-9]{4}-?[0-9]{7}-?[0-9]/;
  * numbers and bigints are amounts, not text, so they are not tested. Keys
  * named in `skipKeys` (an amount carried as a digit string on the wire) are
  * passed over.
+ *
+ * Applied to every free-text and reference input the service accepts, not
+ * only the hand-over: reasons, document references, figure source references,
+ * bureau references, signature and payment references.
  */
 export function containsIdentityNumber(value: unknown, skipKeys: ReadonlySet<string> = new Set()): boolean {
-  if (typeof value === 'string') return IDENTITY_NUMBER.test(value);
+  if (typeof value === 'string') return IDENTITY_NUMBERS.some((p) => p.test(value));
   if (Array.isArray(value)) return value.some((v) => containsIdentityNumber(v, skipKeys));
   if (value !== null && typeof value === 'object') {
     return Object.entries(value as Record<string, unknown>).some(([k, v]) => !skipKeys.has(k) && containsIdentityNumber(v, skipKeys));
@@ -192,6 +205,7 @@ export function decideInCommittee(app: BusinessApplication, decision: { readonly
   const e = expect(app, ['IN_COMMITTEE'], 'Decide in committee'); if (!e.ok) return e;
   if (decision.decidedBy === app.submittedBy) return reject('OP-DETERMINACY', 'FOUR_EYES_SELF_APPROVAL', 'The officer who submitted may not decide in committee');
   if (decision.reason.trim().length < 3) return bad('COMMITTEE_REASON_REQUIRED', 'A committee decision records its reason');
+  if (containsIdentityNumber(decision.reason)) return bad('IDENTITY_NUMBER_IN_PAYLOAD', 'An identity number does not belong in a committee reason; refer to the party by reference');
   const committee = { decidedBy: decision.decidedBy, approved: decision.approved, reason: decision.reason, atEpochSeconds: at };
   return ok(move(app, decision.approved ? 'APPROVED' : 'DECLINED', { committee }, decision.approved ? 'COMMITTEE_APPROVED' : 'COMMITTEE_DECLINED', decision.decidedBy, at, { reason: decision.reason }));
 }
@@ -210,18 +224,70 @@ export function recordSigned(app: BusinessApplication, signature: { readonly sig
   const e = expect(app, ['OFFER_SENT'], 'Record the signature'); if (!e.ok) return e;
   if (app.offer === undefined || signature.letterVersion !== app.offer.letterVersion) return bad('SIGNED_LETTER_NOT_SENT_LETTER', 'The signature is on a different letter from the one sent');
   if (!nonEmpty(signature.signatureRef)) return bad('SIGNATURE_REF_REQUIRED', 'The signing service’s reference is required');
+  if (containsIdentityNumber(signature.signatureRef)) return bad('IDENTITY_NUMBER_IN_PAYLOAD', 'An identity number does not belong in a signature reference');
   return ok(move(app, 'SIGNED', { signature: { signatureRef: signature.signatureRef, atEpochSeconds: at } }, 'SIGNED', actor, at, { signatureRef: signature.signatureRef }));
 }
 
 export function recordDisbursed(app: BusinessApplication, paymentRef: string, actor: string, at: bigint): Result<Transition> {
   const e = expect(app, ['SIGNED'], 'Record the disbursement'); if (!e.ok) return e;
   if (!nonEmpty(paymentRef)) return bad('PAYMENT_REF_REQUIRED', 'The payment instruction’s reference is required');
+  if (containsIdentityNumber(paymentRef)) return bad('IDENTITY_NUMBER_IN_PAYLOAD', 'An identity number does not belong in a payment reference');
   return ok(move(app, 'DISBURSED', { disbursement: { paymentRef, atEpochSeconds: at } }, 'DISBURSED', actor, at, { paymentRef }));
 }
 
 export function withdraw(app: BusinessApplication, reason: string, actor: string, at: bigint): Result<Transition> {
   const e = expect(app, ['RECEIVED', 'SPREADING', 'SUBMITTED', 'ASSESSED', 'IN_COMMITTEE', 'APPROVED', 'OFFER_SENT'], 'Withdraw'); if (!e.ok) return e;
   if (reason.trim().length < 3) return bad('WITHDRAWAL_REASON_REQUIRED', 'A withdrawal says why');
+  if (containsIdentityNumber(reason)) return bad('IDENTITY_NUMBER_IN_PAYLOAD', 'An identity number does not belong in a withdrawal reason; refer to the party by reference');
   const application: BusinessApplication = { ...app, status: 'WITHDRAWN', withdrawal: { reason, atEpochSeconds: at } };
   return ok({ application, event: { eventType: 'WITHDRAWN', fromStage: app.stage, toStage: app.stage, actor, atEpochSeconds: at, detail: { reason } } });
+}
+
+// -- Offer date policy (tenant configuration) ----------------------------------------
+
+/**
+ * The bounds on the dates an officer may choose for an offer, and the
+ * defaults when none is chosen — the tenant's credit policy, never a
+ * constant. Whole days, as bigint.
+ */
+export interface OfferDatePolicy {
+  readonly policyId: string;
+  readonly version: string;
+  /** Where the bounds come from; an illustrative policy says ILLUSTRATIVE here. */
+  readonly policyRef: string;
+  readonly maxDisbursementAfterOfferDays: bigint;
+  readonly minFirstDueAfterDisbursementDays: bigint;
+  readonly maxFirstDueAfterDisbursementDays: bigint;
+  readonly defaultDisbursementAfterOfferDays: bigint;
+  readonly offerValidityDays: bigint;
+}
+
+const OFFER_POLICY_DAYS = ['maxDisbursementAfterOfferDays', 'minFirstDueAfterDisbursementDays', 'maxFirstDueAfterDisbursementDays', 'defaultDisbursementAfterOfferDays', 'offerValidityDays'] as const;
+
+/** Parses an offer date policy from configuration; a malformed one is a refusal, never a default. */
+export function parseOfferDatePolicy(raw: unknown): Result<OfferDatePolicy> {
+  const malformed = (field: string): Result<never> => bad('OFFER_POLICY_MALFORMED', 'The offer date policy is malformed', { field });
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return malformed('body');
+  const r = raw as Record<string, unknown>;
+  for (const k of ['policyId', 'version', 'policyRef'] as const) if (typeof r[k] !== 'string' || !nonEmpty(r[k])) return malformed(k);
+  const days: Partial<Record<(typeof OFFER_POLICY_DAYS)[number], bigint>> = {};
+  for (const k of OFFER_POLICY_DAYS) {
+    const v = r[k];
+    if (typeof v !== 'string' || !/^\d{1,4}$/.test(v)) return malformed(k);
+    days[k] = BigInt(v);
+  }
+  const policy: OfferDatePolicy = {
+    policyId: r['policyId'] as string,
+    version: r['version'] as string,
+    policyRef: r['policyRef'] as string,
+    maxDisbursementAfterOfferDays: days.maxDisbursementAfterOfferDays ?? 0n,
+    minFirstDueAfterDisbursementDays: days.minFirstDueAfterDisbursementDays ?? 0n,
+    maxFirstDueAfterDisbursementDays: days.maxFirstDueAfterDisbursementDays ?? 0n,
+    defaultDisbursementAfterOfferDays: days.defaultDisbursementAfterOfferDays ?? 0n,
+    offerValidityDays: days.offerValidityDays ?? 0n,
+  };
+  if (policy.minFirstDueAfterDisbursementDays > policy.maxFirstDueAfterDisbursementDays) return malformed('minFirstDueAfterDisbursementDays');
+  if (policy.defaultDisbursementAfterOfferDays > policy.maxDisbursementAfterOfferDays) return malformed('defaultDisbursementAfterOfferDays');
+  if (policy.offerValidityDays === 0n) return malformed('offerValidityDays');
+  return ok(policy);
 }

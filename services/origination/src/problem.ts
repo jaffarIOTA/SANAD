@@ -90,6 +90,7 @@ const ARABIC: Readonly<Record<string, string>> = {
   IDENTITY_NUMBER_IN_PAYLOAD: 'لا يُرسَل رقم الهوية ضمن الطلب؛ أرسل مرجعاً بدلاً منه.',
   UPSTREAM_REF_REUSED: 'سبق استخدام هذا المرجع لتسليم طلب آخر.',
   APPLICATION_ID_TAKEN: 'سبق تسليم طلب بهذا المعرّف تحت مرجع مختلف.',
+  STALE_APPLICATION: 'تغيّر الطلب من جهة أخرى منذ تحميله، ولم يُحفظ شيء. أعد التحميل وحاول مرة أخرى.',
   TENANT_NOT_ACTIVE: 'هذه المؤسسة غير مفعّلة في نطاق الاختصاص الحالي للنظام.',
   ELIGIBILITY_POLICY_UNAVAILABLE: 'تعذّر تحميل سياسة الائتمان لهذه المؤسسة.',
 

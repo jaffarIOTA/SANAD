@@ -8,7 +8,9 @@
  * Idempotency-Key replays a response verbatim; the hand-over itself is
  * idempotent on `upstreamRef` (200 with the existing application).
  * The application is durable before the 201 is sent. If the hand-over or its
- * write throws, the Idempotency-Key is released so the caller can retry.
+ * write throws, or the write is refused (409 STALE_APPLICATION, 503
+ * PERSISTENCE_FAILED — nothing written), the Idempotency-Key is released and
+ * the answer not stored, so the caller can retry with the same key.
  * No identity number anywhere in the body (contact and upstream reference
  * included) — refused with a named control before the service is called.
  */
@@ -19,7 +21,7 @@ import { validatorFor } from '@sanad/origination/contract.ts';
 import { fingerprint, type IdempotencyStore } from '@sanad/origination/idempotency.ts';
 import { fromRejection, problem } from '@sanad/origination/problem.ts';
 
-import { flushBusiness, handOver, syncBusiness } from '../../../../../server/business.ts';
+import { handOver, isSettleFailure, mutateBusiness, syncBusiness } from '../../../../../server/business.ts';
 import { idempotencyLedger } from '../../../../../server/persistence.ts';
 import { correlation, json, principalOr401, refuse } from '../shared.ts';
 import { businessTenantOr403, toStatusWire } from './shared.ts';
@@ -97,11 +99,14 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // Anything that throws from here (the service, the database) releases the key, so the caller can retry the
-  // hand-over it never received an answer to — as services/origination/src/server.ts does.
+  // hand-over it never received an answer to — as services/origination/src/server.ts does. So does a save that
+  // wrote nothing (STALE_APPLICATION, PERSISTENCE_FAILED): its answer is not stored against the key, because the
+  // same request may well succeed once retried, and a stored 409 would replay the failure forever.
+  const release = (): Promise<void> => idempotency.release({ tenantId: principal.tenantId, partnerId: principal.partnerId, key });
   try {
-    return await handOverAndAnswer(tenant, body, principal.partnerId, correlationId, finish);
+    return await handOverAndAnswer(tenant, body, principal.partnerId, correlationId, finish, release);
   } catch (error) {
-    await idempotency.release({ tenantId: principal.tenantId, partnerId: principal.partnerId, key });
+    await release();
     throw error;
   }
 }
@@ -112,8 +117,10 @@ const AMOUNT_FIELDS: ReadonlySet<string> = new Set(['requestedMinorUnits']);
 async function handOverAndAnswer(
   tenant: TenantCode, body: HandoverBody, partnerId: string, correlationId: string,
   finish: (status: number, body: unknown, extra?: Record<string, string>) => Promise<Response>,
+  release: () => Promise<void>,
 ): Promise<Response> {
-  const result = await handOver(tenant, {
+  // Made and written as one unit under the tenant's lock: durable before it is acknowledged.
+  const result = await mutateBusiness(tenant, () => handOver(tenant, {
     applicationId: body.applicationId,
     upstreamRef: body.upstreamRef,
     applicant: {
@@ -133,14 +140,15 @@ async function handOverAndAnswer(
     graceMonths: body.graceMonths ?? 0,
     contributionPerTenThousand: body.contributionPerTenThousand ?? 0,
     ...(body.contact === undefined ? {} : { contact: { partyRef: body.contact.partyRef, ...(body.contact.emailMasked === undefined ? {} : { emailMasked: body.contact.emailMasked }), ...(body.contact.mobileMasked === undefined ? {} : { mobileMasked: body.contact.mobileMasked }) } }),
-  }, partnerId);
-  if (!result.ok) return finish(422, fromRejection(result.error, correlationId));
-
-  // Durable before it is acknowledged; a write that lost to another process is refused, not acknowledged.
-  const settled = await flushBusiness();
-  if (!settled.ok) {
-    return finish(409, problem({ status: 409, kind: 'conflict', title: 'Conflict', detail: settled.error.detail, reason: settled.error.reason, control: settled.error.control, correlationId }));
+  }, partnerId));
+  if (!result.ok && isSettleFailure(result.error)) {
+    // Nothing was written: refused, not acknowledged — and the key released so the same request can be retried.
+    await release();
+    const stale = result.error.reason === 'STALE_APPLICATION';
+    const status = stale ? 409 : 503;
+    return json(status, problem({ status, kind: stale ? 'conflict' : 'error', title: stale ? 'Conflict' : 'Service unavailable', detail: result.error.detail, reason: result.error.reason, control: result.error.control, correlationId }), correlationId, stale ? {} : { 'retry-after': '1' });
   }
+  if (!result.ok) return finish(422, fromRejection(result.error, correlationId));
   const wire = toStatusWire(result.value.view);
   return finish(result.value.created ? 201 : 200, wire, { location: `/api/origination/v1/business-applications/${wire.applicationId}` });
 }

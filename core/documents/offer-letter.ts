@@ -18,6 +18,12 @@
  * (a converted date can move between two renders); the Hijri string is
  * supplied by an injected formatter that reads the stored dual date.
  *
+ * Numerals: the English parts are Latin; the Arabic parts write every
+ * quantity — amounts, counts, rates, dates — in Arabic-Indic digits, with the
+ * currency in words. The reference and the version hash are identifiers and
+ * stay Latin in both. The digits are part of the content, so they are part of
+ * the hash: a letter is the text the applicant reads.
+ *
  * Signatories appear by role only. No personal name, no identity number and no
  * contact detail is ever part of the letter.
  */
@@ -65,6 +71,12 @@ export interface OfferLetterInput {
   readonly graceMonths: number;
   /** The approved rate snapshot, in integer basis points. Shown, never applied here. */
   readonly rateBp: bigint;
+  /**
+   * The APR the platform computed for this offer (core/pricing/apr.ts), in
+   * integer basis points. Passed in and shown as a labelled line; never
+   * computed here. Absent, the letter carries no APR line.
+   */
+  readonly aprBp?: bigint;
   /** The applicant's own contribution, per ten thousand of the project cost. */
   readonly equityContributionPerTenThousand: bigint;
   /** ISO dates, yyyy-mm-dd. */
@@ -139,6 +151,36 @@ export function formatPerTenThousand(value: bigint): string {
   return `${negative ? '-' : ''}${(abs / 100n).toString()}.${(abs % 100n).toString().padStart(2, '0')}%`;
 }
 
+const ARABIC_INDIC = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'] as const;
+
+/**
+ * A quantity's Latin digits as Arabic-Indic, for the Arabic parts of the
+ * letter and its notifications: the digits, a decimal point between two
+ * digits (٫), a thousands comma between two digits (٬) and the percent sign
+ * (٪). Quantities only — amounts, counts, rates, dates. Identifiers (the
+ * reference, the version hash) are never passed through it and stay Latin.
+ */
+export function arabicIndic(s: string): string {
+  return s
+    .replace(/(\d)\.(?=\d)/g, '$1٫')
+    .replace(/(\d),(?=\d)/g, '$1٬')
+    .replace(/%/g, '٪')
+    .replace(/\d/g, (d) => ARABIC_INDIC[Number(d)] ?? d);
+}
+
+/** Arabic-Indic (and extended Arabic-Indic) digits back to Latin, so a digit-run guard sees every script. */
+function latinDigits(s: string): string {
+  return s.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660)).replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
+}
+
+const CURRENCY_AR: Readonly<Record<CurrencyCode, string>> = { AED: 'درهم إماراتي', SAR: 'ريال سعودي' };
+
+/** 200000000n AED → '٢٬٠٠٠٬٠٠٠٫٠٠ درهم إماراتي': the Arabic part of a letter's amount. Integer arithmetic. */
+export function formatMoneyAr(m: Money): string {
+  const latin = formatMoney(m).slice(m.currency.length + 1);
+  return `${arabicIndic(latin)} ${CURRENCY_AR[m.currency]}`;
+}
+
 const MONTHS_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] as const;
 const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'] as const;
 
@@ -161,7 +203,7 @@ function gregorian(iso: string): BilingualText {
   const [year, month, day] = [m?.[1] ?? '', Number(m?.[2] ?? '1'), Number(m?.[3] ?? '1')];
   return {
     en: `${String(day)} ${MONTHS_EN[month - 1] ?? ''} ${year}`,
-    ar: `${String(day)} ${MONTHS_AR[month - 1] ?? ''} ${year}`,
+    ar: `${arabicIndic(String(day))} ${MONTHS_AR[month - 1] ?? ''} ${arabicIndic(year)}`,
   };
 }
 
@@ -174,7 +216,9 @@ function gregorian(iso: string): BilingualText {
  * value anywhere in a letter or a notification.
  */
 export function containsIdentityPattern(text: string): boolean {
-  return /\d{10,}/.test(text) || /\b784[- ]?\d{4}[- ]?\d{7}[- ]?\d\b/.test(text);
+  // Arabic-Indic digits are digits too: an identity number written ١٠١٢٣٤٥٦٧٨ is still one.
+  const latin = latinDigits(text);
+  return /\d{10,}/.test(latin) || /\b784[- ]?\d{4}[- ]?\d{7}[- ]?\d\b/.test(latin);
 }
 
 // -- Canonical serialisation and the version ----------------------------------
@@ -214,8 +258,15 @@ function chargeLabel(family: ProductFamily): BilingualText {
   return family === 'ISLAMIC' ? { en: 'Total profit', ar: 'إجمالي الربح' } : { en: 'Total interest', ar: 'إجمالي الفائدة' };
 }
 
-const months = (count: number): BilingualText => ({ en: `${String(count)} months`, ar: `${String(count)} شهرًا` });
-const same = (text: string): BilingualText => ({ en: text, ar: text });
+/** A count of months: English Latin, Arabic in Arabic-Indic digits with the noun the count takes. */
+function months(count: number): BilingualText {
+  const n = arabicIndic(String(count));
+  const ar = count === 1 ? 'شهر واحد' : count === 2 ? 'شهران' : count >= 3 && count <= 10 ? `${n} أشهر` : `${n} شهرًا`;
+  return { en: `${String(count)} months`, ar };
+}
+/** A Latin quantity in English, the same quantity in Arabic-Indic digits in Arabic. */
+const quantity = (text: string): BilingualText => ({ en: text, ar: arabicIndic(text) });
+const amount = (m: Money): BilingualText => ({ en: formatMoney(m), ar: formatMoneyAr(m) });
 
 function allTexts(input: OfferLetterInput): string[] {
   const b = (t: BilingualText): string[] => [t.en, t.ar];
@@ -250,6 +301,7 @@ export function buildOfferLetter(input: OfferLetterInput, hijri?: HijriFormatter
     return bad('FOL_GRACE', 'The grace period is a whole number of months shorter than the tenor');
   }
   if (input.rateBp < 0n) return bad('FOL_RATE', 'The rate is not negative');
+  if (input.aprBp !== undefined && input.aprBp < 0n) return bad('FOL_APR', 'The APR is not negative');
   if (input.equityContributionPerTenThousand < 0n || input.equityContributionPerTenThousand > 10_000n) {
     return bad('FOL_EQUITY', 'The equity contribution is between zero and ten thousand per ten thousand');
   }
@@ -279,19 +331,21 @@ export function buildOfferLetter(input: OfferLetterInput, hijri?: HijriFormatter
 
   const terms: LetterRow[] = [
     { code: 'PRODUCT', label: { en: 'Product', ar: 'المنتج' }, value: input.productVariantName },
-    { code: 'FACILITY_AMOUNT', label: { en: 'Facility amount', ar: 'مبلغ التمويل' }, value: same(formatMoney(input.facilityAmount)) },
+    { code: 'FACILITY_AMOUNT', label: { en: 'Facility amount', ar: 'مبلغ التمويل' }, value: amount(input.facilityAmount) },
     { code: 'TENOR', label: { en: 'Tenor', ar: 'مدة التمويل' }, value: months(input.tenorMonths) },
     { code: 'GRACE_PERIOD', label: { en: 'Grace period', ar: 'فترة السماح' }, value: months(input.graceMonths) },
-    { code: 'RATE', label: rateLabel(input.family), value: { en: `${rate} per annum`, ar: `${rate} سنويًا` } },
-    { code: 'EQUITY_CONTRIBUTION', label: { en: 'Equity contribution', ar: 'المساهمة الذاتية' }, value: same(formatPerTenThousand(input.equityContributionPerTenThousand)) },
+    { code: 'RATE', label: rateLabel(input.family), value: { en: `${rate} per annum`, ar: `${arabicIndic(rate)} سنويًا` } },
+    // The platform's APR, as computed by core/pricing/apr.ts and passed in — shown, never derived here.
+    ...(input.aprBp === undefined ? [] : [{ code: 'APR', label: { en: 'Annual percentage rate (APR)', ar: 'معدل النسبة السنوي' }, value: quantity(formatPerTenThousand(input.aprBp)) }]),
+    { code: 'EQUITY_CONTRIBUTION', label: { en: 'Equity contribution', ar: 'المساهمة الذاتية' }, value: quantity(formatPerTenThousand(input.equityContributionPerTenThousand)) },
   ];
 
   const instalmentCount = input.tenorMonths - input.graceMonths;
   const repayment: LetterRow[] = [
-    { code: 'INSTALMENT_COUNT', label: { en: 'Number of monthly instalments', ar: 'عدد الأقساط الشهرية' }, value: same(String(instalmentCount)) },
-    { code: 'INSTALMENT', label: { en: 'Monthly instalment', ar: 'القسط الشهري' }, value: same(formatMoney(input.totals.instalment)) },
-    { code: 'TOTAL_CHARGE', label: chargeLabel(input.family), value: same(formatMoney(input.totals.totalCharge)) },
-    { code: 'TOTAL_PAYABLE', label: { en: 'Total amount payable', ar: 'إجمالي المبلغ المستحق' }, value: same(formatMoney(input.totals.totalPayable)) },
+    { code: 'INSTALMENT_COUNT', label: { en: 'Number of monthly instalments', ar: 'عدد الأقساط الشهرية' }, value: quantity(String(instalmentCount)) },
+    { code: 'INSTALMENT', label: { en: 'Monthly instalment', ar: 'القسط الشهري' }, value: amount(input.totals.instalment) },
+    { code: 'TOTAL_CHARGE', label: chargeLabel(input.family), value: amount(input.totals.totalCharge) },
+    { code: 'TOTAL_PAYABLE', label: { en: 'Total amount payable', ar: 'إجمالي المبلغ المستحق' }, value: amount(input.totals.totalPayable) },
   ];
 
   const standardConditions: BilingualText[] = [
@@ -304,13 +358,13 @@ export function buildOfferLetter(input: OfferLetterInput, hijri?: HijriFormatter
     const share = formatPerTenThousand(input.equityContributionPerTenThousand);
     standardConditions.push({
       en: `The Borrower contributes ${share} of the project cost from its own funds before the first drawdown.`,
-      ar: `يساهم المقترض بنسبة ${share} من تكلفة المشروع من موارده الذاتية قبل السحب الأول.`,
+      ar: `يساهم المقترض بنسبة ${arabicIndic(share)} من تكلفة المشروع من موارده الذاتية قبل السحب الأول.`,
     });
   }
   if (input.graceMonths > 0) {
     standardConditions.push({
       en: `No principal instalment is due during the first ${String(input.graceMonths)} months.`,
-      ar: `لا يستحق أي قسط من أصل التمويل خلال أول ${String(input.graceMonths)} شهرًا.`,
+      ar: `لا يستحق أي قسط من أصل التمويل خلال فترة السماح البالغة ${months(input.graceMonths).ar}.`,
     });
   }
 

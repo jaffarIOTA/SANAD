@@ -4,6 +4,7 @@ import {
   type OfferLetterInput,
   buildOfferLetter,
   containsIdentityPattern,
+  displayVersion,
   formatMoney,
   formatPerTenThousand,
   offerLetterVersion,
@@ -80,7 +81,7 @@ describe('the Facility Offer Letter', () => {
     expect(letter.repayment.find((r) => r.code === 'TOTAL_CHARGE')?.label.en).toBe('Total interest');
     expect(letter.offerDate.hijri).toBeUndefined();
     expect(letter.validUntil.hijri).toBeUndefined();
-    expect(letter.offerDate.gregorian).toEqual({ en: '8 October 2026', ar: '8 أكتوبر 2026' });
+    expect(letter.offerDate.gregorian).toEqual({ en: '8 October 2026', ar: '٨ أكتوبر ٢٠٢٦' });
     expect(letter.calendars).toEqual(['GREGORIAN']);
     expect(letter.currency).toBe('AED');
     expect(all(letter)).not.toMatch(/profit|الربح/i);
@@ -129,6 +130,73 @@ describe('the Facility Offer Letter', () => {
       expect(r.ok, reason).toBe(false);
       if (!r.ok) expect(r.error.reason).toBe(reason);
     }
+  });
+});
+
+const LATIN_DIGIT = /[0-9]/;
+const ARABIC_INDIC_DIGIT = /[٠-٩]/;
+
+describe('numerals: Arabic-Indic in the Arabic parts, Latin in the English parts', () => {
+  const letter = expectOk(buildOfferLetter(aeConventional));
+  const rows = [...letter.terms, ...letter.repayment];
+
+  it('writes every Arabic quantity in Arabic-Indic digits, and every English one in Latin digits', () => {
+    for (const r of rows) {
+      expect(r.value.ar, r.code).not.toMatch(LATIN_DIGIT);
+      expect(r.value.en, r.code).not.toMatch(ARABIC_INDIC_DIGIT);
+    }
+    expect(letter.terms.find((r) => r.code === 'FACILITY_AMOUNT')?.value).toEqual({ en: 'AED 2,000,000.00', ar: '٢٬٠٠٠٬٠٠٠٫٠٠ درهم إماراتي' });
+    expect(letter.terms.find((r) => r.code === 'TENOR')?.value.ar).toBe('٦٠ شهرًا');
+    expect(letter.terms.find((r) => r.code === 'GRACE_PERIOD')?.value.ar).toBe('٦ أشهر');
+    expect(letter.terms.find((r) => r.code === 'RATE')?.value.ar).toBe('١٫٥٠٪ سنويًا');
+    expect(letter.terms.find((r) => r.code === 'EQUITY_CONTRIBUTION')?.value.ar).toBe('٢٠٫٠٠٪');
+    expect(letter.repayment.find((r) => r.code === 'INSTALMENT_COUNT')?.value.ar).toBe('٥٤');
+    expect(letter.validity.ar).toBe('ساري حتى ٧ نوفمبر ٢٠٢٦');
+    for (const c of letter.conditions) {
+      expect(c.ar).not.toMatch(LATIN_DIGIT);
+      expect(c.en).not.toMatch(ARABIC_INDIC_DIGIT);
+    }
+  });
+
+  it('keeps the identifiers Latin', () => {
+    expect(letter.reference).toBe('APP-2026-000417');
+    expect(letter.version).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('the Arabic digits are part of the hashed content', () => {
+    const { version, ...content } = letter;
+    const latinised = { ...content, terms: content.terms.map((r) => ({ ...r, value: { ...r.value, ar: r.value.en } })) };
+    expect(offerLetterVersion(latinised)).not.toBe(version);
+  });
+
+  it('still refuses an identity number written in Arabic-Indic digits', () => {
+    expect(containsIdentityPattern('١٠١٢٣٤٥٦٧٨')).toBe(true);
+    expect(containsIdentityPattern('٧٨٤-١٩٩٠-١٢٣٤٥٦٧-١')).toBe(true);
+    expect(containsIdentityPattern('٢٬٠٠٠٬٠٠٠٫٠٠ درهم إماراتي')).toBe(false);
+    const r = buildOfferLetter({ ...aeConventional, conditions: [{ en: 'Owner to sign', ar: 'يوقّع المالك ٧٨٤١٩٩٠١٢٣٤٥٦٧١' }] });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.reason).toBe('FOL_IDENTITY_NUMBER');
+  });
+});
+
+describe('the APR line', () => {
+  it('is absent when no APR is passed in', () => {
+    const letter = expectOk(buildOfferLetter(aeConventional));
+    expect(letter.terms.find((r) => r.code === 'APR')).toBeUndefined();
+  });
+
+  it('shows the APR the platform computed, labelled, in both numerals, right after the rate', () => {
+    const letter = expectOk(buildOfferLetter({ ...aeConventional, aprBp: 163n }));
+    const codes = letter.terms.map((r) => r.code);
+    expect(codes.indexOf('APR')).toBe(codes.indexOf('RATE') + 1);
+    expect(letter.terms.find((r) => r.code === 'APR')).toEqual({ code: 'APR', label: { en: 'Annual percentage rate (APR)', ar: 'معدل النسبة السنوي' }, value: { en: '1.63%', ar: '١٫٦٣٪' } });
+    expect(letter.version).not.toBe(expectOk(buildOfferLetter(aeConventional)).version);
+  });
+
+  it('refuses a negative APR', () => {
+    const r = buildOfferLetter({ ...aeConventional, aprBp: -1n });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.reason).toBe('FOL_APR');
   });
 });
 
@@ -198,6 +266,25 @@ describe('offer notifications', () => {
     expect(body).not.toMatch(/\d{15}/);
     expect(body).not.toMatch(/784-?\d{4}-?\d{7}-?\d/);
     expect(n.sms?.to).toBe('+971 50 XXX XXXX');
+  });
+
+  it('Arabic lines write quantities in Arabic-Indic digits; English lines and the identifiers stay Latin', () => {
+    const n = expectOk(previewOfferNotifications(letter, recipient));
+    const [smsAr = '', smsEn = ''] = (n.sms?.body ?? '').split('\n');
+    const ids = (s: string) => s.replace(letter.reference, '').replace(/[0-9a-f]{8}(-[0-9a-f]{8})*/g, '');
+    expect(smsAr).toContain('٢٬٠٠٠٬٠٠٠٫٠٠ درهم إماراتي');
+    expect(smsAr).toContain('٧ نوفمبر ٢٠٢٦');
+    expect(smsAr).toContain(letter.reference);
+    expect(ids(smsAr)).not.toMatch(LATIN_DIGIT);
+    expect(smsEn).toContain('AED 2,000,000.00');
+    expect(smsEn).not.toMatch(ARABIC_INDIC_DIGIT);
+    const [english = '', arabic = ''] = (n.email?.body ?? '').split('— ملخص بالعربية —');
+    expect(english).not.toMatch(ARABIC_INDIC_DIGIT);
+    expect(arabic).toContain('٢٬٠٠٠٬٠٠٠٫٠٠ درهم إماراتي');
+    expect(arabic).toContain('١٫٥٠٪ سنويًا');
+    expect(arabic).toContain('٦٠ شهرًا');
+    expect(arabic).toContain(displayVersion(letter.version));
+    expect(ids(arabic)).not.toMatch(LATIN_DIGIT);
   });
 
   it('SA SMS carries both calendars', () => {

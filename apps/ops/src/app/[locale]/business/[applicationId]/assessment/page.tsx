@@ -79,7 +79,8 @@ export default async function CreditAssessmentPage({ params, searchParams }: { r
   const a = view.application;
   const run = view.latestAssessment;
   const inputs = view.assessmentInputs;
-  const preScoring = ['RECEIVED', 'SPREADING', 'SUBMITTED'].includes(a.status);
+  // Inputs are recorded while the application is open (RECEIVED, SPREADING) and lock at submission; from then on they are shown read-only.
+  const inputsOpen = ['RECEIVED', 'SPREADING'].includes(a.status);
   const fact = (name: string, value: unknown): string => f.digits(formatFact(name, value as bigint, f.arabic));
   const outOf100 = `/ ${f.n(100)}`;
   const route = run === undefined ? undefined : label(ROUTE_LABELS, run.assessment.outcome, f);
@@ -87,7 +88,7 @@ export default async function CreditAssessmentPage({ params, searchParams }: { r
   const reasonText = (code: string, detail: string): string => {
     if (code === 'KNOCKOUT_FAILED') {
       const ko = run?.assessment.knockouts.find((k) => k.code === detail);
-      return `${t(REASON['KNOCKOUT_FAILED']?.en ?? '', REASON['KNOCKOUT_FAILED']?.ar ?? '')}${ko === undefined ? '' : `: ${t(ko.label.en, ko.label.ar)}`}`;
+      return `${t(REASON['KNOCKOUT_FAILED']?.en ?? '', REASON['KNOCKOUT_FAILED']?.ar ?? '')}${ko === undefined ? '' : `: ${f.digits(t(ko.label.en, ko.label.ar))}`}`;
     }
     const r = REASON[code];
     return r === undefined ? t(`${humanise(code)}: ${detail}`, 'سبب آخر مسجّل في أثر التقييم') : t(r.en, r.ar);
@@ -96,24 +97,27 @@ export default async function CreditAssessmentPage({ params, searchParams }: { r
   return (
     <ApplicationShell segment={segment} view={view} screen="assessment" query={query} f={f} title={t('Credit assessment', 'التقييم الائتماني')}>
       {/* -- Inputs ------------------------------------------------------------------------------- */}
-      {preScoring ? <InputsCard segment={segment} applicationId={a.applicationId} view={view} f={f} /> : null}
+      {inputsOpen || inputs !== undefined ? <InputsCard segment={segment} applicationId={a.applicationId} view={view} editable={inputsOpen} f={f} /> : null}
 
       {run === undefined ? (
         <section className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-[15px] font-semibold text-heading">{t('Run the assessment', 'تشغيل التقييم')}</h2>
             <p className="mt-0.5 text-[13px] text-ink-quiet">{t('Knock-outs, the 40/60 scorecard, the risk level and the route — on the verified figures and the recorded inputs.', `معايير الاستبعاد وبطاقة الدرجات ${f.n(40)}/${f.n(60)} وفئة المخاطر والمسار — على الأرقام المتحقق منها والمدخلات المسجلة.`)}</p>
+            <p className="mt-1 text-[13px] text-ink-quiet" data-runs-assessment>{f.arabic
+              ? <>يشغّله المراجِع (<Id>{BUSINESS_ROLES.checker}</Id>)، لا الموظف الذي أحال الطلب{a.submittedBy === undefined ? null : <> (<Id>{a.submittedBy}</Id>)</>}.</>
+              : <>Run by the checker (<Id>{BUSINESS_ROLES.checker}</Id>), not the officer who submitted the application{a.submittedBy === undefined ? null : <> (<Id>{a.submittedBy}</Id>)</>}.</>}</p>
           </div>
           {a.status === 'SUBMITTED' && inputs !== undefined ? (
             <form action={runAssessmentAction}>
               <FormContext segment={segment} applicationId={a.applicationId} screen="assessment" />
-              <button type="submit" className={BTN_PRIMARY}>{t('Run assessment', 'تشغيل التقييم')}</button>
+              <button type="submit" className={BTN_PRIMARY}>{t('Run assessment as checker', 'تشغيل التقييم بصفة المراجِع')}</button>
             </form>
           ) : (
             <DisabledAction label={t('Run assessment', 'تشغيل التقييم')}
               reason={a.status !== 'SUBMITTED'
                 ? t('Submit the loan application first: every figure verified, every mandatory document present.', 'أحِل طلب التمويل أولاً: جميع الأرقام متحقق منها وجميع المستندات الإلزامية مقدمة.')
-                : t('Record the bureau snapshot and the assessment inputs first.', 'سجّل نتيجة المكتب الائتماني ومدخلات التقييم أولاً.')} />
+                : t('The assessment inputs were not recorded before submission, and they lock at submission.', 'لم تُسجَّل مدخلات التقييم قبل الإحالة، وهي تُقفل عند الإحالة.')} />
           )}
         </section>
       ) : (
@@ -165,7 +169,7 @@ export default async function CreditAssessmentPage({ params, searchParams }: { r
                 <tbody>
                   {run.assessment.knockouts.map((k) => (
                     <tr key={k.code} className="border-t border-line">
-                      <td className="py-3 ps-5 pe-3 font-medium text-heading">{t(k.label.en, k.label.ar)}</td>
+                      <td className="py-3 ps-5 pe-3 font-medium text-heading">{f.digits(t(k.label.en, k.label.ar))}</td>
                       <td className="py-3 pe-3 text-end tabular-nums text-ink"><bdi>{OPERATOR[k.operator] ?? ''} {fact(k.fact, k.threshold)}</bdi></td>
                       <td className="py-3 pe-3 text-end font-semibold tabular-nums text-heading"><bdi>{fact(k.fact, k.actual)}</bdi></td>
                       <td className="py-3 pe-5"><Chip tone={k.passed ? 'good' : 'bad'}>{k.passed ? t('Pass', 'مستوفٍ') : t('Fail', 'غير مستوفٍ')}</Chip></td>
@@ -289,7 +293,7 @@ function MatrixCard({ section, f }: { readonly section: SectionTrace; readonly f
             {section.criteria.map((c) => (
               <tr key={c.code} className="border-t border-line align-top">
                 <td className="py-2.5 ps-5 pe-3">
-                  <span className="flex flex-col"><span className="font-medium text-heading">{t(c.label.en, c.label.ar)}</span><span className="text-[11px] text-ink-quiet">{f.digits(t(c.band.en, c.band.ar))}</span></span>
+                  <span className="flex flex-col"><span className="font-medium text-heading">{f.digits(t(c.label.en, c.label.ar))}</span><span className="text-[11px] text-ink-quiet">{f.digits(t(c.band.en, c.band.ar))}</span></span>
                 </td>
                 <td className="py-2.5 pe-3 tabular-nums text-ink"><bdi>{f.digits(formatFact(c.fact, c.input, f.arabic))}</bdi></td>
                 <td className="py-2.5 pe-3 text-end font-semibold tabular-nums text-heading"><bdi>{f.digits(formatPoints(c.scorePerTenThousand))}</bdi></td>
@@ -304,9 +308,19 @@ function MatrixCard({ section, f }: { readonly section: SectionTrace; readonly f
   );
 }
 
-function InputsCard({ segment, applicationId, view, f }: { readonly segment: string; readonly applicationId: string; readonly view: NonNullable<Awaited<ReturnType<typeof getApplication>>>; readonly f: Formatters }): ReactElement {
+/** Minor units as the major-unit digit string a form field takes back: 12345n → '123.45'. Integer arithmetic. */
+const majorUnits = (minor: bigint): string => `${(minor / 100n).toString()}.${(minor % 100n).toString().padStart(2, '0')}`;
+
+/**
+ * The inputs the scorecard reads beyond the statements. Recorded by the
+ * officer while the application is open; locked at submission and shown
+ * read-only from then on. The bureau consent is chosen from the stage-4
+ * verification references handed over — the service accepts no other.
+ */
+function InputsCard({ segment, applicationId, view, editable, f }: { readonly segment: string; readonly applicationId: string; readonly view: NonNullable<Awaited<ReturnType<typeof getApplication>>>; readonly editable: boolean; readonly f: Formatters }): ReactElement {
   const { t } = f;
   const inputs = view.assessmentInputs;
+  const consentRefs = view.application.applicant.upstreamVerificationRefs;
   const field = (name: string, en: string, ar: string, hint?: string, value?: string) => (
     <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">
       <span>{t(en, ar)}{hint === undefined ? null : <span className="text-ink-faint"> · {hint}</span>}</span>
@@ -317,22 +331,38 @@ function InputsCard({ segment, applicationId, view, f }: { readonly segment: str
   return (
     <SectionCard title={t('Assessment inputs', 'مدخلات التقييم')}
       note={t('What the scorecard reads beyond the statements. The bureau result is a recorded snapshot until the AECB rail is verified.', 'ما تقرؤه بطاقة الدرجات إضافةً إلى القوائم المالية. نتيجة المكتب الائتماني لقطة مسجلة إلى أن يُتحقق من الربط مع المكتب.')}
-      aside={inputs === undefined ? <Chip tone="warn">{t('Not recorded', 'غير مسجلة')}</Chip> : <Chip tone="good">{t('Recorded by', 'سجّلها')} <Id>{inputs.recordedBy}</Id></Chip>}>
+      aside={<>
+        {inputs === undefined ? <Chip tone="warn">{t('Not recorded', 'غير مسجلة')}</Chip> : <Chip tone="good"><span>{t('Recorded by', 'سجّلها')} <Id>{inputs.recordedBy}</Id></span></Chip>}
+        {editable ? null : <Chip tone="neutral">{t('Locked at submission', 'مقفلة منذ الإحالة')}</Chip>}
+      </>}>
       {inputs === undefined ? null : (
-        <dl className="mb-5 grid gap-4 sm:grid-cols-3 xl:grid-cols-6">
+        <dl className={`grid gap-4 sm:grid-cols-3 xl:grid-cols-4 ${editable ? 'mb-5' : ''}`} data-inputs-read-only>
           <Field label={t('Bureau report', 'تقرير المكتب')}><Id className="text-[12px]">{inputs.bureau.reportRef}</Id></Field>
+          <Field label={t('Bureau consent', 'موافقة الاستعلام الائتماني')}><Id className="text-[12px]">{inputs.bureau.consentId}</Id></Field>
           <Field label={t('Bureau score', 'درجة المكتب')}>{f.n(inputs.bureau.score)}</Field>
           <Field label={t('Full-time employees', 'الموظفون بدوام كامل')}>{f.n(inputs.fullTimeEmployees)}</Field>
           <Field label={t('Relevant experience', 'الخبرة ذات الصلة')}>{t(`${f.n(inputs.relevantExperienceYears)} years`, `${f.n(inputs.relevantExperienceYears)} سنوات`)}</Field>
           <Field label={t('Sector priority', 'أولوية القطاع')}>{inputs.sectorPriority === 'PRIORITY' ? t('Priority', 'ذو أولوية') : t('Non-priority', 'غير ذي أولوية')}</Field>
-          <Field label={t('Collateral value', 'قيمة الضمان')}><bdi className="tabular-nums">{f.money(inputs.collateralValue.minorUnits)}</bdi></Field>
+          <Field label={t('Commitment assessment', 'تقييم الالتزام')}><bdi className="tabular-nums">{f.digits(formatFact('commitmentRatioPerTenThousand', inputs.commitmentRatioPerTenThousand, f.arabic))}</bdi></Field>
+          <Field label={t('Risk analysis score', 'درجة تحليل المخاطر')}><bdi className="tabular-nums">{f.digits(formatFact('riskAnalysisScorePerTenThousand', inputs.riskAnalysisScorePerTenThousand, f.arabic))}</bdi></Field>
+          <Field label={t('Portfolio repayment', 'نسبة السداد في المحفظة')}><bdi className="tabular-nums">{f.digits(formatFact('portfolioRepaymentPerTenThousand', inputs.portfolioRepaymentPerTenThousand, f.arabic))}</bdi></Field>
+          <Field label={t('Failed files', 'الملفات المتعثرة')}><bdi className="tabular-nums">{f.digits(formatFact('failedFilesRatePerTenThousand', inputs.failedFilesRatePerTenThousand, f.arabic))}</bdi></Field>
+          <Field label={t('Audited financials', 'قوائم مالية مدققة')}>{inputs.auditedFinancialsAvailable ? t('Available', 'متوفرة') : t('Not available', 'غير متوفرة')}</Field>
+          <Field label={t('Collateral value', 'قيمة الضمان')}><bdi className="tabular-nums">{f.money(inputs.collateralValue.minorUnits)}</bdi> <span className="text-[12px] font-normal text-ink-quiet">{f.cur}</span></Field>
         </dl>
       )}
+      {!editable ? null : (
       <details open={inputs === undefined} className="rounded-tile border border-line px-4 py-3">
         <summary className="cursor-pointer text-[13px] font-semibold text-brand">{inputs === undefined ? t('Record inputs', 'تسجيل المدخلات') : t('Record again', 'إعادة التسجيل')}</summary>
         <form action={recordAssessmentInputsAction} className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <FormContext segment={segment} applicationId={applicationId} screen="assessment" />
           <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">{t('Bureau report reference', 'مرجع تقرير المكتب')}<input name="bureauReportRef" required defaultValue={inputs?.bureau.reportRef} className={INPUT} /></label>
+          <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">{t('Bureau consent (stage-4 reference)', 'موافقة الاستعلام (مرجع المرحلة ٤)')}
+            <select name="bureauConsentId" required defaultValue={inputs?.bureau.consentId ?? ''} className={INPUT} dir="ltr">
+              <option value="" disabled>{t('Choose the consent…', 'اختر الموافقة…')}</option>
+              {consentRefs.map((ref) => <option key={ref} value={ref}>{ref}</option>)}
+            </select>
+          </label>
           {field('bureauScore', 'Bureau score', 'درجة المكتب', undefined, inputs?.bureau.score.toString())}
           {field('fullTimeEmployees', 'Full-time employees', 'الموظفون بدوام كامل', undefined, inputs === undefined ? undefined : String(inputs.fullTimeEmployees))}
           {field('relevantExperienceYears', 'Relevant experience (years)', 'الخبرة ذات الصلة (سنوات)', undefined, inputs?.relevantExperienceYears.toString())}
@@ -346,11 +376,12 @@ function InputsCard({ segment, applicationId, view, f }: { readonly segment: str
           {field('riskAnalysisScorePerTenThousand', 'Risk analysis score', 'درجة تحليل المخاطر', per, inputs?.riskAnalysisScorePerTenThousand.toString())}
           {field('portfolioRepaymentPerTenThousand', 'Portfolio repayment', 'نسبة السداد في المحفظة', per, inputs?.portfolioRepaymentPerTenThousand.toString())}
           {field('failedFilesRatePerTenThousand', 'Failed files', 'الملفات المتعثرة', per, inputs?.failedFilesRatePerTenThousand.toString())}
-          <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">{t(`Collateral value (${f.cur})`, `قيمة الضمان (${f.cur})`)}<input name="collateralValue" required inputMode="decimal" className={INPUT} /></label>
+          <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">{t(`Collateral value (${f.cur})`, `قيمة الضمان (${f.cur})`)}<input name="collateralValue" required inputMode="decimal" defaultValue={inputs === undefined ? undefined : majorUnits(inputs.collateralValue.minorUnits)} className={INPUT} /></label>
           <label className="flex items-center gap-2 self-end pb-2 text-[13px] text-ink"><input type="checkbox" name="auditedFinancialsAvailable" value="true" defaultChecked={inputs?.auditedFinancialsAvailable ?? false} />{t('Audited financials available', 'قوائم مالية مدققة متوفرة')}</label>
           <div className="flex items-end"><button type="submit" className={BTN_SECONDARY}>{t('Record inputs', 'تسجيل المدخلات')}</button></div>
         </form>
       </details>
+      )}
     </SectionCard>
   );
 }

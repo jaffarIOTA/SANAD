@@ -51,6 +51,34 @@ describe('stage 5: hand-over', () => {
     expect(containsIdentityNumber({ requestedMinorUnits: '784197112345671' }, new Set(['requestedMinorUnits']))).toBe(false);
     expect(containsIdentityNumber({ n: 784197112345671n, m: 1 })).toBe(false);
   });
+  it('#7 recognises both jurisdictions’ identity numbers: the Emirates ID and the Saudi national id / iqama', () => {
+    // UAE: 784-YYYY-NNNNNNN-N, with dashes, spaces or none.
+    for (const s of ['784-1971-1234567-1', '784 1971 1234567 1', 'ref:784197112345671']) expect(containsIdentityNumber(s), s).toBe(true);
+    // KSA: ten digits starting 1 (citizen) or 2 (resident), alone or inside a reference.
+    for (const s of ['1012345678', '2087654321', 'nid-1012345678', 'iqama:2087654321', 'see 1012345678 above']) expect(containsIdentityNumber(s), s).toBe(true);
+    // Not an identity number: a ten-digit run starting otherwise, a longer or shorter run, an application id, a reference.
+    for (const s of ['3012345678', '0512345678', '10123456789', '101234567', 'FR-00005101', 'doc-ILLUS-5101-TRADE_LICENCE', 'aecb:consent-test', '2026-10-08']) {
+      expect(containsIdentityNumber(s), s).toBe(false);
+    }
+    // Amounts are numbers, never text: an amount shaped like either identity number is not scanned.
+    expect(containsIdentityNumber({ minorUnits: 1_012_345_678n, count: 2_087_654_321, total: 784_197_112_345_671n })).toBe(false);
+  });
+  it('#7 refuses an identity number in a committee reason, a withdrawal reason, a signature or payment reference', () => {
+    const inCommittee = expectOk(recordAssessment(submitted(), { outcome: 'COMMITTEE', assessmentRef: 'asm-9' }, 'engine', T + 3n)).application;
+    for (const reason of ['Guarantor 784-1971-1234567-1 is strong', 'Owner 1012345678 has history']) {
+      const d = decideInCommittee(inCommittee, { decidedBy: 'mcc-1', approved: true, reason }, T + 4n);
+      expect(d.ok).toBe(false); if (!d.ok) expect(d.error.reason).toBe('IDENTITY_NUMBER_IN_PAYLOAD');
+      const w = withdraw(inCommittee, reason, 'officer-1', T + 4n);
+      expect(w.ok).toBe(false); if (!w.ok) expect(w.error.reason).toBe('IDENTITY_NUMBER_IN_PAYLOAD');
+    }
+    const approved = expectOk(decideInCommittee(inCommittee, { decidedBy: 'mcc-1', approved: true, reason: 'strong revenue growth' }, T + 4n)).application;
+    const sent = expectOk(recordOfferSent(approved, { letterVersion: LETTER, channels: ['EMAIL'] }, 'officer-1', T + 5n)).application;
+    const sig = recordSigned(sent, { signatureRef: 'sig-2087654321', letterVersion: LETTER }, 'uaepass', T + 6n);
+    expect(sig.ok).toBe(false); if (!sig.ok) expect(sig.error.reason).toBe('IDENTITY_NUMBER_IN_PAYLOAD');
+    const signed = expectOk(recordSigned(sent, { signatureRef: 'sig-1', letterVersion: LETTER }, 'uaepass', T + 6n)).application;
+    const pay = recordDisbursed(signed, 'pay-784197112345671', 'finance', T + 7n);
+    expect(pay.ok).toBe(false); if (!pay.ok) expect(pay.error.reason).toBe('IDENTITY_NUMBER_IN_PAYLOAD');
+  });
 });
 
 describe('stage 5: submission', () => {

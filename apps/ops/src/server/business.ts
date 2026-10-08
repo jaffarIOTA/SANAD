@@ -15,9 +15,11 @@
  * Every transition goes through the core state machine; nothing here decides.
  * The service holds a tenant's book in memory and writes every change through
  * to migration 0016's tables when a database is configured: the book is loaded
- * once per process, changes are marked, and `flushBusiness()` writes them in
- * one transaction before the response that reports them (the server actions
- * and the hand-over API settle before they answer).
+ * once per process, changes are marked, and each request's change is made and
+ * written in one transaction under the tenant's lock (`mutateBusiness`)
+ * before the response that reports it. A save that fails, or finds the
+ * application changed elsewhere, drops the working set and answers a typed
+ * refusal (PERSISTENCE_FAILED, STALE_APPLICATION); nothing is retried blind.
  *
  * Currency is the tenant's, from its onboarding record — never from input.
  * A hand-over may assert a currency; one that is not the tenant's is refused.
@@ -35,7 +37,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { Pool } from 'pg';
 
-import { type TenantCode, loadDocumentChecklist, loadJurisdictionProfile, loadProductCatalogue, loadSmeAssessmentPolicy, loadSmeDefinition, loadTenantOnboarding } from '@sanad/config/loader.ts';
+import { type TenantCode, loadDocumentChecklist, loadJurisdictionProfile, loadOfferDatePolicy, loadProductCatalogue, loadSmeAssessmentPolicy, loadSmeDefinition, loadTenantOnboarding } from '@sanad/config/loader.ts';
 import {
   type FigureSourceKind,
   type FinancialFigure,
@@ -64,6 +66,7 @@ import {
   type BusinessApplicant,
   type BusinessApplication,
   type BusinessStage,
+  type OfferDatePolicy,
   type StageEvent,
   type Transition,
   approveStraightThrough as approveStraightThroughCore,
@@ -82,6 +85,7 @@ import { type Outbox, type OutboxEvent, emptyOutbox, enqueue } from '@sanad/core
 import { type OutboxStore, inMemoryOutboxStore } from '@sanad/core/outbox/store.ts';
 import type { DatedSchedule } from '@sanad/core/pricing/dated-schedule.ts';
 import { resolvePricingInputs } from '@sanad/core/pricing/quotation.ts';
+import type { RateBasis, RatePeriod } from '@sanad/core/pricing/rate.ts';
 import type { ProductCatalogue } from '@sanad/core/products/catalogue.ts';
 import { buildOffer } from '@sanad/core/products/offer.ts';
 import { type TsaInstant, tsaInstant } from '@sanad/core/time/tsa.ts';
@@ -234,8 +238,10 @@ export interface OfferTerms {
   readonly monthlyInstalment: Money;
   readonly totalInterest: Money;
   readonly totalPayable: Money;
-  /** The rate snapshot, integer basis points, and its source reference. Shown, never applied here. */
+  /** The rate snapshot, integer basis points, its basis and period, and its source reference. Shown, never applied here. */
   readonly rateBp: bigint;
+  readonly rateBasis: RateBasis;
+  readonly ratePeriod: RatePeriod;
   readonly rateSourceRef: string;
   /** Computed by core/pricing/apr.ts from the quote's cash flows. */
   readonly aprBp: bigint;
@@ -375,6 +381,8 @@ interface TenantBook {
   unsavedEvents: (ApplicationEvent & { readonly applicationId: string })[];
   /** Side effects caused by the unsaved changes, written with them in one transaction. */
   unsavedOutbox: OutboxEvent[];
+  /** Set when a failed or stale save dropped this working set; nothing may be recorded on it afterwards. */
+  discarded?: true;
 }
 
 interface BusinessState {
@@ -392,13 +400,51 @@ const KEY = Symbol.for('sanad.ops.businessStore');
 const scope = globalThis as unknown as Record<symbol, BusinessState | undefined>;
 const state: BusinessState = (scope[KEY] ??= { books: new Map(), outbox: emptyOutbox(), outboxStore: inMemoryOutboxStore(), outboxOnDatabase: false });
 
+const freshBook = (seeded: boolean): TenantBook => ({ records: new Map(), hydrated: false, seeded, dirty: new Set(), unsavedFigures: [], unsavedAssessments: [], unsavedOffers: [], unsavedEvents: [], unsavedOutbox: [] });
+
 function bookOf(tenant: TenantCode): TenantBook {
   let book = state.books.get(tenant);
   if (book === undefined) {
-    book = { records: new Map(), hydrated: false, seeded: false, dirty: new Set(), unsavedFigures: [], unsavedAssessments: [], unsavedOffers: [], unsavedEvents: [], unsavedOutbox: [] };
+    book = freshBook(false);
     state.books.set(tenant, book);
   }
   return book;
+}
+
+// -- the per-tenant lock ---------------------------------------------------------
+
+/**
+ * One mutation at a time per tenant, from load through change to save. Every
+ * exported mutation and every save takes its tenant's lock, so a save that
+ * finds the book stale and drops it can never do so while another request is
+ * half-way through changing that book: the other request either finished
+ * (and its change was in the batch that was refused, so its own save is
+ * refused too — see `mutateBusiness`) or has not started (and loads afresh).
+ *
+ * Re-entrant within one call chain (AsyncLocalStorage carries the tenants
+ * held), so a mutation that saves, or a save that runs inside a mutation,
+ * does not wait on itself. On globalThis like the book, one per process.
+ */
+const LOCKS_KEY = Symbol.for('sanad.ops.businessLocks');
+const lockScope = globalThis as unknown as Record<symbol, Map<string, Promise<void>> | undefined>;
+const lockTails: Map<string, Promise<void>> = (lockScope[LOCKS_KEY] ??= new Map());
+const locksHeld = new AsyncLocalStorage<ReadonlySet<string>>();
+
+async function withTenantLock<T>(tenant: string, fn: () => Promise<T>): Promise<T> {
+  const held = locksHeld.getStore();
+  if (held?.has(tenant) === true) return fn();
+  const previous = lockTails.get(tenant) ?? Promise.resolve();
+  let release: () => void = () => undefined;
+  const mine = new Promise<void>((resolve) => { release = resolve; });
+  const tail = previous.then(() => mine);
+  lockTails.set(tenant, tail);
+  await previous;
+  try {
+    return await locksHeld.run(new Set([...(held ?? []), tenant]), fn);
+  } finally {
+    release();
+    if (lockTails.get(tenant) === tail) lockTails.delete(tenant);
+  }
 }
 
 /** The database pool the book is written to, if any. */
@@ -418,6 +464,19 @@ const fail = (reason: string, detail: string, context?: Readonly<Record<string, 
 const notFound = (applicationId: string): Result<never> => fail('BUSINESS_APPLICATION_NOT_FOUND', 'No business application with that id for this institution', { applicationId });
 
 const REF_SHAPE = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,127}$/;
+
+/**
+ * The first named text input that carries an identity-number shape (Emirates
+ * ID or Saudi national id / iqama), refused before anything is recorded —
+ * applied to every free-text and reference input after the hand-over, as the
+ * hand-over itself is. The refusal names the field, never the value.
+ */
+function identityNumberIn(fields: Readonly<Record<string, string>>): Result<never> | undefined {
+  for (const [field, value] of Object.entries(fields)) {
+    if (containsIdentityNumber(value)) return fail('IDENTITY_NUMBER_IN_PAYLOAD', 'An identity number does not belong in the application record; send a reference', { field });
+  }
+  return undefined;
+}
 
 interface TenantContext {
   readonly currency: CurrencyCode;
@@ -502,41 +561,36 @@ function localDate(at: bigint, profile: JurisdictionProfile): string {
   return isoOfDays(local >= 0n ? local / DAY : (local - DAY + 1n) / DAY);
 }
 
-/** The first of a month at least fifteen days after the disbursement date: the default first due date, paying on the 1st. */
-function defaultFirstDue(disbursement: string): string {
+/** The first of a month at least the policy's minimum gap after the disbursement date: the default first due date, paying on the 1st. */
+function defaultFirstDue(disbursement: string, minGapDays: bigint): string {
   const days = daysOfIso(disbursement) ?? 0n;
   const c = civilFromDays(days);
   let y = c.y; let m = c.m + 1n;
   if (m > 12n) { m = 1n; y += 1n; }
   let candidate = daysFromCivil(y, m, 1n);
-  if (candidate - days < 15n) { m += 1n; if (m > 12n) { m = 1n; y += 1n; } candidate = daysFromCivil(y, m, 1n); }
+  while (candidate - days < minGapDays) { m += 1n; if (m > 12n) { m = 1n; y += 1n; } candidate = daysFromCivil(y, m, 1n); }
   return isoOfDays(candidate);
 }
 
-/** ILLUSTRATIVE defaults until the fund's operations manual states its own. */
-const DEFAULT_DISBURSEMENT_AFTER_OFFER_DAYS = 14n;
-const DEFAULT_OFFER_VALIDITY_DAYS = 30n;
-
 /**
- * ILLUSTRATIVE bounds on the dates an officer may choose for an offer, until
- * the tenant's credit policy states its own (they belong in its policy
- * configuration, not here): disbursement on or after the offer date and
- * within 60 days of it; the first instalment 15 to 45 days after disbursement.
+ * The offer's dates against the tenant's offer date policy
+ * (config/tenants/<tenant>/credit-policy/offer-policy.json, loaded through
+ * `loadOfferDatePolicy`), each refusal typed and naming the policy: the
+ * disbursement on or after the offer date and within the policy's window;
+ * the first instalment within the policy's window after disbursement.
  */
-export const OFFER_DATE_BOUNDS = { maxDisbursementAfterOfferDays: 60n, minFirstDueAfterDisbursementDays: 15n, maxFirstDueAfterDisbursementDays: 45n } as const;
-
-/** The offer's dates against the bounds, each refusal typed. */
-export function checkOfferDates(offerDate: string, disbursementDate: string, firstDueDate: string): Result<true> {
+export function checkOfferDates(policy: OfferDatePolicy, offerDate: string, disbursementDate: string, firstDueDate: string): Result<true> {
   const offer = daysOfIso(offerDate);
   const disbursement = daysOfIso(disbursementDate);
   const firstDue = daysOfIso(firstDueDate);
   if (offer === undefined || disbursement === undefined || firstDue === undefined || isoOfDays(disbursement) !== disbursementDate || isoOfDays(firstDue) !== firstDueDate) {
     return fail('OFFER_DATE_MALFORMED', 'Dates are calendar dates as YYYY-MM-DD', { disbursementDate, firstDueDate });
   }
+  const cite = { policyId: policy.policyId, policyVersion: policy.version };
   if (disbursement < offer) return fail('DISBURSEMENT_BEFORE_OFFER', 'The disbursement date is on or after the offer date', { offerDate, disbursementDate });
-  if (disbursement - offer > OFFER_DATE_BOUNDS.maxDisbursementAfterOfferDays) return fail('DISBURSEMENT_TOO_FAR', 'The disbursement date is within 60 days of the offer date (ILLUSTRATIVE bound)', { offerDate, disbursementDate });
-  if (firstDue - disbursement < OFFER_DATE_BOUNDS.minFirstDueAfterDisbursementDays) return fail('FIRST_DUE_TOO_SOON', 'The first instalment falls at least 15 days after disbursement (ILLUSTRATIVE bound)', { disbursementDate, firstDueDate });
-  if (firstDue - disbursement > OFFER_DATE_BOUNDS.maxFirstDueAfterDisbursementDays) return fail('FIRST_DUE_TOO_LATE', 'The first instalment falls at most 45 days after disbursement (ILLUSTRATIVE bound)', { disbursementDate, firstDueDate });
+  if (disbursement - offer > policy.maxDisbursementAfterOfferDays) return fail('DISBURSEMENT_TOO_FAR', `The disbursement date is within ${policy.maxDisbursementAfterOfferDays} days of the offer date`, { offerDate, disbursementDate, ...cite });
+  if (firstDue - disbursement < policy.minFirstDueAfterDisbursementDays) return fail('FIRST_DUE_TOO_SOON', `The first instalment falls at least ${policy.minFirstDueAfterDisbursementDays} days after disbursement`, { disbursementDate, firstDueDate, ...cite });
+  if (firstDue - disbursement > policy.maxFirstDueAfterDisbursementDays) return fail('FIRST_DUE_TOO_LATE', `The first instalment falls at most ${policy.maxFirstDueAfterDisbursementDays} days after disbursement`, { disbursementDate, firstDueDate, ...cite });
   return ok(true);
 }
 
@@ -740,70 +794,127 @@ function useDatabaseOutbox(): void {
   state.outboxOnDatabase = true;
 }
 
+/** The reasons a save answers with, as opposed to a refusal by the domain. Nothing of the change was written. */
+export const SETTLE_FAILURE_REASONS: ReadonlySet<string> = new Set(['STALE_APPLICATION', 'PERSISTENCE_FAILED']);
+
+/** Whether a refusal came from saving the change (nothing written; retry may succeed) rather than from the domain. */
+export const isSettleFailure = (error: { readonly reason: string }): boolean => SETTLE_FAILURE_REASONS.has(error.reason);
+
 /**
- * Writes every change since the last flush, in one transaction per tenant —
- * the outbox rows those changes caused included, so a side effect is durable
- * exactly when its cause is. A failed write keeps the changes marked, so the
- * next flush retries them, and rethrows so the caller does not report a
- * change that is not durable.
+ * Drops the tenant's working set: the next read reloads it from the database.
+ * The side effects it had queued are dropped with it — they were never
+ * written, so they must never be dispatched.
+ */
+function discardBook(tenant: string, book: TenantBook): void {
+  book.discarded = true;
+  if (state.books.get(tenant) === book) state.books.set(tenant, freshBook(book.seeded));
+  const dropped = new Set(book.unsavedOutbox.map((e) => e.eventId));
+  if (dropped.size > 0) state.outbox = { events: state.outbox.events.filter((e) => !dropped.has(e.eventId)) };
+}
+
+/**
+ * Writes one tenant's pending changes in one transaction, under its lock. On
+ * a conflict (STALE) or any other database failure (PERSISTENCE_FAILED) the
+ * transaction is rolled back, the working set is dropped and reloaded on the
+ * next read, and the outcome is a typed refusal — never a throw, and never a
+ * batch left marked to be retried forever, which would make every later
+ * action on the tenant fail with it.
+ */
+async function flushTenant(tenant: string, pool: Pool): Promise<Result<true>> {
+  const book = state.books.get(tenant);
+  if (book === undefined) return ok(true);
+  const dirty = [...book.dirty].flatMap((id) => { const r = book.records.get(id); return r === undefined ? [] : [r]; });
+  const applications = dirty.map((r) => ({ application: r.application, ...(r.stored === undefined ? {} : { expected: r.stored }) }));
+  const figures = [...book.unsavedFigures];
+  const assessments = [...book.unsavedAssessments];
+  const offers = [...book.unsavedOffers];
+  const events = [...book.unsavedEvents];
+  const outbox = [...book.unsavedOutbox];
+  let saved: Awaited<ReturnType<typeof saveBusinessChanges>>;
+  try {
+    saved = await saveBusinessChanges(pool, tenant, { applications, figures, assessments, offers, events, outbox });
+  } catch {
+    // The database's message may quote a value; it is not carried into the refusal.
+    discardBook(tenant, book);
+    return fail('PERSISTENCE_FAILED', 'The change could not be saved and nothing of it was written. Reload and try again');
+  }
+  if (saved.kind === 'STALE') {
+    discardBook(tenant, book);
+    return fail('STALE_APPLICATION', 'The application was changed elsewhere since this screen loaded it; nothing was saved. Reload and try again', { applicationId: saved.applicationId });
+  }
+  for (const r of dirty) {
+    book.dirty.delete(r.application.applicationId);
+    const version = saved.versions.get(r.application.applicationId);
+    if (version !== undefined) r.stored = version;
+  }
+  book.unsavedFigures = book.unsavedFigures.filter((f) => !figures.includes(f));
+  book.unsavedAssessments = book.unsavedAssessments.filter((a) => !assessments.includes(a));
+  book.unsavedOffers = book.unsavedOffers.filter((o) => !offers.includes(o));
+  book.unsavedEvents = book.unsavedEvents.filter((e) => !events.includes(e));
+  book.unsavedOutbox = book.unsavedOutbox.filter((e) => !outbox.includes(e));
+  return ok(true);
+}
+
+/** In memory there is nothing to conflict with: the queued side effects go to the in-memory outbox store as the marks are cleared. */
+async function flushTenantInMemory(tenant: string): Promise<Result<true>> {
+  const book = state.books.get(tenant);
+  if (book === undefined) return ok(true);
+  const outbox = book.unsavedOutbox;
+  book.dirty.clear(); book.unsavedFigures = []; book.unsavedAssessments = []; book.unsavedOffers = []; book.unsavedEvents = []; book.unsavedOutbox = [];
+  if (outbox.length > 0) await state.outboxStore.append(outbox);
+  return ok(true);
+}
+
+async function settleTenant(tenant: string): Promise<Result<true>> {
+  const pool = poolOf();
+  if (pool === undefined) return flushTenantInMemory(tenant);
+  const settled = await flushTenant(tenant, pool);
+  if (settled.ok) useDatabaseOutbox();
+  return settled;
+}
+
+/**
+ * Writes every tenant's pending changes, each tenant in its own transaction
+ * under its lock — the outbox rows those changes caused included, so a side
+ * effect is durable exactly when its cause is. Answers the first tenant's
+ * refusal (STALE_APPLICATION, PERSISTENCE_FAILED) if any; never throws for a
+ * database failure.
  *
- * If another process changed an application since this one loaded it, nothing
- * of that tenant's batch is written: this process's working set for the
- * tenant is discarded (the next read reloads it from the database) and the
- * flush answers STALE_APPLICATION, so the caller reports a refusal rather than
- * a change that did not happen.
- *
- * In memory there is nothing to conflict with: the queued side effects go to
- * the in-memory outbox store in the same step as the marks are cleared.
+ * For pages and tests. A request that changes something uses
+ * `mutateBusiness`, which saves its own change before anyone else can save —
+ * or drop — the book it changed.
  */
 export async function flushBusiness(): Promise<Result<true>> {
-  const pool = poolOf();
-  let stale: Result<never> | undefined;
-  if (pool !== undefined) {
-    for (const [tenant, book] of [...state.books]) {
-      const dirty = [...book.dirty].flatMap((id) => { const r = book.records.get(id); return r === undefined ? [] : [r]; });
-      const applications = dirty.map((r) => ({ application: r.application, ...(r.stored === undefined ? {} : { expected: r.stored }) }));
-      const figures = [...book.unsavedFigures];
-      const assessments = [...book.unsavedAssessments];
-      const offers = [...book.unsavedOffers];
-      const events = [...book.unsavedEvents];
-      const outbox = [...book.unsavedOutbox];
-      const saved = await saveBusinessChanges(pool, tenant, { applications, figures, assessments, offers, events, outbox });
-      if (saved.kind === 'STALE') {
-        // Discard what this process holds for the tenant; the next read loads the current state.
-        state.books.delete(tenant);
-        const dropped = new Set(book.unsavedOutbox.map((e) => e.eventId));
-        state.outbox = { events: state.outbox.events.filter((e) => !dropped.has(e.eventId)) };
-        stale ??= fail('STALE_APPLICATION', 'The application was changed elsewhere since this screen loaded it; nothing was saved. Reload and try again', { applicationId: saved.applicationId });
-        continue;
-      }
-      for (const r of dirty) {
-        book.dirty.delete(r.application.applicationId);
-        const version = saved.versions.get(r.application.applicationId);
-        if (version !== undefined) r.stored = version;
-      }
-      book.unsavedFigures = book.unsavedFigures.filter((f) => !figures.includes(f));
-      book.unsavedAssessments = book.unsavedAssessments.filter((a) => !assessments.includes(a));
-      book.unsavedOffers = book.unsavedOffers.filter((o) => !offers.includes(o));
-      book.unsavedEvents = book.unsavedEvents.filter((e) => !events.includes(e));
-      book.unsavedOutbox = book.unsavedOutbox.filter((e) => !outbox.includes(e));
-    }
-    useDatabaseOutbox();
-  } else {
-    for (const book of state.books.values()) {
-      const outbox = book.unsavedOutbox;
-      book.dirty.clear(); book.unsavedFigures = []; book.unsavedAssessments = []; book.unsavedOffers = []; book.unsavedEvents = []; book.unsavedOutbox = [];
-      if (outbox.length > 0) await state.outboxStore.append(outbox);
-    }
+  let first: Result<never> | undefined;
+  for (const tenant of [...state.books.keys()]) {
+    const settled = await withTenantLock(tenant, () => settleTenant(tenant));
+    if (!settled.ok) first ??= settled;
   }
-  return stale ?? ok(true);
+  return first ?? ok(true);
+}
+
+/**
+ * Runs one change and saves it, as one unit under the tenant's lock: the
+ * change is made on the book as loaded, and written before any other request
+ * on the tenant may change, save or drop that book. The answer is the
+ * change's own result once it is durable; or the domain's refusal (nothing
+ * to save); or the save's refusal (STALE_APPLICATION, PERSISTENCE_FAILED —
+ * see `isSettleFailure`), in which case nothing of it was written.
+ */
+export async function mutateBusiness<T>(tenant: TenantCode, change: () => Promise<Result<T>>): Promise<Result<T>> {
+  return withTenantLock(tenant, async () => {
+    const result = await change();
+    if (!result.ok) return result;
+    const settled = await settleTenant(tenant);
+    return settled.ok ? result : settled;
+  });
 }
 
 /** Loads the tenant's book (once) and writes anything pending. Awaited by pages and routes before they read. */
 export async function syncBusiness(tenant: TenantCode): Promise<void> {
   await hydrate(tenant);
-  // A stale batch has already been discarded and is reloaded by the next read; the page shows the current state.
-  const settled = await flushBusiness();
+  // A refused batch has already been dropped and is reloaded by the next read; the page shows the current state.
+  const settled = await withTenantLock(tenant, () => settleTenant(tenant));
   if (!settled.ok) await hydrate(tenant);
 }
 
@@ -967,7 +1078,7 @@ async function handOverAt(tenant: TenantCode, request: HandoverRequest, actor: s
  * `upstreamRef`: a repeat returns the same application with `created: false`.
  */
 export async function handOver(tenant: TenantCode, request: HandoverRequest, actor: string): Promise<Result<{ readonly view: BusinessApplicationView; readonly created: boolean }>> {
-  return handOverAt(tenant, request, actor, developmentAttestation());
+  return withTenantLock(tenant, () => handOverAt(tenant, request, actor, developmentAttestation()));
 }
 
 function startSpreadingIfReceived(book: TenantBook, record: BusinessRecord, actor: string, at: bigint): Result<true> {
@@ -986,6 +1097,10 @@ async function proposeFiguresAt(tenant: TenantCode, applicationId: string, entri
   const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
   if (!SPREAD_OPEN.has(r.application.status)) return fail('TRANSITION_NOT_ALLOWED', 'Figures are proposed only while the application is in credit assessment', { status: r.application.status });
   if (entries.length === 0) return fail('FIGURES_EMPTY', 'Propose at least one figure');
+  for (const e of entries) {
+    const identity = identityNumberIn({ sourceRef: e.sourceRef, periodLabel: e.periodLabel });
+    if (identity !== undefined) return identity;
+  }
 
   // Validate every proposal before recording any: a batch is recorded whole or not at all.
   const figures: FinancialFigure[] = [];
@@ -1032,7 +1147,7 @@ function isSamePendingProposal(existing: FinancialFigure, proposed: FinancialFig
 export async function proposeFigures(tenant: TenantCode, applicationId: string, entries: readonly OfficerFigureEntry[], actor: string): Promise<Result<BusinessApplicationView>> {
   // Built field by field: a `sourceKind` smuggled onto an entry never reaches the recorder.
   const keyed: FigureProposalEntry[] = entries.map((e) => ({ metric: e.metric, periodLabel: e.periodLabel, minorUnits: e.minorUnits, sourceRef: e.sourceRef, sourceKind: 'OFFICER_ENTRY' }));
-  return proposeFiguresAt(tenant, applicationId, keyed, actor, developmentAttestation());
+  return withTenantLock(tenant, () => proposeFiguresAt(tenant, applicationId, keyed, actor, developmentAttestation()));
 }
 
 /**
@@ -1041,10 +1156,15 @@ export async function proposeFigures(tenant: TenantCode, applicationId: string, 
  * it refuses an OFFICER_ENTRY. `source` is the ingesting system's principal.
  */
 export async function ingestReadFigures(tenant: TenantCode, applicationId: string, entries: readonly ReadFigureEntry[], source: string): Promise<Result<BusinessApplicationView>> {
-  return ingestReadFiguresAt(tenant, applicationId, entries, source, developmentAttestation());
+  return withTenantLock(tenant, () => ingestReadFiguresAt(tenant, applicationId, entries, source, developmentAttestation()));
 }
 
+const READ_SOURCE_PRINCIPALS: ReadonlySet<string> = new Set(Object.values(READ_FIGURE_SOURCES));
+
 async function ingestReadFiguresAt(tenant: TenantCode, applicationId: string, entries: readonly ReadFigureEntry[], source: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+  // Only the system's own ingestion principals record a read figure: an officer (or anyone else) calling this path is refused,
+  // so a figure that says it was read can never have been keyed by a person who could then verify it.
+  if (!READ_SOURCE_PRINCIPALS.has(source)) return fail('FIGURE_SOURCE_PRINCIPAL_INVALID', 'Read figures are recorded only by the statement-reading or rail-ingestion system');
   const read: FigureProposalEntry[] = [];
   for (const e of entries) {
     if (e.sourceKind !== 'OCR' && e.sourceKind !== 'RAIL') return fail('FIGURE_SOURCE_NOT_READ', 'Only figures read from a statement or a rail enter through ingestion', { metric: e.metric });
@@ -1091,7 +1211,7 @@ async function verifyFigureAt(tenant: TenantCode, applicationId: string, figureI
  * proposal, superseding the reading; a different principal then verifies it.
  */
 export async function verifyFigure(tenant: TenantCode, applicationId: string, figureId: string, verifier: string, correctedMinorUnits?: bigint): Promise<Result<BusinessApplicationView>> {
-  return verifyFigureAt(tenant, applicationId, figureId, verifier, correctedMinorUnits, developmentAttestation());
+  return withTenantLock(tenant, () => verifyFigureAt(tenant, applicationId, figureId, verifier, correctedMinorUnits, developmentAttestation()));
 }
 
 async function presentDocumentAt(tenant: TenantCode, applicationId: string, doc: { readonly documentType: string; readonly documentRef: string }, actor: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
@@ -1101,6 +1221,8 @@ async function presentDocumentAt(tenant: TenantCode, applicationId: string, doc:
   if (!SPREAD_OPEN.has(r.application.status)) return fail('TRANSITION_NOT_ALLOWED', 'Documents are presented while the application is in credit assessment', { status: r.application.status });
   if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(doc.documentType)) return fail('DOCUMENT_TYPE_INVALID', 'A document type is a checklist code');
   if (!REF_SHAPE.test(doc.documentRef)) return fail('DOCUMENT_REF_INVALID', 'A document is presented by its reference, not its content');
+  const identity = identityNumberIn({ documentRef: doc.documentRef });
+  if (identity !== undefined) return identity;
   // A typed reference proves nothing about the document: it is PENDING until a different principal validates it.
   const status: BusinessDocument['validationStatus'] = 'PENDING';
   r.documents.push({ documentType: doc.documentType, documentRef: doc.documentRef, capturedAt: at, validationStatus: status, presentedBy: actor });
@@ -1116,7 +1238,7 @@ async function presentDocumentAt(tenant: TenantCode, applicationId: string, doc:
  * It is PENDING — not counted by the checklist — until validated.
  */
 export async function presentDocument(tenant: TenantCode, applicationId: string, doc: { readonly documentType: string; readonly documentRef: string }, actor: string): Promise<Result<BusinessApplicationView>> {
-  return presentDocumentAt(tenant, applicationId, doc, actor, developmentAttestation());
+  return withTenantLock(tenant, () => presentDocumentAt(tenant, applicationId, doc, actor, developmentAttestation()));
 }
 
 async function validateDocumentAt(tenant: TenantCode, applicationId: string, documentRef: string, decision: 'VALID' | 'INVALID', validator: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
@@ -1125,7 +1247,9 @@ async function validateDocumentAt(tenant: TenantCode, applicationId: string, doc
   const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
   if (!SPREAD_OPEN.has(r.application.status)) return fail('TRANSITION_NOT_ALLOWED', 'Documents are validated while the application is in credit assessment', { status: r.application.status });
   if (decision !== 'VALID' && decision !== 'INVALID') return fail('DOCUMENT_DECISION_INVALID', 'A document is validated as VALID or INVALID');
-  const doc = [...r.documents].reverse().find((d) => d.documentRef === documentRef);
+  const identity = identityNumberIn({ documentRef });
+  if (identity !== undefined) return identity;
+  const doc =[...r.documents].reverse().find((d) => d.documentRef === documentRef);
   if (doc === undefined) return fail('DOCUMENT_NOT_FOUND', 'No document with that reference on this application', { documentRef });
   if (doc.validationStatus !== 'PENDING') return fail('DOCUMENT_ALREADY_VALIDATED', 'The document has already been validated; present it again to re-check it', { documentRef });
   if (doc.presentedBy === validator) return fail('FOUR_EYES_REQUIRED', 'A document is validated by a principal other than the one who presented it', { documentRef });
@@ -1139,7 +1263,7 @@ async function validateDocumentAt(tenant: TenantCode, applicationId: string, doc
  * the checklist) or INVALID. Never by the principal who presented it.
  */
 export async function validateDocument(tenant: TenantCode, applicationId: string, documentRef: string, decision: 'VALID' | 'INVALID', validator: string): Promise<Result<BusinessApplicationView>> {
-  return validateDocumentAt(tenant, applicationId, documentRef, decision, validator, developmentAttestation());
+  return withTenantLock(tenant, () => validateDocumentAt(tenant, applicationId, documentRef, decision, validator, developmentAttestation()));
 }
 
 const PER_TEN_THOUSAND_MAX = 100_000n;
@@ -1152,6 +1276,8 @@ async function recordAssessmentInputsAt(tenant: TenantCode, applicationId: strin
   if (!SPREAD_OPEN.has(r.application.status)) return fail('ASSESSMENT_INPUTS_LOCKED', 'Assessment inputs are recorded only before the application is submitted', { status: r.application.status });
   if (!REF_SHAPE.test(entry.bureau.reportRef)) return fail('BUREAU_REF_INVALID', 'The bureau report is recorded by its reference');
   if (!REF_SHAPE.test(entry.bureau.consentId)) return fail('BUREAU_CONSENT_MISSING', 'The bureau result is recorded with the consent id it was obtained under');
+  const identity = identityNumberIn({ bureauReportRef: entry.bureau.reportRef, bureauConsentId: entry.bureau.consentId, sectorPriority: entry.sectorPriority });
+  if (identity !== undefined) return identity;
   // The consent must be one stage 4 recorded; a consent id typed here and nowhere else is not a consent.
   if (!r.application.applicant.upstreamVerificationRefs.includes(entry.bureau.consentId)) return fail('BUREAU_CONSENT_NOT_ON_RECORD', 'The bureau consent is not among the stage-4 verification references handed over');
   if (entry.bureau.score < 0n || entry.bureau.score > 10_000n) return fail('BUREAU_SCORE_INVALID', 'The bureau score is the bureau’s own whole number');
@@ -1197,7 +1323,7 @@ async function recordAssessmentInputsAt(tenant: TenantCode, applicationId: strin
  * collateral. Refused once the application is submitted.
  */
 export async function recordAssessmentInputs(tenant: TenantCode, applicationId: string, entry: AssessmentInputsEntry, actor: string): Promise<Result<BusinessApplicationView>> {
-  return recordAssessmentInputsAt(tenant, applicationId, entry, actor, developmentAttestation());
+  return withTenantLock(tenant, () => recordAssessmentInputsAt(tenant, applicationId, entry, actor, developmentAttestation()));
 }
 
 async function submitAt(tenant: TenantCode, applicationId: string, actor: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
@@ -1214,13 +1340,16 @@ async function submitAt(tenant: TenantCode, applicationId: string, actor: string
     missingDocuments: checklist.value.missing,
   }, actor, at.epochSeconds);
   if (!t.ok) return t;
+  // After the figure and document gates: the inputs lock at submission and scoring needs them,
+  // so a case submitted without them could never be assessed.
+  if (r.inputs === undefined) return fail('ASSESSMENT_INPUTS_MISSING', 'Record the bureau result and the officer’s assessment inputs before submitting');
   apply(book, r, t.value);
   return ok(view(r, ctx.value.currency));
 }
 
 /** Submit for scoring: every required figure verified and every mandatory document present, or refused naming which. */
 export async function submitForAssessment(tenant: TenantCode, applicationId: string, actor: string): Promise<Result<BusinessApplicationView>> {
-  return submitAt(tenant, applicationId, actor, developmentAttestation());
+  return withTenantLock(tenant, () => submitAt(tenant, applicationId, actor, developmentAttestation()));
 }
 
 // =============================================================================
@@ -1339,7 +1468,7 @@ async function runAssessmentAt(tenant: TenantCode, applicationId: string, actor:
  * checker or the system, never by the officer who submitted it.
  */
 export async function runAssessment(tenant: TenantCode, applicationId: string, actor: string): Promise<Result<BusinessApplicationView>> {
-  return runAssessmentAt(tenant, applicationId, actor, developmentAttestation());
+  return withTenantLock(tenant, () => runAssessmentAt(tenant, applicationId, actor, developmentAttestation()));
 }
 
 async function approveAt(tenant: TenantCode, applicationId: string, approver: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
@@ -1354,7 +1483,7 @@ async function approveAt(tenant: TenantCode, applicationId: string, approver: st
 
 /** A straight-through case approved by a checker who is not the submitting officer. */
 export async function approveStraightThrough(tenant: TenantCode, applicationId: string, approver: string): Promise<Result<BusinessApplicationView>> {
-  return approveAt(tenant, applicationId, approver, developmentAttestation());
+  return withTenantLock(tenant, () => approveAt(tenant, applicationId, approver, developmentAttestation()));
 }
 
 async function decideAt(tenant: TenantCode, applicationId: string, decision: { readonly decidedBy: string; readonly approved: boolean; readonly reason: string }, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
@@ -1369,7 +1498,7 @@ async function decideAt(tenant: TenantCode, applicationId: string, decision: { r
 
 /** The credit committee's decision, by a member who is not the submitting officer, with its reason. */
 export async function decideInCommittee(tenant: TenantCode, applicationId: string, decision: { readonly decidedBy: string; readonly approved: boolean; readonly reason: string }): Promise<Result<BusinessApplicationView>> {
-  return decideAt(tenant, applicationId, decision, developmentAttestation());
+  return withTenantLock(tenant, () => decideAt(tenant, applicationId, decision, developmentAttestation()));
 }
 
 // =============================================================================
@@ -1403,13 +1532,15 @@ async function generateOfferAt(tenant: TenantCode, applicationId: string, actor:
   const definition = loadSmeDefinition(ctx.value.profile.code);
   if (!definition.ok) return definition;
 
+  const datePolicy = loadOfferDatePolicy(tenant);
+  if (!datePolicy.ok) return datePolicy;
   const offerDate = localDate(at.epochSeconds, ctx.value.profile);
   const offerDays = daysOfIso(offerDate) ?? 0n;
-  const disbursementDate = options.disbursementDate ?? isoOfDays(offerDays + DEFAULT_DISBURSEMENT_AFTER_OFFER_DAYS);
-  const firstDueDate = options.firstDueDate ?? defaultFirstDue(disbursementDate);
+  const disbursementDate = options.disbursementDate ?? isoOfDays(offerDays + datePolicy.value.defaultDisbursementAfterOfferDays);
+  const firstDueDate = options.firstDueDate ?? defaultFirstDue(disbursementDate, datePolicy.value.minFirstDueAfterDisbursementDays);
   const paymentDay = options.paymentDay ?? Number(firstDueDate.slice(8, 10));
-  const validUntil = isoOfDays(offerDays + DEFAULT_OFFER_VALIDITY_DAYS);
-  const dates = checkOfferDates(offerDate, disbursementDate, firstDueDate);
+  const validUntil = isoOfDays(offerDays + datePolicy.value.offerValidityDays);
+  const dates = checkOfferDates(datePolicy.value, offerDate, disbursementDate, firstDueDate);
   if (!dates.ok) return dates;
   const tenorDays = app.tenorMonths * 30;
 
@@ -1452,6 +1583,8 @@ async function generateOfferAt(tenant: TenantCode, applicationId: string, actor:
     tenorMonths: q.months,
     graceMonths: q.graceMonths,
     rateBp: q.rateSnapshot.rate.bp,
+    // The APR the platform computed (core/pricing/apr.ts via buildOffer); the letter states it, never computes it.
+    aprBp: offer.value.apr.bp,
     equityContributionPerTenThousand: BigInt(q.contributionPerTenThousand),
     offerDate,
     validUntil,
@@ -1468,7 +1601,7 @@ async function generateOfferAt(tenant: TenantCode, applicationId: string, actor:
   const terms: OfferTerms = {
     productCode: app.productCode, variantCode: app.variantCode, months: q.months, graceMonths: q.graceMonths, facilityAmount: app.requested,
     monthlyInstalment: q.monthlyInstalment, totalInterest: q.interestAmount, totalPayable: money(app.requested.minorUnits + totalCharge.minorUnits, app.requested.currency),
-    rateBp: q.rateSnapshot.rate.bp, rateSourceRef: q.rateSnapshot.sourceRef, aprBp: offer.value.apr.bp,
+    rateBp: q.rateSnapshot.rate.bp, rateBasis: q.rateSnapshot.rate.basis, ratePeriod: q.rateSnapshot.rate.period, rateSourceRef: q.rateSnapshot.sourceRef, aprBp: offer.value.apr.bp,
     disbursementDate, firstDueDate, paymentDay, offerDate, validUntil,
   };
   // The same letter twice is one version: the hash is the identity.
@@ -1489,7 +1622,7 @@ async function generateOfferAt(tenant: TenantCode, applicationId: string, actor:
  * bilingual Facility Offer Letter. Its content hash is its version.
  */
 export async function generateOffer(tenant: TenantCode, applicationId: string, actor: string, options: OfferOptions = {}): Promise<Result<BusinessApplicationView>> {
-  return generateOfferAt(tenant, applicationId, actor, options, developmentAttestation());
+  return withTenantLock(tenant, () => generateOfferAt(tenant, applicationId, actor, options, developmentAttestation()));
 }
 
 function latestOfferOf(r: BusinessRecord): Result<OfferRun> {
@@ -1561,7 +1694,7 @@ function commitSideEffects(book: TenantBook, outbox: Outbox): void {
  * is a no-op; a resend needs a new letter version.
  */
 export async function sendOffer(tenant: TenantCode, applicationId: string, actor: string): Promise<Result<BusinessApplicationView>> {
-  return sendOfferAt(tenant, applicationId, actor, developmentAttestation());
+  return withTenantLock(tenant, () => sendOfferAt(tenant, applicationId, actor, developmentAttestation()));
 }
 
 async function signAt(tenant: TenantCode, applicationId: string, signature: { readonly letterVersion: string; readonly signatureRef?: string }, actor: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
@@ -1582,7 +1715,7 @@ async function signAt(tenant: TenantCode, applicationId: string, signature: { re
  * that rail is verified.
  */
 export async function recordSigned(tenant: TenantCode, applicationId: string, signature: { readonly letterVersion: string; readonly signatureRef?: string }, actor: string): Promise<Result<BusinessApplicationView>> {
-  return signAt(tenant, applicationId, signature, actor, developmentAttestation());
+  return withTenantLock(tenant, () => signAt(tenant, applicationId, signature, actor, developmentAttestation()));
 }
 
 async function disburseAt(tenant: TenantCode, applicationId: string, actor: string, paymentRef: string | undefined, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
@@ -1599,6 +1732,11 @@ async function disburseAt(tenant: TenantCode, applicationId: string, actor: stri
   if (!t.ok) return t;
   const signed = r.offers.find((o) => o.letter.version === app.offer?.letterVersion);
   if (signed === undefined) return fail('OFFER_NOT_GENERATED', 'The signed letter version is not on record');
+  // Money goes out on or after the date the borrower signed for: the schedule (and its first due date) is built from it.
+  const actualDate = localDate(at.epochSeconds, ctx.value.profile);
+  if (actualDate < signed.terms.disbursementDate) {
+    return fail('DISBURSEMENT_BEFORE_PLANNED_DATE', 'The disbursement is recorded on or after the planned disbursement date in the signed offer', { plannedDate: signed.terms.disbursementDate, actualDate });
+  }
 
   // The payment instruction to the partner bank and the bureau's facility-opened report, as products/sme-term-conventional/execution.ts
   // shapes them, keyed on the application: queued with the DISBURSED change and written in its transaction.
@@ -1621,7 +1759,7 @@ async function disburseAt(tenant: TenantCode, applicationId: string, actor: stri
  * facility-opened report on the outbox in the same transaction.
  */
 export async function recordDisbursed(tenant: TenantCode, applicationId: string, actor: string, paymentRef?: string): Promise<Result<BusinessApplicationView>> {
-  return disburseAt(tenant, applicationId, actor, paymentRef, developmentAttestation());
+  return withTenantLock(tenant, () => disburseAt(tenant, applicationId, actor, paymentRef, developmentAttestation()));
 }
 
 // =============================================================================
@@ -1635,6 +1773,13 @@ async function portfolioAt(tenant: TenantCode, applicationId: string, status: { 
   if (r.application.status !== 'DISBURSED') return fail('TRANSITION_NOT_ALLOWED', 'Portfolio status is recorded for a disbursed facility', { status: r.application.status });
   if (!Number.isSafeInteger(status.daysPastDue) || status.daysPastDue < 0) return fail('DAYS_PAST_DUE_INVALID', 'Days past due is a whole, non-negative count');
   if (status.arrearsMinorUnits < 0n) return fail('ARREARS_NEGATIVE', 'Arrears are not negative');
+  // Days past due accrue from the first due date of the signed offer: more of them than days since then is not a status, it is an error.
+  const signed = r.offers.find((o) => o.letter.version === r.application.offer?.letterVersion);
+  const firstDue = signed === undefined ? undefined : daysOfIso(signed.terms.firstDueDate);
+  const observed = daysOfIso(localDate(at.epochSeconds, ctx.value.profile)) ?? 0n;
+  if (status.daysPastDue > 0 && (firstDue === undefined || BigInt(status.daysPastDue) > observed - firstDue)) {
+    return fail('DAYS_PAST_DUE_IMPOSSIBLE', 'Days past due cannot exceed the days since the first instalment fell due', { firstDueDate: signed?.terms.firstDueDate ?? '' });
+  }
   const arrears = money(status.arrearsMinorUnits, ctx.value.currency);
   r.portfolio = { daysPastDue: status.daysPastDue, arrears, recordedBy: actor, asOfEpochSeconds: at.epochSeconds };
   const stage = status.daysPastDue > 0 ? 9 : 8;
@@ -1648,17 +1793,22 @@ async function portfolioAt(tenant: TenantCode, applicationId: string, status: { 
  * Recorded as an event: the application row is closed once disbursed.
  */
 export async function recordPortfolioStatus(tenant: TenantCode, applicationId: string, status: { readonly daysPastDue: number; readonly arrearsMinorUnits: bigint }, actor: string): Promise<Result<BusinessApplicationView>> {
-  return portfolioAt(tenant, applicationId, status, actor, developmentAttestation());
+  return withTenantLock(tenant, () => portfolioAt(tenant, applicationId, status, actor, developmentAttestation()));
 }
 
-export async function withdrawApplication(tenant: TenantCode, applicationId: string, reason: string, actor: string): Promise<Result<BusinessApplicationView>> {
+async function withdrawAt(tenant: TenantCode, applicationId: string, reason: string, actor: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
   const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
   const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
-  const t = withdraw(r.application, reason, actor, developmentAttestation().epochSeconds);
+  const t = withdraw(r.application, reason, actor, at.epochSeconds);
   if (!t.ok) return t;
   apply(book, r, t.value);
   return ok(view(r, ctx.value.currency));
+}
+
+/** Withdraw an open application, saying why. The reason is free text and carries no identity number. */
+export async function withdrawApplication(tenant: TenantCode, applicationId: string, reason: string, actor: string): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () => withdrawAt(tenant, applicationId, reason, actor, developmentAttestation()));
 }
 
 // =============================================================================
@@ -1700,6 +1850,12 @@ interface SeedSpec {
   readonly collateralAed: bigint;
   readonly reach: SeedReach;
   readonly daysPastDue?: number;
+  /**
+   * How many days ago the walk ends (default 0, today). A facility in
+   * arrears must have been disbursed, and its first instalment fallen due,
+   * long enough ago for its days past due to have accrued by today.
+   */
+  readonly walkEndsDaysAgo?: bigint;
 }
 
 const SEEDS: readonly SeedSpec[] = [
@@ -1718,7 +1874,7 @@ const SEEDS: readonly SeedSpec[] = [
   { applicationId: 'FR-00005107', nameEn: 'Ibex Robotics Lab FZ-LLC', nameAr: 'آيبكس لمختبرات الروبوتات م.م.ح', sector: 'SERVICES', years: 4, owner: 'Layla F. Example', variant: 'ADVANCED_TECH_AI', purpose: 'EQUIPMENT', requestedAed: 480_000n, tenorMonths: 36, graceMonths: 3, contribution: 2_000, receivedDaysAgo: 40n,
     figures: { revenue: 3_600_000n, prior: 3_100_000n, profit: 700_000n, debtService: 50_000n, assets: 1_200_000n, liabilities: 700_000n, salary: 50_000n, obligations: 8_000n }, bureauScore: 790n, employees: 19, experience: 6n, sectorPriority: 'PRIORITY', collateralAed: 620_000n, reach: 'DISBURSED' },
   { applicationId: 'FR-00005108', nameEn: 'Mangrove Thread Textiles LLC', nameAr: 'خيوط المانغروف للمنسوجات ذ.م.م', sector: 'MANUFACTURING', years: 9, owner: 'Rashid T. Example', variant: 'FIXED_ASSETS', purpose: 'EQUIPMENT', requestedAed: 420_000n, tenorMonths: 48, graceMonths: 0, contribution: 2_000, receivedDaysAgo: 120n,
-    figures: { revenue: 4_800_000n, prior: 4_400_000n, profit: 760_000n, debtService: 65_000n, assets: 1_500_000n, liabilities: 900_000n, salary: 38_000n, obligations: 6_000n }, bureauScore: 752n, employees: 48, experience: 11n, sectorPriority: 'NON_PRIORITY', collateralAed: 560_000n, reach: 'DISBURSED', daysPastDue: 34 },
+    figures: { revenue: 4_800_000n, prior: 4_400_000n, profit: 760_000n, debtService: 65_000n, assets: 1_500_000n, liabilities: 900_000n, salary: 38_000n, obligations: 6_000n }, bureauScore: 752n, employees: 48, experience: 11n, sectorPriority: 'NON_PRIORITY', collateralAed: 560_000n, reach: 'DISBURSED', daysPastDue: 34, walkEndsDaysAgo: 40n },
 ];
 
 const seedInstant = (epochSeconds: bigint): TsaInstant => tsaInstant({ verified: true, genTimeEpochSeconds: epochSeconds, tokenDigest: 'development-substitute', authorityId: 'development' });
@@ -1727,10 +1883,14 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
   const now = developmentAttestation().epochSeconds;
   const officer = BUSINESS_ROLES.officer;
   const checker = BUSINESS_ROLES.checker;
+  const ctx = tenantContext(tenant);
+  const datePolicy = loadOfferDatePolicy(tenant);
+  if (!ctx.ok || !datePolicy.ok) return;
+  const profile = ctx.value.profile;
   for (const s of SEEDS) {
     const t0 = now - s.receivedDaysAgo * DAY;
-    // Steps are spaced within the days since receipt, so every instant is in the past.
-    const span = s.receivedDaysAgo * DAY;
+    // Steps are spaced between receipt and the walk's end (today unless the seed says otherwise), so every instant is in the past.
+    const span = (s.receivedDaysAgo - (s.walkEndsDaysAgo ?? 0n)) * DAY;
     const step = (n: bigint): TsaInstant => seedInstant(t0 + (span * n) / 12n + n * MINUTE);
     const handed = await handOverAt(tenant, {
       applicationId: s.applicationId, upstreamRef: `upstream-${s.applicationId}`,
@@ -1805,7 +1965,15 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
         : undefined;
     if (decided === undefined || !decided.ok) continue;
 
-    const offered = await generateOfferAt(tenant, id, officer, {}, step(7n));
+    // A facility the seed disburses is offered for disbursement on the day it is paid out — never paid before its planned
+    // date. One in arrears falls first due at the policy's earliest, so its days past due accrue from a date in the past.
+    const disbursementDays = daysOfIso(localDate(step(10n).epochSeconds, profile)) ?? 0n;
+    const firstDueDays = disbursementDays + datePolicy.value.minFirstDueAfterDisbursementDays;
+    const offerOptions: OfferOptions = s.reach !== 'DISBURSED' ? {} : {
+      disbursementDate: isoOfDays(disbursementDays),
+      ...(s.daysPastDue === undefined ? {} : { firstDueDate: isoOfDays(firstDueDays) }),
+    };
+    const offered = await generateOfferAt(tenant, id, officer, offerOptions, step(7n));
     if (!offered.ok) continue;
     const sent = await sendOfferAt(tenant, id, officer, step(8n));
     if (!sent.ok || s.reach === 'OFFER_SENT') continue;
@@ -1816,8 +1984,14 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
     const disbursed = await disburseAt(tenant, id, BUSINESS_ROLES.finance, undefined, step(10n));
     if (!disbursed.ok) continue;
     if (s.daysPastDue !== undefined) {
+      // Observed on the day the arrears reach the seed's days past due, counted from the first due date — never after today.
+      const todayDays = daysOfIso(localDate(now, profile)) ?? 0n;
+      const observedDays = firstDueDays + BigInt(s.daysPastDue) < todayDays ? firstDueDays + BigInt(s.daysPastDue) : todayDays;
+      const daysPastDue = Number(observedDays - firstDueDays);
+      if (daysPastDue <= 0) continue;
+      const observedAt = observedDays * DAY + 12n * HOUR - (OFFSET_SECONDS[profile.timeZone] ?? 0n);
       const instalment = disbursed.value.latestOffer?.terms.monthlyInstalment.minorUnits ?? 0n;
-      await portfolioAt(tenant, id, { daysPastDue: s.daysPastDue, arrearsMinorUnits: instalment }, 'loan-system-fixture', step(11n));
+      await portfolioAt(tenant, id, { daysPastDue, arrearsMinorUnits: instalment }, 'loan-system-fixture', seedInstant(observedAt < now ? observedAt : now));
     }
   }
 }

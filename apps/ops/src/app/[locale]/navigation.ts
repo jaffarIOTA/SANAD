@@ -5,44 +5,24 @@
  * Narrowed by the deployment's jurisdiction (ADR 0005): a UAE deployment does
  * not list the Saudi products, the Saudi rails or the Murabaha SCF (Wasl)
  * workstreams; a Saudi deployment does not list the UAE rails or the UAE SME
- * direct-lending items. Platform-wide groups stay in both. The filter is by
- * known group and item ids because the module map does not carry a
- * jurisdiction tag yet — the cleaner change is a `jurisdictions` field on
- * each ModuleGroup / ModuleItem in server/modules.ts, after which these two
- * tables go away.
+ * direct-lending items. Platform-wide groups stay in both. Each group and
+ * item says where it exists in its own `jurisdictions` field in
+ * server/modules.ts; an entry without one is platform-wide. Nothing here
+ * names an id.
  */
 
-import { MODULE_GROUPS, type ModuleGroup, type ModuleReadiness } from '../../server/modules.ts';
+import { MODULE_GROUPS, type ModuleGroup, type ModuleJurisdiction, type ModuleReadiness } from '../../server/modules.ts';
 
-export type NavJurisdiction = 'SA' | 'AE';
+export type NavJurisdiction = ModuleJurisdiction;
 
-/** Groups that exist for one jurisdiction only. */
-const GROUP_JURISDICTION: Readonly<Record<string, NavJurisdiction>> = {
-  rails: 'SA',
-  // Murabaha SCF (Wasl) workstreams: anchors, programmes, goods, commodity brokers; drawdowns, sequencing gates, the financed-invoice registry.
-  programmes: 'SA',
-  transactions: 'SA',
-  'uae-rails': 'AE',
-  'sme-direct-uae': 'AE',
-};
-
-/** Items, inside platform-wide groups, that exist for one jurisdiction only. */
-const ITEM_JURISDICTION: Readonly<Record<string, NavJurisdiction>> = {
-  'murabaha-scf': 'SA',
-  'tawarruq-personal': 'SA',
-  bnpl: 'SA',
-  merchants: 'SA',
-  'embedded-lending': 'SA',
-  'conventional-term': 'SA',
-  // The aggregator channel nominates under a merchant mandate (the Saudi BNPL rails).
-  embedded: 'SA',
-};
+/** True where an entry with these tags exists in this jurisdiction; untagged is everywhere. */
+const listedIn = (tags: readonly ModuleJurisdiction[] | undefined, code: NavJurisdiction): boolean => tags === undefined || tags.includes(code);
 
 /** The module map as this deployment's jurisdiction sees it. Groups left empty are dropped. */
 export function navigationFor(code: NavJurisdiction, groups: readonly ModuleGroup[] = MODULE_GROUPS): readonly ModuleGroup[] {
   return groups
-    .filter((g) => (GROUP_JURISDICTION[g.id] ?? code) === code)
-    .map((g) => ({ ...g, items: g.items.filter((i) => (ITEM_JURISDICTION[i.id] ?? code) === code) }))
+    .filter((g) => listedIn(g.jurisdictions, code))
+    .map((g) => ({ ...g, items: g.items.filter((i) => listedIn(i.jurisdictions, code)) }))
     .filter((g) => g.items.length > 0);
 }
 

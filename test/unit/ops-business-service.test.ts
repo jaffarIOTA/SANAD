@@ -11,8 +11,12 @@
 import type { Pool } from 'pg';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { loadOfferDatePolicy } from '@sanad/config/loader.ts';
+import offerPolicyJson from '@sanad/config/tenants/sme-fund-ae/credit-policy/offer-policy.json' with { type: 'json' };
 import type { FinancialMetric } from '@sanad/core/applicant/financials.ts';
+import { type OfferDatePolicy, parseOfferDatePolicy } from '@sanad/core/origination/business-application.ts';
 
+import * as businessModule from '../../apps/ops/src/server/business.ts';
 import {
   BUSINESS_ROLES,
   type HandoverRequest,
@@ -29,6 +33,7 @@ import {
   handOver,
   ingestReadFigures,
   listApplications,
+  mutateBusiness,
   presentDocument,
   previewNotifications,
   proposeFigures,
@@ -43,6 +48,7 @@ import {
   submitForAssessment,
   validateDocument,
   verifyFigure,
+  withdrawApplication,
 } from '../../apps/ops/src/server/business.ts';
 
 const TENANT = 'sme-fund-ae' as const;
@@ -190,17 +196,21 @@ describe('the business-application service — full journey in memory', () => {
     const approved = await decideInCommittee(TENANT, ID, { decidedBy: committee, approved: true, reason: 'Within risk-aligned terms' });
     expect(approved.ok && approved.value.application.status).toBe('APPROVED');
 
-    const disbursementDate = isoAfter(14);
-    const offered = await generateOffer(TENANT, ID, officer, { disbursementDate, firstDueDate: isoAfter(44) });
+    // Disbursed today, as planned: a disbursement before the planned date is refused (see #6 below).
+    const disbursementDate = isoAfter(0);
+    const offered = await generateOffer(TENANT, ID, officer, { disbursementDate, firstDueDate: isoAfter(30) });
     expect(offered.ok).toBe(true);
     if (!offered.ok) return;
     const offer = offered.value.latestOffer;
     expect(offer?.letter.version).toMatch(/^[0-9a-f]{64}$/);
     expect(offer?.letter.currency).toBe('AED');
     expect(offer?.terms.rateBp).toBe(150n);
+    // #10 the basis and period are the rate snapshot's, stored with the terms — not asserted by a screen.
+    expect(offer?.terms.rateBasis).toBe('REDUCING');
+    expect(offer?.terms.ratePeriod).toBe('ANNUAL');
     expect(offer?.terms.months).toBe(36);
     expect(offer?.schedule.dayCount).toBe('ACT/365');
-    expect(offer?.schedule.rows[0]?.dueDate).toBe(isoAfter(44));
+    expect(offer?.schedule.rows[0]?.dueDate).toBe(isoAfter(30));
     expect(offer?.terms.totalPayable.minorUnits).toBe(80_000_000n + (offer?.terms.totalInterest.minorUnits ?? 0n));
 
     const preview = await previewNotifications(TENANT, ID);
@@ -227,8 +237,10 @@ describe('the business-application service — full journey in memory', () => {
       expect(disbursed.value.application.disbursement?.paymentRef).toMatch(/^partner-bank-fixture:/);
     }
 
-    const late = await recordPortfolioStatus(TENANT, ID, { daysPastDue: 12, arrearsMinorUnits: 2_000_000n }, 'loan-system-fixture');
-    expect(late.ok && late.value.displayStage).toBe(9);
+    // The first instalment falls due in 30 days: twelve days past due today is not possible, and is refused.
+    expectRefused(await recordPortfolioStatus(TENANT, ID, { daysPastDue: 12, arrearsMinorUnits: 2_000_000n }, 'loan-system-fixture'), 'DAYS_PAST_DUE_IMPOSSIBLE');
+    const current = await recordPortfolioStatus(TENANT, ID, { daysPastDue: 0, arrearsMinorUnits: 0n }, 'loan-system-fixture');
+    expect(current.ok && current.value.displayStage).toBe(8);
 
     const final = await getApplication(TENANT, ID);
     expect(final?.events.map((e) => e.eventType)).toEqual(expect.arrayContaining(['HANDED_OVER', 'SPREADING_STARTED', 'FIGURE_VERIFIED', 'DOCUMENT_PRESENTED', 'DOCUMENT_VALIDATED', 'SUBMITTED_FOR_ASSESSMENT', 'ASSESSED', 'COMMITTEE_APPROVED', 'OFFER_GENERATED', 'OFFER_SENT', 'SIGNED', 'DISBURSED', 'PORTFOLIO_STATUS_RECORDED']));
@@ -255,6 +267,17 @@ describe('#1 a keyed figure is OFFICER_ENTRY whatever the caller says', () => {
     await handOver(TENANT, handover(), 'upstream');
     const keyed = { metric: 'NET_PROFIT' as const, periodLabel: 'FY2025', minorUnits: 1n, sourceRef: 'doc', sourceKind: 'OFFICER_ENTRY' } as unknown as Parameters<typeof ingestReadFigures>[2][number];
     expectRefused(await ingestReadFigures(TENANT, ID, [keyed], READ_FIGURE_SOURCES.ocr), 'FIGURE_SOURCE_NOT_READ');
+  });
+
+  it('#4 refuses a read figure recorded by anyone but the system’s ingestion principals', async () => {
+    await handOver(TENANT, handover(), 'upstream');
+    const read = [{ metric: 'NET_PROFIT' as const, periodLabel: 'FY2025', minorUnits: 90_000_000n, sourceKind: 'OCR' as const, sourceRef: 'doc-test' }];
+    // An officer calling the ingestion path would otherwise record an "OCR" figure they could then verify themselves.
+    for (const source of [officer, checker, 'system:anything-else', '']) {
+      expectRefused(await ingestReadFigures(TENANT, ID, read, source), 'FIGURE_SOURCE_PRINCIPAL_INVALID');
+    }
+    expect((await getApplication(TENANT, ID))?.figures).toHaveLength(0);
+    expect((await ingestReadFigures(TENANT, ID, read, READ_FIGURE_SOURCES.rail)).ok).toBe(true);
   });
 });
 
@@ -363,22 +386,53 @@ describe('#7 assessment inputs: consent-bound, locked at submission, scored by s
     await recordAssessmentInputs(TENANT, ID, INPUTS, officer);
     expect((await submitForAssessment(TENANT, ID, officer)).ok).toBe(true);
     expectRefused(await recordAssessmentInputs(TENANT, ID, { ...INPUTS, bureau: { ...INPUTS.bureau, score: 900n } }, officer), 'ASSESSMENT_INPUTS_LOCKED');
+  });
+
+  it('refuses submission without the assessment inputs, which lock at submission and scoring needs', async () => {
+    await handOver(TENANT, handover(), 'upstream');
+    await spreadAndVerify();
+    await presentAndValidateDocuments();
+    expectRefused(await submitForAssessment(TENANT, ID, officer), 'ASSESSMENT_INPUTS_MISSING');
+    expect((await recordAssessmentInputs(TENANT, ID, INPUTS, officer)).ok).toBe(true);
+    expect((await submitForAssessment(TENANT, ID, officer)).ok).toBe(true);
     expectRefused(await runAssessment(TENANT, ID, officer), 'FOUR_EYES_SELF_ASSESSMENT');
     expect((await runAssessment(TENANT, ID, checker)).ok).toBe(true);
   });
 });
 
-describe('#11 offer dates within ILLUSTRATIVE bounds', () => {
+describe('#11 offer dates within the fund’s configured (ILLUSTRATIVE) bounds', () => {
+  const policy = (): OfferDatePolicy => {
+    const p = loadOfferDatePolicy(TENANT);
+    if (!p.ok) throw new Error(p.error.reason);
+    return p.value;
+  };
+
+  it('#8 the bounds come from the fund’s credit-policy configuration, marked ILLUSTRATIVE, through a parser', () => {
+    const p = policy();
+    expect(p.policyRef).toMatch(/^ILLUSTRATIVE/);
+    expect([p.maxDisbursementAfterOfferDays, p.minFirstDueAfterDisbursementDays, p.maxFirstDueAfterDisbursementDays]).toEqual([60n, 15n, 45n]);
+    // A malformed policy is a refusal, never a default.
+    expectRefused(parseOfferDatePolicy({ ...offerPolicyJson, maxFirstDueAfterDisbursementDays: 45 }), 'OFFER_POLICY_MALFORMED');
+    expectRefused(parseOfferDatePolicy({ ...offerPolicyJson, minFirstDueAfterDisbursementDays: '50' }), 'OFFER_POLICY_MALFORMED');
+    expectRefused(parseOfferDatePolicy({ ...offerPolicyJson, policyRef: '' }), 'OFFER_POLICY_MALFORMED');
+    expectRefused(loadOfferDatePolicy('bank-a'), 'OFFER_POLICY_NOT_FOUND');
+    // The constants are gone from the service: nothing but the policy carries a bound.
+    expect(Object.keys(businessModule)).not.toContain('OFFER_DATE_BOUNDS');
+  });
+
   it('checks each bound with a typed reason', () => {
-    expect(checkOfferDates('2026-10-08', '2026-10-22', '2026-11-20').ok).toBe(true);
-    expectRefused(checkOfferDates('2026-10-08', '2026-10-07', '2026-11-01'), 'DISBURSEMENT_BEFORE_OFFER');
-    expectRefused(checkOfferDates('2026-10-08', '2026-12-08', '2026-12-30'), 'DISBURSEMENT_TOO_FAR');
-    expectRefused(checkOfferDates('2026-10-08', '2026-10-22', '2026-11-05'), 'FIRST_DUE_TOO_SOON');
-    expectRefused(checkOfferDates('2026-10-08', '2026-10-22', '2026-12-07'), 'FIRST_DUE_TOO_LATE');
-    expectRefused(checkOfferDates('2026-10-08', '2026-02-30', '2026-03-30'), 'OFFER_DATE_MALFORMED');
+    const p = policy();
+    expect(checkOfferDates(p, '2026-10-08', '2026-10-22', '2026-11-20').ok).toBe(true);
+    expectRefused(checkOfferDates(p, '2026-10-08', '2026-10-07', '2026-11-01'), 'DISBURSEMENT_BEFORE_OFFER');
+    expectRefused(checkOfferDates(p, '2026-10-08', '2026-12-08', '2026-12-30'), 'DISBURSEMENT_TOO_FAR');
+    expectRefused(checkOfferDates(p, '2026-10-08', '2026-10-22', '2026-11-05'), 'FIRST_DUE_TOO_SOON');
+    expectRefused(checkOfferDates(p, '2026-10-08', '2026-10-22', '2026-12-07'), 'FIRST_DUE_TOO_LATE');
+    expectRefused(checkOfferDates(p, '2026-10-08', '2026-02-30', '2026-03-30'), 'OFFER_DATE_MALFORMED');
     // Exactly on the bounds is allowed.
-    expect(checkOfferDates('2026-10-08', '2026-12-07', '2026-12-22').ok).toBe(true);
-    expect(checkOfferDates('2026-10-08', '2026-10-08', '2026-11-22').ok).toBe(true);
+    expect(checkOfferDates(p, '2026-10-08', '2026-12-07', '2026-12-22').ok).toBe(true);
+    expect(checkOfferDates(p, '2026-10-08', '2026-10-08', '2026-11-22').ok).toBe(true);
+    // A different policy moves the bounds: the same dates, judged by a tighter one.
+    expectRefused(checkOfferDates({ ...p, maxDisbursementAfterOfferDays: 10n }, '2026-10-08', '2026-10-22', '2026-11-20'), 'DISBURSEMENT_TOO_FAR');
   });
 
   it('refuses an officer-chosen date outside the bounds when generating the offer', async () => {
@@ -397,9 +451,21 @@ describe('#11 offer dates within ILLUSTRATIVE bounds', () => {
 describe('#12 #13 disbursement: a distinct finance principal, payment and bureau report queued', () => {
   beforeEach(() => resetBusinessStore({ seed: false }));
 
+  it('#6 refuses a disbursement earlier than the signed offer’s planned disbursement date, queuing nothing', async () => {
+    await driveToApproved();
+    await generateOffer(TENANT, ID, officer, { disbursementDate: isoAfter(14), firstDueDate: isoAfter(44) });
+    const sent = await sendOffer(TENANT, ID, officer);
+    await recordSigned(TENANT, ID, { letterVersion: sent.ok ? sent.value.application.offer?.letterVersion ?? '' : '' }, officer);
+    const early = await recordDisbursed(TENANT, ID, finance);
+    expectRefused(early, 'DISBURSEMENT_BEFORE_PLANNED_DATE');
+    if (!early.ok) expect(early.error.context).toMatchObject({ plannedDate: isoAfter(14), actualDate: isoAfter(0) });
+    expect((await getApplication(TENANT, ID))?.application.status).toBe('SIGNED');
+    expect(queuedBusinessNotifications().filter((e) => e.subjectRef === ID && e.kind === 'PAYMENT_DISBURSE')).toHaveLength(0);
+  });
+
   it('refuses the approver and the submitting officer; queues PAYMENT_DISBURSE and BUREAU_REPORT with DISBURSED', async () => {
     await driveToApproved();
-    await generateOffer(TENANT, ID, officer, { disbursementDate: isoAfter(14), firstDueDate: isoAfter(40) });
+    await generateOffer(TENANT, ID, officer, { disbursementDate: isoAfter(0), firstDueDate: isoAfter(30) });
     const sent = await sendOffer(TENANT, ID, officer);
     await recordSigned(TENANT, ID, { letterVersion: sent.ok ? sent.value.application.offer?.letterVersion ?? '' : '' }, officer);
 
@@ -442,6 +508,27 @@ describe('the hand-over refuses and repeats safely', () => {
     expectRefused(await handOver(TENANT, handover({ contact: { partyRef: '784199012345671' } }), 'upstream'), 'IDENTITY_NUMBER_IN_PAYLOAD');
     expectRefused(await handOver(TENANT, handover({ upstreamRef: 'cif-784-1990-1234567-1' }), 'upstream'), 'IDENTITY_NUMBER_IN_PAYLOAD');
     expect(await getApplication(TENANT, ID)).toBeUndefined();
+  });
+
+  it('#7 refuses an identity number — Emirates ID or Saudi id / iqama — in every reference input after the hand-over', async () => {
+    await handOver(TENANT, handover(), 'upstream');
+    for (const id of ['784-1985-1234567-1', '1012345678', '2087654321']) {
+      expectRefused(await presentDocument(TENANT, ID, { documentType: 'TRADE_LICENCE', documentRef: `doc-${id}` }, officer), 'IDENTITY_NUMBER_IN_PAYLOAD');
+      expectRefused(await validateDocument(TENANT, ID, `doc-${id}`, 'VALID', checker), 'IDENTITY_NUMBER_IN_PAYLOAD');
+      expectRefused(await proposeFigures(TENANT, ID, [{ metric: 'NET_PROFIT', periodLabel: 'FY2025', minorUnits: 1n, sourceRef: `stmt-${id}` }], officer), 'IDENTITY_NUMBER_IN_PAYLOAD');
+      expectRefused(await ingestReadFigures(TENANT, ID, [{ metric: 'NET_PROFIT', periodLabel: 'FY2025', minorUnits: 1n, sourceKind: 'OCR', sourceRef: `stmt-${id}` }], READ_FIGURE_SOURCES.ocr), 'IDENTITY_NUMBER_IN_PAYLOAD');
+      expectRefused(await recordAssessmentInputs(TENANT, ID, { ...INPUTS, bureau: { ...INPUTS.bureau, reportRef: `aecb:report-${id}` } }, officer), 'IDENTITY_NUMBER_IN_PAYLOAD');
+      expectRefused(await withdrawApplication(TENANT, ID, `Applicant ${id} withdrew`, officer), 'IDENTITY_NUMBER_IN_PAYLOAD');
+    }
+    // The refusal names the field, never the value.
+    const refused = await presentDocument(TENANT, ID, { documentType: 'TRADE_LICENCE', documentRef: 'doc-1012345678' }, officer);
+    if (!refused.ok) expect(JSON.stringify(refused.error)).not.toContain('1012345678');
+    const v = await getApplication(TENANT, ID);
+    expect(v?.documents).toHaveLength(0);
+    expect(v?.figures).toHaveLength(0);
+    expect(v?.application.status).toBe('RECEIVED');
+    // An amount shaped like an identity number is an amount: bigint, not text, and not scanned.
+    expect((await proposeFigures(TENANT, ID, [{ metric: 'ANNUAL_REVENUE', periodLabel: 'FY2025', minorUnits: 1_012_345_678n, sourceRef: 'doc-test-statements' }], officer)).ok).toBe(true);
   });
 
   it('refuses a contact that is not masked, and a purpose the variant does not finance', async () => {
@@ -489,6 +576,31 @@ describe('the illustrative seed (sme-fund-ae)', () => {
     expect(new Set(all.map((a) => a.displayStage))).toEqual(new Set([5, 6, 7, 8, 9]));
   });
 
+  it('#6 keeps possible timelines: nothing disbursed before its planned date; days past due accrued from a past first due date', async () => {
+    const all = await listApplications(TENANT);
+    const dubaiDate = (epoch: bigint): string => new Date(Number((epoch + 4n * 3_600n) * 1_000n)).toISOString().slice(0, 10);
+    const daysBetween = (from: string, to: string): number => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
+    const nowEpoch = BigInt(Math.floor(Date.now() / 1_000));
+    for (const id of ['FR-00005107', 'FR-00005108']) {
+      const v = all.find((a) => a.application.applicationId === id);
+      const terms = v?.latestOffer?.terms;
+      const paidAt = v?.application.disbursement?.atEpochSeconds;
+      expect(terms, id).toBeDefined();
+      expect(paidAt, id).toBeDefined();
+      if (terms === undefined || paidAt === undefined) continue;
+      expect(dubaiDate(paidAt) >= terms.disbursementDate, `${id} paid ${dubaiDate(paidAt)} planned ${terms.disbursementDate}`).toBe(true);
+      expect(daysBetween(terms.offerDate, terms.disbursementDate)).toBeGreaterThanOrEqual(0);
+      expect(daysBetween(terms.disbursementDate, terms.firstDueDate)).toBeGreaterThanOrEqual(15);
+      expect(paidAt <= nowEpoch).toBe(true);
+    }
+    const arrears = all.find((a) => a.application.applicationId === 'FR-00005108');
+    const portfolio = arrears?.portfolio;
+    const firstDue = arrears?.latestOffer?.terms.firstDueDate ?? '';
+    expect(portfolio?.daysPastDue).toBeGreaterThan(0);
+    expect(portfolio === undefined ? false : portfolio.asOfEpochSeconds <= nowEpoch).toBe(true);
+    expect(portfolio === undefined ? -1 : daysBetween(firstDue, dubaiDate(portfolio.asOfEpochSeconds))).toBeGreaterThanOrEqual(portfolio?.daysPastDue ?? Number.MAX_SAFE_INTEGER);
+  });
+
   it('has figures awaiting verification at stage 5', async () => {
     const first = await getApplication(TENANT, 'FR-00005101');
     expect(first?.figures.length).toBeGreaterThan(0);
@@ -527,7 +639,7 @@ interface Logged { readonly via: 'pool' | 'client'; readonly client: number; rea
  * config.deployment_profile says; `stale` makes the application upsert find
  * a changed row; `failOn` throws on a statement containing that text.
  */
-function recordingPool(options: { profile?: boolean | 'missing' | 'error'; stale?: () => boolean; failOn?: () => string | undefined } = {}) {
+function recordingPool(options: { profile?: boolean | 'missing' | 'error'; stale?: (params: readonly unknown[]) => boolean; failOn?: () => string | undefined } = {}) {
   const log: Logged[] = [];
   let clients = 0;
   let loads = 0;
@@ -542,7 +654,7 @@ function recordingPool(options: { profile?: boolean | 'missing' | 'error'; stale
     }
     if (sql.startsWith('select record')) { loads += 1; return { rows: [], rowCount: 0 }; }
     if (sql.includes('insert into core.business_application') && !sql.includes('business_application_event')) {
-      if (options.stale?.() === true) return { rows: [], rowCount: 0 };
+      if (options.stale?.(params) === true) return { rows: [], rowCount: 0 };
       return { rows: [{ status: params[4], updated_at: `2026-10-08 10:00:00.${String(log.length).padStart(6, '0')}+00` }], rowCount: 1 };
     }
     return { rows: [], rowCount: 0 };
@@ -600,26 +712,105 @@ describe.skipIf(DB_CONFIGURED)('#3 the outbox row is written in the business tra
     expect(db.log.slice(before).filter((s) => s.via === 'pool' && s.sql.includes('outbox_event'))).toHaveLength(0);
   });
 
-  it('rolls the send back with its outbox row: a failed outbox insert leaves both pending, and the retry writes both', async () => {
+  it('rolls the send back with its outbox row: neither is written, the notification is not queued, and the answer is PERSISTENCE_FAILED', async () => {
     let failing: string | undefined;
     const db = recordingPool({ failOn: () => failing });
     resetBusinessStore({ seed: false, pool: db.pool });
     await driveToApproved();
     await generateOffer(TENANT, ID, officer, { disbursementDate: isoAfter(14), firstDueDate: isoAfter(40) });
-    await flushBusiness();
-    await sendOffer(TENANT, ID, officer);
+    expect((await flushBusiness()).ok).toBe(true);
     failing = 'insert into core.outbox_event';
     const before = db.log.length;
-    await expect(flushBusiness()).rejects.toThrow(/simulated failure/);
+    const sent = await mutateBusiness(TENANT, () => sendOffer(TENANT, ID, officer));
+    expectRefused(sent, 'PERSISTENCE_FAILED');
+    const tx = transactions(db.log.slice(before));
+    expect(tx.at(-1)?.at(-1)?.sql).toBe('rollback');
+    expect(tx.some((t) => t.at(-1)?.sql === 'commit')).toBe(false);
+    // The side effect of a change that was not written is never dispatched.
+    expect(queuedBusinessNotifications().filter((e) => e.subjectRef === ID && e.kind === 'NOTIFICATION')).toHaveLength(0);
+  });
+});
+
+describe.skipIf(DB_CONFIGURED)('#2 a failed save is not a poison batch', () => {
+  it('rolls back, drops the working set, answers PERSISTENCE_FAILED without throwing, and later actions are unaffected', async () => {
+    let failing: string | undefined;
+    const db = recordingPool({ failOn: () => failing });
+    resetBusinessStore({ seed: false, pool: db.pool });
+    expect((await mutateBusiness(TENANT, () => handOver(TENANT, handover(), 'upstream'))).ok).toBe(true);
+
+    failing = 'insert into core.business_financial_figure';
+    const before = db.log.length;
+    const proposed = await mutateBusiness(TENANT, () => proposeFigures(TENANT, ID, [{ metric: 'NET_PROFIT', periodLabel: 'FY2025', minorUnits: 1n, sourceRef: 'doc' }], officer));
+    expectRefused(proposed, 'PERSISTENCE_FAILED');
+    // The database's message is not carried into the refusal.
+    if (!proposed.ok) expect(JSON.stringify(proposed.error)).not.toMatch(/simulated/);
     expect(transactions(db.log.slice(before)).at(-1)?.at(-1)?.sql).toBe('rollback');
 
+    // The database is back. Before the fix the unsaved figure stayed marked and every later save retried it — and failed —
+    // whatever the later action was. Now the working set was dropped: the next read reloads (the stand-in's book is empty).
     failing = undefined;
-    const retry = db.log.length;
+    expect(await getApplication(TENANT, ID)).toBeUndefined();
+    const retryFrom = db.log.length;
     expect((await flushBusiness()).ok).toBe(true);
-    const tx = transactions(db.log.slice(retry))[0] ?? [];
-    expect(tx.some((s) => s.sql.includes('insert into core.business_application\n') && s.params[4] === 'OFFER_SENT')).toBe(true);
-    expect(tx.some((s) => s.sql.includes('insert into core.outbox_event') && s.params[2] === 'NOTIFICATION')).toBe(true);
-    expect(tx.at(-1)?.sql).toBe('commit');
+    expect(db.log.slice(retryFrom).some((s) => s.sql.includes('business_financial_figure'))).toBe(false);
+    const again = await mutateBusiness(TENANT, () => handOver(TENANT, handover({ applicationId: 'FR-00009002', upstreamRef: 'upstream-test-9002' }), 'upstream'));
+    expect(again.ok).toBe(true);
+  });
+
+  it('flushBusiness answers PERSISTENCE_FAILED instead of throwing when the connection itself fails', async () => {
+    let failing: string | undefined;
+    const db = recordingPool({ failOn: () => failing });
+    resetBusinessStore({ seed: false, pool: db.pool });
+    await handOver(TENANT, handover(), 'upstream');
+    failing = 'begin';
+    const settled = await flushBusiness();
+    expectRefused(settled, 'PERSISTENCE_FAILED');
+    failing = undefined;
+    expect((await flushBusiness()).ok).toBe(true);
+  });
+});
+
+describe.skipIf(DB_CONFIGURED)('#1 two interleaved requests on one tenant', () => {
+  it('never reports a change as saved when a stale save dropped the book it was made on', async () => {
+    const staleFor = new Set<string>();
+    const db = recordingPool({ stale: (params) => staleFor.has(String(params[1])) });
+    resetBusinessStore({ seed: false, pool: db.pool });
+    const B = 'FR-00009002';
+    expect((await mutateBusiness(TENANT, () => handOver(TENANT, handover(), 'upstream'))).ok).toBe(true);
+    expect((await mutateBusiness(TENANT, () => handOver(TENANT, handover({ applicationId: B, upstreamRef: 'upstream-test-9002' }), 'upstream'))).ok).toBe(true);
+
+    // Another process has since changed application A: A's save will be refused as stale.
+    staleFor.add(ID);
+    const figure = (app: string, n: bigint) => () => proposeFigures(TENANT, app, [{ metric: 'NET_PROFIT', periodLabel: 'FY2025', minorUnits: n, sourceRef: 'doc' }], officer);
+    // Started together: each yields at every await, so without the lock B's change would land on the book that A's
+    // stale save then drops — and B's own save would find nothing to write and report success.
+    const [a, b] = await Promise.all([mutateBusiness(TENANT, figure(ID, 1n)), mutateBusiness(TENANT, figure(B, 2n))]);
+    expectRefused(a, 'STALE_APPLICATION');
+    const committedFigures = transactions(db.log)
+      .filter((t) => t.at(-1)?.sql === 'commit')
+      .flatMap((t) => t.filter((s) => s.sql.includes('insert into core.business_financial_figure')).map((s) => String(s.params[2])));
+    // Whatever B answered, it is true: a success means B's figure was committed; otherwise B was refused.
+    if (b.ok) expect(committedFigures).toContain(B);
+    else expect(['STALE_APPLICATION', 'BUSINESS_APPLICATION_NOT_FOUND']).toContain(b.error.reason);
+    expect(committedFigures).not.toContain(ID);
+  });
+
+  it('serialises the two: the second change starts only after the first is saved', async () => {
+    const db = recordingPool();
+    resetBusinessStore({ seed: false, pool: db.pool });
+    const order: string[] = [];
+    const op = (name: string) => async () => {
+      order.push(`${name}:start`);
+      await new Promise((r) => setTimeout(r, 5));
+      const r = await handOver(TENANT, handover({ applicationId: name, upstreamRef: `upstream-${name}` }), 'upstream');
+      order.push(`${name}:end`);
+      return r;
+    };
+    const commitsBefore = (): number => transactions(db.log).filter((t) => t.at(-1)?.sql === 'commit').length;
+    const [x, y] = await Promise.all([mutateBusiness(TENANT, op('FR-00009011')), mutateBusiness(TENANT, op('FR-00009012'))]);
+    expect(x.ok && y.ok).toBe(true);
+    expect(order).toEqual(['FR-00009011:start', 'FR-00009011:end', 'FR-00009012:start', 'FR-00009012:end']);
+    expect(commitsBefore()).toBe(2);
   });
 });
 

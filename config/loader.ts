@@ -284,3 +284,18 @@ export function loadAllForTenant(tenant: TenantCode): Result<{
 
   return ok({ structures, creditPolicies });
 }
+
+// -- Offer date policy (SME direct lending) -----------------------------------------
+// Imports placed here deliberately: this section is appended as a unit.
+
+import fundAeOfferPolicy from './tenants/sme-fund-ae/credit-policy/offer-policy.json' with { type: 'json' };
+import { type OfferDatePolicy, parseOfferDatePolicy } from '../core/origination/business-application.ts';
+
+const OFFER_DATE_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = { 'sme-fund-ae': fundAeOfferPolicy };
+
+/** The bounds and defaults for the dates on a business offer, for a tenant that configures them. */
+export function loadOfferDatePolicy(tenant: TenantCode): Result<OfferDatePolicy> {
+  const raw = OFFER_DATE_POLICIES[tenant];
+  if (raw === undefined) return reject('OP-DETERMINACY', 'OFFER_POLICY_NOT_FOUND', 'No offer date policy is configured for this tenant', { tenant });
+  return parseOfferDatePolicy(raw);
+}

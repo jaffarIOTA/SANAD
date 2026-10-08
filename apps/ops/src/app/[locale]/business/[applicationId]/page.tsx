@@ -12,7 +12,9 @@
  *     checker, never by whoever keyed it (core/applicant/financials.ts);
  *   - sees the ratios the verified spread supports, against the minimums in
  *     the fund's credit policy (ILLUSTRATIVE), and the owner's debt burden;
- *   - completes the variant's document checklist by reference;
+ *   - completes the variant's document checklist by reference: the officer
+ *     presents a document, which stays PENDING (and does not count) until the
+ *     checker marks it valid or invalid — four eyes again;
  *   - submits to credit assessment — refused by the domain, and disabled
  *     here with the reason, until every figure is verified and every
  *     mandatory document is present.
@@ -29,8 +31,8 @@ import type { SmeAssessmentPolicy } from '@sanad/core/decisioning/sme-assessment
 import type { Result } from '@sanad/core/kernel/result.ts';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 
-import { proposeFigureAction, presentDocumentAction, submitForAssessmentAction, verifyFigureAction, withdrawApplicationAction } from '../../../../server/business-actions.ts';
-import { BUSINESS_ROLES, checklistStatus, figureReadiness, getApplication, productVariants, syncBusiness } from '../../../../server/business.ts';
+import { proposeFigureAction, presentDocumentAction, submitForAssessmentAction, validateDocumentAction, verifyFigureAction, withdrawApplicationAction } from '../../../../server/business-actions.ts';
+import { BUSINESS_ROLES, type BusinessDocument, checklistStatus, figureReadiness, getApplication, productVariants, syncBusiness } from '../../../../server/business.ts';
 import { type DocumentGroup, documentGroup, formatFact, formatPercent } from '../../../../server/business-dashboard.ts';
 import { workbenchJurisdiction } from '../../../../server/jurisdiction.ts';
 import { ApplicationShell, BTN_PRIMARY, BTN_SECONDARY, BTN_SMALL, Chip, DisabledAction, DividedBy, Field, FormContext, type Formatters, INPUT, Id, METRIC_LABELS, SECTOR_LABELS, SectionCard, TH, TH_END, formatters, label, variantProvenanceNote } from '../ui.tsx';
@@ -61,8 +63,22 @@ const ITEM_STATUS: Readonly<Record<string, { readonly en: string; readonly ar: s
   MISSING: { en: 'Missing', ar: 'غير مرفوع', tone: 'bad' },
   EXPIRED: { en: 'Expired', ar: 'منتهي الصلاحية', tone: 'bad' },
   INVALID: { en: 'Invalid', ar: 'غير صالح', tone: 'bad' },
-  PENDING: { en: 'Validating', ar: 'قيد التحقق', tone: 'warn' },
+  PENDING: { en: 'Awaiting the checker', ar: 'بانتظار تحقق المراجِع', tone: 'warn' },
 };
+
+/** Who presented the document on file and, once checked, who validated it — principals by id, never by name. */
+function DocumentProvenance({ held, f }: { readonly held: BusinessDocument | undefined; readonly f: Formatters }): ReactElement | null {
+  if (held === undefined) return null;
+  const { t } = f;
+  return (
+    <span className="flex flex-col text-[11px] text-ink-quiet" data-document-provenance>
+      <span>{t('Presented by', 'قدّمه')} <Id>{held.presentedBy}</Id></span>
+      {held.validatedBy === undefined ? null : (
+        <span>{held.validationStatus === 'VALID' ? t('Validated by', 'اعتمده') : t('Rejected by', 'رفضه')} <Id>{held.validatedBy}</Id></span>
+      )}
+    </span>
+  );
+}
 
 const OPEN = new Set(['RECEIVED', 'SPREADING']);
 
@@ -97,7 +113,9 @@ export default async function LoanApplicationPage({ params, searchParams }: { re
   const unverified = view.figures.filter((x) => x.figure.status !== 'VERIFIED');
   const missingFigures = readiness.ok ? [...readiness.value.missingFigures, ...readiness.value.unverifiedFigures] : [];
   const missingDocs = checklist.ok ? checklist.value.report.filter((r) => r.item.required && r.status !== 'PRESENT') : [];
-  const ready = readiness.ok && readiness.value.spreadComplete && checklist.ok && checklist.value.complete;
+  // The inputs lock at submission, so the screen does not offer Submit before they are recorded (the scoring cannot run without them).
+  const inputsMissing = view.assessmentInputs === undefined;
+  const ready = readiness.ok && readiness.value.spreadComplete && checklist.ok && checklist.value.complete && !inputsMissing;
 
   return (
     <ApplicationShell segment={segment} view={view} screen="application" query={query} f={f} title={t('Loan application', 'طلب التمويل')}>
@@ -209,7 +227,6 @@ export default async function LoanApplicationPage({ params, searchParams }: { re
                         <form action={verifyFigureAction} className="flex flex-wrap items-center gap-2">
                           <FormContext segment={segment} applicationId={a.applicationId} />
                           <input type="hidden" name="figureId" value={figureId} />
-                          <input type="hidden" name="sourceKind" value={figure.sourceKind} />
                           <label className="min-w-0 flex-1 basis-[120px]">
                             <span className="sr-only">{t('Corrected amount (optional)', 'المبلغ المصحح (اختياري)')}</span>
                             <input name="correctedAmount" inputMode="decimal" placeholder={t('Correct (optional)', 'تصحيح (اختياري)')} className={INPUT} />
@@ -239,7 +256,6 @@ export default async function LoanApplicationPage({ params, searchParams }: { re
               <label className="text-[12px] text-ink-quiet">{t(`Amount (${f.cur})`, `المبلغ (${f.cur})`)}<input name="amount" required inputMode="decimal" placeholder="0.00" className={`${INPUT} mt-1`} /></label>
               <label className="text-[12px] text-ink-quiet">{t('Source document or rail reference', 'مرجع المستند أو الربط')}<input name="sourceRef" required className={`${INPUT} mt-1`} /></label>
               <div className="flex items-end gap-3">
-                <input type="hidden" name="sourceKind" value="OFFICER_ENTRY" />
                 <label className="flex items-center gap-1.5 pb-2 text-[12px] text-ink-quiet"><input type="checkbox" name="negative" value="true" />{t('Loss', 'خسارة')}</label>
                 <button type="submit" className={BTN_SMALL}>{t('Record', 'تسجيل')}</button>
               </div>
@@ -280,7 +296,7 @@ export default async function LoanApplicationPage({ params, searchParams }: { re
         note={!checklist.ok ? undefined : f.arabic
           ? <>قائمة فئة {variant?.nameAr ?? a.variantCode} (الإصدار <Id>{checklist.value.checklist.version}</Id>). تُسجَّل المستندات بمرجعها لا بمحتواها.</>
           : <>The {variant?.nameEn ?? a.variantCode} checklist (version <Id>{checklist.value.checklist.version}</Id>). Documents are recorded by reference, never by content.</>}
-        aside={checklist.ok ? <Chip tone={checklist.value.complete ? 'good' : 'warn'}>{checklist.value.complete ? t('Mandatory documents complete', 'المستندات الإلزامية مكتملة') : t(`${f.n(missingDocs.length)} mandatory missing`, `${f.n(missingDocs.length)} إلزامي ناقص`)}</Chip> : undefined}>
+        aside={checklist.ok ? <Chip tone={checklist.value.complete ? 'good' : 'warn'}>{checklist.value.complete ? t('Mandatory documents complete', 'المستندات الإلزامية مكتملة') : t(`${f.n(missingDocs.length)} mandatory outstanding`, `${f.n(missingDocs.length)} إلزامي غير مكتمل`)}</Chip> : undefined}>
         {!checklist.ok ? <p className="text-[13px] text-blocked">{checklist.error.detail}</p> : (
           <div className="flex flex-col gap-5">
             {GROUPS.map((group) => {
@@ -302,8 +318,20 @@ export default async function LoanApplicationPage({ params, searchParams }: { re
                             </span>
                             {held === undefined ? null : <bdi dir="ltr" className="identifier block truncate text-start text-[11px] text-ink-quiet" title={held.documentRef}>{held.documentRef}</bdi>}
                           </span>
-                          <Chip tone={st.tone}>{t(st.en, st.ar)}</Chip>
-                          {open && r.status !== 'PRESENT' ? (
+                          <span className="flex flex-col items-start gap-0.5">
+                            <Chip tone={st.tone}>{t(st.en, st.ar)}</Chip>
+                            <DocumentProvenance held={held} f={f} />
+                          </span>
+                          {open && r.status === 'PENDING' && held !== undefined ? (
+                            <form action={validateDocumentAction} className="flex w-full flex-wrap items-center gap-2 sm:w-auto" data-document-validation>
+                              <FormContext segment={segment} applicationId={a.applicationId} />
+                              <input type="hidden" name="documentRef" value={held.documentRef} />
+                              <span className="text-[11px] text-ink-quiet">{t('As the checker', 'بصفة المراجِع')} <Id>{BUSINESS_ROLES.checker}</Id></span>
+                              <button type="submit" name="decision" value="VALID" className={BTN_SMALL}>{t('Valid', 'صالح')}</button>
+                              <button type="submit" name="decision" value="INVALID" className="press inline-flex h-8 items-center justify-center gap-1 rounded-tile border border-blocked/50 bg-surface px-3 text-[13px] font-semibold text-blocked hover:bg-blocked-wash">{t('Invalid', 'غير صالح')}</button>
+                            </form>
+                          ) : null}
+                          {open && r.status !== 'PRESENT' && r.status !== 'PENDING' ? (
                             <form action={presentDocumentAction} className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                               <FormContext segment={segment} applicationId={a.applicationId} />
                               <input type="hidden" name="documentType" value={r.item.documentType} />
@@ -347,7 +375,8 @@ export default async function LoanApplicationPage({ params, searchParams }: { re
             <DisabledAction label={t('Submit to Credit Assessment', 'إحالة إلى التقييم الائتماني')}
               reason={[
                 missingFigures.length > 0 ? t(`Verify first: ${missingFigures.map((m) => label(METRIC_LABELS, m, f)).join(', ')}.`, `تحقق أولاً من: ${missingFigures.map((m) => label(METRIC_LABELS, m, f)).join('، ')}.`) : '',
-                missingDocs.length > 0 ? t(`Missing mandatory documents: ${missingDocs.map((d) => d.item.titleEn).join(', ')}.`, `مستندات إلزامية ناقصة: ${missingDocs.map((d) => d.item.titleAr).join('، ')}.`) : '',
+                missingDocs.length > 0 ? t(`Mandatory documents not yet presented and validated by the checker: ${missingDocs.map((d) => d.item.titleEn).join(', ')}.`, `مستندات إلزامية لم تُقدَّم أو لم يتحقق منها المراجِع بعد: ${missingDocs.map((d) => d.item.titleAr).join('، ')}.`) : '',
+                inputsMissing ? t('Record the bureau result and the assessment inputs on the Credit assessment screen; they lock at submission.', 'سجّل نتيجة المكتب الائتماني ومدخلات التقييم في شاشة التقييم الائتماني؛ فهي تُقفل عند الإحالة.') : '',
               ].filter((s) => s !== '').join(' ')} />
           )
         ) : (

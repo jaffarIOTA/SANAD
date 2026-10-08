@@ -17,7 +17,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('next/cache', () => ({ revalidatePath: () => undefined }));
 
 import { BUSINESS_ROLES, READ_FIGURE_SOURCES, getApplication, handOver, ingestReadFigures, resetBusinessStore } from '../../apps/ops/src/server/business.ts';
-import { proposeFigureAction, verifyFigureAction } from '../../apps/ops/src/server/business-actions.ts';
+import { presentDocumentAction, proposeFigureAction, submitForAssessmentAction, verifyFigureAction, withdrawApplicationAction } from '../../apps/ops/src/server/business-actions.ts';
 
 const TENANT = 'sme-fund-ae' as const;
 const ID = 'FR-00009101';
@@ -82,6 +82,34 @@ describe('business server actions', () => {
     const domain = await redirectOf(verifyFigureAction, form({ figureId: 'no-such-figure' }));
     expect(domain.searchParams.get('reason')).toBe('FIGURE_NOT_FOUND');
     expect([...domain.searchParams.keys()].sort()).toEqual(['control', 'reason']);
+  });
+
+  it('#5 #7 a refusal whose detail would name domain data sends the codes only; an identity number never reaches the URL', async () => {
+    for (const [action, fields] of [
+      [withdrawApplicationAction, { reason: 'Owner 1012345678 changed plans' }],
+      [withdrawApplicationAction, { reason: 'Owner 784-1985-1234567-1 changed plans' }],
+      [presentDocumentAction, { documentType: 'TRADE_LICENCE', documentRef: 'doc-2087654321' }],
+      [proposeFigureAction, { metric: 'NET_PROFIT', periodLabel: 'FY2025', amount: '100', sourceRef: 'stmt-1012345678' }],
+    ] as const) {
+      const url = await redirectOf(action, form(fields));
+      expect(url.searchParams.get('reason')).toBe('IDENTITY_NUMBER_IN_PAYLOAD');
+      expect([...url.searchParams.keys()].sort()).toEqual(['control', 'reason']);
+      expect(url.href).not.toMatch(/1012345678|2087654321|784-1985/);
+    }
+    // A domain refusal with context (the status it was in) still sends only its codes.
+    const notAllowed = await redirectOf(submitForAssessmentAction, form({}));
+    expect([...notAllowed.searchParams.keys()].sort()).toEqual(['control', 'reason']);
+    expect((await getApplication(TENANT, ID))?.application.status).toBe('RECEIVED');
+  });
+
+  it('#1 an action makes and saves its change as one unit (mutateBusiness): concurrent posts both land', async () => {
+    const [a, b] = await Promise.all([
+      redirectOf(presentDocumentAction, form({ documentType: 'TRADE_LICENCE', documentRef: 'doc-act-a' })),
+      redirectOf(presentDocumentAction, form({ documentType: 'MOA_AOA', documentRef: 'doc-act-b' })),
+    ]);
+    expect(a.searchParams.get('notice')).toBe('DOCUMENT_PRESENTED');
+    expect(b.searchParams.get('notice')).toBe('DOCUMENT_PRESENTED');
+    expect((await getApplication(TENANT, ID))?.documents.map((d) => d.documentRef).sort()).toEqual(['doc-act-a', 'doc-act-b']);
   });
 
   it('#13 the finance principal is a distinct role', () => {

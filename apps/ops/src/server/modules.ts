@@ -30,6 +30,9 @@ export type ModuleReadiness =
   /** Excluded from this phase by the specification, not by us. */
   | { readonly kind: 'EXCLUDED_THIS_PHASE'; readonly basis: string };
 
+/** The deployment jurisdictions a module can be listed under (ADR 0005). */
+export type ModuleJurisdiction = 'SA' | 'AE';
+
 export interface ModuleItem {
   readonly id: string;
   readonly titleEn: string;
@@ -39,6 +42,8 @@ export interface ModuleItem {
   readonly readiness: ModuleReadiness;
   /** Where the specification defines it. */
   readonly reference: string;
+  /** The jurisdictions this item exists in. Absent: every jurisdiction its group is listed in. */
+  readonly jurisdictions?: readonly ModuleJurisdiction[];
 }
 
 export interface ModuleGroup {
@@ -48,10 +53,17 @@ export interface ModuleGroup {
   /** Beside the group heading, never instead of it. */
   readonly icon: IconName;
   readonly items: readonly ModuleItem[];
+  /** The jurisdictions this group exists in. Absent: platform-wide. */
+  readonly jurisdictions?: readonly ModuleJurisdiction[];
 }
 
 const live = (): ModuleReadiness => ({ kind: 'LIVE' });
 const soon = (): ModuleReadiness => ({ kind: 'NOT_BUILT' });
+
+/** Saudi only: the Saudi products and rails, the Murabaha SCF (Wasl) workstreams. */
+const SA: readonly ModuleJurisdiction[] = ['SA'];
+/** UAE only: the UAE rails and the UAE SME direct-lending items. */
+const AE: readonly ModuleJurisdiction[] = ['AE'];
 
 export const MODULE_GROUPS: readonly ModuleGroup[] = [
   {
@@ -100,6 +112,8 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         href: '/originate',
         readiness: live(),
         reference: 'Aggregator channel · merchant mandate required',
+        // The aggregator channel nominates under a merchant mandate (the Saudi BNPL rails).
+        jurisdictions: SA,
       },
     ],
   },
@@ -110,18 +124,19 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
     titleAr: 'المنتجات',
     items: [
       { id: 'catalogue', titleEn: 'Catalogue & disclosure', titleAr: 'الكتالوج والإفصاح', href: '/products', readiness: live(), reference: 'CLAUDE.md §3 · §4.2 — tenant catalogue, quote, APR, disclosure' },
-      { id: 'murabaha-scf', titleEn: 'Murabaha SCF (Wasl)', titleAr: 'مرابحة سلاسل الإمداد (وصل)', readiness: live(), reference: 'products/murabaha-scf — trade-first, profit amount' },
-      { id: 'tawarruq-personal', titleEn: 'Personal finance (Tawarruq)', titleAr: 'التمويل الشخصي (تورّق)', readiness: live(), reference: 'products/tawarruq-personal — module built; broker adapter fixture-only; thresholds carry placeholder citations' },
-      { id: 'bnpl', titleEn: 'BNPL', titleAr: 'اشترِ الآن وادفع لاحقاً', readiness: live(), reference: 'products/bnpl — module, merchant onboarding (core/merchants) and checkout API (api/openapi/checkout.v1.yaml, apps/consumer) built; ceilings cite the SAMA BNPL Rules (Nov 2023) Art. 20 and 22' },
-      { id: 'merchants', titleEn: 'Merchants & checkout', titleAr: 'التجار والدفع عند الشراء', href: '/merchants', readiness: live(), reference: 'core/merchants on PostgreSQL (core.merchant): onboard, verify under four eyes and a store contract (SAMA BNPL Rules Art. 27), suspend, reinstate, close; the checkout API reads the same rows. Registry and screening references are typed until those rails are live.' },
-      { id: 'embedded-lending', titleEn: 'Embedded lending', titleAr: 'التمويل المدمج', readiness: live(), reference: 'products/embedded-lending — module and partner settlement reconciliation (core/reconciliation) built; settlement feed adapter not built' },
-      { id: 'conventional-term', titleEn: 'Conventional term loan', titleAr: 'قرض لأجل تقليدي', readiness: live(), reference: 'products/conventional-term — module built; affordability cap carries a placeholder citation' },
+      { id: 'murabaha-scf', jurisdictions: SA,titleEn: 'Murabaha SCF (Wasl)', titleAr: 'مرابحة سلاسل الإمداد (وصل)', readiness: live(), reference: 'products/murabaha-scf — trade-first, profit amount' },
+      { id: 'tawarruq-personal', jurisdictions: SA,titleEn: 'Personal finance (Tawarruq)', titleAr: 'التمويل الشخصي (تورّق)', readiness: live(), reference: 'products/tawarruq-personal — module built; broker adapter fixture-only; thresholds carry placeholder citations' },
+      { id: 'bnpl', jurisdictions: SA,titleEn: 'BNPL', titleAr: 'اشترِ الآن وادفع لاحقاً', readiness: live(), reference: 'products/bnpl — module, merchant onboarding (core/merchants) and checkout API (api/openapi/checkout.v1.yaml, apps/consumer) built; ceilings cite the SAMA BNPL Rules (Nov 2023) Art. 20 and 22' },
+      { id: 'merchants', jurisdictions: SA,titleEn: 'Merchants & checkout', titleAr: 'التجار والدفع عند الشراء', href: '/merchants', readiness: live(), reference: 'core/merchants on PostgreSQL (core.merchant): onboard, verify under four eyes and a store contract (SAMA BNPL Rules Art. 27), suspend, reinstate, close; the checkout API reads the same rows. Registry and screening references are typed until those rails are live.' },
+      { id: 'embedded-lending', jurisdictions: SA,titleEn: 'Embedded lending', titleAr: 'التمويل المدمج', readiness: live(), reference: 'products/embedded-lending — module and partner settlement reconciliation (core/reconciliation) built; settlement feed adapter not built' },
+      { id: 'conventional-term', jurisdictions: SA,titleEn: 'Conventional term loan', titleAr: 'قرض لأجل تقليدي', readiness: live(), reference: 'products/conventional-term — module built; affordability cap carries a placeholder citation' },
       { id: 'sme-term-conventional', titleEn: 'SME term finance', titleAr: 'تمويل المنشآت لأجل', readiness: live(), reference: 'products/sme-term-conventional — module built; size by the SAMA SME definition (config/regulatory/sme-definition.json); DSCR and revenue-share limits are tenant credit policy, illustrative until the bank supplies its own; Kafalah coverage a placeholder' },
       { id: 'sme-term-islamic', titleEn: 'SME finance (Tawarruq)', titleAr: 'تمويل المنشآت (تورّق)', readiness: live(), reference: 'products/sme-term-islamic — module built; disabled in both tenants until each board ruling is recorded through Admin; same SME rules as the conventional module' },
     ],
   },
   {
     id: 'rails',
+    jurisdictions: SA,
     icon: 'plug',
     titleEn: 'KSA integration rails',
     titleAr: 'قنوات التكامل السعودية',
@@ -142,6 +157,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
   },
   {
     id: 'uae-rails',
+    jurisdictions: AE,
     icon: 'plug',
     titleEn: 'UAE integration rails',
     titleAr: 'قنوات التكامل الإماراتية',
@@ -157,6 +173,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
   },
   {
     id: 'sme-direct-uae',
+    jurisdictions: AE,
     icon: 'building',
     titleEn: 'SME direct lending (UAE)',
     titleAr: 'تمويل المنشآت المباشر (الإمارات)',
@@ -194,6 +211,8 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
   },
   {
     id: 'transactions',
+    // Murabaha SCF (Wasl) workstreams: drawdowns, sequencing gates, the financed-invoice registry.
+    jurisdictions: SA,
     icon: 'exchange',
     titleEn: 'Transactions',
     titleAr: 'المعاملات',
@@ -273,6 +292,8 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
   },
   {
     id: 'programmes',
+    // Murabaha SCF (Wasl) workstreams: anchors, programmes, goods, commodity brokers.
+    jurisdictions: SA,
     icon: 'building',
     titleEn: 'Programmes',
     titleAr: 'البرامج',

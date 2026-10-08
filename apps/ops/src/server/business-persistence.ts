@@ -342,7 +342,9 @@ export async function saveBusinessChanges(pool: Pool, tenantCode: string, change
     await client.query('commit');
     return { kind: 'SAVED', versions };
   } catch (error) {
-    await client.query('rollback');
+    // A rollback on a broken connection fails too; the original error is the one that matters, and the
+    // transaction is abandoned with the connection either way.
+    try { await client.query('rollback'); } catch { /* the connection is gone; nothing was committed */ }
     throw error;
   } finally {
     client.release();

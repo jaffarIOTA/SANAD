@@ -82,7 +82,10 @@ export function previewOfferNotifications(
     return refuse('OFFER_NOTICE_UNMASKED_MOBILE', 'A mobile recipient is carried masked only');
   }
 
+  // English lines take the English values (Latin digits); Arabic lines the Arabic values (Arabic-Indic digits).
+  // The reference and the version are identifiers and stay Latin in both.
   const amount = letterRow(letter, 'FACILITY_AMOUNT')?.value.en ?? '';
+  const amountAr = letterRow(letter, 'FACILITY_AMOUNT')?.value.ar ?? '';
   const tenor = letterRow(letter, 'TENOR');
   const rate = letterRow(letter, 'RATE');
   const instalment = letterRow(letter, 'INSTALMENT')?.value.en ?? '';
@@ -111,7 +114,7 @@ export function previewOfferNotifications(
       '',
       '— ملخص بالعربية —',
       `السادة ${letter.parties.borrower.ar}،`,
-      `يسر ${letter.parties.lender.ar} أن تعرض على منشأتكم تمويل ${letter.productVariant.ar} بمبلغ ${amount} لمدة ${tenor?.value.ar ?? ''}، ${rate?.label.ar ?? ''} ${rate?.value.ar ?? ''}.`,
+      `يسر ${letter.parties.lender.ar} أن تعرض على منشأتكم تمويل ${letter.productVariant.ar} بمبلغ ${amountAr} لمدة ${tenor?.value.ar ?? ''}، ${rate?.label.ar ?? ''} ${rate?.value.ar ?? ''}.`,
       `العرض ساري حتى ${validAr}. للاطلاع والتوقيع: ${SIGNING_LINK_PLACEHOLDER}`,
       `مرجع الخطاب ${letter.reference}، الإصدار ${fullVersion}.`,
     ].join('\n'),
@@ -121,7 +124,7 @@ export function previewOfferNotifications(
     channel: 'SMS',
     to: recipient.mobileMasked,
     body: [
-      `${letter.parties.lender.ar}: عرض تمويل بمبلغ ${amount} جاهز للتوقيع حتى ${validAr}. ${SIGNING_LINK_PLACEHOLDER} (مرجع ${letter.reference}، إصدار ${shortVersion})`,
+      `${letter.parties.lender.ar}: عرض تمويل بمبلغ ${amountAr} جاهز للتوقيع حتى ${validAr}. ${SIGNING_LINK_PLACEHOLDER} (مرجع ${letter.reference}، إصدار ${shortVersion})`,
       `${letter.parties.lender.en}: your facility offer of ${amount} is ready to sign until ${validEn}. ${SIGNING_LINK_PLACEHOLDER} (Ref ${letter.reference}, v ${shortVersion})`,
     ].join('\n'),
   };

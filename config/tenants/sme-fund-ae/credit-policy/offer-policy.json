@@ -1,0 +1,11 @@
+{
+  "policyId": "sme-direct-lending-offer-dates",
+  "version": "0.1.0",
+  "source": "TENANT_CREDIT_POLICY",
+  "policyRef": "ILLUSTRATIVE — offer date bounds chosen as plausible placeholders, 2026-10-08; not an approved policy of any fund. The fund's Credit function and operations manual replace them before any real use",
+  "maxDisbursementAfterOfferDays": "60",
+  "minFirstDueAfterDisbursementDays": "15",
+  "maxFirstDueAfterDisbursementDays": "45",
+  "defaultDisbursementAfterOfferDays": "14",
+  "offerValidityDays": "30"
+}

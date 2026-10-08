@@ -11,7 +11,7 @@
         "kind": "CATALOGUE_RATE",
         "bp": "150",
         "basis": "REDUCING",
-        "catalogueRef": "ILLUSTRATIVE — fund rate card from Tuum's prototype offer letter (1.5% p.a.), 2026-10-08; replace with the fund's approved rate card"
+        "catalogueRef": "ILLUSTRATIVE — fund rate card from the core banking partner's prototype offer letter (1.5% p.a.), 2026-10-08; replace with the fund's approved rate card"
       },
       "terms": {
         "currency": "AED",
@@ -42,7 +42,7 @@
             "knockOutNotes": [
               { "code": "DSCR_MIN", "labelEn": "Debt-service cover of at least 1.40×", "labelAr": "تغطية خدمة الدين ١٫٤٠ مرة على الأقل" }
             ],
-            "note": "Source: Tuum prototype screens shared 2026-10-08 — maximum AED 1,000,000 and 36 months. ILLUSTRATIVE: minimum tenor, no grace, contribution band, purposes and collateral; replace with the fund's product paper."
+            "note": "Source: the core banking partner's prototype screens shared 2026-10-08 — maximum AED 1,000,000 and 36 months. ILLUSTRATIVE: minimum tenor, no grace, contribution band, purposes and collateral; replace with the fund's product paper."
           },
           {
             "code": "WORKING_CAPITAL",
@@ -67,7 +67,7 @@
             "knockOutNotes": [
               { "code": "DSCR_MIN", "labelEn": "Debt-service cover of at least 1.40×", "labelAr": "تغطية خدمة الدين ١٫٤٠ مرة على الأقل" }
             ],
-            "note": "Source: Tuum prototype screens shared 2026-10-08 — maximum AED 1,000,000, 12 months, grace up to 3 months. ILLUSTRATIVE: minimum tenor, contribution band, years in operation, purposes and collateral; replace with the fund's product paper."
+            "note": "Source: the core banking partner's prototype screens shared 2026-10-08 — maximum AED 1,000,000, 12 months, grace up to 3 months. ILLUSTRATIVE: minimum tenor, contribution band, years in operation, purposes and collateral; replace with the fund's product paper."
           },
           {
             "code": "FIXED_ASSETS",
@@ -96,7 +96,7 @@
               { "code": "YEARS_MIN", "labelEn": "At least 1 year in operation", "labelAr": "سنة واحدة على الأقل من التشغيل" },
               { "code": "CONTRIBUTION_MIN", "labelEn": "Owner contribution of at least 20% of the project cost", "labelAr": "مساهمة المالك ٢٠٪ على الأقل من تكلفة المشروع" }
             ],
-            "note": "Source: Tuum prototype screens shared 2026-10-08 — maximum AED 2,000,000, 60 months, grace 6 months, contribution 20%, minimum 1 year in operation, collateral personal guarantee + promissory note + underlying asset + insurance. ILLUSTRATIVE: minimum tenor, the contribution ceiling and purposes; replace with the fund's product paper."
+            "note": "Source: the core banking partner's prototype screens shared 2026-10-08 — maximum AED 2,000,000, 60 months, grace 6 months, contribution 20%, minimum 1 year in operation, collateral personal guarantee + promissory note + underlying asset + insurance. ILLUSTRATIVE: minimum tenor, the contribution ceiling and purposes; replace with the fund's product paper."
           },
           {
             "code": "EXPANSION",
@@ -124,7 +124,7 @@
               { "code": "YEARS_MIN", "labelEn": "At least 2 years in operation", "labelAr": "سنتان على الأقل من التشغيل" },
               { "code": "CONTRIBUTION_BAND", "labelEn": "Owner contribution of 20% to 40% of the project cost", "labelAr": "مساهمة المالك بين ٢٠٪ و٤٠٪ من تكلفة المشروع" }
             ],
-            "note": "Source: Tuum prototype screens shared 2026-10-08 — maximum AED 5,000,000, 72 months, grace up to 12 months, minimum 2 years in operation, contribution 20–40%. ILLUSTRATIVE: minimum tenor, purposes and collateral; replace with the fund's product paper."
+            "note": "Source: the core banking partner's prototype screens shared 2026-10-08 — maximum AED 5,000,000, 72 months, grace up to 12 months, minimum 2 years in operation, contribution 20–40%. ILLUSTRATIVE: minimum tenor, purposes and collateral; replace with the fund's product paper."
           },
           {
             "code": "FIRST_TIME_FOUNDERS",
@@ -150,7 +150,7 @@
             "knockOutNotes": [
               { "code": "DSCR_MIN", "labelEn": "Debt-service cover of at least 1.40× on the business plan", "labelAr": "تغطية خدمة الدين ١٫٤٠ مرة على الأقل وفق خطة العمل" }
             ],
-            "note": "Source: Tuum prototype screens shared 2026-10-08 — maximum AED 1,000,000 and 60 months. ILLUSTRATIVE: minimum tenor, grace, contribution band, purposes and collateral; replace with the fund's product paper."
+            "note": "Source: the core banking partner's prototype screens shared 2026-10-08 — maximum AED 1,000,000 and 60 months. ILLUSTRATIVE: minimum tenor, grace, contribution band, purposes and collateral; replace with the fund's product paper."
           },
           {
             "code": "ADVANCED_TECH_AI",
@@ -176,7 +176,7 @@
             "knockOutNotes": [
               { "code": "DSCR_MIN", "labelEn": "Debt-service cover of at least 1.40×", "labelAr": "تغطية خدمة الدين ١٫٤٠ مرة على الأقل" }
             ],
-            "note": "Source: Tuum prototype screens shared 2026-10-08 — maximum AED 2,000,000 and 60 months. ILLUSTRATIVE: minimum tenor, grace, contribution band, purposes and collateral; replace with the fund's product paper."
+            "note": "Source: the core banking partner's prototype screens shared 2026-10-08 — maximum AED 2,000,000 and 60 months. ILLUSTRATIVE: minimum tenor, grace, contribution band, purposes and collateral; replace with the fund's product paper."
           }
         ],
         "credit": {
@@ -185,7 +185,7 @@
           "maxFinancingShareOfRevenuePerTenThousand": 10000,
           "maxFinancingWithoutRevenueHistoryMinorUnits": "100000000",
           "source": "TENANT_CREDIT_POLICY",
-          "policyRef": "ILLUSTRATIVE — fund SME credit policy from Tuum's prototype knock-out rules (DSCR ≥ 1.40), 2026-10-08; replace with the fund's approved policy"
+          "policyRef": "ILLUSTRATIVE — fund SME credit policy from the core banking partner's prototype knock-out rules (DSCR ≥ 1.40), 2026-10-08; replace with the fund's approved policy"
         }
       },
       "effectiveFromEpochSeconds": "1780000000"
@@ -231,7 +231,7 @@
               { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
               { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" }
             ],
-            "note": "Mirror of the conventional SMALL_LOAN variant; disabled until the fund's Shariah board ruling is recorded. Source: Tuum prototype screens shared 2026-10-08 — maximum AED 1,000,000 and 36 months. ILLUSTRATIVE: everything else."
+            "note": "Mirror of the conventional SMALL_LOAN variant; disabled until the fund's Shariah board ruling is recorded. Source: the core banking partner's prototype screens shared 2026-10-08 — maximum AED 1,000,000 and 36 months. ILLUSTRATIVE: everything else."
           },
           {
             "code": "WORKING_CAPITAL",
@@ -253,7 +253,7 @@
               { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
               { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" }
             ],
-            "note": "Mirror of the conventional WORKING_CAPITAL variant; disabled until the fund's Shariah board ruling is recorded. Source: Tuum prototype screens shared 2026-10-08 — maximum AED 1,000,000, 12 months, grace up to 3 months. ILLUSTRATIVE: everything else."
+            "note": "Mirror of the conventional WORKING_CAPITAL variant; disabled until the fund's Shariah board ruling is recorded. Source: the core banking partner's prototype screens shared 2026-10-08 — maximum AED 1,000,000, 12 months, grace up to 3 months. ILLUSTRATIVE: everything else."
           },
           {
             "code": "FIXED_ASSETS",
@@ -277,7 +277,7 @@
               { "code": "UNDERLYING_ASSET", "labelEn": "Pledge of the financed asset", "labelAr": "رهن الأصل المموَّل" },
               { "code": "INSURANCE", "labelEn": "Insurance of the financed asset, assigned to the fund", "labelAr": "تأمين الأصل المموَّل مع التنازل لصالح الصندوق" }
             ],
-            "note": "Mirror of the conventional FIXED_ASSETS variant; disabled until the fund's Shariah board ruling is recorded. Source: Tuum prototype screens shared 2026-10-08 — maximum AED 2,000,000, 60 months, grace 6 months, contribution 20%, minimum 1 year, collateral as listed. ILLUSTRATIVE: minimum tenor, the contribution ceiling and purposes."
+            "note": "Mirror of the conventional FIXED_ASSETS variant; disabled until the fund's Shariah board ruling is recorded. Source: the core banking partner's prototype screens shared 2026-10-08 — maximum AED 2,000,000, 60 months, grace 6 months, contribution 20%, minimum 1 year, collateral as listed. ILLUSTRATIVE: minimum tenor, the contribution ceiling and purposes."
           },
           {
             "code": "EXPANSION",
@@ -300,7 +300,7 @@
               { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
               { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" }
             ],
-            "note": "Mirror of the conventional EXPANSION variant; disabled until the fund's Shariah board ruling is recorded. Source: Tuum prototype screens shared 2026-10-08 — maximum AED 5,000,000, 72 months, grace up to 12 months, minimum 2 years, contribution 20–40%. ILLUSTRATIVE: minimum tenor, purposes and collateral."
+            "note": "Mirror of the conventional EXPANSION variant; disabled until the fund's Shariah board ruling is recorded. Source: the core banking partner's prototype screens shared 2026-10-08 — maximum AED 5,000,000, 72 months, grace up to 12 months, minimum 2 years, contribution 20–40%. ILLUSTRATIVE: minimum tenor, purposes and collateral."
           },
           {
             "code": "FIRST_TIME_FOUNDERS",
@@ -323,7 +323,7 @@
               { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
               { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" }
             ],
-            "note": "Mirror of the conventional FIRST_TIME_FOUNDERS variant; disabled until the fund's Shariah board ruling is recorded. Source: Tuum prototype screens shared 2026-10-08 — maximum AED 1,000,000 and 60 months. ILLUSTRATIVE: everything else."
+            "note": "Mirror of the conventional FIRST_TIME_FOUNDERS variant; disabled until the fund's Shariah board ruling is recorded. Source: the core banking partner's prototype screens shared 2026-10-08 — maximum AED 1,000,000 and 60 months. ILLUSTRATIVE: everything else."
           },
           {
             "code": "ADVANCED_TECH_AI",
@@ -346,7 +346,7 @@
               { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
               { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" }
             ],
-            "note": "Mirror of the conventional ADVANCED_TECH_AI variant; disabled until the fund's Shariah board ruling is recorded. Source: Tuum prototype screens shared 2026-10-08 — maximum AED 2,000,000 and 60 months. ILLUSTRATIVE: everything else."
+            "note": "Mirror of the conventional ADVANCED_TECH_AI variant; disabled until the fund's Shariah board ruling is recorded. Source: the core banking partner's prototype screens shared 2026-10-08 — maximum AED 2,000,000 and 60 months. ILLUSTRATIVE: everything else."
           }
         ],
         "credit": {
