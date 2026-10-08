@@ -31,8 +31,8 @@
     "nutrient:samples": "node scripts/nutrient-samples.mjs",
     "dev:admin": "next dev apps/admin --port 3004",
     "db:connect": "bash scripts/set-database-url.sh",
-    "db:push": "supabase db push --db-url \"$SANAD_DATABASE_URL\"",
-    "db:start": "supabase start"
+    "db:push": "bash scripts/db-push.sh",
+    "db:start": "npx --yes supabase start"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

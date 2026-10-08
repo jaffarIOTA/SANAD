@@ -303,12 +303,15 @@ Recorded so they read as decisions rather than omissions.
 
 Worth stating plainly, because a green test suite can flatter.
 
-- **The database in use is the local one.** A local Supabase stack (Docker) carries the
-  schema, the vault, the configuration revisions and the workbench's request book. The
-  hosted project chosen for development and UAT (ADR 0004) has no migrations applied yet:
-  its direct host is IPv6-only and unreachable from the development machine, and its
-  Session pooler connection string has not been supplied. `npm run db:push` applies all
-  ten migrations once `SANAD_DATABASE_URL` points at it.
+- **The apps run on the hosted Supabase project** (`ap-south-1`, through its Session
+  pooler) since 2026-10-08: all twelve migrations applied with `npm run db:push`, the two
+  tenants seeded, each tenant's four configuration areas seeded as approved revisions, the
+  workbench's book and the development merchant seeded on first use. Its deployment
+  profile row still says `non-kingdom-development` with production data not permitted,
+  which is the truth. The local Docker stack remains the **test** database
+  (`SANAD_TEST_DATABASE_URL`), because the contract tests create and revoke rows. The
+  hosted vault is empty: no Nutrient key has been saved to it, so the viewer runs in
+  evaluation mode there.
 - **The invariant-guard hook did not see most of October's code.** It fires on the Write
   and Edit tools; a long stretch of this build was written through the shell. A
   retroactive run of the hook over all 298 source files found no credential, no table in
