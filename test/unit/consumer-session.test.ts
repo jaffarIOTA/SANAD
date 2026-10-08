@@ -43,6 +43,14 @@ describe('the consumer session token', () => {
     expect(openSession(`${v}.${iv}.${body}.${flip(tag)}`, KEY, T0).kind).toBe('INVALID');
     expect(openSession(`v2.${iv}.${body}.${tag}`, KEY, T0).kind).toBe('INVALID');
   });
+  it('refuses a truncated authentication tag, which GCM would otherwise accept', () => {
+    const token = sealSession(session, KEY);
+    const [v, iv, body, tag] = token.split('.') as [string, string, string, string];
+    const full = Buffer.from(tag, 'base64url');
+    for (const bytes of [4, 8, 12, 15]) {
+      expect(openSession(`${v}.${iv}.${body}.${full.subarray(0, bytes).toString('base64url')}`, KEY, T0).kind, `${String(bytes)}-byte tag`).toBe('INVALID');
+    }
+  });
   it('refuses a token sealed under another key, and anything that is not a token', () => {
     expect(openSession(sealSession(session, OTHER), KEY, T0).kind).toBe('INVALID');
     expect(openSession('', KEY, T0).kind).toBe('INVALID');

@@ -43,7 +43,7 @@ const unb64u = (s: string): Uint8Array => new Uint8Array(Buffer.from(s, 'base64u
 export function seal<T extends SealedPayload>(value: Sealed<T>, key: SealKey, version = 'v1'): string {
   if (value.expiresAtEpochSeconds <= value.issuedAtEpochSeconds) throw new Error('a sealed token expires after it is issued');
   const iv = randomBytes(IV_BYTES);
-  const cipher = createCipheriv('aes-256-gcm', key.bytes, iv);
+  const cipher = createCipheriv('aes-256-gcm', key.bytes, iv, { authTagLength: 16 });
   cipher.setAAD(Buffer.from(version, 'utf8'));
   const plain = Buffer.from(JSON.stringify({ p: value.payload, t: value.issuedAtEpochSeconds.toString(), e: value.expiresAtEpochSeconds.toString() }), 'utf8');
   const body = Buffer.concat([cipher.update(plain), cipher.final()]);
@@ -74,7 +74,9 @@ export function open<T extends SealedPayload>(
     const iv = unb64u(parts[1] ?? '');
     const tag = unb64u(parts[3] ?? '');
     if (iv.byteLength !== IV_BYTES || tag.byteLength !== 16) return INVALID;
-    const decipher = createDecipheriv('aes-256-gcm', key.bytes, iv);
+    // The tag length is fixed on the decipher as well as checked above, so a truncated tag
+    // (which GCM would otherwise accept, making forgery far cheaper) is refused by Node itself.
+    const decipher = createDecipheriv('aes-256-gcm', key.bytes, iv, { authTagLength: 16 });
     decipher.setAAD(Buffer.from(version, 'utf8'));
     decipher.setAuthTag(tag);
     plain = Buffer.concat([decipher.update(unb64u(parts[2] ?? '')), decipher.final()]);
