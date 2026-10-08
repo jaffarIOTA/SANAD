@@ -85,6 +85,12 @@ const ARABIC: Readonly<Record<string, string>> = {
   ESCALATION_WITHOUT_REASON: 'التصعيد يتطلب سبباً.',
   EXCEPTION_ALREADY_RESOLVED: 'هذا الاستثناء محلول ولا يمكن تعديله.',
   DOCUMENT_CHECKLIST_NOT_FOUND: 'لا توجد قائمة مستندات مُهيّأة لهذا البرنامج.',
+  BUSINESS_APPLICATION_NOT_FOUND: 'لا يوجد طلب منشأة بهذا المعرّف لدى هذه المؤسسة.',
+  CURRENCY_NOT_TENANTS: 'يجب أن يكون المبلغ بالعملة الأساسية للمؤسسة.',
+  IDENTITY_NUMBER_IN_PAYLOAD: 'لا يُرسَل رقم الهوية ضمن الطلب؛ أرسل مرجعاً بدلاً منه.',
+  UPSTREAM_REF_REUSED: 'سبق استخدام هذا المرجع لتسليم طلب آخر.',
+  APPLICATION_ID_TAKEN: 'سبق تسليم طلب بهذا المعرّف تحت مرجع مختلف.',
+  TENANT_NOT_ACTIVE: 'هذه المؤسسة غير مفعّلة في نطاق الاختصاص الحالي للنظام.',
   ELIGIBILITY_POLICY_UNAVAILABLE: 'تعذّر تحميل سياسة الائتمان لهذه المؤسسة.',
 
   // Transport-level refusals raised by this service

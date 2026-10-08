@@ -24,7 +24,9 @@ export type NotificationEvent =
   | 'REQUEST_REJECTED'
   | 'REQUEST_EXPIRED'
   | 'SLA_BREACHED'
-  | 'SERVICING_UNAVAILABLE';
+  | 'SERVICING_UNAVAILABLE'
+  /** A Facility Offer Letter is ready to sign (core/notifications/offer-notification.ts). Variables: letter reference and version only. */
+  | 'OFFER_ISSUED';
 
 export interface Notification {
   readonly tenantId: string;

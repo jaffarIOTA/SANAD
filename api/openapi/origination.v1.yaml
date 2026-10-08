@@ -88,6 +88,8 @@ security:
 tags:
   - name: Requests
     description: Raising, reading and withdrawing origination requests.
+  - name: Business applications
+    description: SME applications handed over from an upstream customer-record system at stage 5.
 
 paths:
   /requests:
@@ -344,6 +346,93 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
+  /business-applications:
+    post:
+      tags: [Business applications]
+      operationId: handOverBusinessApplication
+      summary: Hand an SME application over at stage 5 (credit assessment).
+      description: |
+        For the upstream customer-record system of an institution that lends to
+        businesses directly (ADR 0005). Stages 1–4 — application, needs
+        assessment, product application, verification — happen upstream; this
+        call hands the verified application to the credit team at stage 5.
+
+        Requires the `business:write` scope, which only an upstream
+        customer-record credential carries.
+
+        **Tenant and currency are not in the body.** The tenant is the
+        credential's; the amount is in that tenant's base currency from its
+        onboarding record, given here as minor units only. A `currency` field
+        is an unknown property and is refused.
+
+        **Idempotent twice over.** The `Idempotency-Key` header replays a
+        response verbatim; independently, the hand-over is idempotent on
+        `upstreamRef`: the same application handed over again returns `200`
+        with the application as it stands, never a second application. The
+        same `upstreamRef` for a different `applicationId` is refused.
+
+        **No identity number.** Owners appear by display name and an opaque
+        reference; anything shaped like an identity number in the applicant is
+        refused with `IDENTITY_NUMBER_IN_PAYLOAD`. Contact details travel
+        masked; the delivery adapter resolves the destination from `partyRef`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BusinessHandover' }
+      responses:
+        '201':
+          description: Received at stage 5.
+          headers:
+            Location: { $ref: '#/components/headers/Location' }
+            X-Correlation-Id: { $ref: '#/components/headers/CorrelationId' }
+            Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessApplicationStatus' }
+        '200':
+          description: Already handed over under this `upstreamRef`; the application as it stands.
+          headers:
+            Location: { $ref: '#/components/headers/Location' }
+            X-Correlation-Id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessApplicationStatus' }
+        '400': { $ref: '#/components/responses/Malformed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '422': { $ref: '#/components/responses/ControlRejection' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /business-applications/{applicationId}:
+    parameters:
+      - $ref: '#/components/parameters/ApplicationId'
+    get:
+      tags: [Business applications]
+      operationId: getBusinessApplication
+      summary: Read a business application's stage and status.
+      description: Requires the `business:read` scope. An application of another tenant is reported as absent.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: The application.
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessApplicationStatus' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
 webhooks:
   requestStateChanged:
     post:
@@ -400,6 +489,8 @@ components:
           scopes:
             origination:read: Read requests this partner raised.
             origination:write: Raise and withdraw requests.
+            business:read: Read SME business applications of the credential's tenant.
+            business:write: Hand SME business applications over at stage 5 (upstream customer-record systems only).
 
   parameters:
     IdempotencyKey:
@@ -436,6 +527,14 @@ components:
       schema:
         type: string
         format: uuid
+    ApplicationId:
+      name: applicationId
+      in: path
+      required: true
+      description: The upstream system's application id, a prefix and digits.
+      schema:
+        type: string
+        pattern: '^[A-Z]{2,4}-[0-9]{6,10}$'
 
   headers:
     Location:
@@ -857,6 +956,110 @@ components:
             details are logged, forwarded and shown on screens.
           additionalProperties:
             type: [string, number, boolean]
+
+    BusinessOwner:
+      type: object
+      additionalProperties: false
+      required: [displayName, ref]
+      description: An owner by display name and an opaque reference. Never an identity number.
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 200 }
+        ref: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9:._/-]{0,127}$' }
+
+    BusinessApplicant:
+      type: object
+      additionalProperties: false
+      required: [businessNameEn, registrationRef, sector, yearsInOperation, owners, upstreamVerificationRefs]
+      properties:
+        businessNameEn: { type: string, minLength: 1, maxLength: 200 }
+        businessNameAr: { type: string, minLength: 1, maxLength: 200 }
+        registrationRef:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: The trade licence reference as the registry rail verified it upstream.
+        sector:
+          type: string
+          pattern: '^[A-Z][A-Z_]{1,31}$'
+          description: The sector code the jurisdiction's SME definition uses (UAE — TRADING, MANUFACTURING, SERVICES).
+        yearsInOperation: { type: integer, minimum: 0, maximum: 200 }
+        owners:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { $ref: '#/components/schemas/BusinessOwner' }
+        upstreamVerificationRefs:
+          type: array
+          minItems: 1
+          maxItems: 20
+          description: What stage 4 verified upstream (identity, registry, bureau consent), by reference.
+          items: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9:._/-]{0,127}$' }
+
+    BusinessContact:
+      type: object
+      additionalProperties: false
+      required: [partyRef]
+      description: |
+        Who the offer letter goes to. A party reference and masked display
+        strings only; the delivery adapter resolves the real destination.
+      properties:
+        partyRef: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9:._/-]{0,127}$' }
+        emailMasked: { type: string, maxLength: 254, examples: ['a***@example.com'] }
+        mobileMasked: { type: string, maxLength: 32, examples: ['+971 50 XXX XXXX'] }
+
+    BusinessHandover:
+      type: object
+      additionalProperties: false
+      required: [applicationId, upstreamRef, applicant, productCode, variantCode, purpose, requestedMinorUnits, tenorMonths]
+      description: |
+        An SME application as verified upstream. No tenant, no currency: both
+        follow from the credential and the tenant's onboarding.
+      properties:
+        applicationId: { type: string, pattern: '^[A-Z]{2,4}-[0-9]{6,10}$', examples: ['FR-00005061'] }
+        upstreamRef: { type: string, minLength: 1, maxLength: 128 }
+        applicant: { $ref: '#/components/schemas/BusinessApplicant' }
+        productCode: { type: string, enum: [sme-term-conventional, sme-term-islamic] }
+        variantCode: { type: string, pattern: '^[A-Z][A-Z0-9_]{0,63}$' }
+        purpose: { type: string, pattern: '^[A-Z][A-Z0-9_]{0,63}$' }
+        requestedMinorUnits:
+          type: string
+          pattern: '^[1-9][0-9]{0,18}$'
+          description: The requested amount in minor units of the tenant's base currency (fils for a UAE tenant).
+        tenorMonths: { type: integer, minimum: 1, maximum: 600 }
+        graceMonths: { type: integer, minimum: 0, maximum: 599 }
+        contributionPerTenThousand:
+          type: integer
+          minimum: 0
+          maximum: 10000
+          description: The owner's own contribution to the project cost, per ten thousand.
+        contact: { $ref: '#/components/schemas/BusinessContact' }
+
+    BusinessApplicationStatus:
+      type: object
+      additionalProperties: false
+      required: [applicationId, upstreamRef, status, stage, productCode, variantCode, requestedMinorUnits, currency]
+      properties:
+        applicationId: { type: string }
+        upstreamRef: { type: string }
+        status:
+          type: string
+          enum: [RECEIVED, SPREADING, SUBMITTED, ASSESSED, IN_COMMITTEE, APPROVED, DECLINED, OFFER_SENT, SIGNED, DISBURSED, WITHDRAWN]
+        stage:
+          type: integer
+          minimum: 5
+          maximum: 9
+          description: 5 credit assessment, 6 decisioning, 7 contract & disbursement, 8 portfolio, 9 collections.
+        productCode: { type: string }
+        variantCode: { type: string }
+        requestedMinorUnits: { type: string, pattern: '^[1-9][0-9]{0,18}$' }
+        currency:
+          type: string
+          enum: [SAR, AED]
+          description: The tenant's base currency, from its onboarding record.
+        offerLetterVersion:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: The content hash of the offer letter sent, once one has been.
 
   responses:
     Malformed:

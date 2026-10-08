@@ -18,6 +18,10 @@
  * origination policy in force, the rails from its approved configuration.
  * There is no rate anywhere (SH-01 for the Murabaha product), and nothing is
  * invented to fill a slot — an empty list says so.
+ *
+ * When the deployment behaves as the UAE (ADR 0005) this route shows the SME
+ * pipeline dashboard instead (PipelineDashboard.tsx); the Saudi request book
+ * below is unchanged.
  */
 
 import { notFound } from 'next/navigation';
@@ -33,7 +37,9 @@ import { resolveOriginationPolicy } from '@sanad/origination/origination-policy.
 import { resolveRailsConfiguration } from '@sanad/origination/rails.ts';
 
 import { type AttentionItem, railStatuses, summarise } from '../../server/dashboard.ts';
+import { workbenchJurisdiction } from '../../server/jurisdiction.ts';
 import { developmentAttestation, listRequests, type RequestRow } from '../../server/store.ts';
+import { PipelineDashboard } from './PipelineDashboard.tsx';
 
 const TENANT: TenantCode = 'bank-a';
 const PAGE_SIZE = 8;
@@ -70,6 +76,8 @@ export default async function DashboardPage({ params, searchParams }: { readonly
   const locale = localeFromSegment(segment);
   if (locale === undefined) notFound();
   const arabic = locale === 'ar-SA';
+  // A UAE deployment originates SME direct lending, not the Saudi request book (ADR 0005).
+  if ((await workbenchJurisdiction()).code === 'AE') return <PipelineDashboard segment={segment} arabic={arabic} />;
   const t = (en: string, ar: string): string => (arabic ? ar : en);
   const numerals = defaultNumerals(locale);
   const sar = (minorUnits: bigint) => formatMinorUnits({ minorUnits, currency: 'SAR' }, numerals);

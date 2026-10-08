@@ -8,7 +8,7 @@ import { money } from '@sanad/core/kernel/money.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
 import {
   type BusinessApplication, type HandoverInput,
-  approveStraightThrough, decideInCommittee, receiveHandover, recordAssessment, recordDisbursed, recordOfferSent, recordSigned, startSpreading, submitForAssessment, withdraw,
+  approveStraightThrough, containsIdentityNumber, decideInCommittee, receiveHandover, recordAssessment, recordDisbursed, recordOfferSent, recordSigned, startSpreading, submitForAssessment, withdraw,
 } from '@sanad/core/origination/business-application.ts';
 
 const T = 1_800_000_000n;
@@ -32,6 +32,24 @@ describe('stage 5: hand-over', () => {
     expect(receiveHandover({ ...input, applicant: { ...input.applicant, upstreamVerificationRefs: [] } }, 'AED', 'cif', T).ok).toBe(false);
     const withId = receiveHandover({ ...input, applicant: { ...input.applicant, owners: [{ displayName: 'Owner', ref: '784-1971-1234567-1' }] } }, 'AED', 'cif', T);
     expect(withId.ok).toBe(false); if (!withId.ok) expect(withId.error.reason).toBe('IDENTITY_NUMBER_IN_PAYLOAD');
+  });
+  it('scans the whole hand-over for an identity number, not only the applicant', () => {
+    for (const tampered of [
+      { ...input, upstreamRef: 'cif-784-1971-1234567-1' },
+      { ...input, purpose: '784197112345671' },
+      { ...input, applicant: { ...input.applicant, upstreamVerificationRefs: ['uaepass:784-1971-1234567-1'] } },
+    ]) {
+      const r = receiveHandover(tampered, 'AED', 'cif', T);
+      expect(r.ok).toBe(false); if (!r.ok) expect(r.error.reason).toBe('IDENTITY_NUMBER_IN_PAYLOAD');
+    }
+    // An amount is a number, not text: a fifteen-digit amount in minor units is not mistaken for an identity number.
+    expect(receiveHandover({ ...input, requested: money(100_000_000_000_000n, 'AED') }, 'AED', 'cif', T).ok).toBe(true);
+  });
+  it('containsIdentityNumber walks nested values and honours skipped keys', () => {
+    expect(containsIdentityNumber({ contact: { partyRef: '784-1971-1234567-1' } })).toBe(true);
+    expect(containsIdentityNumber([{ a: ['x', '784197112345671'] }])).toBe(true);
+    expect(containsIdentityNumber({ requestedMinorUnits: '784197112345671' }, new Set(['requestedMinorUnits']))).toBe(false);
+    expect(containsIdentityNumber({ n: 784197112345671n, m: 1 })).toBe(false);
   });
 });
 

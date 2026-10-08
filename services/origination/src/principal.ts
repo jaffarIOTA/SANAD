@@ -38,7 +38,15 @@ export type Scope =
    * systems we depend on, their status and their latency, which is a map of
    * the estate and where it is weak.
    */
-  | 'platform:health';
+  | 'platform:health'
+  /**
+   * The SME business-application hand-over (stage 4 → 5, ADR 0005): granted
+   * only to the upstream customer-record system of a tenant that lends to
+   * businesses directly. A partner raising origination requests does not
+   * hold it, so it cannot hand an SME application to the credit team.
+   */
+  | 'business:read'
+  | 'business:write';
 
 export interface PartnerPrincipal {
   /** Opaque partner identifier. Safe to log. */
@@ -93,6 +101,17 @@ export function developmentRegistry(env: NodeJS.ProcessEnv): CredentialRegistry 
     channel: 'PARTNER_API',
     scopes: ['platform:health'],
     credentialRef: 'cred-dev-platform-ops',
+  });
+
+  // The UAE fund's upstream customer-record system (the core banking platform's
+  // customer record and the government portal behind it): hands SME
+  // applications over at stage 5. Illustrative tenant, development credential.
+  add(env['UPSTREAM_RECORD_DEV_TOKEN'], {
+    partnerId: 'upstream-record-dev-01',
+    tenantId: 'sme-fund-ae',
+    channel: 'PARTNER_API',
+    scopes: ['business:read', 'business:write'],
+    credentialRef: 'cred-dev-upstream-01',
   });
 
   add(env['AGGREGATOR_DEV_TOKEN'], {

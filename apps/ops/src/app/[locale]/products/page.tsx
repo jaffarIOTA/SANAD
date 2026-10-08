@@ -16,9 +16,11 @@
 
 import type { ReactElement } from 'react';
 
-import { type TenantCode, isTenantCode, loadSmeDefinition } from '@sanad/config/loader.ts';
+import { type TenantCode, isTenantCode, loadSmeDefinition, loadTenantOnboarding } from '@sanad/config/loader.ts';
 import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
-import { money } from '@sanad/core/kernel/money.ts';
+import type { JurisdictionCode } from '@sanad/core/jurisdiction/profile.ts';
+import { type CurrencyCode, money as moneyOf } from '@sanad/core/kernel/money.ts';
+import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import type { QuoteRequest } from '@sanad/core/products/module.ts';
 import { buildOffer, type Offer } from '@sanad/core/products/offer.ts';
 import { ProductRegistry } from '@sanad/core/products/registry.ts';
@@ -54,23 +56,67 @@ function coreBookingLabel(entry: { readonly coreBankingProductCode?: string }, b
   return { text: t('not mapped yet', 'غير مرتبط بعد'), tone: 'progress' };
 }
 
-/** The regulator's SME definition, loaded from configuration and handed to the quote — a module never reads configuration. */
-const SME_DEFINITION = loadSmeDefinition();
-const SME_REGULATORY = SME_DEFINITION.ok ? { smeDefinition: SME_DEFINITION.value } : {};
-/** An illustrative small enterprise, with the figures a real quote takes from its statements and the bureau. */
-const SAMPLE_BUSINESS = { annualRevenue: money(600_000_000n), fullTimeEmployees: 22, annualOperatingCashFlow: money(90_000_000n), existingAnnualDebtService: money(12_000_000n), financialsSourceRef: 'sample-audited-statements-2025' };
+/**
+ * What the sample needs from the tenant shown: its base currency (from its
+ * onboarding, never assumed), the SME definition of its jurisdiction (loaded
+ * from configuration and handed to the quote — a module never reads
+ * configuration), and for the SME modules the first variant of its term sheet.
+ */
+interface SampleContext {
+  readonly currency: CurrencyCode;
+  readonly jurisdiction: JurisdictionCode;
+  readonly smeVariant?: { readonly code: string; readonly purpose: string; readonly contributionPerTenThousand: number; readonly minYearsInOperation: number };
+}
 
-/** A sample request per journey shape. Amounts and facts are illustrative. */
-function sampleFor(code: string, tenantId: string, at: QuoteRequest['asOf']): { readonly principal: bigint; readonly tenorDays: number; readonly build: (pricing: QuoteRequest['pricing']) => QuoteRequest; readonly note: { en: string; ar: string } } {
+/**
+ * The sample's currency and jurisdiction, from the tenant's onboarding — or a
+ * refusal naming why. Never a default: a sample quoted in an assumed currency
+ * would show a figure the tenant could never offer.
+ */
+function sampleContextFor(tenant: TenantCode): Result<SampleContext> {
+  const onboarding = loadTenantOnboarding(tenant);
+  if (!onboarding.ok) return reject('OP-DETERMINACY', 'TENANT_ONBOARDING_UNAVAILABLE', `The tenant’s onboarding record did not load (${onboarding.error.reason}); no sample is quoted without its base currency`, { tenant });
+  return ok({ currency: onboarding.value.baseCurrency, jurisdiction: onboarding.value.jurisdiction });
+}
+
+/** The first variant of an SME term sheet, read defensively: the terms arrive typed only as the module's own. */
+function firstSmeVariant(terms: unknown): SampleContext['smeVariant'] {
+  const variants = (terms as { readonly variants?: readonly { readonly code: string; readonly purposes: readonly { readonly code: string }[]; readonly minContributionPerTenThousand: number; readonly minYearsInOperation: number }[] }).variants;
+  const v = variants?.[0];
+  const purpose = v?.purposes[0]?.code;
+  return v === undefined || purpose === undefined ? undefined : { code: v.code, purpose, contributionPerTenThousand: v.minContributionPerTenThousand, minYearsInOperation: v.minYearsInOperation };
+}
+
+/** A sample request per journey shape. Amounts and facts are illustrative, in the currency of the tenant shown. */
+function sampleFor(code: string, tenantId: string, at: QuoteRequest['asOf'], ctx: SampleContext): { readonly principal: bigint; readonly tenorDays: number; readonly build: (pricing: QuoteRequest['pricing']) => QuoteRequest; readonly note: { en: string; ar: string } } {
   const base = { tenantId, programmeId: 'prg-0001', counterpartyId: 'sample', asOf: at };
+  const money = (minor: bigint): ReturnType<typeof moneyOf> => moneyOf(minor, ctx.currency);
   switch (code) {
     case 'murabaha-scf':
       return { principal: 18_500_000n, tenorDays: 90, build: (pricing) => ({ ...base, requestedAmount: money(18_500_000n), requestedTenorDays: 90, tradeReference: SAMPLE_TRADE, pricing }), note: { en: 'A cleared invoice of SAR 185,000.00 over 90 days.', ar: 'فاتورة مُخلّصة بقيمة ١٨٥٬٠٠٠٫٠٠ ريال على ٩٠ يوماً.' } };
     case 'bnpl':
       return { principal: 120_000n, tenorDays: 120, build: (pricing) => ({ ...base, requestedAmount: money(120_000n), requestedTenorDays: 120, pricing, affordability: { outstandingSameClass: money(0n) } }), note: { en: 'A basket of SAR 1,200.00 in four instalments; the merchant pays the discount.', ar: 'سلة بقيمة ١٬٢٠٠٫٠٠ ريال على أربعة أقساط؛ الخصم على التاجر.' } };
     case 'sme-term-conventional':
-    case 'sme-term-islamic':
-      return { principal: 50_000_000n, tenorDays: 720, build: (pricing) => ({ ...base, requestedAmount: money(50_000_000n), requestedTenorDays: 720, pricing, regulatory: SME_REGULATORY, affordability: { business: SAMPLE_BUSINESS } }), note: { en: 'SAR 500,000.00 over 24 months for a small enterprise with SAR 6,000,000.00 revenue, SAR 900,000.00 operating cash flow and SAR 120,000.00 a year of existing debt service.', ar: '٥٠٠٬٠٠٠٫٠٠ ريال على ٢٤ شهراً لمنشأة صغيرة إيراداتها ٦٬٠٠٠٬٠٠٠٫٠٠ ريال وتدفقها التشغيلي ٩٠٠٬٠٠٠٫٠٠ ريال وخدمة ديونها القائمة ١٢٠٬٠٠٠٫٠٠ ريال سنوياً.' } };
+    case 'sme-term-islamic': {
+      const definition = loadSmeDefinition(ctx.jurisdiction);
+      const v = ctx.smeVariant;
+      // The variant module refuses a quote without its choices and dated schedule; the sample states them. Dates are illustrative.
+      const preferences: Readonly<Record<string, string>> = v === undefined ? {} : {
+        variant: v.code, purpose: v.purpose, contributionPerTenThousand: String(v.contributionPerTenThousand),
+        yearsInOperation: String(Math.max(v.minYearsInOperation, 3)), graceMonths: '0',
+        disbursementDate: '2026-11-01', firstDueDate: '2026-12-01', paymentDay: '1',
+      };
+      const business = { annualRevenue: money(600_000_000n), fullTimeEmployees: 22, sector: 'TRADING', annualOperatingCashFlow: money(90_000_000n), existingAnnualDebtService: money(12_000_000n), financialsSourceRef: 'sample-audited-statements-2025' };
+      const word = { en: ctx.currency, ar: ctx.currency === 'AED' ? 'درهم' : 'ريال' };
+      return {
+        principal: 50_000_000n, tenorDays: 720,
+        build: (pricing) => ({ ...base, requestedAmount: money(50_000_000n), requestedTenorDays: 720, pricing, ...(definition.ok ? { regulatory: { smeDefinition: definition.value } } : {}), affordability: { business }, preferences }),
+        note: {
+          en: `${word.en} 500,000.00 over 24 months (variant ${v?.code ?? '—'}, disbursed 1 November 2026) for a small trading enterprise with ${word.en} 6,000,000.00 revenue, ${word.en} 900,000.00 operating cash flow and ${word.en} 120,000.00 a year of existing debt service.`,
+          ar: `٥٠٠٬٠٠٠٫٠٠ ${word.ar} على ٢٤ شهراً (المنتج الفرعي ${v?.code ?? '—'}، صرف في ١ نوفمبر ٢٠٢٦) لمنشأة تجارية صغيرة إيراداتها ٦٬٠٠٠٬٠٠٠٫٠٠ ${word.ar} وتدفقها التشغيلي ٩٠٠٬٠٠٠٫٠٠ ${word.ar} وخدمة ديونها القائمة ١٢٠٬٠٠٠٫٠٠ ${word.ar} سنوياً.`,
+        },
+      };
+    }
     case 'embedded-lending':
       return { principal: 10_000_000n, tenorDays: 180, build: (pricing) => ({ ...base, requestedAmount: money(10_000_000n), requestedTenorDays: 180, pricing, partnerRef: 'aggregator-01', preferences: { collection: 'REVENUE_LINKED' } }), note: { en: 'A merchant advance of SAR 100,000.00 over 180 days, collected from partner-routed revenue.', ar: 'تمويل تاجر بقيمة ١٠٠٬٠٠٠٫٠٠ ريال على ١٨٠ يوماً، يُحصَّل من الإيرادات عبر الشريك.' } };
     default:
@@ -86,6 +132,7 @@ export default async function ProductsPage({ params, searchParams }: { readonly 
   const t = (en: string, ar: string): string => (arabic ? ar : en);
   const tenant: TenantCode = tenantParam !== undefined && isTenantCode(tenantParam) ? tenantParam : 'bank-a';
   const at = developmentAttestation();
+  const sampleBase = sampleContextFor(tenant);
   const resolved = await resolveProductCatalogue(tenant, at.epochSeconds);
   const catalogue = resolved.catalogue;
 
@@ -100,7 +147,7 @@ export default async function ProductsPage({ params, searchParams }: { readonly 
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-h2 font-semibold text-heading">{t('Products — ', 'المنتجات — ')}<span className="identifier">{tenant}</span></h2>
         <nav className="flex gap-2 text-sm">
-          {(['bank-a', 'fintech-b'] as const).map((code) => (
+          {(['bank-a', 'fintech-b', 'sme-fund-ae'] as const).map((code) => (
             <a key={code} href={`/${segment}/products?tenant=${code}`} className={`identifier press rounded-pill px-4 py-2 ${code === tenant ? 'bg-brand-deep text-white' : 'bg-surface text-ink-quiet hover:bg-sunken'}`}>{code}</a>
           ))}
         </nav>
@@ -162,10 +209,15 @@ export default async function ProductsPage({ params, searchParams }: { readonly 
         const module = found.ok ? found.value : undefined;
         let offer: Offer | undefined;
         let refusal: string | undefined;
-        if (module !== undefined && entry.enabled) {
-          const sample = sampleFor(entry.productCode, tenant, at);
+        const parsedTerms = module?.validateTerms(entry.terms);
+        const smeVariant = parsedTerms?.ok === true ? firstSmeVariant(parsedTerms.value) : undefined;
+        const ctx: SampleContext | undefined = sampleBase.ok ? { ...sampleBase.value, ...(smeVariant === undefined ? {} : { smeVariant }) } : undefined;
+        // Without the tenant's onboarding there is no currency to quote in: refuse, saying why.
+        if (!sampleBase.ok) refusal = `${sampleBase.error.reason}: ${sampleBase.error.detail}`;
+        else if (ctx !== undefined && module !== undefined && entry.enabled) {
+          const sample = sampleFor(entry.productCode, tenant, at, ctx);
           const terms = module.validateTerms(entry.terms);
-          const inputs = resolvePricingInputs(entry.pricingRule, { principal: money(sample.principal), tenorDays: sample.tenorDays, asOfEpochSeconds: at.epochSeconds, benchmark: DEV_BENCHMARK, marketRange: DEV_RANGE });
+          const inputs = resolvePricingInputs(entry.pricingRule, { principal: moneyOf(sample.principal, ctx.currency), tenorDays: sample.tenorDays, asOfEpochSeconds: at.epochSeconds, benchmark: DEV_BENCHMARK, marketRange: DEV_RANGE });
           if (!terms.ok) refusal = terms.error.detail;
           else if (!inputs.ok) refusal = inputs.error.detail;
           else {
@@ -174,7 +226,7 @@ export default async function ProductsPage({ params, searchParams }: { readonly 
             else { const built = buildOffer(module, quote.value, at); if (built.ok) offer = built.value; else refusal = built.error.detail; }
           }
         }
-        const sample = sampleFor(entry.productCode, tenant, at);
+        const sample = ctx === undefined ? undefined : sampleFor(entry.productCode, tenant, at, ctx);
         return (
           <Card key={entry.productCode}>
             <div id={`disclosure-${entry.productCode}`} className="flex flex-wrap items-baseline justify-between gap-2">
@@ -188,7 +240,7 @@ export default async function ProductsPage({ params, searchParams }: { readonly 
               <dt className="text-ink-quiet">{t('Journey · family', 'المسار · النوع')}</dt><dd className="identifier">{module === undefined ? '—' : `${module.descriptor.journeyShape} · ${module.descriptor.family}${module.descriptor.consumer ? ' · consumer' : ''}`}</dd>
               <dt className="text-ink-quiet">{t('Core banking', 'النظام المصرفي')}</dt><dd>{(() => { const c = coreBookingLabel(entry, module?.descriptor.bookingShape, t); return c.code === undefined ? <span className="text-ink-quiet">{c.text}</span> : <span><span className="identifier">{c.code}</span> <span className="text-ink-quiet">· {c.text}</span></span>; })()}</dd>
             </dl>
-            {offer !== undefined ? (
+            {offer !== undefined && sample !== undefined ? (
               <div className="mt-4">
                 <p className="mb-2 text-xs text-ink-quiet">{t('Worked example: ', 'مثال عملي: ')}{arabic ? sample.note.ar : sample.note.en}{entry.pricingRule.kind === 'BENCHMARK_PLUS_MARGIN' ? t(' Development benchmark 5.60%, bounded by a development market range.', ' مؤشر تطويري ٥٫٦٠٪ محدود بنطاق سوق تطويري.') : ''}</p>
                 <Disclosure offer={offer} locale={locale} />

@@ -89,6 +89,26 @@ export interface StageEvent {
 export interface Transition { readonly application: BusinessApplication; readonly event: StageEvent }
 
 const bad = (reason: string, detail: string, context?: Readonly<Record<string, string>>): Result<never> => reject('OP-DETERMINACY', reason, detail, context);
+
+/** An identity-number shape (e.g. 784-YYYY-NNNNNNN-N), with or without separators. */
+const IDENTITY_NUMBER = /[0-9]{3}-?[0-9]{4}-?[0-9]{7}-?[0-9]/;
+
+/**
+ * Whether any string anywhere in a value — nested objects and arrays
+ * included — carries an identity-number shape. Strings are tested one by one
+ * (never a serialisation of the whole, which would join adjacent digits), and
+ * numbers and bigints are amounts, not text, so they are not tested. Keys
+ * named in `skipKeys` (an amount carried as a digit string on the wire) are
+ * passed over.
+ */
+export function containsIdentityNumber(value: unknown, skipKeys: ReadonlySet<string> = new Set()): boolean {
+  if (typeof value === 'string') return IDENTITY_NUMBER.test(value);
+  if (Array.isArray(value)) return value.some((v) => containsIdentityNumber(v, skipKeys));
+  if (value !== null && typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>).some(([k, v]) => !skipKeys.has(k) && containsIdentityNumber(v, skipKeys));
+  }
+  return false;
+}
 const nonEmpty = (s: string | undefined): s is string => s !== undefined && s.trim().length > 0;
 
 function move(app: BusinessApplication, to: BusinessStatus, patch: Partial<BusinessApplication>, eventType: string, actor: string, at: bigint, detail: Readonly<Record<string, string>> = {}): Transition {
@@ -131,7 +151,8 @@ export function receiveHandover(input: HandoverInput, tenantCurrency: CurrencyCo
   if (!Number.isInteger(input.contributionPerTenThousand) || input.contributionPerTenThousand < 0 || input.contributionPerTenThousand > 10_000) return bad('CONTRIBUTION_INVALID', 'contributionPerTenThousand is in [0, 10000]');
   if (!nonEmpty(input.applicant.businessNameEn) || !nonEmpty(input.applicant.registrationRef)) return bad('APPLICANT_INCOMPLETE', 'The business name and registration reference are required');
   if (input.applicant.upstreamVerificationRefs.length === 0) return bad('UPSTREAM_VERIFICATION_MISSING', 'Stage 4 verification references are required before stage 5');
-  if (/[0-9]{3}-?[0-9]{4}-?[0-9]{7}-?[0-9]/.test(JSON.stringify(input.applicant))) return bad('IDENTITY_NUMBER_IN_PAYLOAD', 'An identity number does not belong in the application record; send a reference');
+  // The whole hand-over, not only the applicant: an identity number in the upstream reference or a product field is refused too.
+  if (containsIdentityNumber(input)) return bad('IDENTITY_NUMBER_IN_PAYLOAD', 'An identity number does not belong in the application record; send a reference');
   const application: BusinessApplication = { ...input, status: 'RECEIVED', stage: 5, receivedAtEpochSeconds: at };
   return ok({ application, event: { eventType: 'HANDED_OVER', fromStage: null, toStage: 5, actor, atEpochSeconds: at, detail: { upstreamRef: input.upstreamRef } } });
 }

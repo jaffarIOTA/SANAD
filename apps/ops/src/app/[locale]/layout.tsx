@@ -102,10 +102,10 @@ export default async function OpsLayout({ children, params }: { readonly childre
         </header>
 
         <div className="flex min-h-[calc(100dvh-64px)]">
-          <SideNav segment={segment} arabic={arabic} current={`/${segment}`} />
+          <SideNav segment={segment} arabic={arabic} jurisdiction={jurisdiction.code} />
           <main className="min-w-0 flex-1 overflow-x-clip px-4 pb-24 pt-6 lg:px-8 lg:pb-10 lg:pt-8">{children}</main>
         </div>
-        <BottomNav segment={segment} arabic={arabic} current={`/${segment}`} />
+        <BottomNav segment={segment} arabic={arabic} jurisdiction={jurisdiction.code} />
       </body>
     </html>
   );
