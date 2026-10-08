@@ -22,6 +22,13 @@ export interface CatalogueEntry {
   readonly nameAr: string;
   readonly programmeIds: readonly string[] | 'ALL';
   readonly boardRulingRef?: string;
+  /**
+   * The product type code the core banking platform books this product under,
+   * where the tenant books through the core's own product set. Optional: a
+   * Murabaha booked as account postings has none. Validated here only as a
+   * shape; whether the core knows the code is read live on the admin screen.
+   */
+  readonly coreBankingProductCode?: string;
   readonly pricingRule: PricingRule;
   /** The module's own term sheet. Validated by the module, not here. */
   readonly terms: unknown;
@@ -33,7 +40,7 @@ export interface ProductCatalogue {
   readonly entries: readonly CatalogueEntry[];
 }
 
-const ENTRY_KEYS = new Set(['productCode', 'enabled', 'nameEn', 'nameAr', 'programmeIds', 'boardRulingRef', 'pricingRule', 'terms', 'effectiveFromEpochSeconds']);
+const ENTRY_KEYS = new Set(['productCode', 'enabled', 'nameEn', 'nameAr', 'programmeIds', 'boardRulingRef', 'coreBankingProductCode', 'pricingRule', 'terms', 'effectiveFromEpochSeconds']);
 const RULE_KEYS: Record<PricingRule['kind'], readonly string[]> = {
   FIXED_PROFIT_AMOUNT: ['kind', 'profitMinorUnits'],
   CATALOGUE_RATE: ['kind', 'bp', 'basis', 'catalogueRef'],
@@ -65,6 +72,8 @@ export function parseProductCatalogue(raw: unknown, islamicProductCodes: Readonl
     if (islamicProductCodes.has(code) && e['enabled'] === true && ruling === undefined) {
       return reject('SH-18', 'BOARD_RULING_REQUIRED', 'An Islamic product cannot be enabled for a tenant without that tenant\'s Shariah board ruling reference', { productCode: code });
     }
+    const coreCode = e['coreBankingProductCode'];
+    if (coreCode !== undefined && (typeof coreCode !== 'string' || coreCode.trim().length === 0 || coreCode.length > 64)) return bad('CATALOGUE_CORE_PRODUCT_CODE', 'coreBankingProductCode is a non-empty string of at most 64 characters when present', { productCode: code });
     const rule = parseRule(e['pricingRule']);
     if (!rule.ok) return rule;
     entries.push({
@@ -74,6 +83,7 @@ export function parseProductCatalogue(raw: unknown, islamicProductCodes: Readonl
       nameAr: e['nameAr'],
       programmeIds: programmes as readonly string[] | 'ALL',
       ...(ruling === undefined ? {} : { boardRulingRef: ruling }),
+      ...(coreCode === undefined ? {} : { coreBankingProductCode: coreCode }),
       pricingRule: rule.value,
       terms: e['terms'],
       effectiveFromEpochSeconds: BigInt(e['effectiveFromEpochSeconds']),

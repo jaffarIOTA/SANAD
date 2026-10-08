@@ -23,7 +23,7 @@ export type Environment = (typeof ENVIRONMENTS)[number];
 /** The key names each provider's adapter reads, offered as suggestions; any name is accepted. */
 export const KNOWN_KEY_NAMES: Readonly<Partial<Record<VaultProvider, readonly string[]>>> = {
   NUTRIENT: ['web_sdk_license_key', 'document_engine_base_url', 'document_engine_api_token', 'jwt_private_key'],
-  TUUM: ['client_id', 'client_secret', 'base_url'],
+  TUUM: ['username', 'password', 'tenant_code', 'auth_base_url', 'loan_api_base_url'],
 };
 
 export interface CredentialRow {

@@ -241,6 +241,7 @@ operation set is. Not yet actioned.
 |---|---|
 | `TuumCoreBankingAdapter` — mapping, idempotency, breaker, credential handling, failure posture | Real. Tested against fixtures. |
 | `TuumTransport` — endpoint paths, request and response DTO shapes | **Placeholder**, and now pending the design decision in Finding 1 as well as sandbox access. |
+| `TuumProductCatalogue` (`product-catalogue.ts`) — read-only list and description of the core's product types, for the Admin Products screen | Real. Verified live against the partners sandbox on 2026-10-08 (76 types; `TAWRROUQ` described as rate driven, `FIX ACT/365`, `INT = 25`). Deliberately a separate file: the booking adapter still carries no lending path. Hosts come from the vault (`auth_base_url`, `loan_api_base_url`). |
 
 Endpoint paths and payload field names are supplied as adapter *configuration*, not
 hardcoded. When OI-02 is answered the configuration is filled in and the fixtures are

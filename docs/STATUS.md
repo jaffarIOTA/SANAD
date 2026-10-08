@@ -157,6 +157,13 @@ Ordered by what it costs to guess wrong.
   needs its own product set-up from Tuum before BNPL or Tawarruq personal can
   be booked through the Loan module. Record in
   [adapters/tuum/README.md](../adapters/tuum/README.md).
+  **Tuum's products are visible in Admin → Products & modules** ("In the core
+  banking platform"): a live, read-only list of the core's product types,
+  filtered to riyals by default, with a detail view that says whether the
+  core would price the product by a rate. A Sanad catalogue entry can carry
+  an optional `coreBankingProductCode`, and the screen shows whether the
+  core knows it. Port `core/ports/core-banking-catalogue.ts`, adapter
+  `adapters/tuum/product-catalogue.ts`.
 
 ### Buildable now, nothing blocking
 

@@ -65,10 +65,26 @@ export interface AuthHttp {
   }): Promise<{ readonly status: number; readonly body: string }>;
 }
 
-interface Envelope<T> {
+export interface Envelope<T> {
   readonly errors?: readonly unknown[];
   readonly validationErrors?: readonly unknown[];
   readonly data?: T;
+}
+
+/** `AuthHttp` over the platform's `fetch`. Inject a fetch bound to the institution's proxy where one applies. */
+export function fetchAuthHttp(fetchImpl: typeof fetch = fetch, timeoutMs = 30_000): AuthHttp {
+  return {
+    async post(request): Promise<{ status: number; body: string }> {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetchImpl(request.url, { method: 'POST', headers: request.headers, body: request.body, signal: controller.signal });
+        return { status: response.status, body: await response.text() };
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+  };
 }
 
 /**
@@ -78,7 +94,7 @@ interface Envelope<T> {
  * carrying `code` and `translations`, because both shapes appear in the
  * document and we should not care which we got.
  */
-function errorCodes(envelope: Envelope<unknown>): string[] {
+export function errorCodes(envelope: Envelope<unknown>): string[] {
   const from = (list: readonly unknown[] | undefined): string[] =>
     (list ?? []).map((entry) =>
       typeof entry === 'string'

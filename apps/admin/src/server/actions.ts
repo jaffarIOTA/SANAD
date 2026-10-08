@@ -100,7 +100,8 @@ export async function proposeProductChangeAction(form: FormData): Promise<void> 
   const effectiveMs = effectiveRaw === '' ? Date.now() : Date.parse(effectiveRaw);
   if (!Number.isFinite(effectiveMs)) return back(to, 'EFFECTIVE_FROM_MALFORMED');
   const boardRulingRef = field(form, 'boardRulingRef');
-  const changed = catalogueWithChange(current.catalogue.value, { productCode: field(form, 'productCode'), enabled: form.get('enabled') === 'on', termsJson: field(form, 'terms'), ...(boardRulingRef === '' ? {} : { boardRulingRef }) });
+  const coreBankingProductCode = field(form, 'coreBankingProductCode');
+  const changed = catalogueWithChange(current.catalogue.value, { productCode: field(form, 'productCode'), enabled: form.get('enabled') === 'on', termsJson: field(form, 'terms'), ...(boardRulingRef === '' ? {} : { boardRulingRef }), coreBankingProductCode });
   if (!changed.ok) return back(to, `REFUSED:${changed.error.reason}`);
   const summary = field(form, 'summary');
   const checked = checkProposal({ tenant, payload: changed.value.payload, summary, effectiveFromEpochSeconds: BigInt(Math.floor(effectiveMs / 1000)), proposedBy: admin?.principalId ?? '', nowEpochSeconds: now });

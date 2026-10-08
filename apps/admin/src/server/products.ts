@@ -30,6 +30,7 @@ export function catalogueToJson(c: ProductCatalogue): unknown {
     entries: c.entries.map((e) => ({
       productCode: e.productCode, enabled: e.enabled, nameEn: e.nameEn, nameAr: e.nameAr, programmeIds: e.programmeIds,
       ...(e.boardRulingRef === undefined ? {} : { boardRulingRef: e.boardRulingRef }),
+      ...(e.coreBankingProductCode === undefined ? {} : { coreBankingProductCode: e.coreBankingProductCode }),
       pricingRule: e.pricingRule, terms: e.terms, effectiveFromEpochSeconds: e.effectiveFromEpochSeconds.toString(),
     })),
   };
@@ -41,6 +42,8 @@ export interface EntryChange {
   /** The term sheet as JSON text, validated by the module's own parser. */
   readonly termsJson: string;
   readonly boardRulingRef?: string;
+  /** The core banking product type this product books under; empty clears it. */
+  readonly coreBankingProductCode?: string;
 }
 
 /** The whole catalogue with one entry changed, parsed as production would parse it. Refuses before anything is proposed. */
@@ -53,7 +56,12 @@ export function catalogueWithChange(current: ProductCatalogue, change: EntryChan
   if (!validTerms.ok) return validTerms;
   const existing = current.entries.find((e) => e.productCode === change.productCode);
   if (existing === undefined) return reject('OP-DETERMINACY', 'PRODUCT_NOT_IN_CATALOGUE', 'Adding a product to the catalogue is a separate change', { productCode: change.productCode });
-  const next: CatalogueEntry = { ...existing, enabled: change.enabled, terms, ...(change.boardRulingRef === undefined ? {} : { boardRulingRef: change.boardRulingRef }) };
+  const { coreBankingProductCode: _previousCore, ...rest } = existing;
+  const next: CatalogueEntry = {
+    ...rest, enabled: change.enabled, terms,
+    ...(change.boardRulingRef === undefined ? {} : { boardRulingRef: change.boardRulingRef }),
+    ...(change.coreBankingProductCode === undefined || change.coreBankingProductCode.trim().length === 0 ? {} : { coreBankingProductCode: change.coreBankingProductCode.trim() }),
+  };
   const payload = catalogueToJson({ version: current.version, entries: current.entries.map((e) => (e.productCode === change.productCode ? next : e)) });
   const parsed = parseProductCatalogue(payload, ISLAMIC_PRODUCT_CODES);
   if (!parsed.ok) return parsed;

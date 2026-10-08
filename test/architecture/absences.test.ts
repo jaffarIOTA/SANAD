@@ -277,6 +277,12 @@ describe('AP-04 — vendor concepts stop at the adapter', () => {
       }
     }
     expect(offenders).toEqual([]);
+
+    // The read-only product catalogue (product-catalogue.ts) may list the
+    // lending module's product types; the booking adapter may not even do
+    // that. The two stay in separate files so this line can be asserted.
+    const booking = codeOnly(read(join(ROOT, 'adapters/tuum/core-banking-adapter.ts')));
+    expect(booking).not.toMatch(/loan-products/);
   });
 
   it('each adapter declares its deviations and names its verification item', async () => {
