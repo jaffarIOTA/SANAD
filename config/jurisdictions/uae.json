@@ -1,0 +1,30 @@
+{
+  "code": "AE",
+  "nameEn": "United Arab Emirates",
+  "nameAr": "الإمارات العربية المتحدة",
+  "currency": "AED",
+  "timeZone": "Asia/Dubai",
+  "contractualCalendars": ["GREGORIAN"],
+  "regulator": { "code": "CBUAE", "nameEn": "Central Bank of the UAE", "nameAr": "مصرف الإمارات العربية المتحدة المركزي" },
+  "railAdapters": {
+    "CORE_BANKING": ["TUUM"],
+    "DOCUMENT_PLATFORM": ["NUTRIENT"],
+    "TAX_COMPLIANCE": ["FTA"],
+    "IDENTITY": ["UAE_PASS"],
+    "IDENTITY_AUTHENTICATION": ["UAE_PASS"],
+    "IDENTITY_VERIFICATION": ["ICP"],
+    "BUSINESS_REGISTRY": ["NER"],
+    "CREDIT_BUREAU": ["AECB"],
+    "EMPLOYMENT_VERIFICATION": ["MOHRE"],
+    "PAYMENTS_HUB": ["PARTNER_BANK"],
+    "RATE_PUBLISHER": ["RATE_PUBLISHER"],
+    "SCREENING": ["SCREENING"],
+    "TIMESTAMP_AUTHORITY": ["TSA"],
+    "WORKFLOW_ENGINE": ["WORKFLOW_ENGINE"]
+  },
+  "regulatoryDirectory": "ae",
+  "citations": [
+    "Dates: the Gregorian calendar governs UAE commercial contracts; Hijri is not required on a facility offer letter (confirm with the institution's counsel).",
+    "Supervision depends on the licence: a CBUAE-licensed bank or finance company is bound by CBUAE rules; a government development fund may sit outside them. Recorded per tenant as licenceType at onboarding."
+  ]
+}

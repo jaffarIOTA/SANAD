@@ -19,9 +19,10 @@ import { deploymentProfile, identityFromForm, resolveStaffIdentity } from './ide
 import { parseStaffIdentity } from '@sanad/core/config/staff-identity.ts';
 import { policyWithPartner, resolveOriginationPolicy } from './partners.ts';
 import { parseOriginationPolicy } from '@sanad/core/origination/policy.ts';
-import { isTenantCode, loadProductCatalogue } from '@sanad/config/loader.ts';
+import { catalogueForTenant, isTenantCode, loadProductCatalogue } from '@sanad/config/loader.ts';
 import { randomUUID } from 'node:crypto';
 import { currentAdmin, developmentPrincipalFor, endAdminSession, startAdminSession } from './session.ts';
+import { decideDeploymentJurisdiction, proposeDeploymentJurisdiction } from '@sanad/origination/jurisdiction.ts';
 
 const field = (form: FormData, name: string): string => { const v = form.get(name); return typeof v === 'string' ? v.trim() : ''; };
 const back = (to: string, notice: string): never => redirect(`${to}${to.includes('?') ? '&' : '?'}notice=${encodeURIComponent(notice)}`);
@@ -139,6 +140,46 @@ export async function proposeProductAdditionAction(form: FormData): Promise<void
   back(to, 'PROPOSED');
 }
 
+/** Propose the jurisdiction the whole deployment behaves as (ADR 0005). Another administrator decides. */
+export async function proposeJurisdictionAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'ar';
+  const to = `/${locale}/jurisdiction`;
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${locale}`);
+  if (store().kind !== 'READY') return back(to, 'NO_DATABASE');
+  const jurisdiction = field(form, 'jurisdiction');
+  if (jurisdiction !== 'SA' && jurisdiction !== 'AE') return back(to, 'JURISDICTION_UNKNOWN');
+  const summary = field(form, 'summary');
+  if (summary.length < 3) return back(to, 'SUMMARY_REQUIRED');
+  try {
+    await proposeDeploymentJurisdiction({ jurisdiction, summary, proposedBy: admin?.principalId ?? '', correlationId: randomUUID() });
+  } catch (error) {
+    const m = error instanceof Error ? error.message : '';
+    return back(to, /does not change/.test(m) ? 'LOCKED' : /already behaves/.test(m) ? 'ALREADY_IN_FORCE' : 'PROPOSE_FAILED');
+  }
+  back(to, 'PROPOSED');
+}
+
+export async function decideJurisdictionAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'ar';
+  const to = `/${locale}/jurisdiction`;
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${locale}`);
+  if (store().kind !== 'READY') return back(to, 'NO_DATABASE');
+  const id = field(form, 'revisionId');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return back(to, 'REVISION_ID_MALFORMED');
+  const approve = field(form, 'decision') === 'approve';
+  const reason = field(form, 'reason');
+  if (!approve && reason.length < 3) return back(to, 'REJECTION_REASON_REQUIRED');
+  try {
+    await decideDeploymentJurisdiction({ revisionId: id, approve, decidedBy: admin?.principalId ?? '', ...(approve ? {} : { reason }), correlationId: randomUUID() });
+  } catch (error) {
+    const m = error instanceof Error ? error.message : '';
+    return back(to, /four eyes/.test(m) ? 'REFUSED:FOUR_EYES_SELF_DECISION' : /does not change/.test(m) ? 'LOCKED' : /residency/.test(m) ? 'RESIDENCY' : 'DECIDE_FAILED');
+  }
+  back(to, approve ? 'APPROVED' : 'REJECTED');
+}
+
 export async function decideRevisionAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
   const tenant = field(form, 'tenant');
@@ -179,11 +220,13 @@ export async function proposeRailChangeAction(form: FormData): Promise<void> {
   if (!Number.isFinite(effectiveMs)) return back(to, 'EFFECTIVE_FROM_MALFORMED');
   const opt = (name: string): string | undefined => { const v = field(form, name); return v === '' ? undefined : v; };
   const fallback = opt('fallbackAdapter'); const baseUrl = opt('baseUrl'); const note = opt('note');
-  const changed = railsWithChange(current.rails.value, { capability: field(form, 'capability'), adapter: field(form, 'adapter'), environment: field(form, 'environment'), enabled: form.get('enabled') === 'on', ...(fallback === undefined ? {} : { fallbackAdapter: fallback }), ...(baseUrl === undefined ? {} : { baseUrl }), ...(note === undefined ? {} : { note }) });
+  const catalogue = catalogueForTenant(tenant, ADAPTER_CATALOGUE);
+  if (!catalogue.ok) return back(to, `REFUSED:${catalogue.error.reason}`);
+  const changed = railsWithChange(current.rails.value, { capability: field(form, 'capability'), adapter: field(form, 'adapter'), environment: field(form, 'environment'), enabled: form.get('enabled') === 'on', ...(fallback === undefined ? {} : { fallbackAdapter: fallback }), ...(baseUrl === undefined ? {} : { baseUrl }), ...(note === undefined ? {} : { note }) }, catalogue.value);
   if (!changed.ok) return back(to, `REFUSED:${changed.error.reason}`);
   const summary = field(form, 'summary');
   const effectiveFromEpochSeconds = BigInt(Math.floor(effectiveMs / 1000));
-  const checked = proposePure({ id: randomUUID(), tenantId: tenant, area: 'RAILS', rawPayload: changed.value.payload, summary, effectiveFromEpochSeconds, proposedBy: admin?.principalId ?? '', proposedAtEpochSeconds: now, parse: (raw) => parseRailsConfiguration(raw, ADAPTER_CATALOGUE) });
+  const checked = proposePure({ id: randomUUID(), tenantId: tenant, area: 'RAILS', rawPayload: changed.value.payload, summary, effectiveFromEpochSeconds, proposedBy: admin?.principalId ?? '', proposedAtEpochSeconds: now, parse: (raw) => parseRailsConfiguration(raw, catalogue.value) });
   if (!checked.ok) return back(to, `REFUSED:${checked.error.reason}`);
   try {
     await proposeRevision(s.pool, { tenantCode: tenant, area: 'RAILS', payload: changed.value.payload, summary, effectiveFromEpochSeconds, proposedBy: admin?.principalId ?? '', correlationId: randomUUID() });

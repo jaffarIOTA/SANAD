@@ -1,0 +1,66 @@
+{
+  "version": "2026-10-08.1",
+  "entries": [
+    {
+      "productCode": "sme-term-conventional",
+      "enabled": true,
+      "nameEn": "SME direct lending",
+      "nameAr": "التمويل المباشر للمنشآت",
+      "programmeIds": "ALL",
+      "pricingRule": {
+        "kind": "CATALOGUE_RATE",
+        "bp": "150",
+        "basis": "REDUCING",
+        "catalogueRef": "ILLUSTRATIVE — fund rate card from Tuum's prototype offer letter (1.5% p.a.), 2026-10-08; replace with the fund's approved rate card"
+      },
+      "terms": {
+        "minMonths": 6,
+        "maxMonths": 72,
+        "minAmountMinorUnits": "5000000",
+        "maxAmountMinorUnits": "500000000",
+        "adminFeeMinorUnits": "0",
+        "credit": {
+          "eligibleSizes": ["MICRO", "SMALL", "MEDIUM"],
+          "minDebtServiceCoverPerTenThousand": 14000,
+          "maxFinancingShareOfRevenuePerTenThousand": 10000,
+          "maxFinancingWithoutRevenueHistoryMinorUnits": "100000000",
+          "source": "TENANT_CREDIT_POLICY",
+          "policyRef": "ILLUSTRATIVE — fund SME credit policy from Tuum's prototype knock-out rules (DSCR ≥ 1.40), 2026-10-08; replace with the fund's approved policy"
+        }
+      },
+      "effectiveFromEpochSeconds": "1780000000"
+    },
+    {
+      "productCode": "sme-term-islamic",
+      "enabled": false,
+      "nameEn": "SME finance (Tawarruq)",
+      "nameAr": "تمويل المنشآت (تورّق)",
+      "programmeIds": "ALL",
+      "pricingRule": {
+        "kind": "CATALOGUE_RATE",
+        "bp": "150",
+        "basis": "REDUCING",
+        "catalogueRef": "ILLUSTRATIVE — fund rate card, 2026-10-08"
+      },
+      "terms": {
+        "minMonths": 6,
+        "maxMonths": 72,
+        "minAmountMinorUnits": "5000000",
+        "maxAmountMinorUnits": "500000000",
+        "brokerRef": "broker-board-approved-01",
+        "commodityCode": "LME-AL",
+        "agencyPermitted": true,
+        "adminFeeMinorUnits": "0",
+        "credit": {
+          "eligibleSizes": ["MICRO", "SMALL", "MEDIUM"],
+          "minDebtServiceCoverPerTenThousand": 14000,
+          "maxFinancingShareOfRevenuePerTenThousand": 10000,
+          "maxFinancingWithoutRevenueHistoryMinorUnits": "100000000",
+          "source": "TENANT_CREDIT_POLICY",
+          "policyRef": "ILLUSTRATIVE — fund SME credit policy, 2026-10-08"
+        }
+      },
+      "effectiveFromEpochSeconds": "1780000000"
+    }
+  ]
+}

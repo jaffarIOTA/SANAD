@@ -5,7 +5,7 @@
  */
 
 import { ADAPTER_CATALOGUE } from '../../../adapters/catalogue.ts';
-import { type TenantCode, loadRailsConfiguration } from '../../../config/loader.ts';
+import { type TenantCode, catalogueForTenant, loadRailsConfiguration } from '../../../config/loader.ts';
 import { type RailsConfiguration, parseRailsConfiguration } from '../../../core/config/rails.ts';
 import type { Result } from '../../../core/kernel/result.ts';
 
@@ -29,5 +29,7 @@ export async function resolveRailsConfiguration(tenant: TenantCode, asOfEpochSec
   );
   const row = r.rows[0];
   if (row === undefined) return { rails: loadRailsConfiguration(tenant, ADAPTER_CATALOGUE), source: 'FILE' };
-  return { rails: parseRailsConfiguration(row.payload, ADAPTER_CATALOGUE), source: 'REVISION', revisionId: row.id, revisionSummary: row.summary };
+  const catalogue = catalogueForTenant(tenant, ADAPTER_CATALOGUE);
+  if (!catalogue.ok) return { rails: catalogue, source: 'REVISION', revisionId: row.id, revisionSummary: row.summary };
+  return { rails: parseRailsConfiguration(row.payload, catalogue.value), source: 'REVISION', revisionId: row.id, revisionSummary: row.summary };
 }

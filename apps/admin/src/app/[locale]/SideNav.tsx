@@ -10,6 +10,7 @@ import { Icon, type IconName } from '@sanad/design/icons.tsx';
 interface Area { readonly id: string; readonly href?: string; readonly icon: IconName; readonly en: string; readonly ar: string; readonly state: 'LIVE' | 'NOT_BUILT' }
 
 export const AREAS: readonly Area[] = [
+  { id: 'jurisdiction', href: '/jurisdiction', icon: 'building', en: 'Jurisdiction (KSA / UAE)', ar: 'الولاية (السعودية / الإمارات)', state: 'LIVE' },
   { id: 'credentials', href: '/credentials', icon: 'shield-check', en: 'Credentials', ar: 'بيانات الاعتماد', state: 'LIVE' },
   { id: 'products', href: '/products', icon: 'store', en: 'Products & modules', ar: 'المنتجات والوحدات', state: 'LIVE' },
   { id: 'rails', href: '/rails', icon: 'plug', en: 'Rails & adapters', ar: 'قنوات التكامل', state: 'LIVE' },

@@ -26,39 +26,93 @@ import bankARails from './tenants/bank-a/rails/rails.json' with { type: 'json' }
 import fintechBRails from './tenants/fintech-b/rails/rails.json' with { type: 'json' };
 import bankAIdentity from './tenants/bank-a/identity/staff-identity.json' with { type: 'json' };
 import fintechBIdentity from './tenants/fintech-b/identity/staff-identity.json' with { type: 'json' };
-import smeDefinition from './regulatory/sme-definition.json' with { type: 'json' };
+import saSmeDefinition from './regulatory/sa/sme-definition.json' with { type: 'json' };
+import aeSmeDefinition from './regulatory/ae/sme-definition.json' with { type: 'json' };
+// Named ksa/uae, not sa/ae: a file called `sa.json` is a cloud service-account key by convention, and the secret scanner rightly refuses one.
+import saJurisdiction from './jurisdictions/ksa.json' with { type: 'json' };
+import aeJurisdiction from './jurisdictions/uae.json' with { type: 'json' };
+import bankATenant from './tenants/bank-a/tenant.json' with { type: 'json' };
+import fintechBTenant from './tenants/fintech-b/tenant.json' with { type: 'json' };
+import fundAeTenant from './tenants/sme-fund-ae/tenant.json' with { type: 'json' };
+import fundAeCatalogue from './tenants/sme-fund-ae/products/catalogue.json' with { type: 'json' };
+import fundAeRails from './tenants/sme-fund-ae/rails/rails.json' with { type: 'json' };
+import fundAeIdentity from './tenants/sme-fund-ae/identity/staff-identity.json' with { type: 'json' };
+import fundAeOrigination from './tenants/sme-fund-ae/origination/policy.json' with { type: 'json' };
 
 import {
   type StructureDefinition,
   parseStructureDefinition,
 } from '../products/murabaha-scf/structures/definition.ts';
 import { type CreditPolicy, parseCreditPolicy } from '../core/decisioning/policy.ts';
-import { type AdapterCatalogue, type RailsConfiguration, parseRailsConfiguration } from '../core/config/rails.ts';
+import { type AdapterCatalogue, type RailsConfiguration, parseRailsConfiguration, restrictCatalogue } from '../core/config/rails.ts';
 import { type DeploymentProfile, type StaffIdentityConfiguration, parseStaffIdentity } from '../core/config/staff-identity.ts';
 import { type OriginationPolicy, parseOriginationPolicy } from '../core/origination/policy.ts';
 import { type SmeDefinition, parseSmeDefinition } from '../core/applicant/sme-size.ts';
+import { type JurisdictionCode, type JurisdictionProfile, type TenantOnboarding, parseJurisdictionProfile, parseTenantOnboarding } from '../core/jurisdiction/profile.ts';
 import { type DocumentChecklist, parseDocumentChecklist } from '../core/documents/checklist.ts';
 import { type Result, ok, reject } from '../core/kernel/result.ts';
 import { type ProductCatalogue, parseProductCatalogue } from '../core/products/catalogue.ts';
 import { ISLAMIC_PRODUCT_CODES } from '../core/products/registry.ts';
 
 /** The tenant codes this deployment knows about. */
-export const TENANT_CODES = ['bank-a', 'fintech-b'] as const;
+export const TENANT_CODES = ['bank-a', 'fintech-b', 'sme-fund-ae'] as const;
 export type TenantCode = (typeof TENANT_CODES)[number];
+
+// -- Jurisdictions (ADR 0005) ------------------------------------------------------
+
+const JURISDICTIONS: Readonly<Record<JurisdictionCode, unknown>> = { SA: saJurisdiction, AE: aeJurisdiction };
+
+export function loadJurisdictionProfile(code: JurisdictionCode): Result<JurisdictionProfile> {
+  return parseJurisdictionProfile(JURISDICTIONS[code]);
+}
+
+/** Both profiles, parsed; a malformed profile refuses to activate anything. */
+export function loadJurisdictionProfiles(): Result<Readonly<Record<JurisdictionCode, JurisdictionProfile>>> {
+  const sa = loadJurisdictionProfile('SA'); if (!sa.ok) return sa;
+  const ae = loadJurisdictionProfile('AE'); if (!ae.ok) return ae;
+  return ok({ SA: sa.value, AE: ae.value });
+}
+
+const ONBOARDING: Readonly<Record<TenantCode, unknown>> = { 'bank-a': bankATenant, 'fintech-b': fintechBTenant, 'sme-fund-ae': fundAeTenant };
+
+/**
+ * What the institution was onboarded as — its jurisdiction, licence and base
+ * currency. The database record (core.tenant, migration 0013) is the same
+ * record; this is the checked-in copy for environments without one, and a
+ * test asserts the two agree.
+ */
+export function loadTenantOnboarding(tenant: TenantCode): Result<TenantOnboarding> {
+  const profiles = loadJurisdictionProfiles();
+  if (!profiles.ok) return profiles;
+  const parsed = parseTenantOnboarding(ONBOARDING[tenant], profiles.value);
+  if (parsed.ok && parsed.value.tenantCode !== tenant) return reject('OP-DETERMINACY', 'ONBOARDING_TENANT_MISMATCH', 'The onboarding record is for a different tenant', { tenant });
+  return parsed;
+}
+
+/** The jurisdiction profile that applies to a tenant, from its onboarding. */
+export function loadTenantJurisdiction(tenant: TenantCode): Result<JurisdictionProfile> {
+  const onboarding = loadTenantOnboarding(tenant);
+  if (!onboarding.ok) return onboarding;
+  return loadJurisdictionProfile(onboarding.value.jurisdiction);
+}
 
 const STRUCTURES: Readonly<Record<TenantCode, readonly unknown[]>> = {
   'bank-a': [bankAStructure],
   'fintech-b': [fintechBStructure],
+  // The UAE fund does not offer Murabaha supply-chain finance.
+  'sme-fund-ae': [],
 };
 
 const CREDIT_POLICIES: Readonly<Record<TenantCode, readonly unknown[]>> = {
   'bank-a': [bankAPolicyV1],
   'fintech-b': [fintechBPolicyV1],
+  'sme-fund-ae': [],
 };
 
 const ORIGINATION_POLICIES: Readonly<Record<TenantCode, unknown>> = {
   'bank-a': bankAOrigination,
   'fintech-b': fintechBOrigination,
+  'sme-fund-ae': fundAeOrigination,
 };
 
 /**
@@ -68,6 +122,7 @@ const ORIGINATION_POLICIES: Readonly<Record<TenantCode, unknown>> = {
 const PRODUCT_CATALOGUES: Readonly<Record<TenantCode, unknown>> = {
   'bank-a': bankACatalogue,
   'fintech-b': fintechBCatalogue,
+  'sme-fund-ae': fundAeCatalogue,
 };
 
 export function loadProductCatalogue(tenant: TenantCode): Result<ProductCatalogue> {
@@ -77,16 +132,31 @@ export function loadProductCatalogue(tenant: TenantCode): Result<ProductCatalogu
 const RAILS: Readonly<Record<TenantCode, unknown>> = {
   'bank-a': bankARails,
   'fintech-b': fintechBRails,
+  'sme-fund-ae': fundAeRails,
 };
 
-/** The rails the tenant consumes, checked against the adapter catalogue the caller supplies (the engine names no vendor). */
+/**
+ * The adapter catalogue the caller supplies, narrowed to what the tenant's
+ * onboarded jurisdiction permits. Every parse of a tenant's rails goes through
+ * this, so a Saudi tenant cannot be configured onto a UAE bureau or the reverse.
+ */
+export function catalogueForTenant(tenant: TenantCode, allowed: AdapterCatalogue): Result<AdapterCatalogue> {
+  const jurisdiction = loadTenantJurisdiction(tenant);
+  if (!jurisdiction.ok) return jurisdiction;
+  return ok(restrictCatalogue(allowed, jurisdiction.value.railAdapters));
+}
+
+/** The rails the tenant consumes, checked against the adapter catalogue the caller supplies (the engine names no vendor) as its jurisdiction permits. */
 export function loadRailsConfiguration(tenant: TenantCode, allowed: AdapterCatalogue): Result<RailsConfiguration> {
-  return parseRailsConfiguration(RAILS[tenant], allowed);
+  const catalogue = catalogueForTenant(tenant, allowed);
+  if (!catalogue.ok) return catalogue;
+  return parseRailsConfiguration(RAILS[tenant], catalogue.value);
 }
 
 const STAFF_IDENTITY: Readonly<Record<TenantCode, unknown>> = {
   'bank-a': bankAIdentity,
   'fintech-b': fintechBIdentity,
+  'sme-fund-ae': fundAeIdentity,
 };
 
 export function loadStaffIdentity(tenant: TenantCode, profile: DeploymentProfile): Result<StaffIdentityConfiguration> {
@@ -100,6 +170,7 @@ export function loadOriginationPolicy(tenant: TenantCode): Result<OriginationPol
 const CHECKLISTS: Readonly<Record<TenantCode, readonly unknown[]>> = {
   'bank-a': [bankAChecklist],
   'fintech-b': [fintechBChecklist],
+  'sme-fund-ae': [],
 };
 
 /** The documents a programme requires of this tenant's counterparties. */
@@ -112,10 +183,22 @@ export function loadDocumentChecklist(tenant: TenantCode, programmeId: string): 
   return reject('OP-DETERMINACY', 'DOCUMENT_CHECKLIST_NOT_FOUND', 'No document checklist is configured for that programme', { tenant, programmeId });
 }
 
-/** The regulator's SME size definition. Platform-wide, not per tenant: it is the regulator's, with its circular. */
-export function loadSmeDefinition(): Result<SmeDefinition> {
-  return parseSmeDefinition(smeDefinition);
+const SME_DEFINITIONS: Readonly<Record<JurisdictionCode, unknown>> = { SA: saSmeDefinition, AE: aeSmeDefinition };
+
+/**
+ * The SME size definition of a jurisdiction — the regulator's or the law's,
+ * with its instrument. Per jurisdiction, never per tenant. Defaults to the
+ * Kingdom for callers written before ADR 0005; new callers pass the tenant's
+ * jurisdiction (`loadTenantJurisdiction`).
+ */
+export function loadSmeDefinition(jurisdiction: JurisdictionCode = 'SA'): Result<SmeDefinition> {
+  return parseSmeDefinition(SME_DEFINITIONS[jurisdiction]);
 }
+
+/** Tenants that offer the Murabaha supply-chain product (have structure definitions). Not every tenant does. */
+export const MURABAHA_TENANT_CODES: readonly TenantCode[] = TENANT_CODES.filter((t) => STRUCTURES[t].length > 0);
+/** Tenants with a Wasl-style programme document checklist. */
+export const CHECKLIST_TENANT_CODES: readonly TenantCode[] = TENANT_CODES.filter((t) => CHECKLISTS[t].length > 0);
 
 export function isTenantCode(value: string): value is TenantCode {
   return (TENANT_CODES as readonly string[]).includes(value);

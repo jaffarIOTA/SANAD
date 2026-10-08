@@ -87,6 +87,8 @@ export interface BusinessFacts {
   readonly annualRevenue?: Money;
   /** A count of people, not an amount. Used for size classification when there is no revenue history. */
   readonly fullTimeEmployees: number;
+  /** The enterprise's sector code where the jurisdiction's SME definition differs by sector (UAE: TRADING, MANUFACTURING, SERVICES). */
+  readonly sector?: string;
   /** Cash available to service debt over a year (the tenant's credit policy says how it is derived). */
   readonly annualOperatingCashFlow: Money;
   /** What the enterprise already pays a year on existing finance, from the bureau. */

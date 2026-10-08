@@ -10,7 +10,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { TENANT_CODES } from '../../config/loader.ts';
+// The counterparty-distinctness cases run on Murabaha structures (ADR 0005: not every tenant offers it).
+import { MURABAHA_TENANT_CODES as TENANT_CODES } from '../../config/loader.ts';
 import { expectOk } from '../../core/kernel/result.ts';
 import { money } from '../../core/kernel/money.ts';
 import { priceMurabaha } from '../../products/murabaha-scf/pricing/murabaha.ts';

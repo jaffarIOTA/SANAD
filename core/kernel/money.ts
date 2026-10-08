@@ -13,8 +13,14 @@
 
 import { type Result, ok, reject } from './result.ts';
 
-/** ISO 4217. SAR at launch; the union exists so a second currency is a config change. */
-export type CurrencyCode = 'SAR';
+/**
+ * ISO 4217. SAR for a Saudi institution, AED for a UAE one (ADR 0005). Both
+ * have two minor digits, so minor units mean the same thing in either. Which
+ * one an amount is in follows the institution's onboarded jurisdiction; mixing
+ * them in one operation is refused below, never converted.
+ */
+export type CurrencyCode = 'SAR' | 'AED';
+export const CURRENCY_CODES: readonly CurrencyCode[] = ['SAR', 'AED'];
 
 export interface Money {
   readonly minorUnits: bigint;

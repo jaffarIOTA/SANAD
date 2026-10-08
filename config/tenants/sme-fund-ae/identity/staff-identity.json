@@ -1,0 +1,17 @@
+{
+  "version": "2026-10-08",
+  "provider": {
+    "protocol": "DEVELOPMENT",
+    "issuer": "development:sme-fund-ae",
+    "groupsClaim": "groups"
+  },
+  "mappings": [
+    { "group": "sanad-makers", "authority": "MAKER" },
+    { "group": "sanad-checkers", "authority": "CHECKER" },
+    { "group": "sanad-senior-checkers", "authority": "SENIOR_CHECKER" },
+    { "group": "sanad-credit-committee", "authority": "CREDIT_COMMITTEE" },
+    { "group": "sanad-platform-admins", "authority": "PLATFORM_ADMIN" }
+  ],
+  "sessionLifetimeSeconds": 1800,
+  "stepUpForApprovalSeconds": 300
+}

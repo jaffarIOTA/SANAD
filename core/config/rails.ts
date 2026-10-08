@@ -37,6 +37,23 @@ export interface RailsConfiguration {
 /** Capability → adapter codes that may serve it. Supplied by the adapters layer. */
 export type AdapterCatalogue = Readonly<Partial<Record<RailCapability, readonly string[]>>>;
 
+/**
+ * The catalogue narrowed to what a jurisdiction permits (ADR 0005): the
+ * adapters layer says what exists, the jurisdiction profile says what may be
+ * used there. A capability the jurisdiction does not list is not available to
+ * its tenants at all.
+ */
+export function restrictCatalogue(allowed: AdapterCatalogue, permitted: Readonly<Record<string, readonly string[]>>): AdapterCatalogue {
+  const out: Partial<Record<RailCapability, readonly string[]>> = {};
+  for (const [capability, codes] of Object.entries(allowed) as [RailCapability, readonly string[]][]) {
+    const here = permitted[capability];
+    if (here === undefined) continue;
+    const both = codes.filter((c) => here.includes(c));
+    if (both.length > 0) out[capability] = both;
+  }
+  return out;
+}
+
 const ENTRY_KEYS = new Set(['capability', 'adapter', 'fallbackAdapter', 'environment', 'baseUrl', 'enabled', 'note']);
 const ENVIRONMENTS: readonly RailEnvironment[] = ['sandbox', 'uat', 'production'];
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);

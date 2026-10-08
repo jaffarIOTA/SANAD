@@ -14,7 +14,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { TENANT_CODES, loadAllForTenant, loadStructureDefinition } from '../../config/loader.ts';
+// Only tenants that offer Murabaha SCF have structures; the UAE fund does not (ADR 0005).
+import { MURABAHA_TENANT_CODES as TENANT_CODES, loadAllForTenant, loadStructureDefinition } from '../../config/loader.ts';
 import { expectOk } from '../../core/kernel/result.ts';
 import { evaluateGates } from '../../products/murabaha-scf/sequencing/gates.ts';
 import { parseStructureDefinition } from '../../products/murabaha-scf/structures/definition.ts';

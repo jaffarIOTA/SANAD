@@ -1,0 +1,9 @@
+{
+  "tenantCode": "bank-a",
+  "legalNameEn": "Bank A — illustrative tenant",
+  "legalNameAr": "البنك أ — مؤسسة توضيحية",
+  "jurisdiction": "SA",
+  "licenceType": "BANK",
+  "baseCurrency": "SAR",
+  "window": "BOTH"
+}

@@ -1,0 +1,23 @@
+{
+  "citation": "UAE Cabinet Resolution No. (22) of 2016 on the unified definition of small and medium enterprises (uaelegislation.gov.ae/en/legislations/1059), under Federal Law No. (2) of 2014 on SMEs. Thresholds by sector on full-time employees and annual revenue; the SMEs Council reviews them at least every three years. Where the two criteria give different classes this platform takes the higher class (rule HIGHER_OF_BOTH) — confirm that reading with the institution's counsel and the revision in force before go-live.",
+  "currency": "AED",
+  "rule": "HIGHER_OF_BOTH",
+  "effectiveFromEpochSeconds": "1451606400",
+  "sectors": {
+    "TRADING": [
+      { "sizeClass": "MICRO", "revenueUpToMinorUnits": "300000000", "employeesUpTo": 5 },
+      { "sizeClass": "SMALL", "revenueUpToMinorUnits": "5000000000", "employeesUpTo": 50 },
+      { "sizeClass": "MEDIUM", "revenueUpToMinorUnits": "25000000000", "employeesUpTo": 200 }
+    ],
+    "MANUFACTURING": [
+      { "sizeClass": "MICRO", "revenueUpToMinorUnits": "300000000", "employeesUpTo": 9 },
+      { "sizeClass": "SMALL", "revenueUpToMinorUnits": "5000000000", "employeesUpTo": 100 },
+      { "sizeClass": "MEDIUM", "revenueUpToMinorUnits": "25000000000", "employeesUpTo": 250 }
+    ],
+    "SERVICES": [
+      { "sizeClass": "MICRO", "revenueUpToMinorUnits": "200000000", "employeesUpTo": 5 },
+      { "sizeClass": "SMALL", "revenueUpToMinorUnits": "2000000000", "employeesUpTo": 50 },
+      { "sizeClass": "MEDIUM", "revenueUpToMinorUnits": "20000000000", "employeesUpTo": 200 }
+    ]
+  }
+}

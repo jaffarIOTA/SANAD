@@ -1,0 +1,9 @@
+{
+  "tenantCode": "sme-fund-ae",
+  "legalNameEn": "SME Development Fund (UAE) — illustrative tenant",
+  "legalNameAr": "صندوق تنمية المنشآت (الإمارات) — مؤسسة توضيحية",
+  "jurisdiction": "AE",
+  "licenceType": "DEVELOPMENT_FUND",
+  "baseCurrency": "AED",
+  "window": "BOTH"
+}

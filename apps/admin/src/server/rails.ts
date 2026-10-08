@@ -5,7 +5,7 @@
  */
 
 import { ADAPTER_CATALOGUE, CAPABILITY_LABELS } from '@sanad/adapters/catalogue.ts';
-import { type RailCapability, type RailEntry, type RailsConfiguration, parseRailsConfiguration } from '@sanad/core/config/rails.ts';
+import { type AdapterCatalogue, type RailCapability, type RailEntry, type RailsConfiguration, parseRailsConfiguration } from '@sanad/core/config/rails.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import { resolveRailsConfiguration } from '@sanad/origination/rails.ts';
 
@@ -26,8 +26,9 @@ export function railsToJson(c: RailsConfiguration): unknown {
 }
 
 /** The whole configuration with one rail replaced, parsed as production parses it. */
-export function railsWithChange(current: RailsConfiguration, change: RailChange): Result<{ readonly payload: unknown; readonly parsed: RailsConfiguration }> {
-  if (!(change.capability in ADAPTER_CATALOGUE)) return reject('OP-DETERMINACY', 'RAIL_CAPABILITY_UNKNOWN', 'The capability is not one the engine consumes', { capability: change.capability });
+/** The whole configuration with one rail replaced, parsed against the tenant's jurisdiction-narrowed catalogue. */
+export function railsWithChange(current: RailsConfiguration, change: RailChange, catalogue: AdapterCatalogue = ADAPTER_CATALOGUE): Result<{ readonly payload: unknown; readonly parsed: RailsConfiguration }> {
+  if (!(change.capability in catalogue)) return reject('OP-DETERMINACY', 'RAIL_CAPABILITY_UNKNOWN', 'The capability is not one the engine consumes in this jurisdiction', { capability: change.capability });
   const cap = change.capability as RailCapability;
   const next: RailEntry = {
     capability: cap, adapter: change.adapter, environment: change.environment as RailEntry['environment'], enabled: change.enabled,
@@ -38,7 +39,7 @@ export function railsWithChange(current: RailsConfiguration, change: RailChange)
   const exists = current.rails.some((r) => r.capability === cap);
   const rails = exists ? current.rails.map((r) => (r.capability === cap ? next : r)) : [...current.rails, next];
   const payload = railsToJson({ version: current.version, rails });
-  const parsed = parseRailsConfiguration(payload, ADAPTER_CATALOGUE);
+  const parsed = parseRailsConfiguration(payload, catalogue);
   if (!parsed.ok) return parsed;
   return ok({ payload, parsed: parsed.value });
 }

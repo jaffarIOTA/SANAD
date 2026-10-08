@@ -1,0 +1,36 @@
+{
+  "code": "SA",
+  "nameEn": "Kingdom of Saudi Arabia",
+  "nameAr": "المملكة العربية السعودية",
+  "currency": "SAR",
+  "timeZone": "Asia/Riyadh",
+  "contractualCalendars": ["GREGORIAN", "HIJRI"],
+  "regulator": { "code": "SAMA", "nameEn": "Saudi Central Bank", "nameAr": "البنك المركزي السعودي" },
+  "railAdapters": {
+    "CORE_BANKING": ["TUUM"],
+    "DOCUMENT_PLATFORM": ["NUTRIENT"],
+    "E_INVOICING": ["ZATCA"],
+    "TAX_COMPLIANCE": ["ZATCA"],
+    "IDENTITY": ["NAFATH"],
+    "IDENTITY_AUTHENTICATION": ["NAFATH"],
+    "IDENTITY_VERIFICATION": ["YAKEEN"],
+    "DOCUMENT_VERIFICATION": ["TAHAQOQ"],
+    "BUSINESS_REGISTRY": ["WATHQ"],
+    "CREDIT_BUREAU": ["SIMAH", "BAYAN"],
+    "EMPLOYMENT_VERIFICATION": ["GOSI"],
+    "OPEN_BANKING": ["OPEN_BANKING"],
+    "BILL_COLLECTION": ["SADAD"],
+    "PAYMENTS_HUB": ["PAYMENTS_HUB"],
+    "RATE_PUBLISHER": ["RATE_PUBLISHER"],
+    "COMMODITY_BROKER": ["COMMODITY_BROKER"],
+    "SCREENING": ["SCREENING"],
+    "CERTIFICATION_SERVICE_PROVIDER": ["CSP"],
+    "TIMESTAMP_AUTHORITY": ["TSA"],
+    "WORKFLOW_ENGINE": ["WORKFLOW_ENGINE"]
+  },
+  "regulatoryDirectory": "sa",
+  "citations": [
+    "Contractual dates in both calendars: CLAUDE.md §9, platform rule for the Kingdom.",
+    "Residency of customer data in the Kingdom: SAMA Cloud Computing Regulatory Framework; PDPL; NDMO (CLAUDE.md §7)."
+  ]
+}

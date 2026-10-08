@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { ADAPTER_CATALOGUE } from '../../adapters/catalogue.ts';
 import { parseRailsConfiguration, railFor } from '@sanad/core/config/rails.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
-import { loadRailsConfiguration } from '@sanad/config/loader.ts';
+import { catalogueForTenant, loadRailsConfiguration } from '@sanad/config/loader.ts';
 
 const base = { version: 't', rails: [{ capability: 'CREDIT_BUREAU', adapter: 'SIMAH', fallbackAdapter: 'BAYAN', environment: 'sandbox', enabled: true }] };
 const parse = (raw: unknown) => parseRailsConfiguration(raw, ADAPTER_CATALOGUE);
@@ -24,7 +24,19 @@ describe('the rail configuration', () => {
   });
   it('refuses an adapter that does not serve the capability, with the allowed codes named', () => {
     const r = parse({ ...base, rails: [{ ...base.rails[0], adapter: 'NAFATH' }] });
-    expect(r.ok).toBe(false); if (!r.ok) { expect(r.error.reason).toBe('RAIL_ADAPTER_UNKNOWN'); expect(String(r.error.context?.['allowed'])).toBe('SIMAH,BAYAN'); }
+    expect(r.ok).toBe(false); if (!r.ok) { expect(r.error.reason).toBe('RAIL_ADAPTER_UNKNOWN'); expect(String(r.error.context?.['allowed'])).toBe('SIMAH,BAYAN,AECB'); }
+  });
+  it('a tenant may use only the adapters its onboarded jurisdiction permits (ADR 0005)', () => {
+    const sa = expectOk(catalogueForTenant('bank-a', ADAPTER_CATALOGUE));
+    const ae = expectOk(catalogueForTenant('sme-fund-ae', ADAPTER_CATALOGUE));
+    expect(sa.CREDIT_BUREAU).toEqual(['SIMAH', 'BAYAN']);
+    expect(ae.CREDIT_BUREAU).toEqual(['AECB']);
+    expect(ae.E_INVOICING).toBeUndefined();
+    const saOnAecb = parseRailsConfiguration({ ...base, rails: [{ ...base.rails[0], adapter: 'AECB', fallbackAdapter: undefined }] }, sa);
+    expect(saOnAecb.ok).toBe(false); if (!saOnAecb.ok) expect(saOnAecb.error.reason).toBe('RAIL_ADAPTER_UNKNOWN');
+    const aeOnSimah = parseRailsConfiguration(base, ae);
+    expect(aeOnSimah.ok).toBe(false);
+    expect(expectOk(loadRailsConfiguration('sme-fund-ae', ADAPTER_CATALOGUE)).rails.find((r) => r.capability === 'CREDIT_BUREAU')?.adapter).toBe('AECB');
   });
   it('refuses a fallback that is the primary, or that does not serve the capability', () => {
     expect(reason({ ...base, rails: [{ ...base.rails[0], fallbackAdapter: 'SIMAH' }] })).toBe('RAIL_FALLBACK_SAME');

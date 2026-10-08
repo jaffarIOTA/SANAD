@@ -10,21 +10,27 @@
 
 import type { AdapterCatalogue } from '../core/config/rails.ts';
 
+/**
+ * Every adapter the platform ships, across both jurisdictions (ADR 0005). A
+ * tenant may use only those its jurisdiction profile allows
+ * (`config/jurisdictions/<code>.json`, `railAdapters`); the catalogue is the
+ * union, the profile is the filter.
+ */
 export const ADAPTER_CATALOGUE: AdapterCatalogue = {
   CORE_BANKING: ['TUUM'],
   DOCUMENT_PLATFORM: ['NUTRIENT'],
   E_INVOICING: ['ZATCA'],
-  TAX_COMPLIANCE: ['ZATCA'],
-  IDENTITY: ['NAFATH'],
-  IDENTITY_AUTHENTICATION: ['NAFATH'],
-  IDENTITY_VERIFICATION: ['YAKEEN'],
+  TAX_COMPLIANCE: ['ZATCA', 'FTA'],
+  IDENTITY: ['NAFATH', 'UAE_PASS'],
+  IDENTITY_AUTHENTICATION: ['NAFATH', 'UAE_PASS'],
+  IDENTITY_VERIFICATION: ['YAKEEN', 'ICP'],
   DOCUMENT_VERIFICATION: ['TAHAQOQ'],
-  BUSINESS_REGISTRY: ['WATHQ'],
-  CREDIT_BUREAU: ['SIMAH', 'BAYAN'],
-  EMPLOYMENT_VERIFICATION: ['GOSI'],
+  BUSINESS_REGISTRY: ['WATHQ', 'NER'],
+  CREDIT_BUREAU: ['SIMAH', 'BAYAN', 'AECB'],
+  EMPLOYMENT_VERIFICATION: ['GOSI', 'MOHRE'],
   OPEN_BANKING: ['OPEN_BANKING'],
   BILL_COLLECTION: ['SADAD'],
-  PAYMENTS_HUB: ['PAYMENTS_HUB'],
+  PAYMENTS_HUB: ['PAYMENTS_HUB', 'PARTNER_BANK'],
   RATE_PUBLISHER: ['RATE_PUBLISHER'],
   COMMODITY_BROKER: ['COMMODITY_BROKER'],
   SCREENING: ['SCREENING'],

@@ -1,9 +1,13 @@
 {
   "citation": "SAMA Rulebook, Definition of SMEs — SAMA Circular No. 381000064902, effective 14 March 2017 (rulebook.sama.gov.sa/en/node/5475). Revenue decides the class; full-time employees decide only where there is no revenue history. Confirm the revision in force before go-live.",
+  "currency": "SAR",
+  "rule": "REVENUE_THEN_EMPLOYEES",
   "effectiveFromEpochSeconds": "1489449600",
-  "bands": [
-    { "sizeClass": "MICRO", "revenueUpToMinorUnits": "300000000", "employeesUpTo": 5 },
-    { "sizeClass": "SMALL", "revenueUpToMinorUnits": "4000000000", "employeesUpTo": 49 },
-    { "sizeClass": "MEDIUM", "revenueUpToMinorUnits": "20000000000", "employeesUpTo": 249 }
-  ]
+  "sectors": {
+    "ALL": [
+      { "sizeClass": "MICRO", "revenueUpToMinorUnits": "300000000", "employeesUpTo": 5 },
+      { "sizeClass": "SMALL", "revenueUpToMinorUnits": "4000000000", "employeesUpTo": 49 },
+      { "sizeClass": "MEDIUM", "revenueUpToMinorUnits": "20000000000", "employeesUpTo": 249 }
+    ]
+  }
 }

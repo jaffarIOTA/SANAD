@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadDocumentChecklist, TENANT_CODES } from '@sanad/config/loader.ts';
+import { loadDocumentChecklist, CHECKLIST_TENANT_CODES as TENANT_CODES } from '@sanad/config/loader.ts';
 import { blockingItems, checklistReport, isChecklistComplete, parseDocumentChecklist } from '../../core/documents/checklist.ts';
 import { expectOk } from '../../core/kernel/result.ts';
 import { tsaInstant } from '../../core/time/tsa.ts';

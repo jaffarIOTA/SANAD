@@ -1,0 +1,43 @@
+{
+  "tenantId": "sme-fund-ae",
+  "version": "1.0.0",
+  "expirySeconds": {
+    "AWAITING_SERVICING_RESPONSE": 172800,
+    "AWAITING_REVIEW": 1209600,
+    "RETURNED_TO_MAKER": 604800,
+    "PENDING_INFORMATION": 1209600
+  },
+  "slaSeconds": {
+    "AWAITING_SERVICING_RESPONSE": 14400,
+    "AWAITING_REVIEW": 432000,
+    "RETURNED_TO_MAKER": 172800,
+    "AWAITING_CREDIT_REVIEW": 864000,
+    "PENDING_INFORMATION": 259200,
+    "SERVICING_UNAVAILABLE": 3600
+  },
+  "approvalTiers": [
+    { "upToMinorUnits": "50000000", "authority": "CHECKER" },
+    { "upToMinorUnits": "100000000", "authority": "SENIOR_CHECKER" },
+    { "authority": "CREDIT_COMMITTEE" }
+  ],
+  "agents": [],
+  "partners": [
+    {
+      "partnerId": "cif-upstream",
+      "status": "ACTIVE",
+      "channel": "PARTNER_API",
+      "programmes": "ALL",
+      "maxRequestMinorUnits": "500000000"
+    }
+  ],
+  "servicingRetry": {
+    "maxAttempts": 3,
+    "backoffSeconds": 300
+  },
+  "revalidateOn": [
+    "requestedAmount",
+    "counterpartyId",
+    "programmeId",
+    "requestedTenorDays"
+  ]
+}

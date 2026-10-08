@@ -9,6 +9,15 @@ Saudi integration rails.
 **Wasl** (وصل), the Shariah-compliant SME supply-chain-finance product, is the first product
 module. It is no longer the platform.
 
+> **Two jurisdictions, 8 October 2026 (ADR 0005).** Sanad now serves the **Kingdom of Saudi
+> Arabia (SAR, SAMA)** and the **United Arab Emirates (AED)**. Administrators choose which one
+> the whole deployment behaves as (Admin → Jurisdiction, four eyes, locked in production once
+> there is business); each tenant keeps the jurisdiction it was onboarded under. Rules,
+> currency, calendars and permitted rails come from `config/jurisdictions/{ksa,uae}.json` and
+> `config/regulatory/<code>/`. Where this file says "Saudi" or "SAMA", read it as the Saudi
+> jurisdiction's rule; the UAE has its own, held as cited configuration. Every invariant in
+> §2 and §12 applies in both. Do not reintroduce a single-jurisdiction assumption.
+
 > **Re-chartered 25 September 2026.** The previous charter (archived at
 > `docs/archive/CLAUDE-v1-wasl-charter-2026-09-21.md`, decision in `docs/adr/0002`) scoped
 > Sanad as a Murabaha-only platform with no amounts, no rates and no Tawarruq anywhere.

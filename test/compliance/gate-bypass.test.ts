@@ -12,7 +12,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { TENANT_CODES, type TenantCode } from '../../config/loader.ts';
+// Sequencing gates belong to Murabaha SCF; only tenants that offer it are attacked here (ADR 0005).
+import { MURABAHA_TENANT_CODES as TENANT_CODES, type TenantCode } from '../../config/loader.ts';
 import { expectOk } from '../../core/kernel/result.ts';
 import { evaluateGates } from '../../products/murabaha-scf/sequencing/gates.ts';
 import {

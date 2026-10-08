@@ -1,0 +1,9 @@
+{
+  "tenantCode": "fintech-b",
+  "legalNameEn": "Fintech B — illustrative tenant",
+  "legalNameAr": "شركة التقنية المالية ب — مؤسسة توضيحية",
+  "jurisdiction": "SA",
+  "licenceType": "FINANCE_COMPANY",
+  "baseCurrency": "SAR",
+  "window": "BOTH"
+}

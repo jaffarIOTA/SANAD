@@ -1,0 +1,17 @@
+{
+  "version": "2026-10-08",
+  "rails": [
+    { "capability": "IDENTITY_AUTHENTICATION", "adapter": "UAE_PASS", "environment": "sandbox", "enabled": false, "note": "UAE Pass sign-in and signing intent; adapter on fixtures until the institution's UAE Pass onboarding" },
+    { "capability": "IDENTITY_VERIFICATION", "adapter": "ICP", "environment": "sandbox", "enabled": false, "note": "Emirates ID verification; adapter on fixtures" },
+    { "capability": "CREDIT_BUREAU", "adapter": "AECB", "environment": "sandbox", "enabled": false, "note": "Al Etihad Credit Bureau; consent-gated; adapter on fixtures" },
+    { "capability": "BUSINESS_REGISTRY", "adapter": "NER", "environment": "sandbox", "enabled": false, "note": "Trade licence and owners from the economic register; adapter on fixtures" },
+    { "capability": "EMPLOYMENT_VERIFICATION", "adapter": "MOHRE", "environment": "sandbox", "enabled": false, "note": "WPS salary report; adapter on fixtures" },
+    { "capability": "TAX_COMPLIANCE", "adapter": "FTA", "environment": "sandbox", "enabled": false, "note": "Tax registration and certificate status; adapter on fixtures" },
+    { "capability": "PAYMENTS_HUB", "adapter": "PARTNER_BANK", "environment": "sandbox", "enabled": false, "note": "Disbursement through the partner bank the fund contracts" },
+    { "capability": "RATE_PUBLISHER", "adapter": "RATE_PUBLISHER", "environment": "sandbox", "enabled": false },
+    { "capability": "DOCUMENT_PLATFORM", "adapter": "NUTRIENT", "environment": "sandbox", "enabled": false, "note": "Offer letter generation and signing once licensed (R-02)" },
+    { "capability": "CORE_BANKING", "adapter": "TUUM", "environment": "sandbox", "enabled": false, "note": "Tuum CIF hands applications over at stage 5; Tuum LMS books and schedules (R-01)" },
+    { "capability": "WORKFLOW_ENGINE", "adapter": "WORKFLOW_ENGINE", "environment": "sandbox", "enabled": false },
+    { "capability": "TIMESTAMP_AUTHORITY", "adapter": "TSA", "environment": "sandbox", "enabled": false, "note": "Development substitute only" }
+  ]
+}

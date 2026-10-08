@@ -1,22 +1,31 @@
 /**
  * Enterprise size classification, from a cited regulatory definition held as
- * configuration (`config/regulatory/sme-definition.json`).
+ * configuration (`config/regulatory/<jurisdiction>/sme-definition.json`).
  *
- * The definition in force for SAMA-regulated finance is SAMA's own adoption
- * of the national SME definition: the class is decided by annual revenue, and
- * by the count of full-time employees only where there is no revenue history
- * (a new enterprise). The figures are not in this file. They live in the
- * configuration with the circular they come from, so a change of definition
- * is a configuration change with a citation, never a code edit.
+ * Two jurisdictions, two shapes (ADR 0005):
+ *
+ *   - Saudi Arabia (SAMA's adoption of the national definition): one set of
+ *     bands; revenue decides, and full-time employees decide only where there
+ *     is no revenue history — rule `REVENUE_THEN_EMPLOYEES`.
+ *   - UAE (the unified federal definition): bands per sector — trading,
+ *     manufacturing, services — on employees and revenue. Where the two
+ *     criteria point to different classes the higher class is taken — rule
+ *     `HIGHER_OF_BOTH` — so an enterprise is never under-classified; the
+ *     interpretation is recorded in the definition file for confirmation.
+ *
+ * The figures are not in this file. They live in the configuration with the
+ * instrument they come from, in the jurisdiction's currency.
  *
  * Pure. Money is minor-unit bigint; employees are a count.
  */
 
-import { type Money } from '../kernel/money.ts';
+import { type CurrencyCode, type Money, CURRENCY_CODES } from '../kernel/money.ts';
 import { type Result, ok, reject } from '../kernel/result.ts';
 
 export type SmeSizeClass = 'MICRO' | 'SMALL' | 'MEDIUM' | 'LARGE';
 export const SME_SIZE_CLASSES: readonly SmeSizeClass[] = ['MICRO', 'SMALL', 'MEDIUM', 'LARGE'];
+
+export type ClassificationRule = 'REVENUE_THEN_EMPLOYEES' | 'HIGHER_OF_BOTH';
 
 export interface SizeBand {
   readonly sizeClass: Exclude<SmeSizeClass, 'LARGE'>;
@@ -27,9 +36,11 @@ export interface SizeBand {
 }
 
 export interface SmeDefinition {
-  /** Ascending: micro, small, medium. Anything above the last band is large. */
-  readonly bands: readonly SizeBand[];
-  /** The regulation and article the bands come from. Required. */
+  readonly currency: CurrencyCode;
+  readonly rule: ClassificationRule;
+  /** Bands per sector, ascending micro → small → medium. `ALL` where the definition has no sectors. */
+  readonly sectors: Readonly<Record<string, readonly SizeBand[]>>;
+  /** The instrument and article the bands come from. Required. */
   readonly citation: string;
   readonly effectiveFromEpochSeconds: bigint;
 }
@@ -38,20 +49,20 @@ export interface SizeClassification {
   readonly sizeClass: SmeSizeClass;
   /** Which criterion decided it, recorded on the decision. */
   readonly basis: 'REVENUE' | 'EMPLOYEES';
+  readonly sector: string;
   readonly citation: string;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isIntString = (v: unknown): v is string => typeof v === 'string' && /^\d+$/.test(v);
 const ORDER: readonly SizeBand['sizeClass'][] = ['MICRO', 'SMALL', 'MEDIUM'];
+const RANK: Readonly<Record<SmeSizeClass, number>> = { MICRO: 0, SMALL: 1, MEDIUM: 2, LARGE: 3 };
 
-export function parseSmeDefinition(raw: unknown): Result<SmeDefinition> {
+function parseBands(raw: unknown): Result<readonly SizeBand[]> {
   const bad = (reason: string, detail: string): Result<never> => reject('OP-DETERMINACY', reason, detail);
-  if (!isRecord(raw) || !Array.isArray(raw['bands'])) return bad('SME_DEFINITION_MALFORMED', 'An SME definition has bands, a citation and an effective date');
-  if (typeof raw['citation'] !== 'string' || raw['citation'].trim().length < 10) return bad('SME_DEFINITION_CITATION_REQUIRED', 'A regulatory definition carries the circular it comes from');
-  if (!isIntString(raw['effectiveFromEpochSeconds'])) return bad('SME_DEFINITION_EFFECTIVE_FROM', 'effectiveFromEpochSeconds is an integer string');
+  if (!Array.isArray(raw)) return bad('SME_DEFINITION_BANDS', 'Each sector lists its bands');
   const bands: SizeBand[] = [];
-  for (const [i, b] of (raw['bands'] as unknown[]).entries()) {
+  for (const [i, b] of raw.entries()) {
     if (!isRecord(b) || b['sizeClass'] !== ORDER[i]) return bad('SME_DEFINITION_BAND_ORDER', 'Bands are MICRO, SMALL, MEDIUM in that order');
     if (!isIntString(b['revenueUpToMinorUnits'])) return bad('SME_DEFINITION_REVENUE', 'revenueUpToMinorUnits is an integer string');
     const employees = b['employeesUpTo'];
@@ -61,24 +72,58 @@ export function parseSmeDefinition(raw: unknown): Result<SmeDefinition> {
     if (previous !== undefined && (band.revenueUpToMinorUnits <= previous.revenueUpToMinorUnits || band.employeesUpTo <= previous.employeesUpTo)) return bad('SME_DEFINITION_NOT_ASCENDING', 'Each band is strictly above the one before it');
     bands.push(band);
   }
-  if (bands.length !== ORDER.length) return bad('SME_DEFINITION_BANDS', 'Exactly three bands: micro, small, medium');
-  return ok({ bands, citation: raw['citation'], effectiveFromEpochSeconds: BigInt(raw['effectiveFromEpochSeconds']) });
+  if (bands.length !== ORDER.length) return bad('SME_DEFINITION_BANDS', 'Exactly three bands per sector: micro, small, medium');
+  return ok(bands);
 }
 
+export function parseSmeDefinition(raw: unknown): Result<SmeDefinition> {
+  const bad = (reason: string, detail: string): Result<never> => reject('OP-DETERMINACY', reason, detail);
+  if (!isRecord(raw) || !isRecord(raw['sectors'])) return bad('SME_DEFINITION_MALFORMED', 'An SME definition has a currency, a rule, sectors of bands, a citation and an effective date');
+  if (typeof raw['citation'] !== 'string' || raw['citation'].trim().length < 10) return bad('SME_DEFINITION_CITATION_REQUIRED', 'A regulatory definition carries the instrument it comes from');
+  if (!CURRENCY_CODES.includes(raw['currency'] as CurrencyCode)) return bad('SME_DEFINITION_CURRENCY', 'currency is the jurisdiction’s ISO 4217 code');
+  if (raw['rule'] !== 'REVENUE_THEN_EMPLOYEES' && raw['rule'] !== 'HIGHER_OF_BOTH') return bad('SME_DEFINITION_RULE', 'rule is REVENUE_THEN_EMPLOYEES or HIGHER_OF_BOTH');
+  if (!isIntString(raw['effectiveFromEpochSeconds'])) return bad('SME_DEFINITION_EFFECTIVE_FROM', 'effectiveFromEpochSeconds is an integer string');
+  const sectors: Record<string, readonly SizeBand[]> = {};
+  for (const [name, bands] of Object.entries(raw['sectors'])) {
+    if (!/^[A-Z_]{3,20}$/.test(name)) return bad('SME_DEFINITION_SECTOR', 'Sector names are upper-case codes');
+    const parsed = parseBands(bands);
+    if (!parsed.ok) return parsed;
+    sectors[name] = parsed.value;
+  }
+  if (Object.keys(sectors).length === 0) return bad('SME_DEFINITION_SECTORS', 'At least one sector');
+  return ok({ currency: raw['currency'] as CurrencyCode, rule: raw['rule'], sectors, citation: raw['citation'], effectiveFromEpochSeconds: BigInt(raw['effectiveFromEpochSeconds']) });
+}
+
+const byRevenue = (bands: readonly SizeBand[], revenue: bigint): SmeSizeClass => bands.find((b) => revenue <= b.revenueUpToMinorUnits)?.sizeClass ?? 'LARGE';
+const byEmployees = (bands: readonly SizeBand[], employees: number): SmeSizeClass => bands.find((b) => employees <= b.employeesUpTo)?.sizeClass ?? 'LARGE';
+
 /**
- * Revenue decides; employees decide only when there is no revenue history.
- * A business with neither a revenue figure nor at least one employee cannot be
- * classified and is refused rather than guessed.
+ * Classify under the definition's own rule. A definition with sectors needs
+ * the enterprise's sector; one with a single `ALL` sector ignores it. An
+ * enterprise that cannot be classified is refused rather than guessed.
  */
-export function classifySme(def: SmeDefinition, facts: { readonly annualRevenue?: Money; readonly fullTimeEmployees: number }): Result<SizeClassification> {
+export function classifySme(def: SmeDefinition, facts: { readonly annualRevenue?: Money; readonly fullTimeEmployees: number; readonly sector?: string }): Result<SizeClassification> {
+  const sector = def.sectors['ALL'] !== undefined ? 'ALL' : facts.sector;
+  const bands = sector === undefined ? undefined : def.sectors[sector];
+  if (sector === undefined || bands === undefined) return reject('OP-DETERMINACY', 'SECTOR_REQUIRED', 'This jurisdiction’s SME definition differs by sector, and the enterprise’s sector is not one it lists', { sectors: Object.keys(def.sectors).join(',') });
   if (facts.annualRevenue !== undefined) {
+    if (facts.annualRevenue.currency !== def.currency) return reject('OP-DETERMINACY', 'REVENUE_CURRENCY_MISMATCH', 'Revenue is classified in the definition’s own currency', { expected: def.currency, given: facts.annualRevenue.currency });
     if (facts.annualRevenue.minorUnits < 0n) return reject('OP-DETERMINACY', 'REVENUE_NEGATIVE', 'Annual revenue cannot be negative');
-    const band = def.bands.find((b) => facts.annualRevenue !== undefined && facts.annualRevenue.minorUnits <= b.revenueUpToMinorUnits);
-    return ok({ sizeClass: band?.sizeClass ?? 'LARGE', basis: 'REVENUE', citation: def.citation });
   }
-  if (!Number.isInteger(facts.fullTimeEmployees) || facts.fullTimeEmployees < 1) {
-    return reject('OP-DETERMINACY', 'SIZE_UNCLASSIFIABLE', 'With no revenue history the enterprise is classified by its full-time employees, and none were given');
+  const hasStaff = Number.isInteger(facts.fullTimeEmployees) && facts.fullTimeEmployees >= 1;
+  const revenueClass = facts.annualRevenue === undefined ? undefined : byRevenue(bands, facts.annualRevenue.minorUnits);
+  const staffClass = hasStaff ? byEmployees(bands, facts.fullTimeEmployees) : undefined;
+  const base = { sector, citation: def.citation };
+
+  if (def.rule === 'REVENUE_THEN_EMPLOYEES') {
+    if (revenueClass !== undefined) return ok({ ...base, sizeClass: revenueClass, basis: 'REVENUE' });
+    if (staffClass !== undefined) return ok({ ...base, sizeClass: staffClass, basis: 'EMPLOYEES' });
+  } else {
+    if (revenueClass !== undefined && staffClass !== undefined) {
+      return ok(RANK[revenueClass] >= RANK[staffClass] ? { ...base, sizeClass: revenueClass, basis: 'REVENUE' } : { ...base, sizeClass: staffClass, basis: 'EMPLOYEES' });
+    }
+    if (revenueClass !== undefined) return ok({ ...base, sizeClass: revenueClass, basis: 'REVENUE' });
+    if (staffClass !== undefined) return ok({ ...base, sizeClass: staffClass, basis: 'EMPLOYEES' });
   }
-  const band = def.bands.find((b) => facts.fullTimeEmployees <= b.employeesUpTo);
-  return ok({ sizeClass: band?.sizeClass ?? 'LARGE', basis: 'EMPLOYEES', citation: def.citation });
+  return reject('OP-DETERMINACY', 'SIZE_UNCLASSIFIABLE', 'Neither a revenue history nor a count of full-time employees was given');
 }
