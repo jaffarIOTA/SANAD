@@ -37,6 +37,7 @@ const COLLECTION_METHODS = new Set(['SADAD', 'CARD', 'OPEN_BANKING_PIS', 'DIRECT
 
 
 
+
 const KEYS = new Set(['instalments', 'intervalDays', 'consumerLimitMinorUnits', 'merchantDiscountPerTenThousand', 'citation', 'samaLimitVariationRef', 'collectionMethods']);
 const isRecord = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isPosInt = (v) => typeof v === 'number' && Number.isInteger(v) && v > 0;
@@ -69,7 +70,7 @@ export function parseBnplTerms(raw) {
     return bad('TERMS_COLLECTION_NOT_ELECTRONIC', 'Collection is through electronic channels only; a cash request is prohibited', { rejected: notElectronic.map(String).join(','), citation: `${BNPL_RULES}, Art. 22(3)` });
   }
   return ok({
-    instalments: raw['instalments'], intervalDays: raw['intervalDays'], consumerLimit: money(limit), merchantDiscountPerTenThousand: mdr, citation: raw['citation'],
+    numberOfInstalments: raw['instalments'], intervalDays: raw['intervalDays'], consumerLimit: money(limit), merchantDiscountPerTenThousand: mdr, citation: raw['citation'],
     ...(typeof variation === 'string' ? { samaLimitVariationRef: variation.trim() } : {}),
     collectionMethods: methodsRaw ,
   });

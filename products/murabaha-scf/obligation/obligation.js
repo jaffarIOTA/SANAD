@@ -45,6 +45,7 @@ import { ok, reject } from '../../../core/kernel/result.js';
 
 
 
+
 export function createObligation(params
 
 
@@ -164,7 +165,7 @@ function validateSchedule(
   for (const i of instalments) {
     if (isNegative(i.amount)) {
       return reject('SH-03', 'INSTALMENT_NEGATIVE', 'An instalment cannot be negative', {
-        instalmentNo: i.instalmentNo,
+        sequenceNumber: i.sequenceNumber,
       });
     }
     if (i.dueDateGregorian.length === 0 || i.dueDateHijri.length === 0) {
@@ -172,7 +173,7 @@ function validateSchedule(
         'SH-03',
         'INSTALMENT_DATE_INDETERMINATE',
         'Each instalment carries a due date in both calendars',
-        { instalmentNo: i.instalmentNo },
+        { sequenceNumber: i.sequenceNumber },
       );
     }
   }

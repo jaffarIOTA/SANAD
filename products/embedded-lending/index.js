@@ -44,6 +44,7 @@ import { isStrictlyLater } from '../../core/time/tsa.js';
 
 
 
+
 const KEYS = new Set(['collection', 'holdbackPerTenThousand', 'maxAmountMinorUnits', 'maxTenorDays', 'instalmentIntervalDays']);
 const isRecord = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isPosInt = (v) => typeof v === 'number' && Number.isInteger(v) && v > 0;
@@ -59,7 +60,7 @@ export function parseEmbeddedTerms(raw) {
   if (collection === 'REVENUE_LINKED' && holdback === 0) return reject('OP-DETERMINACY', 'TERMS_HOLDBACK_REQUIRED', 'Revenue-linked collection needs a holdback share');
   if (typeof raw['maxAmountMinorUnits'] !== 'string' || !/^\d+$/.test(raw['maxAmountMinorUnits'])) return reject('OP-DETERMINACY', 'TERMS_MAX_AMOUNT', 'maxAmountMinorUnits is an integer string');
   if (!isPosInt(raw['maxTenorDays']) || !isPosInt(raw['instalmentIntervalDays'])) return reject('OP-DETERMINACY', 'TERMS_TENOR', 'maxTenorDays and instalmentIntervalDays are positive integers');
-  return ok({ collection, holdbackPerTenThousand: holdback, maxAmount: money(BigInt(raw['maxAmountMinorUnits'])), maxTenorDays: raw['maxTenorDays'], instalmentIntervalDays: raw['instalmentIntervalDays'] });
+  return ok({ collection, holdbackPerTenThousand: holdback, maxAmount: money(BigInt(raw['maxAmountMinorUnits'])), maxTenorDays: raw['maxTenorDays'], daysBetweenInstalments: raw['instalmentIntervalDays'] });
 }
 
 export function quoteEmbedded(terms, request) {
@@ -72,11 +73,11 @@ export function quoteEmbedded(terms, request) {
   if (preferred !== undefined && preferred !== 'FIXED_INSTALMENTS' && preferred !== 'REVENUE_LINKED') return reject('OP-DETERMINACY', 'COLLECTION_MODE_UNKNOWN', 'collection is FIXED_INSTALMENTS or REVENUE_LINKED');
   const collection = _nullishCoalesce(preferred, () => ( 'FIXED_INSTALMENTS'));
   if (collection === 'REVENUE_LINKED' && terms.collection !== 'REVENUE_LINKED') return reject('SH-18', 'COLLECTION_MODE_NOT_PERMITTED', 'This tenant does not permit revenue-linked collection (E-3)');
-  const count = Math.max(1, Math.floor(request.requestedTenorDays / terms.instalmentIntervalDays));
-  const schedule = flatInstalments(request.requestedAmount, request.pricing.profitAmount, count, terms.instalmentIntervalDays);
+  const count = Math.max(1, Math.floor(request.requestedTenorDays / terms.daysBetweenInstalments));
+  const schedule = flatInstalments(request.requestedAmount, request.pricing.profitAmount, count, terms.daysBetweenInstalments);
   if (!schedule.ok) return schedule;
   return ok({
-    productCode: 'embedded-lending', financingAmount: request.requestedAmount, tenorDays: count * terms.instalmentIntervalDays,
+    productCode: 'embedded-lending', financingAmount: request.requestedAmount, tenorDays: count * terms.daysBetweenInstalments,
     schedule: cashFlows(request.requestedAmount, schedule.value), fees: [], totalPayable: schedule.value.totalPayable, totalCostOfCredit: request.pricing.profitAmount,
     collection, profitAmount: request.pricing.profitAmount, partnerRef: request.partnerRef, schedule_: schedule.value,
   });
@@ -84,7 +85,7 @@ export function quoteEmbedded(terms, request) {
 
 export function discloseEmbedded(q) {
   return {
-    financingAmount: q.financingAmount, tenorDays: q.tenorDays, instalmentCount: q.schedule_.instalments.length,
+    financingAmount: q.financingAmount, tenorDays: q.tenorDays, countOfInstalments: q.schedule_.instalments.length,
     ...(q.schedule_.instalments.every((i) => i.amount.minorUnits === _optionalChain([q, 'access', _3 => _3.schedule_, 'access', _4 => _4.instalments, 'access', _5 => _5[0], 'optionalAccess', _6 => _6.amount, 'access', _7 => _7.minorUnits])) && q.schedule_.instalments[0] !== undefined ? { instalmentAmount: q.schedule_.instalments[0].amount } : {}),
     totalCostOfCredit: q.totalCostOfCredit, totalPayable: q.totalPayable, fees: q.fees,
     lines: [
