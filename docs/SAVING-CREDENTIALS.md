@@ -43,7 +43,7 @@ Repeat per credential. Typical set:
 
 | Provider | Keys you will likely need |
 |---|---|
-| `TUUM` | `client_id`, `client_secret`, `base_url` |
+| `TUUM` | `username`, `password`, `tenant_code`, `auth_base_url`, `loan_api_base_url` — the sandbox authenticates an **employee** by username and password with a tenant code (`POST /api/v1/employees/authorise`), so the stored secret is a password and password rotation applies to it. `auth_base_url` is the authentication host (for the partners sandbox, `https://auth-api.sandbox-partners.tuumplatform.com`); `loan_api_base_url` the loan module's host. Hosts only, no paths. |
 | `NUTRIENT` | `web_sdk_license_key`, `document_engine_base_url`, `document_engine_api_token`, `jwt_private_key` |
 
 For `NUTRIENT`: the **Web SDK licence key** is domain-bound and is handed to the browser
