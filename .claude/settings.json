@@ -10,6 +10,19 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // .tool_response.filePath // empty'); [ -n \"$f\" ] || exit 0; cd \"${CLAUDE_PROJECT_DIR:-.}\" || exit 0; case \"$f\" in *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs|*.json|*.css) ./node_modules/.bin/prettier --write --log-level warn \"$f\" >/dev/null 2>&1 || true;; *) exit 0;; esac; case \"$f\" in *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs) out=$(./node_modules/.bin/eslint --fix --quiet \"$f\" 2>&1) || { printf '%s\\n' \"ESLint errors remain after --fix in $f:\" \"$out\" >&2; exit 2; };; esac; exit 0",
+            "timeout": 60,
+            "statusMessage": "Formatting with Prettier and fixing with ESLint..."
+          }
+        ]
+      }
     ]
   }
 }

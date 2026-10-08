@@ -1,0 +1,28 @@
+# Dependencies and build output
+node_modules
+.next
+dist
+coverage
+*.tsbuildinfo
+package-lock.json
+yarn.lock
+
+# Compiled .js siblings emitted by the editor beside every .ts (see .gitignore)
+core/**/*.js
+adapters/**/*.js
+config/**/*.js
+test/**/*.js
+products/**/*.js
+services/**/*.js
+apps/**/src/**/*.js
+packages/**/*.js
+
+# Generated or vendored
+supabase
+apps/ops/public/nutrient
+adapters/nutrient/verification/samples
+adapters/*/verification/findings
+.codebase-memory
+
+# Prose: reviewed by hand, not reflowed by a formatter
+*.md
