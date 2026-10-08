@@ -55,7 +55,8 @@ export async function saveCredentialAction(form: FormData): Promise<void> {
   const label = field(form, 'label');
   if (!(VAULT_PROVIDERS as readonly string[]).includes(provider)) back(to, 'PROVIDER_UNKNOWN');
   if (!(ENVIRONMENTS as readonly string[]).includes(environment)) back(to, 'ENVIRONMENT_UNKNOWN');
-  if (!/^[a-z][a-z0-9_]{1,63}$/.test(keyName)) back(to, 'KEY_NAME_MALFORMED');
+  // A vendor's own spelling is allowed (tenantCode, csrfToken); an adapter documents the names it reads.
+  if (!/^[A-Za-z][A-Za-z0-9_]{1,63}$/.test(keyName)) back(to, 'KEY_NAME_MALFORMED');
   if (typeof secret !== 'string' || secret.trim().length === 0) back(to, 'SECRET_EMPTY');
   if (s.kind !== 'READY' || typeof secret !== 'string') return;
   try {

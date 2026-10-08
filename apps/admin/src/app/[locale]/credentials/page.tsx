@@ -20,7 +20,7 @@ const NOTICE: Readonly<Record<string, { en: string; ar: string; tone: 'settled' 
   SAVE_FAILED: { en: 'The vault refused the save.', ar: 'رفضت الخزنة الحفظ.', tone: 'blocked' },
   REVOKE_FAILED: { en: 'The vault refused the revocation.', ar: 'رفضت الخزنة الإلغاء.', tone: 'blocked' },
   SECRET_EMPTY: { en: 'The value was empty.', ar: 'القيمة فارغة.', tone: 'attention' },
-  KEY_NAME_MALFORMED: { en: 'A key name is lower-case letters, digits and underscores.', ar: 'اسم المفتاح حروف لاتينية صغيرة وأرقام وشرطات سفلية.', tone: 'attention' },
+  KEY_NAME_MALFORMED: { en: 'A key name is letters, digits and underscores, starting with a letter.', ar: 'اسم المفتاح حروف لاتينية وأرقام وشرطات سفلية، يبدأ بحرف.', tone: 'attention' },
   CONFIRMATION_REQUIRED: { en: 'Tick the confirmation to revoke.', ar: 'أكّد الإلغاء أولاً.', tone: 'attention' },
 };
 
@@ -122,7 +122,7 @@ export default async function CredentialsPage({ params, searchParams }: { readon
                 <select name="environment" required defaultValue="sandbox" className={FIELD_INPUT}>{ENVIRONMENTS.map((e) => <option key={e} value={e}>{e}</option>)}</select>
               </label>
               <label className={FIELD_LABEL}>{arabic ? 'اسم المفتاح' : 'Key name'}
-                <input name="keyName" list="key-names" required pattern="[a-z][a-z0-9_]{1,63}" placeholder="web_sdk_license_key" className={`${FIELD_INPUT} identifier`} />
+                <input name="keyName" list="key-names" required pattern="[A-Za-z][A-Za-z0-9_]{1,63}" placeholder="web_sdk_license_key" className={`${FIELD_INPUT} identifier`} />
                 <datalist id="key-names">{Object.values(KNOWN_KEY_NAMES).flat().map((k) => <option key={k} value={k} />)}</datalist>
               </label>
               <label className={FIELD_LABEL}>{arabic ? 'الوصف (اختياري)' : 'Label (optional)'}

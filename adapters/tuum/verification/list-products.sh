@@ -16,17 +16,27 @@ TENANT_CODE="${1:-bank-a}"
 URL="$(grep '^SANAD_DATABASE_URL=' "${ROOT}/.env.local" | head -1 | cut -d= -f2-)"
 [ -n "${URL}" ] || { printf 'SANAD_DATABASE_URL is not set in .env.local. Run: npm run db:connect\n' >&2; exit 1; }
 
+# Reads one credential by name through the audited vault function. Several
+# spellings are accepted for a name, in order, because the vendor's own
+# documentation spells some in camel case and the vault keeps what was saved.
 read_credential() {
-  psql "${URL}" -At -v ON_ERROR_STOP=1 -c \
-    "select config.get_integration_credential((select id from core.tenant where code = '${TENANT_CODE}'), 'TUUM', 'sandbox', '$1', gen_random_uuid())" 2>/dev/null \
-    || { printf 'No TUUM sandbox credential named %s for %s. Save it in Admin → Credentials.\n' "$1" "${TENANT_CODE}" >&2; exit 1; }
+  local name
+  for name in "$@"; do
+    if value="$(psql "${URL}" -At -v ON_ERROR_STOP=1 -c \
+      "select config.get_integration_credential((select id from core.tenant where code = '${TENANT_CODE}'), 'TUUM', 'sandbox', '${name}', gen_random_uuid())" 2>/dev/null)"; then
+      printf '%s' "${value}"; return 0
+    fi
+  done
+  return 1
 }
+required() { read_credential "$@" || { printf 'No TUUM sandbox credential named %s for %s. Save it in Admin → Credentials.\n' "$1" "${TENANT_CODE}" >&2; exit 1; }; }
 
-USERNAME="$(read_credential username)"
-PASSWORD="$(read_credential password)"
-TUUM_TENANT="$(read_credential tenant_code)"
-AUTH_HOST="$(read_credential auth_base_url)"
-LOAN_HOST="$(read_credential loan_api_base_url)"
+USERNAME="$(required username)"
+PASSWORD="$(required password)"
+TUUM_TENANT="$(required tenant_code tenantcode tenantCode)"
+AUTH_HOST="$(required auth_base_url)"
+# The loan module's host, or the authentication host with its module name swapped, which is how the sandbox names its modules.
+LOAN_HOST="$(read_credential loan_api_base_url loan_base_url || printf '%s' "${AUTH_HOST}" | sed 's#//auth-api\.#//loan-api.#')"
 
 printf 'Authenticating as an employee of tenant %s at %s ...\n' "${TUUM_TENANT}" "${AUTH_HOST}"
 BODY="$(python3 -c 'import json,sys; print(json.dumps({"csrfToken": "string", "username": sys.argv[1], "password": sys.argv[2], "tenantCode": sys.argv[3]}))' "${USERNAME}" "${PASSWORD}" "${TUUM_TENANT}")"
@@ -49,8 +59,9 @@ printf 'Authenticated. Listing loan products at %s ...\n' "${LOAN_HOST}"
 OUT_DIR="${ROOT}/adapters/tuum/verification/findings"
 mkdir -p "${OUT_DIR}"
 OUT="${OUT_DIR}/loan-products.$(date +%Y-%m-%d).json"
+# The token travels in x-auth-token; an Authorization header is silently ignored (README, finding 2).
 HTTP="$(curl -sS --max-time 30 -o "${OUT}" -w '%{http_code}' "${LOAN_HOST}/api/v1/loan-products" \
-  -H 'accept: application/json' -H "x-tenant-code: ${TUUM_TENANT}" -H "Authorization: Bearer ${TOKEN}")"
+  -H 'accept: application/json' -H "x-tenant-code: ${TUUM_TENANT}" -H "x-auth-token: ${TOKEN}")"
 unset TOKEN
 printf 'HTTP %s. Response saved to %s\n' "${HTTP}" "${OUT#${ROOT}/}"
 python3 - "${OUT}" <<'PY'

@@ -370,6 +370,36 @@ curl -sS "$TUUM_HOST/api/v1/employees" \
   -H "x-tenant-code: $TUUM_TENANT" | python3 -m json.tool
 ```
 
+## First verified call — 2026-10-08
+
+Run from `adapters/tuum/verification/list-products.sh`, with credentials read from the
+vault through the audited function. The employee authorise endpoint at
+`auth-api.sandbox-partners` returned a token (JWT; roles `ADMIN`, `TUUM_API`; claims carry
+the tenant code and an employee id, nothing personal beyond a display name).
+`GET /api/v1/loan-products` on `loan-api.sandbox-partners` answered **200 with 76 products**
+once the token was sent in `x-auth-token`; with `Authorization: Bearer` it answered 401
+with an empty body, which confirms finding 2 above.
+
+What the list is: a shared partner sandbox. The 76 products span nine currencies and
+seventeen countries, under tenant codes `MB`, `MB.EU.EE` and `MB.TEST.TEST`; most are other
+partners' test products. Each entry carries only `loanTypeCode`, `loanTypeDescription`,
+`loanGroupCode`, `loanGroupDescription`, `currencyCode`, `countryCode`, `statusCode` and
+`tenantCode` — a type and a group, not pricing, schedule shape or components. The four
+riyal products:
+
+| `loanTypeCode` | Description | Group |
+|---|---|---|
+| `RETAIL FINANCE SAR` | Ragworks retail finance | `UNSECURED_LOAN` |
+| `SME FINANCE SAR RAG` | Ragworks SME finance | `UNSECURED_LOAN` |
+| `TAWRROUQ` | Tawrrouq | `UNSECURED_LOAN` |
+| `UMBRELLA_RAG` | Umbrella revolving credit facility | `UMBRELLA_FACILITY_REVOLVING` |
+
+So the list answers which product *types* exist and nothing about what a contract under
+them looks like. Step A.2 onward (an offer with no rate, acceptance, and the contract's
+interest fields) is what settles finding 1, and it writes test offers and contracts into
+this shared sandbox. The raw response is kept under `verification/findings/` and not
+committed.
+
 ## What this does not settle
 
 **OI-02 remains open.** Knowing how to authenticate says nothing about
