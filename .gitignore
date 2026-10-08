@@ -23,6 +23,12 @@ core/**/*.js
 adapters/**/*.js
 config/**/*.js
 test/**/*.js
+# products/ was missing from this list, so its compiled siblings were committed —
+# reviewed source and executed artefact could diverge (SEC-D16). Untracked 2026-10-08.
+products/**/*.js
+services/**/*.js
+apps/**/src/**/*.js
+packages/**/*.js
 
 # Vendor credential bundles.
 #

@@ -29,6 +29,14 @@ import '../globals.css';
 
 export const metadata = { title: 'Sanad — Operations', description: 'Origination and review' };
 
+/**
+ * Every workbench page reads live state per request — the request book, the
+ * deployment jurisdiction, the vault. Nothing here may be pre-rendered at build
+ * time: a build has no database, and a credential or a tenant's book baked into
+ * a static page would be served to whoever asks.
+ */
+export const dynamic = 'force-dynamic';
+
 const dmSans = DM_Sans({ subsets: ['latin'], weight: ['300', '400', '500', '600', '700'], variable: '--font-dm-sans', display: 'swap' });
 const notoKufi = Noto_Kufi_Arabic({ subsets: ['arabic'], weight: ['400', '500', '600', '700'], variable: '--font-noto-kufi', display: 'swap' });
 

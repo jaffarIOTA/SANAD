@@ -357,11 +357,40 @@ everything as if it worked is worse.
 
 ---
 
-## 14. Definition of done
+## 14. Security
+
+Full requirements: `docs/CYBERSECURITY-REQUIREMENTS.md`. The short version:
+
+**Two regulators, not one.** NCA (ECC-2:2024, and CSCC if the client classifies Sanad a
+critical system) *and* SAMA CSF. Plus PDPL. Design to **OWASP ASVS L2**, and **L3** for
+authentication, cryptography, signing, the sequencing engine and the audit chain.
+
+**CI gates block merge** (`.github/workflows/security.yml`): CodeQL, Semgrep with the Sanad
+invariant rules in `.semgrep/sanad.yml`, Gitleaks over full history, OSV + npm audit,
+dependency review, SBOM, Trivy, and the compliance suite. A finding is not a warning.
+
+**Never:**
+- Accept `tenantId` from a client request — derive it from the authenticated principal.
+- Interpolate into SQL.
+- Put a secret in `NEXT_PUBLIC_*`, a log line, a trace span, a metric label or an error message.
+- Read the server clock inside sequencing — leg ordering and the risk period come from the TSA.
+- Create a domain table in the `public` schema — PostgREST exposes it and that is a state-machine
+  bypass, not merely a data-access issue.
+
+**When adding an endpoint**, assume it will be tested against the abuse cases in
+`docs/CYBERSECURITY-REQUIREMENTS.md` §2.1 — BOLA on every identifier, mass assignment on every
+payload, cross-tenant access on every scope, and a direct attempt to reach a sale leg without
+passing the gates. Write the negative test yourself; it belongs in the compliance suite.
+
+**Security findings are tracked like bugs, with SLAs:** Critical 24 hours and blocks release,
+High 7 days and blocks release, Medium 30 days.
+
+## 15. Definition of done
 
 A change is done when: the compliance and architecture suites pass; RLS exists and is
 tested for any new table; the OpenAPI spec is updated and contract tests pass; any new
 consumer-facing figure goes through `disclose()` and the disclosure screen; the UI is
-reviewed in RTL and LTR; no secret, identifier or personal datum appears in any log; every
+reviewed in RTL and LTR; no secret, identifier or personal datum appears in any log; **every gate in
+`.github/workflows/security.yml` is green**; every
 regulatory threshold cites its source; and the second-client test has been asked and
 answered in the PR description.

@@ -37,17 +37,17 @@
   resolved "https://registry.npmjs.org/@img/colour/-/colour-1.1.0.tgz"
   integrity sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==
 
-"@img/sharp-darwin-arm64@0.35.4":
-  version "0.35.4"
-  resolved "https://registry.npmjs.org/@img/sharp-darwin-arm64/-/sharp-darwin-arm64-0.35.4.tgz"
-  integrity sha512-Uhfl4V4lhP2nbUVF9+hyH1+luj86f1gUFeo8ALYxFoULoU+G87D43BfeMP8XHsk9boxAnCY/bf2EHwhA7MuGsA==
+"@img/sharp-darwin-arm64@0.35.5":
+  version "0.35.5"
+  resolved "https://registry.npmjs.org/@img/sharp-darwin-arm64/-/sharp-darwin-arm64-0.35.5.tgz"
+  integrity sha512-QRUlFQ0WxvdWyqqG/WtI3iupfD5rBzmCHXSdPsY91sAtVtTo7Q4cb6zOccZ3gqEqkr0f1As1ehLqmEpDsRf+lg==
   optionalDependencies:
-    "@img/sharp-libvips-darwin-arm64" "1.3.3"
+    "@img/sharp-libvips-darwin-arm64" "1.3.4"
 
-"@img/sharp-libvips-darwin-arm64@1.3.3":
-  version "1.3.3"
-  resolved "https://registry.npmjs.org/@img/sharp-libvips-darwin-arm64/-/sharp-libvips-darwin-arm64-1.3.3.tgz"
-  integrity sha512-suTBPTDGrI9WodccaDdwZItTSaBYASlBk1NSfElSHrUfzu3szG6lvIF58+WiFvnfzuK8ZBFS5zE00PxqxnRiPg==
+"@img/sharp-libvips-darwin-arm64@1.3.4":
+  version "1.3.4"
+  resolved "https://registry.npmjs.org/@img/sharp-libvips-darwin-arm64/-/sharp-libvips-darwin-arm64-1.3.4.tgz"
+  integrity sha512-5R89nBYiRdUlSWJxPhO+GVtaXzXSxKnRu/xqMn3KTA3L9EB9Oy/P+Nn2f2vlhPuUdy/Zusb2DarbyTpGCfEDuw==
 
 "@jridgewell/gen-mapping@^0.3.5":
   version "0.3.13"
@@ -262,15 +262,15 @@
     "@jsonjoy.com/buffers" "17.67.0"
     "@jsonjoy.com/codegen" "17.67.0"
 
-"@next/env@15.5.25":
-  version "15.5.25"
-  resolved "https://registry.npmjs.org/@next/env/-/env-15.5.25.tgz"
-  integrity sha512-42h1lLr07vl4gawALP1hsgRZjHB1xYa58JfUfHwr0f7jG/zhPakh5GHkADHXOC9ZxUvlQFOPIrp7s6qX4DezPQ==
+"@next/env@15.5.27":
+  version "15.5.27"
+  resolved "https://registry.npmjs.org/@next/env/-/env-15.5.27.tgz"
+  integrity sha512-WC5hvVqiuFOcRyz6gKPeJkiVvSMf3scNeAV49CdWtVqxmUlzh8UKR6YHt9yiNkh8LngtzqSlVz07/Ma3ZAzchA==
 
-"@next/swc-darwin-arm64@15.5.25":
-  version "15.5.25"
-  resolved "https://registry.npmjs.org/@next/swc-darwin-arm64/-/swc-darwin-arm64-15.5.25.tgz"
-  integrity sha512-w+RR0v/QuApnWEjRGm1z6gcObKwGMb5YPA7V3bzBEVSBpMFUXprer0tS27UxjUcEnqbhL7Zuzohej79B6rYmBg==
+"@next/swc-darwin-arm64@15.5.27":
+  version "15.5.27"
+  resolved "https://registry.npmjs.org/@next/swc-darwin-arm64/-/swc-darwin-arm64-15.5.27.tgz"
+  integrity sha512-fBA9QurmK4+uj4wNhmRTuO5zMVRaBHCvp6H93zTG/5i6Yi6TewbvbesXB8YQNj8T99Cwrow87hHiFV6wL/hyMA==
 
 "@nutrient-sdk/viewer@^1.22.0":
   version "1.22.0"
@@ -1128,30 +1128,30 @@ ms@3.0.0-canary.1:
   resolved "https://registry.npmjs.org/ms/-/ms-3.0.0-canary.1.tgz"
   integrity sha512-kh8ARjh8rMN7Du2igDRO9QJnqCb2xYTJxyQYK7vJJS4TvLLmsbyhiKpSW+t+y26gyOyMd0riphX0GeWKU3ky5g==
 
-nanoid@^3.3.18, nanoid@^3.3.6:
+nanoid@^3.3.18, nanoid@^3.3.19:
   version "3.3.19"
   resolved "https://registry.npmjs.org/nanoid/-/nanoid-3.3.19.tgz"
   integrity sha512-Y2tUNy4ouw6tq5oDSKeQYGOyhkUBhNOcGV/02KC+6kd9eDGqdZd++mjMiIDilrBYvjEnCYvVtsuHCuP+okSfug==
 
 next@^15.5.25:
-  version "15.5.25"
-  resolved "https://registry.npmjs.org/next/-/next-15.5.25.tgz"
-  integrity sha512-OMWNulIIqKM2ykvC2qMjIt0IoavB4UB2SCs4iXJ6z6847FvyH8jBmBWcvrF5iuhTu8Przh20Fo/aoszIdqx4PA==
+  version "15.5.27"
+  resolved "https://registry.npmjs.org/next/-/next-15.5.27.tgz"
+  integrity sha512-F82CrlPZ8GRxBH9RIIoR3qU1t5RT3dv1K8moe8SjlDEquiFipvEI13R1Om90TaUOEwShkWCMlg8+gvTNzfMhvg==
   dependencies:
-    "@next/env" "15.5.25"
+    "@next/env" "15.5.27"
     "@swc/helpers" "0.5.15"
     caniuse-lite "^1.0.30001579"
     postcss "8.4.31"
     styled-jsx "5.1.6"
   optionalDependencies:
-    "@next/swc-darwin-arm64" "15.5.25"
-    "@next/swc-darwin-x64" "15.5.25"
-    "@next/swc-linux-arm64-gnu" "15.5.25"
-    "@next/swc-linux-arm64-musl" "15.5.25"
-    "@next/swc-linux-x64-gnu" "15.5.25"
-    "@next/swc-linux-x64-musl" "15.5.25"
-    "@next/swc-win32-arm64-msvc" "15.5.25"
-    "@next/swc-win32-x64-msvc" "15.5.25"
+    "@next/swc-darwin-arm64" "15.5.27"
+    "@next/swc-darwin-x64" "15.5.27"
+    "@next/swc-linux-arm64-gnu" "15.5.27"
+    "@next/swc-linux-arm64-musl" "15.5.27"
+    "@next/swc-linux-x64-gnu" "15.5.27"
+    "@next/swc-linux-x64-musl" "15.5.27"
+    "@next/swc-win32-arm64-msvc" "15.5.27"
+    "@next/swc-win32-x64-msvc" "15.5.27"
     sharp "^0.34.3 || ^0.35.4"
 
 nexus-rpc@^0.0.3:
@@ -1225,7 +1225,7 @@ pgpass@1.0.5:
   dependencies:
     split2 "^4.1.0"
 
-picocolors@^1.0.0, picocolors@^1.1.1:
+picocolors@^1.1.1:
   version "1.1.1"
   resolved "https://registry.npmjs.org/picocolors/-/picocolors-1.1.1.tgz"
   integrity sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==
@@ -1244,14 +1244,14 @@ postcss@^8.5.16, postcss@^8.5.28:
     picocolors "^1.1.1"
     source-map-js "^1.2.1"
 
-postcss@8.4.31:
-  version "8.4.31"
-  resolved "https://registry.npmjs.org/postcss/-/postcss-8.4.31.tgz"
-  integrity sha512-PS08Iboia9mts/2ygV3eLpY5ghnUcfLV/EXTOW1E2qYxJKGGBUtNjN76FYHnMs36RmARn41bC0AZmn+rR0OVpQ==
+postcss@^8.5.29:
+  version "8.5.29"
+  resolved "https://registry.npmjs.org/postcss/-/postcss-8.5.29.tgz"
+  integrity sha512-49cGhUbXj8Qenv0iTMxA1cFBzxXoctpC9Ujd77t1WcbJIr6nF/eI7g/8MgxrYldFRuAXvja7xQRwavoW7kgrxQ==
   dependencies:
-    nanoid "^3.3.6"
-    picocolors "^1.0.0"
-    source-map-js "^1.0.2"
+    nanoid "^3.3.19"
+    picocolors "^1.1.1"
+    source-map-js "^1.2.2"
 
 postgres-array@~2.0.0:
   version "2.0.0"
@@ -1378,49 +1378,49 @@ semver@^7.8.5:
   integrity sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==
 
 "sharp@^0.34.3 || ^0.35.4":
-  version "0.35.4"
-  resolved "https://registry.npmjs.org/sharp/-/sharp-0.35.4.tgz"
-  integrity sha512-n++8XWcj+jCOr2IOl7h8LbKnGBDY4aPbmprMONBNFdn0ImXqpGVv5zliDs0V9HbmbCQLpbuo2ej9rAoOQTvMDA==
+  version "0.35.5"
+  resolved "https://registry.npmjs.org/sharp/-/sharp-0.35.5.tgz"
+  integrity sha512-Ywn4OnzGukp7CDMrp08RQ50YKmuwG47brZgIVPTvBaaAfQlRlygrRqSrxdCiL9M+LlzLBiJ68IR1QqvzHyjC7g==
   dependencies:
     "@img/colour" "^1.1.0"
     detect-libc "^2.1.2"
     semver "^7.8.5"
   optionalDependencies:
-    "@img/sharp-darwin-arm64" "0.35.4"
-    "@img/sharp-darwin-x64" "0.35.4"
-    "@img/sharp-freebsd-wasm32" "0.35.4"
-    "@img/sharp-libvips-darwin-arm64" "1.3.3"
-    "@img/sharp-libvips-darwin-x64" "1.3.3"
-    "@img/sharp-libvips-linux-arm" "1.3.3"
-    "@img/sharp-libvips-linux-arm64" "1.3.3"
-    "@img/sharp-libvips-linux-ppc64" "1.3.3"
-    "@img/sharp-libvips-linux-riscv64" "1.3.3"
-    "@img/sharp-libvips-linux-s390x" "1.3.3"
-    "@img/sharp-libvips-linux-x64" "1.3.3"
-    "@img/sharp-libvips-linuxmusl-arm64" "1.3.3"
-    "@img/sharp-libvips-linuxmusl-x64" "1.3.3"
-    "@img/sharp-linux-arm" "0.35.4"
-    "@img/sharp-linux-arm64" "0.35.4"
-    "@img/sharp-linux-ppc64" "0.35.4"
-    "@img/sharp-linux-riscv64" "0.35.4"
-    "@img/sharp-linux-s390x" "0.35.4"
-    "@img/sharp-linux-x64" "0.35.4"
-    "@img/sharp-linuxmusl-arm64" "0.35.4"
-    "@img/sharp-linuxmusl-x64" "0.35.4"
-    "@img/sharp-webcontainers-wasm32" "0.35.4"
-    "@img/sharp-win32-arm64" "0.35.4"
-    "@img/sharp-win32-ia32" "0.35.4"
-    "@img/sharp-win32-x64" "0.35.4"
+    "@img/sharp-darwin-arm64" "0.35.5"
+    "@img/sharp-darwin-x64" "0.35.5"
+    "@img/sharp-freebsd-wasm32" "0.35.5"
+    "@img/sharp-libvips-darwin-arm64" "1.3.4"
+    "@img/sharp-libvips-darwin-x64" "1.3.4"
+    "@img/sharp-libvips-linux-arm" "1.3.4"
+    "@img/sharp-libvips-linux-arm64" "1.3.4"
+    "@img/sharp-libvips-linux-ppc64" "1.3.4"
+    "@img/sharp-libvips-linux-riscv64" "1.3.4"
+    "@img/sharp-libvips-linux-s390x" "1.3.4"
+    "@img/sharp-libvips-linux-x64" "1.3.4"
+    "@img/sharp-libvips-linuxmusl-arm64" "1.3.4"
+    "@img/sharp-libvips-linuxmusl-x64" "1.3.4"
+    "@img/sharp-linux-arm" "0.35.5"
+    "@img/sharp-linux-arm64" "0.35.5"
+    "@img/sharp-linux-ppc64" "0.35.5"
+    "@img/sharp-linux-riscv64" "0.35.5"
+    "@img/sharp-linux-s390x" "0.35.5"
+    "@img/sharp-linux-x64" "0.35.5"
+    "@img/sharp-linuxmusl-arm64" "0.35.5"
+    "@img/sharp-linuxmusl-x64" "0.35.5"
+    "@img/sharp-webcontainers-wasm32" "0.35.5"
+    "@img/sharp-win32-arm64" "0.35.5"
+    "@img/sharp-win32-ia32" "0.35.5"
+    "@img/sharp-win32-x64" "0.35.5"
 
 siginfo@^2.0.0:
   version "2.0.0"
   resolved "https://registry.npmjs.org/siginfo/-/siginfo-2.0.0.tgz"
   integrity sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==
 
-source-map-js@^1.0.2, source-map-js@^1.2.1:
-  version "1.2.1"
-  resolved "https://registry.npmjs.org/source-map-js/-/source-map-js-1.2.1.tgz"
-  integrity sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==
+source-map-js@^1.0.2, source-map-js@^1.2.1, source-map-js@^1.2.2:
+  version "1.2.2"
+  resolved "https://registry.npmjs.org/source-map-js/-/source-map-js-1.2.2.tgz"
+  integrity sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==
 
 source-map-loader@^5.0.0:
   version "5.0.0"

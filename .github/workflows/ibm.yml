@@ -12,7 +12,7 @@ jobs:
   run-discovery:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
@@ -21,7 +21,7 @@ jobs:
         run: |
           echo "action_updates=$(git diff --name-only --diff-filter=ACMRT ${{ github.event.before }} ${{ github.sha }} | xargs)" >> $GITHUB_OUTPUT
 
-      - uses: ibm-apiconnect/apic-discovery-action@main
+      - uses: ibm-apiconnect/apic-discovery-action@3fd5f3cc644f98b6b92844a13ce939ec7d172d37 # main as of 2026-10-08 (SEC-D17)
         id: discover-apis
         with:
           api_host: ${{ env.API_HOST }}

@@ -1,0 +1,87 @@
+# Sanad custom SAST rules — SEC-D03.
+#
+# These encode platform invariants that no off-the-shelf rule set knows about.
+# Scoping matters: after the 2026-09-25 re-charter, rates ARE legitimate in
+# core/pricing as typed basis points. The no-rate rule is scoped to the Murabaha
+# module only, where disclosed cost-plus-profit is a contract validity condition.
+
+rules:
+  - id: sanad-no-rate-in-murabaha
+    languages: [typescript, javascript]
+    severity: ERROR
+    paths:
+      include: ["products/murabaha-scf/**"]
+    patterns:
+      - pattern-regex: \b(interestRate|interest_rate|profitRate|profit_rate|apr|APR|accruedInterest|accrued_interest|compoundingFrequency|penaltyRate|rateIndex)\b
+    message: >-
+      Murabaha return is a fixed profit AMOUNT disclosed against cost, not a rate.
+      Rates are legitimate elsewhere (core/pricing, basis points) but not here —
+      disclosure of cost and markup is a contract validity condition.
+
+  - id: sanad-no-domain-table-in-public-schema
+    languages: [generic]
+    severity: ERROR
+    paths:
+      include: ["**/*.sql"]
+    patterns:
+      - pattern-regex: (?i)create\s+table\s+(if\s+not\s+exists\s+)?public\.
+    message: >-
+      Domain tables must not live in the public schema. Supabase PostgREST
+      auto-exposes it, which is a direct state-machine bypass (SEC-TM02).
+      RLS is insufficient — it governs who writes a row, not whether the
+      sequencing gates ran. Use core / config / evidence / audit.
+
+  - id: sanad-no-sql-string-interpolation
+    languages: [typescript, javascript]
+    severity: ERROR
+    patterns:
+      - pattern-either:
+          - pattern: $DB.query(`...${$X}...`)
+          - pattern: $DB.raw(`...${$X}...`)
+          - pattern: sql.raw(`...${$X}...`)
+    message: >-
+      SQL injection (SEC-TM12). Use parameterised queries.
+
+  - id: sanad-no-server-clock-in-sequencing
+    languages: [typescript, javascript]
+    severity: ERROR
+    paths:
+      include: ["**/sequencing/**", "**/legs/**"]
+    patterns:
+      - pattern-either:
+          - pattern: new Date()
+          - pattern: Date.now()
+    message: >-
+      Risk-period and leg ordering are measured against the external timestamping
+      authority, never the server clock. A server clock is attacker-influenceable
+      and is not evidence (SEC-TM06).
+
+  - id: sanad-no-hardcoded-secret
+    languages: [typescript, javascript]
+    severity: ERROR
+    patterns:
+      - pattern-regex: (?i)(api[_-]?key|client[_-]?secret|password|private[_-]?key|access[_-]?token)\s*[:=]\s*['"][A-Za-z0-9_\-+/=]{20,}['"]
+    message: >-
+      Hardcoded credential (SEC-TM10). Secrets live in Vault — see
+      docs/SAVING-CREDENTIALS.md.
+
+  - id: sanad-no-secret-in-next-public
+    languages: [typescript, javascript]
+    severity: ERROR
+    patterns:
+      - pattern-regex: NEXT_PUBLIC_[A-Z0-9_]*(KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL)
+    message: >-
+      NEXT_PUBLIC_ is inlined into the client bundle and shipped to every browser.
+      This is a public disclosure of a secret.
+
+  - id: sanad-no-tenant-id-from-client
+    languages: [typescript, javascript]
+    severity: WARNING
+    patterns:
+      - pattern-either:
+          - pattern: $REQ.body.tenantId
+          - pattern: $REQ.body.tenant_id
+          - pattern: $REQ.query.tenantId
+    message: >-
+      Tenant scope is derived from the authenticated principal, never accepted
+      from the client. Accepting it is cross-tenant access (SEC-TM08).
