@@ -126,7 +126,7 @@ describe('adversarial: the total never increases (SH-02)', () => {
 
   const split = (amounts: readonly bigint[]): Instalment[] =>
     amounts.map((amount, i) => ({
-      instalmentNo: i + 1,
+      sequenceNumber: i + 1,
       dueDateGregorian: `2026-1${i}-01`,
       dueDateHijri: `1448-0${i + 1}-01`,
       amount: money(amount),

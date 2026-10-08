@@ -40,7 +40,7 @@ export function Disclosure({ offer, locale, numerals }: DisclosureProps): ReactE
       <span className="text-ink">{value}</span>
     </div>
   );
-  const count = locale === 'ar-SA' ? String(d.instalmentCount).replace(/\d/g, (x) => '٠١٢٣٤٥٦٧٨٩'[Number(x)] ?? x) : String(d.instalmentCount);
+  const count = locale === 'ar-SA' ? String(d.countOfInstalments).replace(/\d/g, (x) => '٠١٢٣٤٥٦٧٨٩'[Number(x)] ?? x) : String(d.countOfInstalments);
   const tenor = locale === 'ar-SA' ? String(d.tenorDays).replace(/\d/g, (x) => '٠١٢٣٤٥٦٧٨٩'[Number(x)] ?? x) : String(d.tenorDays);
 
   return (

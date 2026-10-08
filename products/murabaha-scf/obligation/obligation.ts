@@ -26,7 +26,8 @@ import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import type { MurabahaPricing } from '../pricing/murabaha.ts';
 
 export interface Instalment {
-  readonly instalmentNo: number;
+  /** Position in the schedule, from 1. An ordinal, not an amount. */
+  readonly sequenceNumber: number;
   /** Both calendars stored. Never derived at read time. */
   readonly dueDateGregorian: string;
   readonly dueDateHijri: string;
@@ -164,7 +165,7 @@ function validateSchedule(
   for (const i of instalments) {
     if (isNegative(i.amount)) {
       return reject('SH-03', 'INSTALMENT_NEGATIVE', 'An instalment cannot be negative', {
-        instalmentNo: i.instalmentNo,
+        sequenceNumber: i.sequenceNumber,
       });
     }
     if (i.dueDateGregorian.length === 0 || i.dueDateHijri.length === 0) {
@@ -172,7 +173,7 @@ function validateSchedule(
         'SH-03',
         'INSTALMENT_DATE_INDETERMINATE',
         'Each instalment carries a due date in both calendars',
-        { instalmentNo: i.instalmentNo },
+        { sequenceNumber: i.sequenceNumber },
       );
     }
   }

@@ -29,14 +29,14 @@ export function quoteBnpl(terms: BnplTerms, request: QuoteRequest): Result<BnplQ
       limit: String(terms.consumerLimit.minorUnits), outstanding: String(outstanding.minorUnits), citation: terms.citation,
     });
   }
-  const schedule = flatInstalments(request.requestedAmount, money(0n), terms.instalments, terms.intervalDays);
+  const schedule = flatInstalments(request.requestedAmount, money(0n), terms.numberOfInstalments, terms.intervalDays);
   if (!schedule.ok) return schedule;
   const s = schedule.value;
   const merchantFee: Fee = { code: 'MERCHANT_DISCOUNT', labelEn: 'Merchant discount', labelAr: 'خصم التاجر', amount: money(roundDiv(request.requestedAmount.minorUnits * BigInt(terms.merchantDiscountPerTenThousand), 10_000n)), when: 'UPFRONT' };
   return ok({
     productCode: 'bnpl',
     financingAmount: request.requestedAmount,
-    tenorDays: terms.instalments * terms.intervalDays,
+    tenorDays: terms.numberOfInstalments * terms.intervalDays,
     schedule: cashFlows(request.requestedAmount, s),
     fees: [],
     totalPayable: request.requestedAmount,
@@ -52,7 +52,7 @@ export function discloseBnpl(q: BnplQuote): Disclosure {
   return {
     financingAmount: q.basket,
     tenorDays: q.tenorDays,
-    instalmentCount: q.schedule_.instalments.length,
+    countOfInstalments: q.schedule_.instalments.length,
     ...(q.schedule_.instalments.every((i) => i.amount.minorUnits === q.instalmentAmount.minorUnits) ? { instalmentAmount: q.instalmentAmount } : {}),
     totalCostOfCredit: q.totalCostOfCredit,
     totalPayable: q.totalPayable,

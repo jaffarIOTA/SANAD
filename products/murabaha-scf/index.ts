@@ -100,7 +100,7 @@ export const murabahaScf: ProductModule<MurabahaTerms, MurabahaQuote, MurabahaEx
     return {
       financingAmount: quote.financingAmount,
       tenorDays: quote.tenorDays,
-      instalmentCount: repayments.length,
+      countOfInstalments: repayments.length,
       ...(equal && repayments[0] !== undefined ? { instalmentAmount: repayments[0].amount } : {}),
       totalCostOfCredit: quote.totalCostOfCredit,
       totalPayable: quote.totalPayable,

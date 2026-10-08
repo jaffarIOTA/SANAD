@@ -108,7 +108,7 @@ const bookingRequest = {
   profitAmount: money(462_500n),
   instalments: [
     {
-      instalmentNo: 1,
+      sequenceNumber: 1,
       dueDateGregorian: '2027-01-04',
       dueDateHijri: '1448-07-25',
       amount: money(18_962_500n),

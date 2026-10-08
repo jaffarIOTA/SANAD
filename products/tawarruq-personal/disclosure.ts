@@ -7,7 +7,7 @@ export function discloseTawarruq(q: TawarruqQuote): Disclosure {
   return {
     financingAmount: q.financingAmount,
     tenorDays: q.tenorDays,
-    instalmentCount: q.months,
+    countOfInstalments: q.months,
     instalmentAmount: q.monthlyInstalment,
     totalCostOfCredit: q.totalCostOfCredit,
     totalPayable: q.totalPayable,

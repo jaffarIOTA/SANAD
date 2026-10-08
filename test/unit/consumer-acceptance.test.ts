@@ -16,7 +16,7 @@ const T0 = 1_791_000_000;
 describe('the consumer journey engine', () => {
   it('quotes a consumer product through the engine with the platform APR', () => {
     const q = expectOk(quoteFor('tawarruq-personal', 5_000_000n, 12, 'app-1', at(T0)));
-    expect(q.offer.apr.computedBy).toBe('core/pricing/apr.ts'); expect(q.offer.disclosure.instalmentCount).toBe(12);
+    expect(q.offer.apr.computedBy).toBe('core/pricing/apr.ts'); expect(q.offer.disclosure.countOfInstalments).toBe(12);
     expect(DEV_AFFORDABILITY.incomeSourceRef).toContain('dev');
   });
   it('refuses a non-consumer product', () => {

@@ -71,7 +71,8 @@ export interface PartyDetails {
 }
 
 export interface ObligationInstalment {
-  readonly instalmentNo: number;
+  /** Position in the schedule, from 1. An ordinal, not an amount. */
+  readonly sequenceNumber: number;
   readonly dueDateGregorian: string;
   readonly dueDateHijri: string;
   readonly amount: Money;

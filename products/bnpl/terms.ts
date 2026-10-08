@@ -24,7 +24,8 @@ export type CollectionMethod = 'SADAD' | 'CARD' | 'OPEN_BANKING_PIS' | 'DIRECT_D
 const COLLECTION_METHODS: ReadonlySet<string> = new Set<CollectionMethod>(['SADAD', 'CARD', 'OPEN_BANKING_PIS', 'DIRECT_DEBIT']);
 
 export interface BnplTerms {
-  readonly instalments: number;
+  /** Configured as `instalments` in the term sheet. A count: at most twelve (Art. 22(2)). */
+  readonly numberOfInstalments: number;
   readonly intervalDays: number;
   readonly consumerLimit: Money;
   /** Per ten thousand of the basket, charged to the merchant. Never to the consumer (Art. 20(1), 19(7)). */
@@ -69,7 +70,7 @@ export function parseBnplTerms(raw: unknown): Result<BnplTerms> {
     return bad('TERMS_COLLECTION_NOT_ELECTRONIC', 'Collection is through electronic channels only; a cash request is prohibited', { rejected: notElectronic.map(String).join(','), citation: `${BNPL_RULES}, Art. 22(3)` });
   }
   return ok({
-    instalments: raw['instalments'], intervalDays: raw['intervalDays'], consumerLimit: money(limit), merchantDiscountPerTenThousand: mdr, citation: raw['citation'],
+    numberOfInstalments: raw['instalments'], intervalDays: raw['intervalDays'], consumerLimit: money(limit), merchantDiscountPerTenThousand: mdr, citation: raw['citation'],
     ...(typeof variation === 'string' ? { samaLimitVariationRef: variation.trim() } : {}),
     collectionMethods: methodsRaw as CollectionMethod[],
   });

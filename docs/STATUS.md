@@ -318,8 +318,10 @@ Worth stating plainly, because a green test suite can flatter.
   the exposed schema and no floating-point money or rate. It flags five fields whose
   names begin with `instalment` and are counts, ordinals or intervals rather than money
   (`instalmentCount`, `instalmentNo`, `instalments`, `instalmentIntervalDays`), three of
-  which predate October. They are the hook's name-based rule meeting a non-money number;
-  the hook's own guidance is to rename them, and that decision is open.
+  which predated October. **Renamed 2026-10-08** by decision of the product owner, to
+  `countOfInstalments`, `sequenceNumber`, `numberOfInstalments` and
+  `daysBetweenInstalments`; the term-sheet JSON keys tenants configure are unchanged. Every
+  tracked source file now passes the hook whole, and the hook's rule is untouched.
 - **There is no timestamping authority.** A development substitute produces
   attestations, clearly named so it is obvious in a diff. Nothing it produces
   may feed a gate in a deployed environment.

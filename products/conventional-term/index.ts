@@ -72,7 +72,7 @@ export function quoteTermLoan(terms: TermLoanTerms, request: QuoteRequest): Resu
 
 export function discloseTermLoan(q: TermLoanQuote): Disclosure {
   return {
-    financingAmount: q.financingAmount, tenorDays: q.tenorDays, instalmentCount: q.months, instalmentAmount: q.monthlyInstalment,
+    financingAmount: q.financingAmount, tenorDays: q.tenorDays, countOfInstalments: q.months, instalmentAmount: q.monthlyInstalment,
     totalCostOfCredit: q.totalCostOfCredit, totalPayable: q.totalPayable, fees: q.fees,
     lines: [
       { code: 'PRINCIPAL', labelEn: 'Loan amount', labelAr: 'مبلغ القرض', amount: q.financingAmount },

@@ -111,7 +111,8 @@ export interface DisclosureLine {
 export interface Disclosure {
   readonly financingAmount: Money;
   readonly tenorDays: number;
-  readonly instalmentCount: number;
+  /** How many instalments. A count, not an amount. */
+  readonly countOfInstalments: number;
   /** Absent when instalments are unequal; then every instalment is listed. */
   readonly instalmentAmount?: Money;
   readonly totalCostOfCredit: Money;

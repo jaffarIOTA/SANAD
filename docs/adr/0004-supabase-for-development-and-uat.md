@@ -24,6 +24,8 @@ ADR 0001 decided.**
 
 ## The condition this decision rests on
 
+> **Confirmed by the product owner on 2026-10-08:** UAT holds invented data only.
+
 The residency rule is about data, not about environments' names. SAMA's cloud and
 outsourcing rules, PDPL and NDMO require customer data to be processed and stored
 in-Kingdom. A UAT environment outside the Kingdom is therefore lawful only while it holds no
