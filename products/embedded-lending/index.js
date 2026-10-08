@@ -110,7 +110,7 @@ export function book(t, at) {
 }
 
 export const embeddedLending = {
-  descriptor: { code: 'embedded-lending', nameEn: 'Embedded lending', nameAr: 'التمويل المدمج', journeyShape: 'AMOUNT_FIRST', family: 'CONVENTIONAL', consumer: false, requiresBoardRuling: false },
+  descriptor: { code: 'embedded-lending', nameEn: 'Embedded lending', nameAr: 'التمويل المدمج', journeyShape: 'AMOUNT_FIRST', family: 'CONVENTIONAL', consumer: false, requiresBoardRuling: false, bookingShape: 'CORE_FACILITY' },
   validateTerms: parseEmbeddedTerms,
   quote: quoteEmbedded,
   disclose: discloseEmbedded,

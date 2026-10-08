@@ -33,6 +33,7 @@ export const tawarruqPersonal = {
     family: 'ISLAMIC',
     consumer: true,
     requiresBoardRuling: true,
+    bookingShape: 'CORE_FACILITY',
   },
   validateTerms: parseTawarruqTerms,
   quote: quoteTawarruq,

@@ -53,6 +53,8 @@ export const murabahaScf = {
     family: 'ISLAMIC',
     consumer: false,
     requiresBoardRuling: true,
+    // The deferred price is fixed; it is booked as postings, never under a core lending product (INVARIANTS.md).
+    bookingShape: 'ACCOUNT_POSTINGS',
   },
 
   validateTerms(raw) {
