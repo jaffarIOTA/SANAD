@@ -38,7 +38,9 @@ jobs:
     container: semgrep/semgrep
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - run: semgrep ci --config .semgrep/sanad.yml --config p/typescript --config p/owasp-top-ten --config p/secrets --error
+      # `semgrep scan`, not `semgrep ci`: ci rejects --error and expects a Semgrep App token; scan with
+      # --error fails the job on any finding from these rule sets, which is the gate SEC-D03 asks for.
+      - run: semgrep scan --config .semgrep/sanad.yml --config p/typescript --config p/owasp-top-ten --config p/secrets --metrics off --error
 
   secrets-history:                                # SEC-D05
     name: Secrets — full history
@@ -109,6 +111,9 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: '22', cache: npm }
       - run: npm ci
+      # Enable the versioned pre-commit hook as every developer does (README); the architecture
+      # suite asserts it is the configured hooks path and that it bites.
+      - run: git config core.hooksPath .githooks
       - run: npm run typecheck
       - run: npm run test:compliance
       # The architecture suite asserts the absences (no vendor in core, no float in pricing, no secret, no PostgREST exposure).
