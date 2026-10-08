@@ -42,3 +42,6 @@ adapters/nutrient/verification/samples/
 
 # Sandbox verification responses: recorded in the adapter README, never committed raw
 adapters/*/verification/findings/
+
+# TypeScript incremental build state: rewritten on every type check, never source.
+*.tsbuildinfo
