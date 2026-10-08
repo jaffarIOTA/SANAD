@@ -14,7 +14,16 @@ import { inMemoryOutboxStore, runOutboxPass } from '@sanad/core/outbox/store.ts'
 import { type DevelopmentDelivery, developmentDispatchPorts } from '../../services/outbox/src/development-ports.ts';
 
 const policy = { maxAttempts: 3, backoffSeconds: 300 };
-const event = (over: Partial<OutboxEvent> = {}): OutboxEvent => ({ eventId: 'txn-1:disburse', tenantId: 'bank-a', kind: 'PAYMENT_DISBURSE', subjectRef: 'txn-1', idempotencyKey: 'txn-1:disburse', payload: { beneficiaryRef: 'app-1', minorUnits: '5000000', currency: 'SAR' }, correlationId: 'c', ...over });
+const event = (over: Partial<OutboxEvent> = {}): OutboxEvent => ({
+  eventId: 'txn-1:disburse',
+  tenantId: 'bank-a',
+  kind: 'PAYMENT_DISBURSE',
+  subjectRef: 'txn-1',
+  idempotencyKey: 'txn-1:disburse',
+  payload: { beneficiaryRef: 'app-1', minorUnits: '5000000', currency: 'SAR' },
+  correlationId: 'c',
+  ...over,
+});
 
 describe('dispatch outcomes', () => {
   it('delivers every kind through its port with the event’s own idempotency key', async () => {
@@ -22,11 +31,36 @@ describe('dispatch outcomes', () => {
     const ports = developmentDispatchPorts(ledger);
     const events: OutboxEvent[] = [
       event(),
-      event({ eventId: 'e2', kind: 'PAYMENT_COLLECT', idempotencyKey: 'k2', payload: { payerRef: 'app-1', minorUnits: '100', currency: 'SAR' } }),
-      event({ eventId: 'e3', kind: 'BUREAU_REPORT', idempotencyKey: 'k3', payload: { facilityRef: 'txn-1', event: 'OPENED', minorUnits: '5000000' } }),
-      event({ eventId: 'e4', kind: 'PARTNER_CALLBACK', idempotencyKey: 'k4', payload: { partnerRef: 'agg-1', webhook: 'requestStateChanged', state: 'APPROVED' } }),
-      event({ eventId: 'e5', kind: 'NOTIFICATION', idempotencyKey: 'k5', payload: { recipientKind: 'COUNTERPARTY', recipientRef: 'cp-1', event: 'REQUEST_APPROVED', channels: 'SMS' } }),
-      event({ eventId: 'e6', kind: 'BILL_PRESENT', idempotencyKey: 'k6', payload: { payerRef: 'app-1', minorUnits: '888488', dueDateGregorian: '2026-11-01' } }),
+      event({
+        eventId: 'e2',
+        kind: 'PAYMENT_COLLECT',
+        idempotencyKey: 'k2',
+        payload: { payerRef: 'app-1', minorUnits: '100', currency: 'SAR' },
+      }),
+      event({
+        eventId: 'e3',
+        kind: 'BUREAU_REPORT',
+        idempotencyKey: 'k3',
+        payload: { facilityRef: 'txn-1', event: 'OPENED', minorUnits: '5000000' },
+      }),
+      event({
+        eventId: 'e4',
+        kind: 'PARTNER_CALLBACK',
+        idempotencyKey: 'k4',
+        payload: { partnerRef: 'agg-1', webhook: 'requestStateChanged', state: 'APPROVED' },
+      }),
+      event({
+        eventId: 'e5',
+        kind: 'NOTIFICATION',
+        idempotencyKey: 'k5',
+        payload: { recipientKind: 'COUNTERPARTY', recipientRef: 'cp-1', event: 'REQUEST_APPROVED', channels: 'SMS' },
+      }),
+      event({
+        eventId: 'e6',
+        kind: 'BILL_PRESENT',
+        idempotencyKey: 'k6',
+        payload: { payerRef: 'app-1', minorUnits: '888488', dueDateGregorian: '2026-11-01' },
+      }),
     ];
     for (const e of events) expect((await dispatchOnce(e, ports, policy, 1)).kind).toBe('DELIVERED');
     expect(ledger.map((l) => l.idempotencyKey)).toEqual(['txn-1:disburse', 'k2', 'k3', 'k4', 'k5', 'k6']);
@@ -43,11 +77,17 @@ describe('dispatch outcomes', () => {
   });
   it('a refusal by the rail is dead at once: retrying a refused payment is how a second payment happens', async () => {
     const ports = developmentDispatchPorts([]);
-    ports.payments.disburse = () => Promise.resolve({ ok: true as const, value: { kind: 'REFUSED' as const, code: 'BENEFICIARY_UNKNOWN' } });
-    expect(await dispatchOnce(event(), ports, policy, 1)).toMatchObject({ kind: 'DEAD', reason: 'refused: BENEFICIARY_UNKNOWN' });
+    ports.payments.disburse = () =>
+      Promise.resolve({ ok: true as const, value: { kind: 'REFUSED' as const, code: 'BENEFICIARY_UNKNOWN' } });
+    expect(await dispatchOnce(event(), ports, policy, 1)).toMatchObject({
+      kind: 'DEAD',
+      reason: 'refused: BENEFICIARY_UNKNOWN',
+    });
   });
   it('a payload that cannot be mapped is dead, not guessed', async () => {
-    expect((await dispatchOnce(event({ payload: { beneficiaryRef: 'x' } }), developmentDispatchPorts([]), policy, 1)).kind).toBe('DEAD');
+    expect(
+      (await dispatchOnce(event({ payload: { beneficiaryRef: 'x' } }), developmentDispatchPorts([]), policy, 1)).kind,
+    ).toBe('DEAD');
   });
 });
 
@@ -61,7 +101,8 @@ describe('the store and a worker pass', () => {
     const first = await runOutboxPass(store, (e, attempt) => dispatchOnce(e, ports, policy, attempt), 1_000n);
     expect(first).toEqual([{ eventId: 'txn-1:disburse', kind: 'PAYMENT_DISBURSE', outcome: 'DELIVERED' }]);
     const second = await runOutboxPass(store, (e, attempt) => dispatchOnce(e, ports, policy, attempt), 2_000n);
-    expect(second).toEqual([]); expect(ledger).toHaveLength(1);
+    expect(second).toEqual([]);
+    expect(ledger).toHaveLength(1);
     expect((await store.rows())[0]).toMatchObject({ state: 'DELIVERED', attempts: 1 });
   });
   it('a retry is not due until its backoff has passed, and a leased row is not claimed twice', async () => {

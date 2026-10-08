@@ -55,9 +55,18 @@ export interface Reconciliation {
   readonly settled: boolean;
 }
 
-export function reconcile(position: CollectionPosition, lines: readonly SettlementLine[], outbox: Outbox, seenRefs: ReadonlySet<string>): Result<Reconciliation> {
+export function reconcile(
+  position: CollectionPosition,
+  lines: readonly SettlementLine[],
+  outbox: Outbox,
+  seenRefs: ReadonlySet<string>,
+): Result<Reconciliation> {
   if (position.collectedToDate.minorUnits > position.totalPayable.minorUnits) {
-    return reject('OP-DETERMINACY', 'POSITION_OVER_COLLECTED', 'The position already shows more collected than is owed; a person must look before anything else is applied');
+    return reject(
+      'OP-DETERMINACY',
+      'POSITION_OVER_COLLECTED',
+      'The position already shows more collected than is owed; a person must look before anything else is applied',
+    );
   }
   let collected = position.collectedToDate.minorUnits;
   let box = outbox;
@@ -65,15 +74,29 @@ export function reconcile(position: CollectionPosition, lines: readonly Settleme
   const outcomes: { settlementRef: string; outcome: LineOutcome }[] = [];
 
   for (const line of lines) {
-    if (seen.has(line.settlementRef)) { outcomes.push({ settlementRef: line.settlementRef, outcome: { kind: 'DUPLICATE' } }); continue; }
+    if (seen.has(line.settlementRef)) {
+      outcomes.push({ settlementRef: line.settlementRef, outcome: { kind: 'DUPLICATE' } });
+      continue;
+    }
     seen.add(line.settlementRef);
     if (line.partnerRef !== position.partnerRef || line.merchantRef !== position.merchantRef) {
-      outcomes.push({ settlementRef: line.settlementRef, outcome: { kind: 'FOREIGN', reason: 'partner or merchant does not match the position' } });
+      outcomes.push({
+        settlementRef: line.settlementRef,
+        outcome: { kind: 'FOREIGN', reason: 'partner or merchant does not match the position' },
+      });
       continue;
     }
     const expected = roundDiv(line.grossRevenue.minorUnits * BigInt(position.holdbackPerTenThousand), 10_000n);
     if (line.swept.minorUnits < expected) {
-      outcomes.push({ settlementRef: line.settlementRef, outcome: { kind: 'SHORT', expected: money(expected, line.swept.currency), swept: line.swept, shortfall: money(expected - line.swept.minorUnits, line.swept.currency) } });
+      outcomes.push({
+        settlementRef: line.settlementRef,
+        outcome: {
+          kind: 'SHORT',
+          expected: money(expected, line.swept.currency),
+          swept: line.swept,
+          shortfall: money(expected - line.swept.minorUnits, line.swept.currency),
+        },
+      });
       // A short sweep is still money received: apply it, and let the exception carry the difference.
     }
     const remaining = position.totalPayable.minorUnits - collected;
@@ -81,12 +104,38 @@ export function reconcile(position: CollectionPosition, lines: readonly Settleme
     const refunded = line.swept.minorUnits - applied;
     collected += applied;
     if (refunded > 0n) {
-      const queued = enqueue(box, { eventId: `${position.transactionId}:refund:${line.settlementRef}`, tenantId: position.tenantId, kind: 'PAYMENT_DISBURSE', subjectRef: position.transactionId, idempotencyKey: `${position.transactionId}:refund:${line.settlementRef}`, payload: { beneficiaryRef: position.merchantRef, minorUnits: refunded.toString(), currency: line.swept.currency, reason: 'OVER_COLLECTION' }, correlationId: position.correlationId });
+      const queued = enqueue(box, {
+        eventId: `${position.transactionId}:refund:${line.settlementRef}`,
+        tenantId: position.tenantId,
+        kind: 'PAYMENT_DISBURSE',
+        subjectRef: position.transactionId,
+        idempotencyKey: `${position.transactionId}:refund:${line.settlementRef}`,
+        payload: {
+          beneficiaryRef: position.merchantRef,
+          minorUnits: refunded.toString(),
+          currency: line.swept.currency,
+          reason: 'OVER_COLLECTION',
+        },
+        correlationId: position.correlationId,
+      });
       if (!queued.ok) return queued;
       box = queued.value;
     }
-    if (line.swept.minorUnits >= expected) outcomes.push({ settlementRef: line.settlementRef, outcome: { kind: 'APPLIED', applied: money(applied, line.swept.currency), refunded: money(refunded, line.swept.currency) } });
+    if (line.swept.minorUnits >= expected)
+      outcomes.push({
+        settlementRef: line.settlementRef,
+        outcome: {
+          kind: 'APPLIED',
+          applied: money(applied, line.swept.currency),
+          refunded: money(refunded, line.swept.currency),
+        },
+      });
   }
 
-  return ok({ position: { ...position, collectedToDate: money(collected, position.totalPayable.currency) }, outbox: box, outcomes, settled: collected === position.totalPayable.minorUnits });
+  return ok({
+    position: { ...position, collectedToDate: money(collected, position.totalPayable.currency) },
+    outbox: box,
+    outcomes,
+    settled: collected === position.totalPayable.minorUnits,
+  });
 }

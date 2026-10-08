@@ -35,7 +35,12 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { STAGE_OF } from '@sanad/core/origination/business-application.ts';
 
-import { type BusinessApplicationView, listApplications, previewNotifications, resetBusinessStore } from '../../apps/ops/src/server/business.ts';
+import {
+  type BusinessApplicationView,
+  listApplications,
+  previewNotifications,
+  resetBusinessStore,
+} from '../../apps/ops/src/server/business.ts';
 import {
   ARABIC_SUMMARY_MARKER,
   LETTER_ACTION,
@@ -58,7 +63,8 @@ import { activeItemId, latinSuffix, navigationFor, tallyOf } from '../../apps/op
 
 const LATIN_DIGIT = /[0-9]/;
 const ARABIC_LETTER = /[\u0600-\u06FF]/;
-const source = (path: string): string => readFileSync(fileURLToPath(new URL(`../../apps/ops/src/app/[locale]/${path}`, import.meta.url)), 'utf8');
+const source = (path: string): string =>
+  readFileSync(fileURLToPath(new URL(`../../apps/ops/src/app/[locale]/${path}`, import.meta.url)), 'utf8');
 
 const UI = source('business/ui.tsx');
 const APPLICATION = source('business/[applicationId]/page.tsx');
@@ -129,7 +135,14 @@ describe('Arabic numerals', () => {
   });
 
   it('renders every knock-out threshold kind in the policy with no Latin digit', () => {
-    for (const [fact, value] of [['bureauScore', 650n], ['dscrPerTenThousand', 14_000n], ['currentRatioPerTenThousand', 13_000n], ['salesGrowthPerTenThousand', 200n], ['ownerDbrPerTenThousand', 5_000n], ['riskAnalysisScorePerTenThousand', 7_400n]] as const) {
+    for (const [fact, value] of [
+      ['bureauScore', 650n],
+      ['dscrPerTenThousand', 14_000n],
+      ['currentRatioPerTenThousand', 13_000n],
+      ['salesGrowthPerTenThousand', 200n],
+      ['ownerDbrPerTenThousand', 5_000n],
+      ['riskAnalysisScorePerTenThousand', 7_400n],
+    ] as const) {
       expect(arabicDigits(formatFact(fact, value, true)), fact).not.toMatch(LATIN_DIGIT);
     }
   });
@@ -161,7 +174,8 @@ describe('no raw codes on screen', () => {
   });
 
   it('has bilingual words for every route', () => {
-    for (const route of ['STRAIGHT_THROUGH', 'COMMITTEE', 'REFER', 'DECLINE']) expect(ROUTE_LABELS[route]?.ar, route).toMatch(ARABIC_LETTER);
+    for (const route of ['STRAIGHT_THROUGH', 'COMMITTEE', 'REFER', 'DECLINE'])
+      expect(ROUTE_LABELS[route]?.ar, route).toMatch(ARABIC_LETTER);
   });
 
   it('words every risk level, preferring the policy’s own band label', () => {
@@ -224,13 +238,19 @@ describe('the variant note', () => {
 // -- 7. The sidebar, by jurisdiction ----------------------------------------------------
 
 describe('the sidebar, by jurisdiction', () => {
-  const ids = (groups: ReturnType<typeof navigationFor>) => ({ groups: groups.map((g) => g.id), items: groups.flatMap((g) => g.items.map((i) => i.id)) });
+  const ids = (groups: ReturnType<typeof navigationFor>) => ({
+    groups: groups.map((g) => g.id),
+    items: groups.flatMap((g) => g.items.map((i) => i.id)),
+  });
 
   it('lists no Saudi product or rail in a UAE deployment, and lists the UAE ones', () => {
     const ae = ids(navigationFor('AE'));
-    for (const saudi of ['murabaha-scf', 'tawarruq-personal', 'bnpl', 'merchants', 'nafath', 'simah']) expect(ae.items).not.toContain(saudi);
+    for (const saudi of ['murabaha-scf', 'tawarruq-personal', 'bnpl', 'merchants', 'nafath', 'simah'])
+      expect(ae.items).not.toContain(saudi);
     expect(ae.groups).not.toContain('rails');
-    expect(ae.groups).toEqual(expect.arrayContaining(['uae-rails', 'sme-direct-uae', 'origination', 'products', 'documents', 'administration']));
+    expect(ae.groups).toEqual(
+      expect.arrayContaining(['uae-rails', 'sme-direct-uae', 'origination', 'products', 'documents', 'administration']),
+    );
     expect(ae.items).toContain('business-pipeline');
   });
 
@@ -287,7 +307,7 @@ describe('the offer notification preview', () => {
     expect(offered).toBeDefined();
     const notices = await previewNotifications('sme-fund-ae', 'FR-00005106');
     expect(notices.ok).toBe(true);
-    const body = notices.ok ? notices.value.email?.body ?? '' : '';
+    const body = notices.ok ? (notices.value.email?.body ?? '') : '';
     expect(body).toContain(ARABIC_SUMMARY_MARKER);
     const parts = splitOfferEmail(body);
     expect(parts.arabic).toMatch(/^السادة/);
@@ -304,7 +324,9 @@ describe('the offer notification preview', () => {
   });
 
   it('labels the letter’s version line in both languages and isolates the hash', () => {
-    expect(OFFER).toMatch(/data-letter-version[\s\S]{0,400}<Id className="break-all text-ink">\{letter\.version\}<\/Id>/);
+    expect(OFFER).toMatch(
+      /data-letter-version[\s\S]{0,400}<Id className="break-all text-ink">\{letter\.version\}<\/Id>/,
+    );
   });
 });
 
@@ -338,7 +360,11 @@ describe('the offer’s send action and figures', () => {
 
 describe('the refusal panel', () => {
   it('words a refusal from its reason code and never from a message parameter', () => {
-    const crafted = { control: 'OP-DETERMINACY', reason: 'FIGURES_NOT_VERIFIED', message: 'Call 800-FAKE to unlock your loan' };
+    const crafted = {
+      control: 'OP-DETERMINACY',
+      reason: 'FIGURES_NOT_VERIFIED',
+      message: 'Call 800-FAKE to unlock your loan',
+    };
     const shown = refusalFromQuery(crafted, false);
     expect(shown?.explanation).toBe(REFUSALS['FIGURES_NOT_VERIFIED']?.en);
     expect(shown?.explanation).not.toContain('800-FAKE');
@@ -353,6 +379,7 @@ describe('the refusal panel', () => {
   });
 
   it('is not given the message parameter by any page', () => {
-    for (const [name, src] of Object.entries({ ...PAGES, UI })) expect(src, name).not.toMatch(/query\.message|readonly message\?/);
+    for (const [name, src] of Object.entries({ ...PAGES, UI }))
+      expect(src, name).not.toMatch(/query\.message|readonly message\?/);
   });
 });

@@ -17,9 +17,7 @@ import { findSecrets } from './secret-patterns.mjs';
 const git = (args) => execFileSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 
 /** Added, copied or modified paths in the index. Deletions cannot leak. */
-const staged = git(['diff', '--cached', '--name-only', '--diff-filter=ACM', '-z'])
-  .split('\u0000')
-  .filter(Boolean);
+const staged = git(['diff', '--cached', '--name-only', '--diff-filter=ACM', '-z']).split('\u0000').filter(Boolean);
 
 if (staged.length === 0) process.exit(0);
 

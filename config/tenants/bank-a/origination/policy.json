@@ -40,9 +40,7 @@
       "agentId": "agt-fo-227",
       "status": "ACTIVE",
       "branchCode": "JED-03",
-      "programmes": [
-        "prg-0001"
-      ],
+      "programmes": ["prg-0001"],
       "maxRequestMinorUnits": "15000000"
     },
     {
@@ -65,18 +63,14 @@
       "partnerId": "aggregator-dev-01",
       "status": "ACTIVE",
       "channel": "EMBEDDED_AGGREGATOR",
-      "programmes": [
-        "prg-0001"
-      ],
+      "programmes": ["prg-0001"],
       "maxRequestMinorUnits": "20000000"
     },
     {
       "partnerId": "hungerstation",
       "status": "ACTIVE",
       "channel": "EMBEDDED_AGGREGATOR",
-      "programmes": [
-        "prg-0001"
-      ],
+      "programmes": ["prg-0001"],
       "maxRequestMinorUnits": "20000000"
     },
     {
@@ -119,10 +113,5 @@
     "maxAttempts": 3,
     "backoffSeconds": 300
   },
-  "revalidateOn": [
-    "tradeReference",
-    "requestedAmount",
-    "counterpartyId",
-    "programmeId"
-  ]
+  "revalidateOn": ["tradeReference", "requestedAmount", "counterpartyId", "programmeId"]
 }

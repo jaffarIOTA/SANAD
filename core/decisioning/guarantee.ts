@@ -26,11 +26,26 @@ export function parseGuarantee(raw: unknown): Result<GuaranteeTerms | undefined>
   if (!isRecord(raw)) return bad('TERMS_GUARANTEE', 'guarantee is an object when present');
   const allowed = new Set(['programme', 'coveragePerTenThousand', 'programmeRef', 'requiredBeforeDisbursement']);
   const unknown = Object.keys(raw).filter((k) => !allowed.has(k));
-  if (unknown.length > 0) return reject('OP-DETERMINACY', 'TERMS_GUARANTEE_UNKNOWN_KEY', 'Unknown key in the guarantee terms', { keys: unknown.join(',') });
-  if (typeof raw['programme'] !== 'string' || raw['programme'].trim().length === 0) return bad('TERMS_GUARANTEE_PROGRAMME', 'guarantee.programme names the programme');
+  if (unknown.length > 0)
+    return reject('OP-DETERMINACY', 'TERMS_GUARANTEE_UNKNOWN_KEY', 'Unknown key in the guarantee terms', {
+      keys: unknown.join(','),
+    });
+  if (typeof raw['programme'] !== 'string' || raw['programme'].trim().length === 0)
+    return bad('TERMS_GUARANTEE_PROGRAMME', 'guarantee.programme names the programme');
   const coverage = raw['coveragePerTenThousand'];
-  if (typeof coverage !== 'number' || !Number.isInteger(coverage) || coverage <= 0 || coverage > 10_000) return bad('TERMS_GUARANTEE_COVERAGE', 'guarantee.coveragePerTenThousand is a whole number in (0, 10000]');
-  if (typeof raw['programmeRef'] !== 'string' || raw['programmeRef'].trim().length < 10) return bad('TERMS_GUARANTEE_REF', 'guarantee.programmeRef cites the programme document and initiative the coverage comes from');
-  if (typeof raw['requiredBeforeDisbursement'] !== 'boolean') return bad('TERMS_GUARANTEE_TIMING', 'guarantee.requiredBeforeDisbursement is a boolean');
-  return ok({ programme: raw['programme'], coveragePerTenThousand: coverage, programmeRef: raw['programmeRef'], requiredBeforeDisbursement: raw['requiredBeforeDisbursement'] });
+  if (typeof coverage !== 'number' || !Number.isInteger(coverage) || coverage <= 0 || coverage > 10_000)
+    return bad('TERMS_GUARANTEE_COVERAGE', 'guarantee.coveragePerTenThousand is a whole number in (0, 10000]');
+  if (typeof raw['programmeRef'] !== 'string' || raw['programmeRef'].trim().length < 10)
+    return bad(
+      'TERMS_GUARANTEE_REF',
+      'guarantee.programmeRef cites the programme document and initiative the coverage comes from',
+    );
+  if (typeof raw['requiredBeforeDisbursement'] !== 'boolean')
+    return bad('TERMS_GUARANTEE_TIMING', 'guarantee.requiredBeforeDisbursement is a boolean');
+  return ok({
+    programme: raw['programme'],
+    coveragePerTenThousand: coverage,
+    programmeRef: raw['programmeRef'],
+    requiredBeforeDisbursement: raw['requiredBeforeDisbursement'],
+  });
 }

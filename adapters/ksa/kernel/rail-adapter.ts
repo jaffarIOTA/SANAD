@@ -55,8 +55,19 @@ export abstract class RailAdapter extends BaseAdapter {
       );
       return { kind: 'ANSWERED', value };
     } catch (error) {
-      if (error instanceof CircuitOpenError) return { kind: 'UNAVAILABLE', reason: 'circuit open', retryAfterSeconds: this.config.breaker.resetAfterSeconds };
-      if (error instanceof TransportError && error.status !== undefined && error.status < 500 && error.status !== 429 && error.status !== 408) {
+      if (error instanceof CircuitOpenError)
+        return {
+          kind: 'UNAVAILABLE',
+          reason: 'circuit open',
+          retryAfterSeconds: this.config.breaker.resetAfterSeconds,
+        };
+      if (
+        error instanceof TransportError &&
+        error.status !== undefined &&
+        error.status < 500 &&
+        error.status !== 429 &&
+        error.status !== 408
+      ) {
         return { kind: 'REFUSED', code: `HTTP_${String(error.status)}` };
       }
       return { kind: 'UNAVAILABLE', reason: error instanceof Error ? error.name : 'transport failure' };
@@ -75,8 +86,18 @@ export abstract class RailAdapter extends BaseAdapter {
 
 export const str = (v: unknown): string | undefined => (typeof v === 'string' && v.length > 0 ? v : undefined);
 export const bool = (v: unknown): boolean | undefined => (typeof v === 'boolean' ? v : undefined);
-export const int = (v: unknown): number | undefined => (typeof v === 'number' && Number.isInteger(v) ? v : typeof v === 'string' && /^-?\d+$/.test(v) ? Number.parseInt(v, 10) : undefined);
-export const epoch = (v: unknown): bigint | undefined => (typeof v === 'number' && Number.isInteger(v) ? BigInt(v) : typeof v === 'string' && /^\d+$/.test(v) ? BigInt(v) : undefined);
+export const int = (v: unknown): number | undefined =>
+  typeof v === 'number' && Number.isInteger(v)
+    ? v
+    : typeof v === 'string' && /^-?\d+$/.test(v)
+      ? Number.parseInt(v, 10)
+      : undefined;
+export const epoch = (v: unknown): bigint | undefined =>
+  typeof v === 'number' && Number.isInteger(v)
+    ? BigInt(v)
+    : typeof v === 'string' && /^\d+$/.test(v)
+      ? BigInt(v)
+      : undefined;
 
 /** "1234.56" → 123456n, by digit manipulation. A vendor decimal never becomes a float. */
 export function decimalToMinor(v: unknown): bigint | undefined {
@@ -89,4 +110,7 @@ export function decimalToMinor(v: unknown): bigint | undefined {
 }
 
 /** Fail closed on a response we do not understand. Typed so it fits any port's outcome. */
-export const malformed = (): { readonly kind: 'UNAVAILABLE'; readonly reason: string } => ({ kind: 'UNAVAILABLE', reason: 'response malformed' });
+export const malformed = (): { readonly kind: 'UNAVAILABLE'; readonly reason: string } => ({
+  kind: 'UNAVAILABLE',
+  reason: 'response malformed',
+});

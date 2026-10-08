@@ -14,14 +14,24 @@ import { ok } from '../../../core/kernel/result.ts';
 import { money } from '../../../core/kernel/money.ts';
 import type { KnownDeviation } from '../../kernel/adapter.ts';
 import type { RailTransport } from '../../kernel/http-transport.ts';
-import { RailAdapter, type RailAdapterConfig, bool, decimalToMinor, epoch, int, malformed, str } from '../kernel/rail-adapter.ts';
+import {
+  RailAdapter,
+  type RailAdapterConfig,
+  bool,
+  decimalToMinor,
+  epoch,
+  int,
+  malformed,
+  str,
+} from '../kernel/rail-adapter.ts';
 import type { TaxCompliancePort } from '../../../core/ports/tax-compliance.ts';
 
 export const ZATCATAXADAPTER_DEVIATIONS: readonly KnownDeviation[] = [
   {
     id: 'ZATCA-TAX-DEV-001',
     summary: 'Certificate status vocabulary is the authority’s own.',
-    containment: 'Mapped to VALID / EXPIRED / NOT_FOUND / SUSPENDED at this boundary; an unknown status is UNAVAILABLE, never VALID.',
+    containment:
+      'Mapped to VALID / EXPIRED / NOT_FOUND / SUSPENDED at this boundary; an unknown status is UNAVAILABLE, never VALID.',
     verificationRef: 'KSA-RAIL-ZATCA-02',
   },
 ];
@@ -35,14 +45,34 @@ export class ZatcaTaxAdapter extends RailAdapter implements TaxCompliancePort {
     super(config, credentials, transport);
   }
 
-  static readonly STATUS: Readonly<Record<string, 'VALID' | 'EXPIRED' | 'NOT_FOUND' | 'SUSPENDED'>> = { ACTIVE: 'VALID', VALID: 'VALID', EXPIRED: 'EXPIRED', NOT_FOUND: 'NOT_FOUND', SUSPENDED: 'SUSPENDED' };
+  static readonly STATUS: Readonly<Record<string, 'VALID' | 'EXPIRED' | 'NOT_FOUND' | 'SUSPENDED'>> = {
+    ACTIVE: 'VALID',
+    VALID: 'VALID',
+    EXPIRED: 'EXPIRED',
+    NOT_FOUND: 'NOT_FOUND',
+    SUSPENDED: 'SUSPENDED',
+  };
 
   async certificateStatus(p: { readonly tenantId: string; readonly crNumber: string; readonly correlationId: string }) {
-    const r = await this.invoke('tax.certificate', { method: 'GET', path: `/v1/certificates?cr=${encodeURIComponent(p.crNumber)}` }, p.correlationId);
+    const r = await this.invoke(
+      'tax.certificate',
+      { method: 'GET', path: `/v1/certificates?cr=${encodeURIComponent(p.crNumber)}` },
+      p.correlationId,
+    );
     if (r.kind !== 'ANSWERED') return ok(r);
-    const status = ZatcaTaxAdapter.STATUS[String(r.value['status'])]; const at = epoch(r.value['asOf']);
+    const status = ZatcaTaxAdapter.STATUS[String(r.value['status'])];
+    const at = epoch(r.value['asOf']);
     if (status === undefined || at === undefined) return ok(malformed());
-    const ref = str(r.value['certificateNumber']); const until = epoch(r.value['validUntil']);
-    return ok({ kind: 'ANSWERED' as const, value: { status, retrievedAtEpochSeconds: at, ...(ref === undefined ? {} : { certificateRef: ref }), ...(until === undefined ? {} : { validUntilEpochSeconds: until }) } });
+    const ref = str(r.value['certificateNumber']);
+    const until = epoch(r.value['validUntil']);
+    return ok({
+      kind: 'ANSWERED' as const,
+      value: {
+        status,
+        retrievedAtEpochSeconds: at,
+        ...(ref === undefined ? {} : { certificateRef: ref }),
+        ...(until === undefined ? {} : { validUntilEpochSeconds: until }),
+      },
+    });
   }
 }

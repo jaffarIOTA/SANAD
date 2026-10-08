@@ -40,7 +40,9 @@ export const ADAPTER_CATALOGUE: AdapterCatalogue = {
 };
 
 /** Bilingual labels for the admin surface. Capability names, the vendor codes speak for themselves. */
-export const CAPABILITY_LABELS: Readonly<Record<keyof typeof ADAPTER_CATALOGUE, { readonly en: string; readonly ar: string }>> = {
+export const CAPABILITY_LABELS: Readonly<
+  Record<keyof typeof ADAPTER_CATALOGUE, { readonly en: string; readonly ar: string }>
+> = {
   CORE_BANKING: { en: 'Core banking', ar: 'النظام المصرفي الأساسي' },
   DOCUMENT_PLATFORM: { en: 'Document platform', ar: 'منصة المستندات' },
   E_INVOICING: { en: 'E-invoicing clearance', ar: 'الفوترة الإلكترونية' },

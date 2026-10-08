@@ -196,7 +196,19 @@ components:
         requestId: { type: string }
         state:
           type: string
-          enum: [KEYING, AWAITING_SERVICING_RESPONSE, AWAITING_REVIEW, RETURNED_TO_MAKER, PENDING_INFORMATION, SERVICING_UNAVAILABLE, APPROVED, REJECTED, WITHDRAWN, EXPIRED]
+          enum:
+            [
+              KEYING,
+              AWAITING_SERVICING_RESPONSE,
+              AWAITING_REVIEW,
+              RETURNED_TO_MAKER,
+              PENDING_INFORMATION,
+              SERVICING_UNAVAILABLE,
+              APPROVED,
+              REJECTED,
+              WITHDRAWN,
+              EXPIRED,
+            ]
         channel: { type: string }
         counterpartyId: { type: string }
         invoiceNumber: { type: string }
@@ -245,7 +257,8 @@ components:
           enum: [APPROVE, RETURN, REJECT, REQUEST_INFORMATION]
         note: { type: string, minLength: 1, maxLength: 500, description: Required for RETURN. }
         reasonCode: { type: string, minLength: 1, maxLength: 64, description: Required for REJECT. }
-        contraryJustification: { type: string, minLength: 1, maxLength: 1000, description: Required to APPROVE against a servicing decline. }
+        contraryJustification:
+          { type: string, minLength: 1, maxLength: 1000, description: Required to APPROVE against a servicing decline. }
         from: { type: string, enum: [COUNTERPARTY, PARTNER, DOCUMENTS], description: Required for REQUEST_INFORMATION. }
         items:
           type: array
@@ -255,7 +268,33 @@ components:
 
     ControlCode:
       type: string
-      enum: [SH-01, SH-02, SH-03, SH-04, SH-05, SH-06, SH-07, SH-08, SH-09, SH-10, SH-11, SH-12, SH-13, SH-14, SH-15, SH-16, SH-17, SH-18, OP-DETERMINACY, OP-CHAIN, OP-LIMIT, PLAT-01, PLAT-02, PLAT-03]
+      enum:
+        [
+          SH-01,
+          SH-02,
+          SH-03,
+          SH-04,
+          SH-05,
+          SH-06,
+          SH-07,
+          SH-08,
+          SH-09,
+          SH-10,
+          SH-11,
+          SH-12,
+          SH-13,
+          SH-14,
+          SH-15,
+          SH-16,
+          SH-17,
+          SH-18,
+          OP-DETERMINACY,
+          OP-CHAIN,
+          OP-LIMIT,
+          PLAT-01,
+          PLAT-02,
+          PLAT-03,
+        ]
 
     Problem:
       type: object

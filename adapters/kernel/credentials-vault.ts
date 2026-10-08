@@ -14,7 +14,12 @@
 
 import { Pool, type PoolConfig } from 'pg';
 
-import { type CredentialProvider, type CredentialProviderName, type CredentialRef, SecretValue } from '../../core/ports/credentials.ts';
+import {
+  type CredentialProvider,
+  type CredentialProviderName,
+  type CredentialRef,
+  SecretValue,
+} from '../../core/ports/credentials.ts';
 
 import type { CredentialAuditSink } from './credentials-environment.ts';
 
@@ -24,8 +29,32 @@ import type { CredentialAuditSink } from './credentials-environment.ts';
  * be refused by the table's check constraint, so it is refused here first.
  */
 export const VAULT_PROVIDER_CODES = [
-  'TUUM', 'NUTRIENT', 'ZATCA', 'NAFATH', 'YAKEEN', 'TAHAQOQ', 'WATHQ', 'SIMAH', 'BAYAN', 'GOSI', 'OPEN_BANKING', 'SADAD', 'PAYMENTS_HUB', 'RATE_PUBLISHER', 'COMMODITY_BROKER', 'WORKFLOW_ENGINE', 'SCREENING', 'CSP', 'TSA',
-  'AECB', 'UAE_PASS', 'ICP', 'NER', 'MOHRE', 'FTA', 'PARTNER_BANK',
+  'TUUM',
+  'NUTRIENT',
+  'ZATCA',
+  'NAFATH',
+  'YAKEEN',
+  'TAHAQOQ',
+  'WATHQ',
+  'SIMAH',
+  'BAYAN',
+  'GOSI',
+  'OPEN_BANKING',
+  'SADAD',
+  'PAYMENTS_HUB',
+  'RATE_PUBLISHER',
+  'COMMODITY_BROKER',
+  'WORKFLOW_ENGINE',
+  'SCREENING',
+  'CSP',
+  'TSA',
+  'AECB',
+  'UAE_PASS',
+  'ICP',
+  'NER',
+  'MOHRE',
+  'FTA',
+  'PARTNER_BANK',
 ] as const;
 export type VaultProviderCode = (typeof VAULT_PROVIDER_CODES)[number];
 
@@ -59,7 +88,8 @@ const VAULT_PROVIDER: Readonly<Record<CredentialProviderName, VaultProviderCode>
   WORKFLOW_ENGINE: 'WORKFLOW_ENGINE',
 };
 
-export const isVaultProviderCode = (code: string): code is VaultProviderCode => (VAULT_PROVIDER_CODES as readonly string[]).includes(code);
+export const isVaultProviderCode = (code: string): code is VaultProviderCode =>
+  (VAULT_PROVIDER_CODES as readonly string[]).includes(code);
 
 /**
  * Which adapter serves a capability for the tenant that owns a credential
@@ -90,7 +120,9 @@ export interface ConfiguredRails {
  * `tenantId` a credential reference carries). A tenant or capability not in
  * the map falls back to the default.
  */
-export function vaultProviderResolverFromRails(byTenant: Readonly<Record<string, ConfiguredRails>>): VaultProviderResolver {
+export function vaultProviderResolverFromRails(
+  byTenant: Readonly<Record<string, ConfiguredRails>>,
+): VaultProviderResolver {
   const table = new Map<string, string>();
   for (const [tenant, config] of Object.entries(byTenant)) {
     for (const rail of config.rails) table.set(`${tenant}\u0000${rail.capability}`, rail.adapter);
@@ -124,7 +156,14 @@ export class VaultCredentialProvider implements CredentialProvider {
       // The function raises on every refusal, so an empty row is a wiring fault, not a policy outcome.
       throw new Error(`credential read returned nothing: ${code}/${ref.environment}/${ref.keyName}`);
     }
-    this.audit({ tenantId: ref.tenantId, provider: ref.provider, environment: ref.environment, keyName: ref.keyName, correlationId, source: 'VAULT' });
+    this.audit({
+      tenantId: ref.tenantId,
+      provider: ref.provider,
+      environment: ref.environment,
+      keyName: ref.keyName,
+      correlationId,
+      source: 'VAULT',
+    });
     return new SecretValue(secret);
   }
 

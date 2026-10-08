@@ -80,7 +80,8 @@ const server = createService({
   snapshots: developmentSnapshots(),
   creditPolicies: {
     versionsFor: (tenantId) => {
-      if (!isTenantCode(tenantId)) return reject('OP-DETERMINACY', 'TENANT_UNKNOWN', 'No configuration for this tenant');
+      if (!isTenantCode(tenantId))
+        return reject('OP-DETERMINACY', 'TENANT_UNKNOWN', 'No configuration for this tenant');
       const all = loadAllForTenant(tenantId);
       return all.ok ? { ok: true, value: all.value.creditPolicies } : all;
     },
@@ -90,9 +91,7 @@ const server = createService({
 
 server.listen(port, () => {
   // No credential, identifier or personal datum in this line, or in any other.
-  process.stdout.write(
-    `origination service listening on http://127.0.0.1:${String(port)}${BASE_PATH}\n`,
-  );
+  process.stdout.write(`origination service listening on http://127.0.0.1:${String(port)}${BASE_PATH}\n`);
 });
 
 /*

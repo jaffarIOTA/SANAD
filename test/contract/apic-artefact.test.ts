@@ -22,8 +22,7 @@ import { parse } from 'yaml';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
-const read = (p: string): Record<string, any> =>
-  parse(readFileSync(`${ROOT}${p}`, 'utf8')) as Record<string, any>;
+const read = (p: string): Record<string, any> => parse(readFileSync(`${ROOT}${p}`, 'utf8')) as Record<string, any>;
 
 const contract = read('api/openapi/origination.v1.yaml');
 const artefact = read('gateway/ibm/origination-api_1.0.0.yaml');
@@ -47,9 +46,7 @@ describe('the generated artefact is publishable', () => {
   });
 
   it('is marked generated, so nobody edits it by hand', () => {
-    expect(readFileSync(`${ROOT}gateway/ibm/origination-api_1.0.0.yaml`, 'utf8')).toContain(
-      'GENERATED — do not edit',
-    );
+    expect(readFileSync(`${ROOT}gateway/ibm/origination-api_1.0.0.yaml`, 'utf8')).toContain('GENERATED — do not edit');
   });
 });
 
@@ -60,9 +57,7 @@ describe('it agrees with the contract on everything that matters', () => {
 
   it('exposes the same operations on each path', () => {
     for (const [path, item] of Object.entries(contract['paths'] as Record<string, any>)) {
-      const methods = Object.keys(item).filter((k) =>
-        ['get', 'put', 'post', 'delete', 'patch'].includes(k),
-      );
+      const methods = Object.keys(item).filter((k) => ['get', 'put', 'post', 'delete', 'patch'].includes(k));
       const published = Object.keys(artefact['paths'][path]).filter((k) =>
         ['get', 'put', 'post', 'delete', 'patch'].includes(k),
       );

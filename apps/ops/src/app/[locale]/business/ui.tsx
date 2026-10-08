@@ -18,10 +18,28 @@ import { formatMinorUnits } from '@sanad/design/Money.tsx';
 import type { CurrencyCode } from '@sanad/core/kernel/money.ts';
 
 import { type BusinessApplicationView, PIPELINE_STAGES } from '../../../server/business.ts';
-import { type ChipTone, NOTICES, STATUS_WORDS, type ShellQuery, VARIANT_NOTE, arabicDigits, codeWords, humanise, refusalFromQuery, riskLevelWords } from '../../../server/business-dashboard.ts';
+import {
+  type ChipTone,
+  NOTICES,
+  STATUS_WORDS,
+  type ShellQuery,
+  VARIANT_NOTE,
+  arabicDigits,
+  codeWords,
+  humanise,
+  refusalFromQuery,
+  riskLevelWords,
+} from '../../../server/business-dashboard.ts';
 
 // The screens' words live in server/business-dashboard.ts (plain TypeScript, so the tests can import them); re-exported here for the pages.
-export { LETTER_ACTION, ROUTE_LABELS, SEND_LABEL, type ShellQuery, humanise, splitOfferEmail } from '../../../server/business-dashboard.ts';
+export {
+  LETTER_ACTION,
+  ROUTE_LABELS,
+  SEND_LABEL,
+  type ShellQuery,
+  humanise,
+  splitOfferEmail,
+} from '../../../server/business-dashboard.ts';
 import { currencyLabel } from '../../../server/jurisdiction.ts';
 
 // -- Formatting ---------------------------------------------------------------
@@ -45,7 +63,8 @@ export interface Formatters {
 export function formatters(arabic: boolean, currency: CurrencyCode): Formatters {
   const numerals = arabic ? 'arabic-indic' : 'latin';
   const dateLocale = arabic ? 'ar-SA-u-ca-gregory' : 'en-GB';
-  const dateFormat = (timeZone: string) => new Intl.DateTimeFormat(dateLocale, { day: 'numeric', month: 'short', year: 'numeric', timeZone });
+  const dateFormat = (timeZone: string) =>
+    new Intl.DateTimeFormat(dateLocale, { day: 'numeric', month: 'short', year: 'numeric', timeZone });
   return {
     arabic,
     t: (en, ar) => (arabic ? ar : en),
@@ -55,7 +74,9 @@ export function formatters(arabic: boolean, currency: CurrencyCode): Formatters 
     digits: (s) => (arabic ? arabicDigits(s) : s),
     isoDate: (iso) => {
       const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-      return m === null ? iso : dateFormat('UTC').format(new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))));
+      return m === null
+        ? iso
+        : dateFormat('UTC').format(new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))));
     },
     epochDate: (epochSeconds) => dateFormat('Asia/Dubai').format(new Date(Number(epochSeconds) * 1000)),
   };
@@ -73,7 +94,13 @@ const CHIP: Readonly<Record<ChipTone, string>> = {
 
 /** A soft pill with its label: meaning is never carried by colour alone. */
 export function Chip({ tone, children }: { readonly tone: ChipTone; readonly children: ReactNode }): ReactElement {
-  return <span className={`inline-flex max-w-full items-center rounded-[6px] px-2.5 py-1 text-[12px] font-medium leading-snug ${CHIP[tone]}`}>{children}</span>;
+  return (
+    <span
+      className={`inline-flex max-w-full items-center rounded-[6px] px-2.5 py-1 text-[12px] font-medium leading-snug ${CHIP[tone]}`}
+    >
+      {children}
+    </span>
+  );
 }
 
 export function StatusPill({ status, f }: { readonly status: string; readonly f: Formatters }): ReactElement {
@@ -99,10 +126,15 @@ export const SECTOR_LABELS: Readonly<Record<string, { readonly en: string; reado
 };
 
 /** A code's words from a bilingual map; an unmapped code is never shown raw (see `codeWords`). */
-export const label = (map: Readonly<Record<string, { readonly en: string; readonly ar: string }>>, code: string, f: Formatters): string => codeWords(map, code, f.arabic);
+export const label = (
+  map: Readonly<Record<string, { readonly en: string; readonly ar: string }>>,
+  code: string,
+  f: Formatters,
+): string => codeWords(map, code, f.arabic);
 
 /** A risk level's words: the policy's band label for it if given, else the static map. */
-export const riskLevelLabel = (level: string, f: Formatters, bands?: Parameters<typeof riskLevelWords>[2]): string => riskLevelWords(level, f.arabic, bands);
+export const riskLevelLabel = (level: string, f: Formatters, bands?: Parameters<typeof riskLevelWords>[2]): string =>
+  riskLevelWords(level, f.arabic, bands);
 
 export function stageTitle(stage: number, f: Formatters): string {
   const s = PIPELINE_STAGES.find((x) => x.stage === stage);
@@ -119,7 +151,11 @@ export const stageRange = (from: number, to: number, f: Formatters): string => `
  * copy, not a quantity to read.
  */
 export function Id({ children, className }: { readonly children: string; readonly className?: string }): ReactElement {
-  return <bdi dir="ltr" className={`identifier ${className ?? ''}`}>{children}</bdi>;
+  return (
+    <bdi dir="ltr" className={`identifier ${className ?? ''}`}>
+      {children}
+    </bdi>
+  );
 }
 
 /** The variant's provenance note, neutral and in the screen's language (VARIANT_NOTE in server/business-dashboard.ts). */
@@ -127,7 +163,19 @@ export const variantProvenanceNote = (f: Formatters): string => f.t(VARIANT_NOTE
 
 // -- Cards --------------------------------------------------------------------
 
-export function SectionCard({ title, note, aside, children, id }: { readonly title: string; readonly note?: ReactNode; readonly aside?: ReactNode; readonly children: ReactNode; readonly id?: string }): ReactElement {
+export function SectionCard({
+  title,
+  note,
+  aside,
+  children,
+  id,
+}: {
+  readonly title: string;
+  readonly note?: ReactNode;
+  readonly aside?: ReactNode;
+  readonly children: ReactNode;
+  readonly id?: string;
+}): ReactElement {
   return (
     <section id={id} className="min-w-0 rounded-card border border-line bg-surface shadow-card">
       <header className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4">
@@ -143,8 +191,27 @@ export function SectionCard({ title, note, aside, children, id }: { readonly tit
 }
 
 /** A figure tile: uppercase label, the value large, one line of context. */
-export function MetricTile({ label, value, unit, sub, tone = 'quiet' }: { readonly label: string; readonly value: ReactNode; readonly unit?: string; readonly sub?: ReactNode; readonly tone?: 'quiet' | 'good' | 'bad' | 'warn' }): ReactElement {
-  const subTone = tone === 'bad' ? 'text-blocked font-medium' : tone === 'good' ? 'text-positive' : tone === 'warn' ? 'text-attention font-medium' : 'text-ink-quiet';
+export function MetricTile({
+  label,
+  value,
+  unit,
+  sub,
+  tone = 'quiet',
+}: {
+  readonly label: string;
+  readonly value: ReactNode;
+  readonly unit?: string;
+  readonly sub?: ReactNode;
+  readonly tone?: 'quiet' | 'good' | 'bad' | 'warn';
+}): ReactElement {
+  const subTone =
+    tone === 'bad'
+      ? 'text-blocked font-medium'
+      : tone === 'good'
+        ? 'text-positive'
+        : tone === 'warn'
+          ? 'text-attention font-medium'
+          : 'text-ink-quiet';
   return (
     <div className="flex min-w-0 flex-col rounded-card border border-line bg-surface px-5 py-4 shadow-card">
       <span className="truncate text-[12px] font-medium uppercase tracking-wide text-ink-quiet">{label}</span>
@@ -163,7 +230,11 @@ export function MetricTile({ label, value, unit, sub, tone = 'quiet' }: { readon
  * have to guess the operator.
  */
 export function DividedBy({ f }: { readonly f: Formatters }): ReactElement {
-  return <span className="text-[14px] font-semibold text-ink" data-operator="divide">{f.t('divided by', 'مقسوماً على')}</span>;
+  return (
+    <span className="text-[14px] font-semibold text-ink" data-operator="divide">
+      {f.t('divided by', 'مقسوماً على')}
+    </span>
+  );
 }
 
 /** A label/value pair in a definition grid. */
@@ -176,10 +247,14 @@ export function Field({ label, children }: { readonly label: string; readonly ch
   );
 }
 
-export const BTN_PRIMARY = 'press inline-flex h-10 items-center justify-center gap-2 rounded-tile bg-brand px-4 text-[14px] font-semibold text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-sunken disabled:text-ink-faint';
-export const BTN_SECONDARY = 'press inline-flex h-10 items-center justify-center gap-2 rounded-tile border border-line-strong bg-surface px-4 text-[14px] font-semibold text-heading hover:bg-sunken disabled:cursor-not-allowed disabled:text-ink-faint';
-export const BTN_SMALL = 'press inline-flex h-8 items-center justify-center gap-1 rounded-tile border border-line-strong bg-surface px-3 text-[13px] font-semibold text-heading hover:bg-sunken';
-export const INPUT = 'h-9 w-full min-w-0 rounded-tile border border-line-strong bg-surface px-3 text-[13px] text-ink outline-none placeholder:text-ink-faint focus:border-brand focus:ring-2 focus:ring-brand/20';
+export const BTN_PRIMARY =
+  'press inline-flex h-10 items-center justify-center gap-2 rounded-tile bg-brand px-4 text-[14px] font-semibold text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-sunken disabled:text-ink-faint';
+export const BTN_SECONDARY =
+  'press inline-flex h-10 items-center justify-center gap-2 rounded-tile border border-line-strong bg-surface px-4 text-[14px] font-semibold text-heading hover:bg-sunken disabled:cursor-not-allowed disabled:text-ink-faint';
+export const BTN_SMALL =
+  'press inline-flex h-8 items-center justify-center gap-1 rounded-tile border border-line-strong bg-surface px-3 text-[13px] font-semibold text-heading hover:bg-sunken';
+export const INPUT =
+  'h-9 w-full min-w-0 rounded-tile border border-line-strong bg-surface px-3 text-[13px] text-ink outline-none placeholder:text-ink-faint focus:border-brand focus:ring-2 focus:ring-brand/20';
 const TH_BASE = 'py-3 pe-3 text-[12px] font-medium text-ink-quiet';
 /** A text column's header: start-aligned. */
 export const TH = `${TH_BASE} text-start`;
@@ -192,17 +267,33 @@ export const TH = `${TH_BASE} text-start`;
 export const TH_END = `${TH_BASE} text-end`;
 
 /** A primary action that is not available yet, with the reason in words beside it. */
-export function DisabledAction({ label, reason }: { readonly label: string; readonly reason: ReactNode }): ReactElement {
+export function DisabledAction({
+  label,
+  reason,
+}: {
+  readonly label: string;
+  readonly reason: ReactNode;
+}): ReactElement {
   return (
     <div className="flex flex-col items-start gap-1.5">
-      <button type="button" disabled className={BTN_PRIMARY}>{label}</button>
+      <button type="button" disabled className={BTN_PRIMARY}>
+        {label}
+      </button>
       <p className="max-w-[48ch] text-[12px] text-ink-quiet">{reason}</p>
     </div>
   );
 }
 
 /** Hidden fields every business form carries: where it acts and where to come back to. */
-export function FormContext({ segment, applicationId, screen }: { readonly segment: string; readonly applicationId: string; readonly screen?: 'assessment' | 'offer' }): ReactElement {
+export function FormContext({
+  segment,
+  applicationId,
+  screen,
+}: {
+  readonly segment: string;
+  readonly applicationId: string;
+  readonly screen?: 'assessment' | 'offer';
+}): ReactElement {
   return (
     <>
       <input type="hidden" name="locale" value={segment} />
@@ -224,23 +315,60 @@ export function FormContext({ segment, applicationId, screen }: { readonly segme
  * scrolls inside its own `relative overflow-x-auto` box rather than letting a
  * word cross a card's border.
  */
-export function StageStepper({ current, closed, f }: { readonly current: number; readonly closed: boolean; readonly f: Formatters }): ReactElement {
+export function StageStepper({
+  current,
+  closed,
+  f,
+}: {
+  readonly current: number;
+  readonly closed: boolean;
+  readonly f: Formatters;
+}): ReactElement {
   return (
     <div className="relative overflow-x-auto pb-1">
-      <ol aria-label={f.t('Pipeline stages', 'مراحل الطلب')} className="flex min-w-max list-none gap-2 p-0 xl:grid xl:min-w-0 xl:grid-cols-9">
+      <ol
+        aria-label={f.t('Pipeline stages', 'مراحل الطلب')}
+        className="flex min-w-max list-none gap-2 p-0 xl:grid xl:min-w-0 xl:grid-cols-9"
+      >
         {PIPELINE_STAGES.map((s) => {
           const done = s.stage < current;
           const here = s.stage === current;
-          const ring = here ? (closed ? 'border-blocked/50 bg-blocked-wash' : 'border-brand bg-brand-wash') : done ? 'border-line bg-surface' : 'border-dashed border-line-strong bg-surface';
-          const dot = here ? (closed ? 'bg-blocked-mark text-white' : 'bg-brand text-white') : done ? 'bg-positive-wash text-positive' : 'bg-sunken text-ink-quiet';
+          const ring = here
+            ? closed
+              ? 'border-blocked/50 bg-blocked-wash'
+              : 'border-brand bg-brand-wash'
+            : done
+              ? 'border-line bg-surface'
+              : 'border-dashed border-line-strong bg-surface';
+          const dot = here
+            ? closed
+              ? 'bg-blocked-mark text-white'
+              : 'bg-brand text-white'
+            : done
+              ? 'bg-positive-wash text-positive'
+              : 'bg-sunken text-ink-quiet';
           return (
-            <li key={s.stage} aria-current={here ? 'step' : undefined} data-stage={s.stage} className={`flex w-[112px] min-w-0 shrink-0 flex-col items-start gap-1.5 overflow-hidden rounded-tile border px-2.5 py-2 xl:w-auto ${ring}`}>
-              <span aria-hidden className={`inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${dot}`}>
+            <li
+              key={s.stage}
+              aria-current={here ? 'step' : undefined}
+              data-stage={s.stage}
+              className={`flex w-[112px] min-w-0 shrink-0 flex-col items-start gap-1.5 overflow-hidden rounded-tile border px-2.5 py-2 xl:w-auto ${ring}`}
+            >
+              <span
+                aria-hidden
+                className={`inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${dot}`}
+              >
                 {done ? '✓' : f.n(s.stage)}
               </span>
               <span className="flex w-full min-w-0 flex-col leading-tight">
-                <span className={`hyphens-auto text-[11.5px] font-semibold wrap-anywhere ${here ? 'text-brand-deep' : done ? 'text-heading' : 'text-ink-quiet'}`}>{f.t(s.titleEn, s.titleAr)}</span>
-                <span className="mt-0.5 text-[11px] text-ink-quiet">{s.owner === 'UPSTREAM' ? f.t('Upstream', 'خارج سند') : f.t('Sanad', 'سند')}</span>
+                <span
+                  className={`hyphens-auto text-[11.5px] font-semibold wrap-anywhere ${here ? 'text-brand-deep' : done ? 'text-heading' : 'text-ink-quiet'}`}
+                >
+                  {f.t(s.titleEn, s.titleAr)}
+                </span>
+                <span className="mt-0.5 text-[11px] text-ink-quiet">
+                  {s.owner === 'UPSTREAM' ? f.t('Upstream', 'خارج سند') : f.t('Sanad', 'سند')}
+                </span>
               </span>
             </li>
           );
@@ -252,8 +380,23 @@ export function StageStepper({ current, closed, f }: { readonly current: number;
 
 // -- The application shell ------------------------------------------------------
 
-
-export function ApplicationShell({ segment, view, screen, query, f, title, children }: { readonly segment: string; readonly view: BusinessApplicationView; readonly screen: 'application' | 'assessment' | 'offer'; readonly query: ShellQuery; readonly f: Formatters; readonly title: string; readonly children: ReactNode }): ReactElement {
+export function ApplicationShell({
+  segment,
+  view,
+  screen,
+  query,
+  f,
+  title,
+  children,
+}: {
+  readonly segment: string;
+  readonly view: BusinessApplicationView;
+  readonly screen: 'application' | 'assessment' | 'offer';
+  readonly query: ShellQuery;
+  readonly f: Formatters;
+  readonly title: string;
+  readonly children: ReactNode;
+}): ReactElement {
   const a = view.application;
   const base = `/${segment}/business/${encodeURIComponent(a.applicationId)}`;
   const tabs = [
@@ -268,12 +411,18 @@ export function ApplicationShell({ segment, view, screen, query, f, title, child
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <a href={`/${segment}/business`} className="inline-flex items-center gap-1 text-[13px] font-medium text-brand hover:underline">
-            <Icon name="chevron-start" size={14} />{f.t('Business applications', 'طلبات المنشآت')}
+          <a
+            href={`/${segment}/business`}
+            className="inline-flex items-center gap-1 text-[13px] font-medium text-brand hover:underline"
+          >
+            <Icon name="chevron-start" size={14} />
+            {f.t('Business applications', 'طلبات المنشآت')}
           </a>
           <h1 className="mt-1 text-h1 font-bold tracking-tight text-heading">{title}</h1>
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-ink-quiet">
-            <span className="font-semibold text-heading">{f.arabic ? a.applicant.businessNameAr ?? a.applicant.businessNameEn : a.applicant.businessNameEn}</span>
+            <span className="font-semibold text-heading">
+              {f.arabic ? (a.applicant.businessNameAr ?? a.applicant.businessNameEn) : a.applicant.businessNameEn}
+            </span>
             <span aria-hidden>·</span>
             <Id>{a.applicationId}</Id>
             <StatusPill status={a.status} f={f} />
@@ -289,8 +438,16 @@ export function ApplicationShell({ segment, view, screen, query, f, title, child
             const active = tab.id === screen;
             return (
               <li key={tab.id}>
-                <a href={tab.href} aria-current={active ? 'page' : undefined} className={`press inline-flex items-center gap-2 border-b-2 px-3 pb-3 text-[14px] font-medium ${active ? 'border-brand text-brand-deep' : 'border-transparent text-ink-quiet hover:text-heading'}`}>
-                  <span className={`inline-flex size-5 items-center justify-center rounded-full text-[11px] ${active ? 'bg-brand-wash text-brand-deep' : 'bg-sunken text-ink-quiet'}`}>{f.n(tab.stage)}</span>
+                <a
+                  href={tab.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={`press inline-flex items-center gap-2 border-b-2 px-3 pb-3 text-[14px] font-medium ${active ? 'border-brand text-brand-deep' : 'border-transparent text-ink-quiet hover:text-heading'}`}
+                >
+                  <span
+                    className={`inline-flex size-5 items-center justify-center rounded-full text-[11px] ${active ? 'bg-brand-wash text-brand-deep' : 'bg-sunken text-ink-quiet'}`}
+                  >
+                    {f.n(tab.stage)}
+                  </span>
                   {tab.label}
                 </a>
               </li>
@@ -300,12 +457,20 @@ export function ApplicationShell({ segment, view, screen, query, f, title, child
       </nav>
 
       {notice === undefined ? null : (
-        <div role="status" className="flex items-center gap-2 rounded-card border border-positive/30 bg-positive-wash px-4 py-3 text-[14px] text-positive">
-          <Icon name="check-circle" size={18} />{f.t(notice.en, notice.ar)}
+        <div
+          role="status"
+          className="flex items-center gap-2 rounded-card border border-positive/30 bg-positive-wash px-4 py-3 text-[14px] text-positive"
+        >
+          <Icon name="check-circle" size={18} />
+          {f.t(notice.en, notice.ar)}
         </div>
       )}
       {refusal === undefined ? null : (
-        <ControlRejection control={refusal.control} explanation={refusal.explanation} controlLabel={f.t('Control', 'الضابط')} />
+        <ControlRejection
+          control={refusal.control}
+          explanation={refusal.explanation}
+          controlLabel={f.t('Control', 'الضابط')}
+        />
       )}
 
       {children}

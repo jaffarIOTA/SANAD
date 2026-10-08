@@ -46,12 +46,16 @@ const actionBody = (name: string): string => {
   return ACTIONS.slice(start, next < 0 ? undefined : next);
 };
 /** The form fields an action reads: field(form, 'x'). */
-const fieldsRead = (name: string): string[] => [...actionBody(name).matchAll(/field\(form, '([A-Za-z]+)'\)/g)].map((m) => m[1] ?? '');
+const fieldsRead = (name: string): string[] =>
+  [...actionBody(name).matchAll(/field\(form, '([A-Za-z]+)'\)/g)].map((m) => m[1] ?? '');
 
 // -- 1. The stage-5 journey ---------------------------------------------------------
 
 describe('a presented document can be validated on screen', () => {
-  const form = APPLICATION.slice(APPLICATION.indexOf('<form action={validateDocumentAction}'), APPLICATION.indexOf('</form>', APPLICATION.indexOf('<form action={validateDocumentAction}')));
+  const form = APPLICATION.slice(
+    APPLICATION.indexOf('<form action={validateDocumentAction}'),
+    APPLICATION.indexOf('</form>', APPLICATION.indexOf('<form action={validateDocumentAction}')),
+  );
 
   it('has a checker control posting validateDocumentAction for a PENDING document', () => {
     expect(APPLICATION).toContain("r.status === 'PENDING' && held !== undefined ? (");
@@ -87,7 +91,10 @@ describe('a presented document can be validated on screen', () => {
 
 describe('the assessment inputs', () => {
   it('post every field the action reads, the bureau consent included', () => {
-    const form = ASSESSMENT.slice(ASSESSMENT.indexOf('<form action={recordAssessmentInputsAction}'), ASSESSMENT.indexOf('</form>', ASSESSMENT.indexOf('<form action={recordAssessmentInputsAction}')));
+    const form = ASSESSMENT.slice(
+      ASSESSMENT.indexOf('<form action={recordAssessmentInputsAction}'),
+      ASSESSMENT.indexOf('</form>', ASSESSMENT.indexOf('<form action={recordAssessmentInputsAction}')),
+    );
     for (const name of fieldsRead('recordAssessmentInputsAction')) {
       if (name === 'locale' || name === 'applicationId' || name === 'screen' || name === 'tenant') continue;
       expect(form, name).toMatch(new RegExp(`(name=["']${name}["']|field\\('${name}')`));
@@ -99,7 +106,9 @@ describe('the assessment inputs', () => {
 
   it('are editable only while the application is open, and read-only once it is submitted or later', () => {
     expect(ASSESSMENT).toContain("const inputsOpen = ['RECEIVED', 'SPREADING'].includes(a.status);");
-    expect(ASSESSMENT).toContain('{inputsOpen || inputs !== undefined ? <InputsCard segment={segment} applicationId={a.applicationId} view={view} editable={inputsOpen} f={f} /> : null}');
+    expect(ASSESSMENT).toContain(
+      '{inputsOpen || inputs !== undefined ? <InputsCard segment={segment} applicationId={a.applicationId} view={view} editable={inputsOpen} f={f} /> : null}',
+    );
     expect(ASSESSMENT).toContain('{!editable ? null : (');
     expect(ASSESSMENT).toContain('data-inputs-read-only');
     expect(ASSESSMENT).toContain('<Id className="text-[12px]">{inputs.bureau.consentId}</Id>');
@@ -113,7 +122,10 @@ describe('the assessment inputs', () => {
 
 describe('who acts', () => {
   it('names the checker as the one who runs the assessment', () => {
-    const run = ASSESSMENT.slice(ASSESSMENT.indexOf('data-runs-assessment'), ASSESSMENT.indexOf('<form action={runAssessmentAction}>'));
+    const run = ASSESSMENT.slice(
+      ASSESSMENT.indexOf('data-runs-assessment'),
+      ASSESSMENT.indexOf('<form action={runAssessmentAction}>'),
+    );
     expect(run).toContain('<Id>{BUSINESS_ROLES.checker}</Id>');
     expect(actionBody('runAssessmentAction')).toContain('BUSINESS_ROLES.checker');
   });
@@ -157,7 +169,8 @@ describe('after a letter is sent', () => {
 function reasonsIn(path: string): string[] {
   const src = repo(path);
   const found = new Set<string>();
-  for (const m of src.matchAll(/\b(?:fail|bad|refused|reject)\(\s*(?:'[A-Z][A-Z-]+',\s*)?'([A-Z][A-Z0-9_]+)'/g)) found.add(m[1] ?? '');
+  for (const m of src.matchAll(/\b(?:fail|bad|refused|reject)\(\s*(?:'[A-Z][A-Z-]+',\s*)?'([A-Z][A-Z0-9_]+)'/g))
+    found.add(m[1] ?? '');
   return [...found];
 }
 
@@ -172,7 +185,15 @@ describe('refusal wording', () => {
   it('finds the reasons it checks (the scan is not vacuous)', () => {
     const all = SOURCES.flatMap(reasonsIn);
     expect(all.length).toBeGreaterThan(60);
-    expect(all).toEqual(expect.arrayContaining(['STALE_APPLICATION', 'FOUR_EYES_SELF_ASSESSMENT', 'FOUR_EYES_DISBURSEMENT', 'TRANSITION_NOT_ALLOWED', 'AMOUNT_MALFORMED']));
+    expect(all).toEqual(
+      expect.arrayContaining([
+        'STALE_APPLICATION',
+        'FOUR_EYES_SELF_ASSESSMENT',
+        'FOUR_EYES_DISBURSEMENT',
+        'TRANSITION_NOT_ALLOWED',
+        'AMOUNT_MALFORMED',
+      ]),
+    );
   });
 
   it.each(SOURCES)('has bilingual words for every reason %s can return', (path) => {
@@ -186,7 +207,24 @@ describe('refusal wording', () => {
   });
 
   it('covers the reasons the verification pass named', () => {
-    for (const r of ['STALE_APPLICATION', 'FOUR_EYES_REQUIRED', 'FOUR_EYES_SELF_ASSESSMENT', 'FOUR_EYES_SELF_APPROVAL', 'FOUR_EYES_DISBURSEMENT', 'ASSESSMENT_INPUTS_LOCKED', 'BUREAU_CONSENT_MISSING', 'BUREAU_CONSENT_NOT_ON_RECORD', 'DOCUMENT_NOT_FOUND', 'DOCUMENT_ALREADY_VALIDATED', 'FIGURE_ALREADY_VERIFIED', 'OFFER_DATE_MALFORMED', 'DISBURSEMENT_BEFORE_OFFER', 'DISBURSEMENT_TOO_FAR', 'FIRST_DUE_TOO_SOON', 'FIRST_DUE_TOO_LATE']) {
+    for (const r of [
+      'STALE_APPLICATION',
+      'FOUR_EYES_REQUIRED',
+      'FOUR_EYES_SELF_ASSESSMENT',
+      'FOUR_EYES_SELF_APPROVAL',
+      'FOUR_EYES_DISBURSEMENT',
+      'ASSESSMENT_INPUTS_LOCKED',
+      'BUREAU_CONSENT_MISSING',
+      'BUREAU_CONSENT_NOT_ON_RECORD',
+      'DOCUMENT_NOT_FOUND',
+      'DOCUMENT_ALREADY_VALIDATED',
+      'FIGURE_ALREADY_VERIFIED',
+      'OFFER_DATE_MALFORMED',
+      'DISBURSEMENT_BEFORE_OFFER',
+      'DISBURSEMENT_TOO_FAR',
+      'FIRST_DUE_TOO_SOON',
+      'FIRST_DUE_TOO_LATE',
+    ]) {
       expect(REFUSALS[r], r).toBeDefined();
     }
   });
@@ -194,7 +232,10 @@ describe('refusal wording', () => {
   it('has words for every notice an action redirects with', () => {
     // finish(ctx, result, 'NOTICE') — or a ternary between two notices as that third argument.
     const direct = [...ACTIONS.matchAll(/\breturn finish\(ctx, [^\n]*, '([A-Z][A-Z_]+)'\);/g)].map((m) => m[1] ?? '');
-    const ternaries = [...ACTIONS.matchAll(/\? '([A-Z][A-Z_]+)' : '([A-Z][A-Z_]+)'\);/g)].flatMap((m) => [m[1] ?? '', m[2] ?? '']);
+    const ternaries = [...ACTIONS.matchAll(/\? '([A-Z][A-Z_]+)' : '([A-Z][A-Z_]+)'\);/g)].flatMap((m) => [
+      m[1] ?? '',
+      m[2] ?? '',
+    ]);
     const all = new Set([...direct, ...ternaries]);
     expect(all.size).toBeGreaterThan(12);
     for (const n of ['FIGURE_CORRECTED', 'DOCUMENT_VALIDATED', 'DOCUMENT_REJECTED']) expect(all.has(n), n).toBe(true);
@@ -206,7 +247,9 @@ describe('refusal wording', () => {
 
   it('is rendered from the maps only: no page query type carries a message', () => {
     for (const [name, src] of Object.entries({ APPLICATION, ASSESSMENT, OFFER })) {
-      expect(src, name).toMatch(/type Query = \{ readonly notice\?: string; readonly control\?: string; readonly reason\?: string; readonly tenant\?: string \};/);
+      expect(src, name).toMatch(
+        /type Query = \{ readonly notice\?: string; readonly control\?: string; readonly reason\?: string; readonly tenant\?: string \};/,
+      );
       expect(src, name).not.toMatch(/message/);
     }
   });
@@ -216,7 +259,15 @@ describe('refusal wording', () => {
 
 describe('STALE_APPLICATION on the hand-over API', () => {
   it('has Arabic in the problem catalogue, not the generic line', () => {
-    const p = problem({ status: 409, kind: 'conflict', title: 'Conflict', detail: 'x', reason: 'STALE_APPLICATION', control: 'OP-DETERMINACY', correlationId: 'c-1' });
+    const p = problem({
+      status: 409,
+      kind: 'conflict',
+      title: 'Conflict',
+      detail: 'x',
+      reason: 'STALE_APPLICATION',
+      control: 'OP-DETERMINACY',
+      correlationId: 'c-1',
+    });
     expect(p.detailAr).toMatch(ARABIC_LETTER);
     expect(p.detailAr).not.toContain('OP-DETERMINACY');
     expect(p.detailAr).toContain('أعد التحميل');
@@ -224,10 +275,14 @@ describe('STALE_APPLICATION on the hand-over API', () => {
 
   it('is listed on the hand-over’s 409 in the OpenAPI source and in the generated API Connect artefact', () => {
     const spec = repo('api/openapi/origination.v1.yaml');
-    const handover = spec.slice(spec.indexOf('operationId: handOverBusinessApplication'), spec.indexOf('/business-applications/{applicationId}:'));
+    const handover = spec.slice(
+      spec.indexOf('operationId: handOverBusinessApplication'),
+      spec.indexOf('/business-applications/{applicationId}:'),
+    );
     expect(handover).toContain("'409': { $ref: '#/components/responses/HandoverConflict' }");
     const conflict = spec.slice(spec.indexOf('    HandoverConflict:'), spec.indexOf('    IdempotencyConflict:'));
-    for (const r of ['STALE_APPLICATION', 'IDEMPOTENCY_KEY_REUSED', 'IDEMPOTENCY_KEY_IN_FLIGHT']) expect(conflict).toContain(r);
+    for (const r of ['STALE_APPLICATION', 'IDEMPOTENCY_KEY_REUSED', 'IDEMPOTENCY_KEY_IN_FLIGHT'])
+      expect(conflict).toContain(r);
     const apic = repo('gateway/ibm/origination-api_1.0.0.yaml');
     expect(apic).toContain('HandoverConflict');
     expect(apic).toContain('STALE_APPLICATION');
@@ -239,7 +294,8 @@ describe('STALE_APPLICATION on the hand-over API', () => {
 describe('the sidebar filters by the module’s own jurisdiction tag', () => {
   it('names no group or item id in navigation.ts', () => {
     const nav = page('navigation.ts');
-    for (const id of ['murabaha-scf', 'bnpl', 'uae-rails', 'sme-direct-uae', 'programmes', 'transactions']) expect(nav, id).not.toContain(`'${id}'`);
+    for (const id of ['murabaha-scf', 'bnpl', 'uae-rails', 'sme-direct-uae', 'programmes', 'transactions'])
+      expect(nav, id).not.toContain(`'${id}'`);
     expect(nav).not.toMatch(/GROUP_JURISDICTION|ITEM_JURISDICTION/);
   });
 
@@ -248,21 +304,56 @@ describe('the sidebar filters by the module’s own jurisdiction tag', () => {
     const item = (id: string) => MODULE_GROUPS.flatMap((g) => g.items).find((i) => i.id === id);
     for (const id of ['rails', 'programmes', 'transactions']) expect(group(id)?.jurisdictions, id).toEqual(['SA']);
     for (const id of ['uae-rails', 'sme-direct-uae']) expect(group(id)?.jurisdictions, id).toEqual(['AE']);
-    for (const id of ['murabaha-scf', 'tawarruq-personal', 'bnpl', 'merchants', 'embedded-lending', 'conventional-term', 'embedded']) expect(item(id)?.jurisdictions, id).toEqual(['SA']);
+    for (const id of [
+      'murabaha-scf',
+      'tawarruq-personal',
+      'bnpl',
+      'merchants',
+      'embedded-lending',
+      'conventional-term',
+      'embedded',
+    ])
+      expect(item(id)?.jurisdictions, id).toEqual(['SA']);
     // Platform-wide entries carry no tag.
-    for (const id of ['origination', 'products', 'documents', 'administration']) expect(group(id)?.jurisdictions, id).toBeUndefined();
+    for (const id of ['origination', 'products', 'documents', 'administration'])
+      expect(group(id)?.jurisdictions, id).toBeUndefined();
   });
 
   it('follows a tag on a module it has never seen', () => {
     const groups: readonly ModuleGroup[] = [
-      { id: 'g-any', titleEn: 'Any', titleAr: 'أي', icon: 'plug', items: [
-        { id: 'i-any', titleEn: 'Any', titleAr: 'أي', readiness: { kind: 'NOT_BUILT' }, reference: 'test' },
-        { id: 'i-ae', titleEn: 'AE', titleAr: 'إ', readiness: { kind: 'NOT_BUILT' }, reference: 'test', jurisdictions: ['AE'] },
-        { id: 'i-both', titleEn: 'Both', titleAr: 'كلاهما', readiness: { kind: 'NOT_BUILT' }, reference: 'test', jurisdictions: ['AE', 'SA'] },
-      ] },
-      { id: 'g-sa', titleEn: 'SA', titleAr: 'س', icon: 'plug', jurisdictions: ['SA'], items: [
-        { id: 'i-sa', titleEn: 'SA', titleAr: 'س', readiness: { kind: 'NOT_BUILT' }, reference: 'test' },
-      ] },
+      {
+        id: 'g-any',
+        titleEn: 'Any',
+        titleAr: 'أي',
+        icon: 'plug',
+        items: [
+          { id: 'i-any', titleEn: 'Any', titleAr: 'أي', readiness: { kind: 'NOT_BUILT' }, reference: 'test' },
+          {
+            id: 'i-ae',
+            titleEn: 'AE',
+            titleAr: 'إ',
+            readiness: { kind: 'NOT_BUILT' },
+            reference: 'test',
+            jurisdictions: ['AE'],
+          },
+          {
+            id: 'i-both',
+            titleEn: 'Both',
+            titleAr: 'كلاهما',
+            readiness: { kind: 'NOT_BUILT' },
+            reference: 'test',
+            jurisdictions: ['AE', 'SA'],
+          },
+        ],
+      },
+      {
+        id: 'g-sa',
+        titleEn: 'SA',
+        titleAr: 'س',
+        icon: 'plug',
+        jurisdictions: ['SA'],
+        items: [{ id: 'i-sa', titleEn: 'SA', titleAr: 'س', readiness: { kind: 'NOT_BUILT' }, reference: 'test' }],
+      },
     ];
     const ids = (code: 'SA' | 'AE') => navigationFor(code, groups).flatMap((g) => g.items.map((i) => i.id));
     expect(ids('AE')).toEqual(['i-any', 'i-ae', 'i-both']);

@@ -3,17 +3,85 @@
   "programmeId": "sme-ae-fixed-assets",
   "version": "0.1.0-illustrative-2026-10-08",
   "items": [
-    { "documentType": "TRADE_LICENCE", "titleEn": "Trade licence", "titleAr": "الرخصة التجارية", "required": true, "validForSeconds": 31536000 },
-    { "documentType": "OWNER_EMIRATES_ID", "titleEn": "Emirates ID of every owner", "titleAr": "الهوية الإماراتية لجميع الملاك", "required": true },
-    { "documentType": "PERSONAL_BUREAU_REPORT", "titleEn": "Personal credit bureau report (AECB) of every owner", "titleAr": "تقرير الاتحاد للمعلومات الائتمانية الشخصي لجميع الملاك", "required": true, "validForSeconds": 2592000 },
-    { "documentType": "PERSONAL_BANK_STATEMENT_12M", "titleEn": "Personal bank statements, 12 months", "titleAr": "كشوف الحساب الشخصي لاثني عشر شهرًا", "required": true, "validForSeconds": 7776000 },
-    { "documentType": "COMPANY_BANK_STATEMENT_12M", "titleEn": "Company bank statements, 12 months", "titleAr": "كشوف حساب المنشأة لاثني عشر شهرًا", "required": true, "validForSeconds": 7776000 },
-    { "documentType": "AUDITED_FINANCIALS_2Y", "titleEn": "Audited financial statements, 2 years", "titleAr": "القوائم المالية المدققة لسنتين", "required": true },
-    { "documentType": "SALARY_CERTIFICATE", "titleEn": "Salary certificate", "titleAr": "شهادة الراتب", "required": true, "validForSeconds": 7776000 },
-    { "documentType": "WPS_SALARY_REPORT", "titleEn": "WPS / MOHRE salary report", "titleAr": "تقرير الرواتب من نظام حماية الأجور / وزارة الموارد البشرية والتوطين", "required": true, "validForSeconds": 7776000 },
-    { "documentType": "SUPPLIER_QUOTATIONS", "titleEn": "Supplier quotations or purchase invoices for the asset", "titleAr": "عروض أسعار الموردين أو فواتير شراء الأصل", "required": true, "validForSeconds": 7776000 },
-    { "documentType": "ASSET_VALUATION_REPORT", "titleEn": "Asset / collateral valuation report", "titleAr": "تقرير تقييم الأصل / الضمان", "required": true, "validForSeconds": 15552000 },
-    { "documentType": "COMPANY_PROFILE", "titleEn": "Company profile", "titleAr": "ملف تعريف المنشأة", "required": true },
-    { "documentType": "RENTAL_CONTRACT", "titleEn": "Rental contract of the premises", "titleAr": "عقد إيجار المقر", "required": false }
+    {
+      "documentType": "TRADE_LICENCE",
+      "titleEn": "Trade licence",
+      "titleAr": "الرخصة التجارية",
+      "required": true,
+      "validForSeconds": 31536000
+    },
+    {
+      "documentType": "OWNER_EMIRATES_ID",
+      "titleEn": "Emirates ID of every owner",
+      "titleAr": "الهوية الإماراتية لجميع الملاك",
+      "required": true
+    },
+    {
+      "documentType": "PERSONAL_BUREAU_REPORT",
+      "titleEn": "Personal credit bureau report (AECB) of every owner",
+      "titleAr": "تقرير الاتحاد للمعلومات الائتمانية الشخصي لجميع الملاك",
+      "required": true,
+      "validForSeconds": 2592000
+    },
+    {
+      "documentType": "PERSONAL_BANK_STATEMENT_12M",
+      "titleEn": "Personal bank statements, 12 months",
+      "titleAr": "كشوف الحساب الشخصي لاثني عشر شهرًا",
+      "required": true,
+      "validForSeconds": 7776000
+    },
+    {
+      "documentType": "COMPANY_BANK_STATEMENT_12M",
+      "titleEn": "Company bank statements, 12 months",
+      "titleAr": "كشوف حساب المنشأة لاثني عشر شهرًا",
+      "required": true,
+      "validForSeconds": 7776000
+    },
+    {
+      "documentType": "AUDITED_FINANCIALS_2Y",
+      "titleEn": "Audited financial statements, 2 years",
+      "titleAr": "القوائم المالية المدققة لسنتين",
+      "required": true
+    },
+    {
+      "documentType": "SALARY_CERTIFICATE",
+      "titleEn": "Salary certificate",
+      "titleAr": "شهادة الراتب",
+      "required": true,
+      "validForSeconds": 7776000
+    },
+    {
+      "documentType": "WPS_SALARY_REPORT",
+      "titleEn": "WPS / MOHRE salary report",
+      "titleAr": "تقرير الرواتب من نظام حماية الأجور / وزارة الموارد البشرية والتوطين",
+      "required": true,
+      "validForSeconds": 7776000
+    },
+    {
+      "documentType": "SUPPLIER_QUOTATIONS",
+      "titleEn": "Supplier quotations or purchase invoices for the asset",
+      "titleAr": "عروض أسعار الموردين أو فواتير شراء الأصل",
+      "required": true,
+      "validForSeconds": 7776000
+    },
+    {
+      "documentType": "ASSET_VALUATION_REPORT",
+      "titleEn": "Asset / collateral valuation report",
+      "titleAr": "تقرير تقييم الأصل / الضمان",
+      "required": true,
+      "validForSeconds": 15552000
+    },
+    {
+      "documentType": "COMPANY_PROFILE",
+      "titleEn": "Company profile",
+      "titleAr": "ملف تعريف المنشأة",
+      "required": true
+    },
+    {
+      "documentType": "RENTAL_CONTRACT",
+      "titleEn": "Rental contract of the premises",
+      "titleAr": "عقد إيجار المقر",
+      "required": false
+    }
   ]
 }

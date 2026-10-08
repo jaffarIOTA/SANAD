@@ -12,8 +12,7 @@
  */
 
 /** Names that carry a secret rather than a location. */
-export const SECRET_SHAPED =
-  /(token|secret|password|passwd|api[_-]?key|credential|private[_-]?key)/i;
+export const SECRET_SHAPED = /(token|secret|password|passwd|api[_-]?key|credential|private[_-]?key)/i;
 
 /**
  * A long opaque value assigned to a secret-named thing.
@@ -55,10 +54,7 @@ const EXACT_STEM = ['credentials', 'credential', 'kubeconfig', 'sa', 'gha', 'net
 const STEM_PREFIX = ['toolkit-credentials', 'service-account', 'client-secret', 'credentials'];
 
 export const CREDENTIAL_FILE = new RegExp(
-  `(^|/)(` +
-    `(?:${EXACT_STEM.join('|')})` +
-    `|(?:${STEM_PREFIX.join('|')})[-._\\w]*` +
-    `)\\.(json|ya?ml|conf)$`,
+  `(^|/)(` + `(?:${EXACT_STEM.join('|')})` + `|(?:${STEM_PREFIX.join('|')})[-._\\w]*` + `)\\.(json|ya?ml|conf)$`,
   'i',
 );
 
@@ -69,8 +65,7 @@ export const PLACEHOLDER = /^(development|example|placeholder|redacted|changeme|
 export const KEY_FILE = /\.(pem|p12|pfx|key|jks|keystore)$/i;
 
 /** Any environment file except the one that is meant to be tracked. */
-export const isTrackedEnvFile = (path) =>
-  /(^|\/)\.env/.test(path) && !path.endsWith('.env.example');
+export const isTrackedEnvFile = (path) => /(^|\/)\.env/.test(path) && !path.endsWith('.env.example');
 
 /** PEM blocks, which are unambiguous wherever they appear. */
 export const PEM_BLOCK = /-----BEGIN (RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/;
@@ -123,9 +118,7 @@ export function findSecrets(path, content) {
   for (const match of content.matchAll(/NEXT_PUBLIC_([A-Z0-9_]+)/g)) {
     if (SECRET_SHAPED.test(match[1] ?? '')) {
       const line = content.slice(0, match.index).split('\n').length;
-      findings.push(
-        `${path}:${line}: NEXT_PUBLIC_${match[1]} — this prefix inlines the value into the browser bundle`,
-      );
+      findings.push(`${path}:${line}: NEXT_PUBLIC_${match[1]} — this prefix inlines the value into the browser bundle`);
     }
   }
 

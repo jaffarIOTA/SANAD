@@ -22,8 +22,19 @@ export interface CounterpartyProfile {
 
 export interface CounterpartyMasterPort {
   /** By commercial registration. Absent means not onboarded, not an error. */
-  findByRegistration(tenantId: string, commercialRegistration: string): Promise<Result<CounterpartyProfile | undefined>>;
+  findByRegistration(
+    tenantId: string,
+    commercialRegistration: string,
+  ): Promise<Result<CounterpartyProfile | undefined>>;
   get(tenantId: string, counterpartyId: string): Promise<Result<CounterpartyProfile>>;
   /** Begins onboarding; returns the id under which KYC will proceed. */
-  beginOnboarding(tenantId: string, registration: { readonly commercialRegistration: string; readonly legalNameAr: string; readonly legalNameEn: string }, correlationId: string): Promise<Result<{ readonly counterpartyId: string }>>;
+  beginOnboarding(
+    tenantId: string,
+    registration: {
+      readonly commercialRegistration: string;
+      readonly legalNameAr: string;
+      readonly legalNameEn: string;
+    },
+    correlationId: string,
+  ): Promise<Result<{ readonly counterpartyId: string }>>;
 }

@@ -15,23 +15,34 @@ import { TENANT } from '../../../../server/engine.ts';
 import { currentSession } from '../../../../server/session.ts';
 import { accept, developmentAttestation, findOffer, nextId } from '../../../../server/store.ts';
 
-const field = (form: FormData, name: string): string => { const v = form.get(name); return typeof v === 'string' ? v.trim() : ''; };
+const field = (form: FormData, name: string): string => {
+  const v = form.get(name);
+  return typeof v === 'string' ? v.trim() : '';
+};
 
 /** Accept the disclosure shown, record it, book the BNPL facility, and send the shopper back to the shop. */
 export async function checkoutAcceptAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
   const sessionId = field(form, 'sessionId');
   const back = `/${locale}/checkout/${sessionId}`;
-  const fail = (reason: string, control: string): never => redirect(`${back}?refused=${encodeURIComponent(reason)}&control=${encodeURIComponent(control)}`);
+  const fail = (reason: string, control: string): never =>
+    redirect(`${back}?refused=${encodeURIComponent(reason)}&control=${encodeURIComponent(control)}`);
   const identity = await currentSession();
   if (identity === undefined) redirect(`/${locale}?next=${encodeURIComponent(back)}`);
   await syncConsumerStore();
   const session = findSession(sessionId);
-  if (session === undefined || session.state !== 'OFFERED' || session.applicantRef !== identity.applicantRef) fail('OFFER_NOT_FOUND', 'OP-DETERMINACY');
+  if (session === undefined || session.state !== 'OFFERED' || session.applicantRef !== identity.applicantRef)
+    fail('OFFER_NOT_FOUND', 'OP-DETERMINACY');
   if (session === undefined || session.state !== 'OFFERED') return;
   if (field(form, 'confirm') !== 'yes') fail('CONFIRMATION_REQUIRED', 'OP-DETERMINACY');
   const at = developmentAttestation();
-  const recorded = accept({ offerId: session.offerId, identityAssertionId: identity.identityAssertionId, localeShown: locale === 'ar' ? 'ar-SA' : 'en-SA', disclosureVersionShown: field(form, 'disclosureVersion'), at });
+  const recorded = accept({
+    offerId: session.offerId,
+    identityAssertionId: identity.identityAssertionId,
+    localeShown: locale === 'ar' ? 'ar-SA' : 'en-SA',
+    disclosureVersionShown: field(form, 'disclosureVersion'),
+    at,
+  });
   if (!recorded.ok) return fail(recorded.error.reason, recorded.error.control);
   const accepted = acceptSession(session, recorded.value.acceptanceId, field(form, 'disclosureVersion'), at);
   if (!accepted.ok) return fail(accepted.error.reason, accepted.error.control);
@@ -44,7 +55,21 @@ export async function checkoutAcceptAction(form: FormData): Promise<void> {
   const entry = catalogue.ok ? entryFor(catalogue.value, 'bnpl', 'prg-0001', at.epochSeconds) : undefined;
   const terms = entry !== undefined && entry.ok ? bnpl.validateTerms(entry.value.terms) : undefined;
   if (stored === undefined || terms === undefined || !terms.ok) return fail('PRODUCT_NOT_ENABLED', 'OP-DETERMINACY');
-  const draft = bnpl.execute(terms.value, { state: 'APPROVED', core: { tenantId: TENANT } } as never, stored.offer.quote as BnplQuote, { transactionId: nextId('txn'), applicantRef: identity.applicantRef, merchantRef: session.core.merchantId, bureauEnquiryRef: `dev-bureau-${identity.applicantRef}`, consentId: `dev-consent-${identity.applicantRef}`, eligibility: { ageHijriYears: 30, residentInKingdom: true, identityVerificationRef: identity.identityRef }, openedAt: at, correlationId: session.core.correlationId });
+  const draft = bnpl.execute(
+    terms.value,
+    { state: 'APPROVED', core: { tenantId: TENANT } } as never,
+    stored.offer.quote as BnplQuote,
+    {
+      transactionId: nextId('txn'),
+      applicantRef: identity.applicantRef,
+      merchantRef: session.core.merchantId,
+      bureauEnquiryRef: `dev-bureau-${identity.applicantRef}`,
+      consentId: `dev-consent-${identity.applicantRef}`,
+      eligibility: { ageHijriYears: 30, residentInKingdom: true, identityVerificationRef: identity.identityRef },
+      openedAt: at,
+      correlationId: session.core.correlationId,
+    },
+  );
   if (!draft.ok) return fail(draft.error.reason, draft.error.control);
   const booked = bookBnpl(draft.value, developmentAttestation());
   if (!booked.ok) return fail(booked.error.reason, booked.error.control);
@@ -54,5 +79,7 @@ export async function checkoutAcceptAction(form: FormData): Promise<void> {
   // the shopper sent back to the shop as BOOKED.
   await flushConsumerStore();
   await outboxStore().append(booked.value.outbox.events);
-  redirect(`${session.core.returnUrl}${session.core.returnUrl.includes('?') ? '&' : '?'}sessionId=${sessionId}&state=BOOKED`);
+  redirect(
+    `${session.core.returnUrl}${session.core.returnUrl.includes('?') ? '&' : '?'}sessionId=${sessionId}&state=BOOKED`,
+  );
 }

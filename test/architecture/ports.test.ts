@@ -11,7 +11,26 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
-const PORTS = ['commodity-broker', 'business-registry', 'counterparty-master', 'credit-bureau', 'screening', 'notifications', 'applicant-snapshot', 'rate-publisher', 'workflow', 'identity-authentication', 'identity-verification', 'document-verification', 'employment-verification', 'tax-compliance', 'account-information', 'payment-initiation', 'bill-collection', 'payments'];
+const PORTS = [
+  'commodity-broker',
+  'business-registry',
+  'counterparty-master',
+  'credit-bureau',
+  'screening',
+  'notifications',
+  'applicant-snapshot',
+  'rate-publisher',
+  'workflow',
+  'identity-authentication',
+  'identity-verification',
+  'document-verification',
+  'employment-verification',
+  'tax-compliance',
+  'account-information',
+  'payment-initiation',
+  'bill-collection',
+  'payments',
+];
 const src = (p: string) => readFileSync(`${ROOT}core/ports/${p}.ts`, 'utf8');
 const fields = (s: string) => [...s.matchAll(/^\s*readonly\s+(\w+)\??:/gm)].map((m) => m[1] ?? '');
 

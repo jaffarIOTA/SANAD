@@ -9,7 +9,15 @@ import { Rate, formatBasisPoints } from '@sanad/design/Rate.tsx';
 import { rate } from '@sanad/core/pricing/rate.ts';
 
 describe('formatBasisPoints', () => {
-  it.each([[0n, '0.00'], [1n, '0.01'], [99n, '0.99'], [100n, '1.00'], [1_268n, '12.68'], [10_000n, '100.00'], [-25n, '-0.25']])('%s bp → %s', (bp, expected) => {
+  it.each([
+    [0n, '0.00'],
+    [1n, '0.01'],
+    [99n, '0.99'],
+    [100n, '1.00'],
+    [1_268n, '12.68'],
+    [10_000n, '100.00'],
+    [-25n, '-0.25'],
+  ])('%s bp → %s', (bp, expected) => {
     expect(formatBasisPoints(bp, 'latin')).toBe(expected);
   });
   it('renders Arabic-Indic numerals under Arabic', () => {
@@ -20,7 +28,9 @@ describe('formatBasisPoints', () => {
 describe('<Rate>', () => {
   it('renders the figure with the locale percent sign and carries basis and period as data', () => {
     const en = renderToStaticMarkup(<Rate rate={rate(1_268n, 'APR')} locale="en-SA" label="APR" />);
-    expect(en).toContain('12.68%'); expect(en).toContain('data-rate-basis="APR"'); expect(en).toContain('data-rate-period="ANNUAL"');
+    expect(en).toContain('12.68%');
+    expect(en).toContain('data-rate-basis="APR"');
+    expect(en).toContain('data-rate-period="ANNUAL"');
     const ar = renderToStaticMarkup(<Rate rate={rate(1_268n, 'APR')} locale="ar-SA" label="معدل النسبة السنوي" />);
     expect(ar).toContain('١٢.٦٨٪');
   });

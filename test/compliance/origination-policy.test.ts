@@ -44,11 +44,23 @@ const bankA = expectOk(loadOriginationPolicy('bank-a'));
 
 function core(over: Partial<OriginationRequestCore> = {}): OriginationRequestCore {
   return {
-    requestId: 'req-t', tenantId: 'bank-a', programmeId: 'prg-0001', counterpartyId: 'cp',
+    requestId: 'req-t',
+    tenantId: 'bank-a',
+    programmeId: 'prg-0001',
+    counterpartyId: 'cp',
     channel: 'AGENT_ASSISTED',
     identification: { kind: 'AGENT', agentId: 'agt-fo-227', branchCode: 'JED-03' },
-    tradeReference: { type: 'CLEARED_INVOICE', invoiceUuid: 'u', invoiceHash: 'h', issuerCr: '1010000002', recipientCr: '7001000001' },
-    requestedAmount: money(10_000_000n), requestedTenorDays: 60, correlationId: 'c', raisedAt: at(1_000),
+    tradeReference: {
+      type: 'CLEARED_INVOICE',
+      invoiceUuid: 'u',
+      invoiceHash: 'h',
+      issuerCr: '1010000002',
+      recipientCr: '7001000001',
+    },
+    requestedAmount: money(10_000_000n),
+    requestedTenorDays: 60,
+    correlationId: 'c',
+    raisedAt: at(1_000),
     ...over,
   };
 }
@@ -61,24 +73,54 @@ describe('the policy file is parsed strictly', () => {
 
   it('refuses an unknown section rather than ignoring it', () => {
     // A typo in a limit key would otherwise remove the limit while looking configured.
-    const r = parseOriginationPolicy({ tenantId: 't', version: '1', approvalTiers: [{ authority: 'CHECKER' }], agentLimits: [] });
+    const r = parseOriginationPolicy({
+      tenantId: 't',
+      version: '1',
+      approvalTiers: [{ authority: 'CHECKER' }],
+      agentLimits: [],
+    });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.reason).toBe('POLICY_UNKNOWN_SECTION');
   });
 
   it('refuses an amount written as a number', () => {
-    const r = parseOriginationPolicy({ tenantId: 't', version: '1', approvalTiers: [{ upToMinorUnits: 25000000, authority: 'CHECKER' }, { authority: 'SENIOR_CHECKER' }] });
+    const r = parseOriginationPolicy({
+      tenantId: 't',
+      version: '1',
+      approvalTiers: [{ upToMinorUnits: 25000000, authority: 'CHECKER' }, { authority: 'SENIOR_CHECKER' }],
+    });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.reason).toBe('POLICY_AMOUNT_NOT_MINOR_UNITS');
   });
 
   it('refuses tiers that do not ascend, and an unbounded tier that is not last', () => {
-    expect(parseOriginationPolicy({ tenantId: 't', version: '1', approvalTiers: [{ upToMinorUnits: '200', authority: 'CHECKER' }, { upToMinorUnits: '100', authority: 'SENIOR_CHECKER' }, { authority: 'CREDIT_COMMITTEE' }] }).ok).toBe(false);
-    expect(parseOriginationPolicy({ tenantId: 't', version: '1', approvalTiers: [{ authority: 'CHECKER' }, { upToMinorUnits: '100', authority: 'SENIOR_CHECKER' }] }).ok).toBe(false);
+    expect(
+      parseOriginationPolicy({
+        tenantId: 't',
+        version: '1',
+        approvalTiers: [
+          { upToMinorUnits: '200', authority: 'CHECKER' },
+          { upToMinorUnits: '100', authority: 'SENIOR_CHECKER' },
+          { authority: 'CREDIT_COMMITTEE' },
+        ],
+      }).ok,
+    ).toBe(false);
+    expect(
+      parseOriginationPolicy({
+        tenantId: 't',
+        version: '1',
+        approvalTiers: [{ authority: 'CHECKER' }, { upToMinorUnits: '100', authority: 'SENIOR_CHECKER' }],
+      }).ok,
+    ).toBe(false);
   });
 
   it('refuses an SLA on a state a request cannot wait in', () => {
-    const r = parseOriginationPolicy({ tenantId: 't', version: '1', approvalTiers: [{ authority: 'CHECKER' }], slaSeconds: { APPROVED: 100 } });
+    const r = parseOriginationPolicy({
+      tenantId: 't',
+      version: '1',
+      approvalTiers: [{ authority: 'CHECKER' }],
+      slaSeconds: { APPROVED: 100 },
+    });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.reason).toBe('POLICY_UNKNOWN_STATE');
   });
@@ -118,7 +160,17 @@ describe('approval tiers govern who may approve a request', () => {
   });
 
   it('approve() refuses a checker whose authority does not cover the amount', () => {
-    const keyed = expectOk(raise({ core: core({ channel: 'MAKER_CHECKER', identification: { kind: 'STAFF_PRINCIPAL', principalId: 'stf-maker-01' }, requestedAmount: money(42_000_000n) }), maker, policy: bankA }));
+    const keyed = expectOk(
+      raise({
+        core: core({
+          channel: 'MAKER_CHECKER',
+          identification: { kind: 'STAFF_PRINCIPAL', principalId: 'stf-maker-01' },
+          requestedAmount: money(42_000_000n),
+        }),
+        maker,
+        policy: bankA,
+      }),
+    );
     const awaiting = expectOk(submitForReview(keyed, at(1_100)));
     if (awaiting.state !== 'AWAITING_REVIEW') throw new Error('unexpected');
 
@@ -155,7 +207,11 @@ describe('agent entitlement', () => {
   });
 
   it('raise() applies it when given the policy', () => {
-    const r = raise({ core: core({ identification: { kind: 'AGENT', agentId: 'agt-rm-088', branchCode: 'RUH-01' } }), maker, policy: bankA });
+    const r = raise({
+      core: core({ identification: { kind: 'AGENT', agentId: 'agt-rm-088', branchCode: 'RUH-01' } }),
+      maker,
+      policy: bankA,
+    });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.reason).toBe('AGENT_SUSPENDED');
   });
@@ -164,22 +220,40 @@ describe('agent entitlement', () => {
 describe('partner entitlement', () => {
   const req = { programmeId: 'prg-0001', requestedAmount: money(10_000_000n), channel: 'PARTNER_API' as const };
   it('admits an active partner on its channel within limit', () => {
-    expect(checkPartnerEntitlement(bankA, { kind: 'PARTNER_SYSTEM', partnerId: 'partner-dev-01', credentialRef: 'c' }, req).ok).toBe(true);
+    expect(
+      checkPartnerEntitlement(bankA, { kind: 'PARTNER_SYSTEM', partnerId: 'partner-dev-01', credentialRef: 'c' }, req)
+        .ok,
+    ).toBe(true);
   });
   it('refuses a suspended partner', () => {
-    const r = checkPartnerEntitlement(bankA, { kind: 'PARTNER_SYSTEM', partnerId: 'partner-suspended', credentialRef: 'c' }, req);
+    const r = checkPartnerEntitlement(
+      bankA,
+      { kind: 'PARTNER_SYSTEM', partnerId: 'partner-suspended', credentialRef: 'c' },
+      req,
+    );
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.reason).toBe('PARTNER_SUSPENDED');
   });
   it('refuses a partner on a channel it is not entitled to', () => {
-    const r = checkPartnerEntitlement(bankA, { kind: 'AGGREGATOR_ON_BEHALF', aggregatorId: 'hungerstation', credentialRef: 'c', merchantMandateRef: 'm' }, req);
+    const r = checkPartnerEntitlement(
+      bankA,
+      { kind: 'AGGREGATOR_ON_BEHALF', aggregatorId: 'hungerstation', credentialRef: 'c', merchantMandateRef: 'm' },
+      req,
+    );
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.reason).toBe('PARTNER_CHANNEL_MISMATCH');
   });
   it('refuses over the per-request limit with OP-LIMIT', () => {
-    const r = checkPartnerEntitlement(bankA, { kind: 'AGGREGATOR_ON_BEHALF', aggregatorId: 'hungerstation', credentialRef: 'c', merchantMandateRef: 'm' }, { ...req, channel: 'EMBEDDED_AGGREGATOR', requestedAmount: money(20_000_001n) });
+    const r = checkPartnerEntitlement(
+      bankA,
+      { kind: 'AGGREGATOR_ON_BEHALF', aggregatorId: 'hungerstation', credentialRef: 'c', merchantMandateRef: 'm' },
+      { ...req, channel: 'EMBEDDED_AGGREGATOR', requestedAmount: money(20_000_001n) },
+    );
     expect(r.ok).toBe(false);
-    if (!r.ok) { expect(r.error.control).toBe('OP-LIMIT'); expect(r.error.reason).toBe('PARTNER_LIMIT_EXCEEDED'); }
+    if (!r.ok) {
+      expect(r.error.control).toBe('OP-LIMIT');
+      expect(r.error.reason).toBe('PARTNER_LIMIT_EXCEEDED');
+    }
   });
 });
 
@@ -191,7 +265,16 @@ describe('SLA and expiry are pure functions of attested time', () => {
   });
 
   it('expire() refuses before the interval and succeeds after — nothing can expire a request early', () => {
-    const keyed = expectOk(raise({ core: core({ channel: 'MAKER_CHECKER', identification: { kind: 'STAFF_PRINCIPAL', principalId: 'stf-maker-01' } }), maker, policy: bankA }));
+    const keyed = expectOk(
+      raise({
+        core: core({
+          channel: 'MAKER_CHECKER',
+          identification: { kind: 'STAFF_PRINCIPAL', principalId: 'stf-maker-01' },
+        }),
+        maker,
+        policy: bankA,
+      }),
+    );
     const awaiting = expectOk(submitForReview(keyed, at(1_000)));
     if (awaiting.state !== 'AWAITING_REVIEW') throw new Error('unexpected');
 
@@ -201,7 +284,10 @@ describe('SLA and expiry are pure functions of attested time', () => {
 
     const due = expire(awaiting, bankA, at(1_000 + 1_209_600));
     expect(due.ok).toBe(true);
-    if (due.ok) { expect(due.value.state).toBe('EXPIRED'); expect(due.value.wasIn).toBe('AWAITING_REVIEW'); }
+    if (due.ok) {
+      expect(due.value.state).toBe('EXPIRED');
+      expect(due.value.wasIn).toBe('AWAITING_REVIEW');
+    }
     expect(isExpired(bankA, 'AWAITING_REVIEW', 1_000n, 1_000n + 1_209_600n)).toBe(true);
   });
 });
@@ -211,9 +297,12 @@ describe('none of this can reach a sequencing gate', () => {
     // Comments are stripped first: `products/murabaha-scf/sequencing` legitimately speaks of
     // the *timestamping* authority in prose, and a scan for behaviour is
     // looking for code. The identifiers below are this module's exports.
-    const codeOnly = (src: string): string =>
-      src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*$/gm, '$1');
-    for (const file of ['products/murabaha-scf/sequencing/transitions.ts', 'products/murabaha-scf/sequencing/gates.ts', 'products/murabaha-scf/sequencing/state.ts']) {
+    const codeOnly = (src: string): string => src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*$/gm, '$1');
+    for (const file of [
+      'products/murabaha-scf/sequencing/transitions.ts',
+      'products/murabaha-scf/sequencing/gates.ts',
+      'products/murabaha-scf/sequencing/state.ts',
+    ]) {
       const src = codeOnly(readFileSync(`${ROOT}${file}`, 'utf8'));
       expect(src, file).not.toMatch(/origination\/policy/);
       expect(src, file).not.toMatch(

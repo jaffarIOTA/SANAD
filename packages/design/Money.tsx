@@ -48,10 +48,7 @@ const ARABIC_GROUP = '٬';
  * dividing is how a rounding error enters a number someone is about to be
  * contractually bound by (BE-06).
  */
-export function formatMinorUnits(
-  amount: DomainMoney,
-  numerals: NumeralSystem,
-): string {
+export function formatMinorUnits(amount: DomainMoney, numerals: NumeralSystem): string {
   const negative = amount.minorUnits < 0n;
   const absolute = negative ? -amount.minorUnits : amount.minorUnits;
   const digits = absolute.toString().padStart(3, '0');
@@ -85,25 +82,14 @@ export function Money({ pricing, locale, numerals, labels }: MoneyProps): ReactE
           : 'flex items-baseline justify-between'
       }
     >
+      <span className={isTotal ? 'text-base font-semibold text-ink' : 'text-sm text-ink-quiet'}>{label}</span>
       <span
-        className={
-          isTotal ? 'text-base font-semibold text-ink' : 'text-sm text-ink-quiet'
-        }
-      >
-        {label}
-      </span>
-      <span
-        className={
-          isTotal
-            ? 'text-amount font-semibold text-ink tabular-nums'
-            : 'text-base text-ink tabular-nums'
-        }
+        className={isTotal ? 'text-amount font-semibold text-ink tabular-nums' : 'text-base text-ink tabular-nums'}
         data-testid={isTotal ? 'money-total' : undefined}
       >
         {/* Isolated so neighbouring punctuation and digits do not reorder
             when an Arabic paragraph surrounds a Latin currency code. */}
-        <bdi>{formatMinorUnits(amount, system)}</bdi>{' '}
-        <span className="text-sm text-ink-quiet">{currency}</span>
+        <bdi>{formatMinorUnits(amount, system)}</bdi> <span className="text-sm text-ink-quiet">{currency}</span>
       </span>
     </div>
   );

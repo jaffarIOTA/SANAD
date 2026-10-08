@@ -83,11 +83,7 @@ export interface IdempotencyStore {
    * Without this, a crash mid-request would wedge the key permanently and the
    * caller could never retry the instruction it never got an answer to.
    */
-  release(params: {
-    readonly tenantId: string;
-    readonly partnerId: string;
-    readonly key: string;
-  }): Promise<void>;
+  release(params: { readonly tenantId: string; readonly partnerId: string; readonly key: string }): Promise<void>;
 }
 
 /**
@@ -97,9 +93,7 @@ export interface IdempotencyStore {
  * operations is a different instruction, not a replay.
  */
 export function fingerprint(method: string, path: string, rawBody: string): string {
-  return createHash('sha256')
-    .update(`${method.toUpperCase()}\n${path}\n${rawBody}`, 'utf8')
-    .digest('hex');
+  return createHash('sha256').update(`${method.toUpperCase()}\n${path}\n${rawBody}`, 'utf8').digest('hex');
 }
 
 interface Record_ {
@@ -117,8 +111,7 @@ export function inMemoryIdempotencyStore(): IdempotencyStore {
   const records = new Map<string, Record_>();
   // NUL-separated, so a partner identifier containing the separator cannot be
   // crafted to collide with another scope.
-  const at = (tenantId: string, partnerId: string, key: string): string =>
-    `${tenantId}\u0000${partnerId}\u0000${key}`;
+  const at = (tenantId: string, partnerId: string, key: string): string => `${tenantId}\u0000${partnerId}\u0000${key}`;
 
   return {
     reserve({ tenantId, partnerId, key, fingerprint: fp }): Promise<Reservation> {

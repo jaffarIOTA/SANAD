@@ -16,7 +16,11 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { type BusinessApplicationView, listApplications, resetBusinessStore } from '../../apps/ops/src/server/business.ts';
+import {
+  type BusinessApplicationView,
+  listApplications,
+  resetBusinessStore,
+} from '../../apps/ops/src/server/business.ts';
 import {
   documentGroup,
   formatPercent,
@@ -50,13 +54,27 @@ describe('the pipeline summary', () => {
     expect(s.portfolioCount).toBe(2);
     expect(s.pendingAssessmentCount).toBe(3);
     expect(s.completedCount).toBe(2);
-    expect(Object.fromEntries(Object.entries(s.byStage).map(([k, v]) => [k, v.length]))).toEqual({ 5: 3, 6: 2, 7: 1, 8: 1, 9: 1 });
+    expect(Object.fromEntries(Object.entries(s.byStage).map(([k, v]) => [k, v.length]))).toEqual({
+      5: 3,
+      6: 2,
+      7: 1,
+      8: 1,
+      9: 1,
+    });
     expect(s.targetDays).toBe(23);
   });
 
   it('leaves withdrawn and declined applications out of every open count', () => {
     const base = byId('FR-00005101');
-    const withdrawn: BusinessApplicationView = { ...base, application: { ...base.application, applicationId: 'FR-00009999', status: 'WITHDRAWN', withdrawal: { reason: 'test', atEpochSeconds: base.application.receivedAtEpochSeconds } } };
+    const withdrawn: BusinessApplicationView = {
+      ...base,
+      application: {
+        ...base.application,
+        applicationId: 'FR-00009999',
+        status: 'WITHDRAWN',
+        withdrawal: { reason: 'test', atEpochSeconds: base.application.receivedAtEpochSeconds },
+      },
+    };
     const now = base.application.receivedAtEpochSeconds + DAY;
     const s = summarisePipeline([...views, withdrawn], now);
     expect(s.activeCount).toBe(6);
@@ -71,7 +89,9 @@ describe('the pipeline summary', () => {
     const s = summarisePipeline(views, now);
     expect(s.averageTurnaroundTenthsOfDay).toBe((sum * 10n + (n * DAY) / 2n) / (n * DAY));
     // Turnaround of a closed application does not grow with the clock.
-    expect(turnaroundSeconds(disbursed[0] as BusinessApplicationView, now + 400n * DAY)).toBe(turnaroundSeconds(disbursed[0] as BusinessApplicationView, now));
+    expect(turnaroundSeconds(disbursed[0] as BusinessApplicationView, now + 400n * DAY)).toBe(
+      turnaroundSeconds(disbursed[0] as BusinessApplicationView, now),
+    );
   });
 
   it('sums the facility amounts disbursed in the current UAE calendar month', () => {
@@ -116,13 +136,19 @@ describe('the status chip', () => {
     const stp = byId('FR-00005105');
     const committee = byId('FR-00005104');
     expect(statusChip(stp, stp.application.receivedAtEpochSeconds).code).toBe('SCORING_COMPLETE');
-    expect(['IN_STAGE', 'SLA_NEAR', 'SLA_BREACHED']).toContain(statusChip(committee, committee.application.receivedAtEpochSeconds + 9n * DAY).code);
+    expect(['IN_STAGE', 'SLA_NEAR', 'SLA_BREACHED']).toContain(
+      statusChip(committee, committee.application.receivedAtEpochSeconds + 9n * DAY).code,
+    );
   });
 
   it('turns the stage-5 chip amber on the last day', () => {
     const v = byId('FR-00005103');
     const entered = stageClock(v, 0n).enteredAtEpochSeconds;
-    expect(statusChip(v, entered + 4n * DAY + 1n)).toMatchObject({ code: 'SLA_NEAR', en: 'Day 5 of 5 ⚠ SLA', tone: 'warn' });
+    expect(statusChip(v, entered + 4n * DAY + 1n)).toMatchObject({
+      code: 'SLA_NEAR',
+      en: 'Day 5 of 5 ⚠ SLA',
+      tone: 'warn',
+    });
   });
 });
 

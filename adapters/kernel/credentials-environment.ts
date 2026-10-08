@@ -57,7 +57,14 @@ export class EnvironmentCredentialProvider implements CredentialProvider {
     if (value === undefined || value.trim().length === 0) {
       return Promise.reject(new CredentialNotConfiguredError(variable));
     }
-    this.audit({ tenantId: ref.tenantId, provider: ref.provider, environment: ref.environment, keyName: ref.keyName, correlationId, source: 'ENVIRONMENT' });
+    this.audit({
+      tenantId: ref.tenantId,
+      provider: ref.provider,
+      environment: ref.environment,
+      keyName: ref.keyName,
+      correlationId,
+      source: 'ENVIRONMENT',
+    });
     return Promise.resolve(new SecretValue(value.trim()));
   }
 }

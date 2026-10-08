@@ -25,8 +25,10 @@ import { lookupStatus } from '../kernel/vocabulary.ts';
 export const NER_DEVIATIONS: readonly KnownDeviation[] = [
   {
     id: 'NER-DEV-001',
-    summary: 'The register keys a business on its trade licence number and issuing authority, not a commercial registration number.',
-    containment: 'The licence number travels in the port’s commercialRegistration field and is renamed only inside this adapter. Licence numbers differ in format by issuing authority, so the adapter checks shape only (letters, digits, hyphen, slash) and lets the register decide.',
+    summary:
+      'The register keys a business on its trade licence number and issuing authority, not a commercial registration number.',
+    containment:
+      'The licence number travels in the port’s commercialRegistration field and is renamed only inside this adapter. Licence numbers differ in format by issuing authority, so the adapter checks shape only (letters, digits, hyphen, slash) and lets the register decide.',
     verificationRef: 'UAE-RAIL-NER-01',
   },
   {
@@ -38,12 +40,20 @@ export const NER_DEVIATIONS: readonly KnownDeviation[] = [
   {
     id: 'NER-DEV-003',
     summary: 'Share capital is an AED decimal; the port carries it as minor units without a currency.',
-    containment: 'Converted to AED minor units by digit manipulation; a capital stated in another currency is left out rather than relabelled.',
+    containment:
+      'Converted to AED minor units by digit manipulation; a capital stated in another currency is left out rather than relabelled.',
     verificationRef: 'UAE-RAIL-NER-01',
   },
 ];
 
-const STATUS: Readonly<Record<string, RegistrationRecord['status']>> = { ACTIVE: 'ACTIVE', EXPIRED: 'EXPIRED', SUSPENDED: 'SUSPENDED', FROZEN: 'SUSPENDED', CANCELLED: 'CANCELLED', REVOKED: 'CANCELLED' };
+const STATUS: Readonly<Record<string, RegistrationRecord['status']>> = {
+  ACTIVE: 'ACTIVE',
+  EXPIRED: 'EXPIRED',
+  SUSPENDED: 'SUSPENDED',
+  FROZEN: 'SUSPENDED',
+  CANCELLED: 'CANCELLED',
+  REVOKED: 'CANCELLED',
+};
 
 const LICENCE_SHAPE = /^[A-Za-z0-9][A-Za-z0-9/-]{2,29}$/;
 
@@ -66,19 +76,59 @@ export class NerAdapter extends RailAdapter implements BusinessRegistryPort {
   }
 
   /** `commercialRegistration` is the trade licence number (NER-DEV-001). `REFUSED` with `NOT_FOUND` when the register does not know it. */
-  async lookup(p: { readonly tenantId: string; readonly commercialRegistration: string; readonly correlationId: string }): Promise<Result<RailOutcome<RegistrationRecord>>> {
+  async lookup(p: {
+    readonly tenantId: string;
+    readonly commercialRegistration: string;
+    readonly correlationId: string;
+  }): Promise<Result<RailOutcome<RegistrationRecord>>> {
     const licence = p.commercialRegistration.trim();
-    if (!LICENCE_SHAPE.test(licence)) return reject('OP-DETERMINACY', 'LICENCE_MALFORMED', 'A trade licence number is 3 to 30 letters, digits, hyphens or slashes');
-    const r = await this.invoke('registry.lookup', { method: 'GET', path: `/v1/trade-licences/${encodeURIComponent(licence)}` }, p.correlationId);
+    if (!LICENCE_SHAPE.test(licence))
+      return reject(
+        'OP-DETERMINACY',
+        'LICENCE_MALFORMED',
+        'A trade licence number is 3 to 30 letters, digits, hyphens or slashes',
+      );
+    const r = await this.invoke(
+      'registry.lookup',
+      { method: 'GET', path: `/v1/trade-licences/${encodeURIComponent(licence)}` },
+      p.correlationId,
+    );
     if (r.kind === 'REFUSED' && r.code === 'HTTP_404') return ok({ kind: 'REFUSED', code: 'NOT_FOUND' });
     if (r.kind !== 'ANSWERED') return ok(r);
     const v = r.value;
-    const nameAr = str(v['tradeNameAr']); const nameEn = str(v['tradeNameEn']); const legalForm = str(v['legalForm']); const status = lookupStatus(STATUS, v['licenceStatus']); const at = epoch(v['asOf']);
-    if (nameAr === undefined || nameEn === undefined || legalForm === undefined || status === undefined || at === undefined) return ok(malformed());
+    const nameAr = str(v['tradeNameAr']);
+    const nameEn = str(v['tradeNameEn']);
+    const legalForm = str(v['legalForm']);
+    const status = lookupStatus(STATUS, v['licenceStatus']);
+    const at = epoch(v['asOf']);
+    if (
+      nameAr === undefined ||
+      nameEn === undefined ||
+      legalForm === undefined ||
+      status === undefined ||
+      at === undefined
+    )
+      return ok(malformed());
     const lookupRef = str(v['lookupId']) ?? `ner-${licence}`;
     const signatoryRefs = [...new Set([...fieldOf(v['owners'], 'ref'), ...fieldOf(v['managers'], 'ref')])];
     const activityCodes = fieldOf(v['activities'], 'code');
-    const capital = aed(v['shareCapital'], v['capitalCurrency']); const issued = str(v['issuedAt']);
-    return ok({ kind: 'ANSWERED', value: { commercialRegistration: licence, legalNameAr: nameAr, legalNameEn: nameEn, legalForm, status, activityCodes, signatoryRefs, lookupRef, retrievedAtEpochSeconds: at, ...(capital === undefined ? {} : { paidCapitalMinorUnits: capital.minorUnits }), ...(issued === undefined ? {} : { registeredAtGregorian: issued }) } });
+    const capital = aed(v['shareCapital'], v['capitalCurrency']);
+    const issued = str(v['issuedAt']);
+    return ok({
+      kind: 'ANSWERED',
+      value: {
+        commercialRegistration: licence,
+        legalNameAr: nameAr,
+        legalNameEn: nameEn,
+        legalForm,
+        status,
+        activityCodes,
+        signatoryRefs,
+        lookupRef,
+        retrievedAtEpochSeconds: at,
+        ...(capital === undefined ? {} : { paidCapitalMinorUnits: capital.minorUnits }),
+        ...(issued === undefined ? {} : { registeredAtGregorian: issued }),
+      },
+    });
   }
 }

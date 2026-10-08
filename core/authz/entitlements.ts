@@ -107,12 +107,7 @@ const CATALOGUE: ReadonlySet<string> = new Set(ENTITLEMENT_ACTIONS);
  * The gate-advancing operations, named so a test can assert the catalogue does
  * not contain them and that no entitlement maps onto one.
  */
-export const SEQUENCING_TRANSITIONS = [
-  'acquireOwnership',
-  'confirmPossession',
-  'offerSale',
-  'acceptOffer',
-] as const;
+export const SEQUENCING_TRANSITIONS = ['acquireOwnership', 'confirmPossession', 'offerSale', 'acceptOffer'] as const;
 
 /**
  * Words that have no legitimate place in an entitlement name here. A catalogue

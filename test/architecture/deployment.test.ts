@@ -55,9 +55,7 @@ describe('OpenShift restricted-v2 compatibility', () => {
 
   it('runs on a read-only root filesystem with a bounded writable mount', () => {
     expect(container.securityContext.readOnlyRootFilesystem).toBe(true);
-    const tmp = deployment?.spec?.['template'].spec.volumes.find(
-      (v: { name: string }) => v.name === 'tmp',
-    );
+    const tmp = deployment?.spec?.['template'].spec.volumes.find((v: { name: string }) => v.name === 'tmp');
     expect(tmp.emptyDir.sizeLimit).toBeTruthy();
   });
 
@@ -87,9 +85,7 @@ describe('the deployment does not lose requests', () => {
 
   it('allows longer to terminate than it takes to drain', () => {
     const grace = deployment?.spec?.['template'].spec.terminationGracePeriodSeconds as number;
-    const drain = Number(
-      container.env.find((e: { name: string }) => e.name === 'DRAIN_MS').value,
-    );
+    const drain = Number(container.env.find((e: { name: string }) => e.name === 'DRAIN_MS').value);
     expect(grace * 1000).toBeGreaterThan(drain);
   });
 
@@ -125,9 +121,7 @@ describe('no secret is in the manifest', () => {
     const raw = read('/deploy/openshift/origination.yaml');
     expect(raw).toMatch(/secretKeyRef/);
     // A literal long opaque value assigned to a token-shaped env var.
-    expect(raw).not.toMatch(
-      /(token|secret|password|api[_-]?key)\w*:\s*['"]?[A-Za-z0-9_\-+/=]{16,}/i,
-    );
+    expect(raw).not.toMatch(/(token|secret|password|api[_-]?key)\w*:\s*['"]?[A-Za-z0-9_\-+/=]{16,}/i);
   });
 
   it('declares no Secret object, so none can be committed here', () => {

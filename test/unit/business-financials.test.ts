@@ -33,7 +33,15 @@ const proposal = (metric: FinancialMetric, value: Money, over: Partial<FigurePro
 });
 
 const verified = (metric: FinancialMetric, value: Money, correctedValue?: Money): FinancialFigure =>
-  expectOk(verifyFigure(expectOk(proposeFigure(proposal(metric, value), 'AED')), correctedValue === undefined ? { verifiedBy: 'officer-1', verifiedAtEpochSeconds: 2_000n } : { verifiedBy: 'officer-1', verifiedAtEpochSeconds: 2_000n, correctedValue }, 'AED'));
+  expectOk(
+    verifyFigure(
+      expectOk(proposeFigure(proposal(metric, value), 'AED')),
+      correctedValue === undefined
+        ? { verifiedBy: 'officer-1', verifiedAtEpochSeconds: 2_000n }
+        : { verifiedBy: 'officer-1', verifiedAtEpochSeconds: 2_000n, correctedValue },
+      'AED',
+    ),
+  );
 
 /** The figures on the core banking partner's SME prototype screen, AED. */
 const SCREEN: Readonly<Record<FinancialMetric, Money>> = {
@@ -48,7 +56,13 @@ const SCREEN: Readonly<Record<FinancialMetric, Money>> = {
 };
 
 const screenSpread = () =>
-  expectOk(completeSpread(FULL_SPREAD_METRICS.map((m) => verified(m, SCREEN[m])), FULL_SPREAD_METRICS, 'AED'));
+  expectOk(
+    completeSpread(
+      FULL_SPREAD_METRICS.map((m) => verified(m, SCREEN[m])),
+      FULL_SPREAD_METRICS,
+      'AED',
+    ),
+  );
 
 describe('financial figures — proposal and verification', () => {
   it('is not usable until an officer verifies it, and verification records who and when', () => {
@@ -58,7 +72,12 @@ describe('financial figures — proposal and verification', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.reason).toBe('FIGURE_NOT_VERIFIED');
     const v = expectOk(verifyFigure(f, { verifiedBy: 'officer-7', verifiedAtEpochSeconds: 1_500n }, 'AED'));
-    expect(v.verification).toEqual({ value: aed(31_000_000n), verifiedBy: 'officer-7', verifiedAtEpochSeconds: 1_500n, correctedFromProposal: false });
+    expect(v.verification).toEqual({
+      value: aed(31_000_000n),
+      verifiedBy: 'officer-7',
+      verifiedAtEpochSeconds: 1_500n,
+      correctedFromProposal: false,
+    });
     expect(expectOk(usableValue(v))).toEqual(aed(31_000_000n));
   });
 
@@ -76,13 +95,19 @@ describe('financial figures — proposal and verification', () => {
     expect(p.ok).toBe(false);
     if (!p.ok) expect(p.error.reason).toBe('FIGURE_CURRENCY_MISMATCH');
     const f = expectOk(proposeFigure(proposal('CURRENT_ASSETS', aed(1n)), 'AED'));
-    const c = verifyFigure(f, { verifiedBy: 'officer-1', verifiedAtEpochSeconds: 2_000n, correctedValue: money(1n, 'SAR') }, 'AED');
+    const c = verifyFigure(
+      f,
+      { verifiedBy: 'officer-1', verifiedAtEpochSeconds: 2_000n, correctedValue: money(1n, 'SAR') },
+      'AED',
+    );
     expect(c.ok).toBe(false);
     if (!c.ok) expect(c.error.reason).toBe('FIGURE_CURRENCY_MISMATCH');
   });
 
   it('refuses content as a source reference, and a negative amount except for a loss', () => {
-    expect(proposeFigure(proposal('NET_PROFIT', aed(1n), { sourceRef: 'Revenue for the year was 2,340,000' }), 'AED').ok).toBe(false);
+    expect(
+      proposeFigure(proposal('NET_PROFIT', aed(1n), { sourceRef: 'Revenue for the year was 2,340,000' }), 'AED').ok,
+    ).toBe(false);
     expect(proposeFigure(proposal('CURRENT_LIABILITIES', aed(-1n)), 'AED').ok).toBe(false);
     expect(proposeFigure(proposal('NET_PROFIT', aed(-1n)), 'AED').ok).toBe(true);
   });
@@ -95,7 +120,9 @@ describe('financial figures — proposal and verification', () => {
 
   it('requires four eyes on an officer-keyed figure, and an entering officer', () => {
     expect(proposeFigure(proposal('NET_PROFIT', aed(1n), { sourceKind: 'OFFICER_ENTRY' }), 'AED').ok).toBe(false);
-    const f = expectOk(proposeFigure(proposal('NET_PROFIT', aed(1n), { sourceKind: 'OFFICER_ENTRY', enteredBy: 'officer-1' }), 'AED'));
+    const f = expectOk(
+      proposeFigure(proposal('NET_PROFIT', aed(1n), { sourceKind: 'OFFICER_ENTRY', enteredBy: 'officer-1' }), 'AED'),
+    );
     const same = verifyFigure(f, { verifiedBy: 'officer-1', verifiedAtEpochSeconds: 2_000n }, 'AED');
     expect(same.ok).toBe(false);
     if (!same.ok) expect(same.error.reason).toBe('FOUR_EYES_REQUIRED');
@@ -116,7 +143,11 @@ describe('the spread', () => {
   it('is complete only when every required metric is verified', () => {
     const figures = BUSINESS_SPREAD_METRICS.map((m) => verified(m, SCREEN[m]));
     const pending = expectOk(proposeFigure(proposal('CURRENT_LIABILITIES', SCREEN.CURRENT_LIABILITIES), 'AED'));
-    const r = completeSpread([...figures.filter((f) => f.metric !== 'CURRENT_LIABILITIES'), pending], BUSINESS_SPREAD_METRICS, 'AED');
+    const r = completeSpread(
+      [...figures.filter((f) => f.metric !== 'CURRENT_LIABILITIES'), pending],
+      BUSINESS_SPREAD_METRICS,
+      'AED',
+    );
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.error.reason).toBe('SPREAD_INCOMPLETE');
@@ -134,7 +165,9 @@ describe('the spread', () => {
   });
 
   it('counts the officer’s corrections', () => {
-    const figures = BUSINESS_SPREAD_METRICS.map((m) => (m === 'NET_PROFIT' ? verified(m, aed(30_000_000n), SCREEN[m]) : verified(m, SCREEN[m])));
+    const figures = BUSINESS_SPREAD_METRICS.map((m) =>
+      m === 'NET_PROFIT' ? verified(m, aed(30_000_000n), SCREEN[m]) : verified(m, SCREEN[m]),
+    );
     expect(expectOk(completeSpread(figures, BUSINESS_SPREAD_METRICS, 'AED')).correctedCount).toBe(1);
   });
 });
@@ -178,7 +211,9 @@ describe('ratios — reproduced against the prototype screen (AED)', () => {
   });
 
   it('negative growth rounds towards −∞ (never overstates growth)', () => {
-    const figures = BUSINESS_SPREAD_METRICS.map((m) => verified(m, m === 'ANNUAL_REVENUE' ? aed(217_999_999n) : SCREEN[m]));
+    const figures = BUSINESS_SPREAD_METRICS.map((m) =>
+      verified(m, m === 'ANNUAL_REVENUE' ? aed(217_999_999n) : SCREEN[m]),
+    );
     const r = expectOk(computeRatio(expectOk(completeSpread(figures, BUSINESS_SPREAD_METRICS, 'AED')), 'SALES_GROWTH'));
     expect(r.perTenThousand).toBe(-1n);
   });
@@ -194,8 +229,12 @@ describe('ratios — reproduced against the prototype screen (AED)', () => {
   });
 
   it('bigint division helpers round in the stated direction', () => {
-    expect(floorDiv(7n, 2n)).toBe(3n); expect(floorDiv(-7n, 2n)).toBe(-4n); expect(floorDiv(-6n, 2n)).toBe(-3n);
-    expect(ceilDiv(7n, 2n)).toBe(4n); expect(ceilDiv(-7n, 2n)).toBe(-3n); expect(ceilDiv(6n, 2n)).toBe(3n);
+    expect(floorDiv(7n, 2n)).toBe(3n);
+    expect(floorDiv(-7n, 2n)).toBe(-4n);
+    expect(floorDiv(-6n, 2n)).toBe(-3n);
+    expect(ceilDiv(7n, 2n)).toBe(4n);
+    expect(ceilDiv(-7n, 2n)).toBe(-3n);
+    expect(ceilDiv(6n, 2n)).toBe(3n);
   });
 });
 
@@ -207,13 +246,19 @@ describe('BusinessFacts for the SME product modules', () => {
     expect(facts.existingAnnualDebtService).toEqual(aed(18_000_000n));
     expect(facts.fullTimeEmployees).toBe(42);
     expect(facts.sector).toBe('TRADING');
-    expect(facts.financialsSourceRef).toBe('spread:doc:stmt-annual_revenue|doc:stmt-net_profit|doc:stmt-total_debt_service');
+    expect(facts.financialsSourceRef).toBe(
+      'spread:doc:stmt-annual_revenue|doc:stmt-net_profit|doc:stmt-total_debt_service',
+    );
     expect(OPERATING_CASH_FLOW_PROXY.policyRef).toMatch(/^ILLUSTRATIVE/);
   });
 
   it('uses the corrected value, not the OCR one', () => {
-    const figures = BUSINESS_SPREAD_METRICS.map((m) => (m === 'NET_PROFIT' ? verified(m, aed(3_100_000n), SCREEN[m]) : verified(m, SCREEN[m])));
-    const facts = expectOk(toBusinessFacts(expectOk(completeSpread(figures, BUSINESS_SPREAD_METRICS, 'AED')), { fullTimeEmployees: 1 }));
+    const figures = BUSINESS_SPREAD_METRICS.map((m) =>
+      m === 'NET_PROFIT' ? verified(m, aed(3_100_000n), SCREEN[m]) : verified(m, SCREEN[m]),
+    );
+    const facts = expectOk(
+      toBusinessFacts(expectOk(completeSpread(figures, BUSINESS_SPREAD_METRICS, 'AED')), { fullTimeEmployees: 1 }),
+    );
     expect(facts.annualOperatingCashFlow).toEqual(aed(31_000_000n));
   });
 

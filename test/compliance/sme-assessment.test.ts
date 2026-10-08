@@ -8,13 +8,18 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { type SmeAssessmentFacts, assessSme, parseSmeAssessmentPolicy } from '@sanad/core/decisioning/sme-assessment.ts';
+import {
+  type SmeAssessmentFacts,
+  assessSme,
+  parseSmeAssessmentPolicy,
+} from '@sanad/core/decisioning/sme-assessment.ts';
 import { money } from '@sanad/core/kernel/money.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const POLICY_PATH = 'config/tenants/sme-fund-ae/credit-policy/sme-assessment.json';
-const rawPolicy = (): Record<string, unknown> => JSON.parse(readFileSync(`${ROOT}${POLICY_PATH}`, 'utf8')) as Record<string, unknown>;
+const rawPolicy = (): Record<string, unknown> =>
+  JSON.parse(readFileSync(`${ROOT}${POLICY_PATH}`, 'utf8')) as Record<string, unknown>;
 const POLICY = expectOk(parseSmeAssessmentPolicy(rawPolicy()));
 
 const aed = (dirhams: bigint) => money(dirhams * 100n, 'AED');
@@ -45,7 +50,13 @@ describe('SME assessment — the prototype example applicant', () => {
 
   it('passes every knock-out, each reported with threshold, actual and pass', () => {
     expect(result.failedKnockouts).toEqual([]);
-    expect(result.knockouts.map((k) => k.code)).toEqual(['KO_BUREAU_SCORE', 'KO_DSCR', 'KO_CURRENT_RATIO', 'KO_SALES_GROWTH', 'KO_OWNER_DBR']);
+    expect(result.knockouts.map((k) => k.code)).toEqual([
+      'KO_BUREAU_SCORE',
+      'KO_DSCR',
+      'KO_CURRENT_RATIO',
+      'KO_SALES_GROWTH',
+      'KO_OWNER_DBR',
+    ]);
     const bureau = result.knockouts[0];
     expect(bureau).toMatchObject({ threshold: 650n, actual: 801n, passed: true });
   });
@@ -104,7 +115,13 @@ describe('SME assessment — routing', () => {
   });
 
   it('cannot reach straight-through with equity below the risk band minimum', () => {
-    const r = expectOk(assessSme(POLICY, { ...EXAMPLE, equityContributionPerTenThousand: 1_999n, dbrBeforeLoanPerTenThousand: 100n }, aed(400_000n)));
+    const r = expectOk(
+      assessSme(
+        POLICY,
+        { ...EXAMPLE, equityContributionPerTenThousand: 1_999n, dbrBeforeLoanPerTenThousand: 100n },
+        aed(400_000n),
+      ),
+    );
     expect(r.outcome).not.toBe('STRAIGHT_THROUGH');
     expect(r.reasons.map((x) => x.code)).toContain('EQUITY_BELOW_RISK_ALIGNED_MINIMUM');
   });
@@ -116,7 +133,20 @@ describe('SME assessment — routing', () => {
   });
 
   it('declines a score below the lowest band, as configured', () => {
-    const poor: SmeAssessmentFacts = { ...EXAMPLE, bureauScore: 650n, dbrBeforeLoanPerTenThousand: 4_500n, relevantExperienceYears: 0n, equityContributionPerTenThousand: 500n, profitable: false, auditedFinancialsAvailable: false, yearsInOperation: 1n, commitmentRatioPerTenThousand: 7_000n, riskAnalysisScorePerTenThousand: 2_000n, portfolioRepaymentPerTenThousand: 4_000n, failedFilesRatePerTenThousand: 4_000n };
+    const poor: SmeAssessmentFacts = {
+      ...EXAMPLE,
+      bureauScore: 650n,
+      dbrBeforeLoanPerTenThousand: 4_500n,
+      relevantExperienceYears: 0n,
+      equityContributionPerTenThousand: 500n,
+      profitable: false,
+      auditedFinancialsAvailable: false,
+      yearsInOperation: 1n,
+      commitmentRatioPerTenThousand: 7_000n,
+      riskAnalysisScorePerTenThousand: 2_000n,
+      portfolioRepaymentPerTenThousand: 4_000n,
+      failedFilesRatePerTenThousand: 4_000n,
+    };
     const r = expectOk(assessSme(POLICY, poor, aed(100_000n)));
     expect(r.outcome).toBe('DECLINE');
     expect(r.riskLevel).toBeUndefined();
@@ -125,7 +155,20 @@ describe('SME assessment — routing', () => {
 
   it('refers instead when the policy says so', () => {
     const policy = expectOk(parseSmeAssessmentPolicy({ ...rawPolicy(), belowFloorOutcome: 'REFER' }));
-    const poor: SmeAssessmentFacts = { ...EXAMPLE, bureauScore: 650n, dbrBeforeLoanPerTenThousand: 4_500n, relevantExperienceYears: 0n, equityContributionPerTenThousand: 500n, profitable: false, auditedFinancialsAvailable: false, yearsInOperation: 1n, commitmentRatioPerTenThousand: 7_000n, riskAnalysisScorePerTenThousand: 2_000n, portfolioRepaymentPerTenThousand: 4_000n, failedFilesRatePerTenThousand: 4_000n };
+    const poor: SmeAssessmentFacts = {
+      ...EXAMPLE,
+      bureauScore: 650n,
+      dbrBeforeLoanPerTenThousand: 4_500n,
+      relevantExperienceYears: 0n,
+      equityContributionPerTenThousand: 500n,
+      profitable: false,
+      auditedFinancialsAvailable: false,
+      yearsInOperation: 1n,
+      commitmentRatioPerTenThousand: 7_000n,
+      riskAnalysisScorePerTenThousand: 2_000n,
+      portfolioRepaymentPerTenThousand: 4_000n,
+      failedFilesRatePerTenThousand: 4_000n,
+    };
     expect(expectOk(assessSme(policy, poor, aed(100_000n))).outcome).toBe('REFER');
   });
 });
@@ -148,7 +191,14 @@ describe('SME assessment — each knock-out declines on its own', () => {
   });
 
   it('passes exactly at each threshold', () => {
-    const edge = { ...EXAMPLE, bureauScore: 650n, dscrPerTenThousand: 14_000n, currentRatioPerTenThousand: 13_000n, salesGrowthPerTenThousand: 200n, ownerDbrPerTenThousand: 5_000n };
+    const edge = {
+      ...EXAMPLE,
+      bureauScore: 650n,
+      dscrPerTenThousand: 14_000n,
+      currentRatioPerTenThousand: 13_000n,
+      salesGrowthPerTenThousand: 200n,
+      ownerDbrPerTenThousand: 5_000n,
+    };
     expect(expectOk(assessSme(POLICY, edge, aed(400_000n))).failedKnockouts).toEqual([]);
   });
 });
@@ -210,7 +260,13 @@ describe('SME assessment — the policy parses strictly', () => {
 
   it('requires the source to say these are the institution’s figures, and every threshold in the fund’s policy is tagged illustrative', () => {
     expect(parseSmeAssessmentPolicy({ ...rawPolicy(), source: 'REGULATOR' }).ok).toBe(false);
-    const refs = [POLICY.policyRef, POLICY.straightThrough.policyRef, ...POLICY.knockouts.map((k) => k.policyRef), ...POLICY.riskBands.map((r) => r.policyRef), ...POLICY.sections.flatMap((s) => s.criteria.map((c) => c.policyRef))];
+    const refs = [
+      POLICY.policyRef,
+      POLICY.straightThrough.policyRef,
+      ...POLICY.knockouts.map((k) => k.policyRef),
+      ...POLICY.riskBands.map((r) => r.policyRef),
+      ...POLICY.sections.flatMap((s) => s.criteria.map((c) => c.policyRef)),
+    ];
     expect(refs.every((r) => r.startsWith('ILLUSTRATIVE'))).toBe(true);
   });
 });
@@ -247,7 +303,9 @@ describe('SME assessment — determinacy and integers', () => {
   });
 
   it('the engine source holds no float helpers or decimal literals', () => {
-    const source = readFileSync(`${ROOT}core/decisioning/sme-assessment.ts`, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    const source = readFileSync(`${ROOT}core/decisioning/sme-assessment.ts`, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '');
     expect(source).not.toMatch(/parseFloat|toFixed|Math\.(round|floor|ceil|pow)/);
     expect(source).not.toMatch(/[^\w.]\d+\.\d+/);
   });

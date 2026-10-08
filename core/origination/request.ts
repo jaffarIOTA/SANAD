@@ -232,7 +232,12 @@ export interface Withdrawn {
 export interface Expired {
   readonly state: 'EXPIRED';
   readonly core: OriginationRequestCore;
-  readonly wasIn: 'AWAITING_SERVICING_RESPONSE' | 'AWAITING_REVIEW' | 'RETURNED_TO_MAKER' | 'PENDING_INFORMATION' | 'SERVICING_UNAVAILABLE';
+  readonly wasIn:
+    | 'AWAITING_SERVICING_RESPONSE'
+    | 'AWAITING_REVIEW'
+    | 'RETURNED_TO_MAKER'
+    | 'PENDING_INFORMATION'
+    | 'SERVICING_UNAVAILABLE';
   readonly expiredAt: TsaInstant;
 }
 
@@ -305,10 +310,7 @@ export function raise(params: {
  * not, it goes straight to review. The return type is the union, so a caller
  * has to handle both rather than assuming the shorter path.
  */
-export function submitForReview(
-  request: Keying,
-  at: TsaInstant,
-): Result<AwaitingServicingResponse | AwaitingReview> {
+export function submitForReview(request: Keying, at: TsaInstant): Result<AwaitingServicingResponse | AwaitingReview> {
   const policy = CHANNEL_POLICIES[request.core.channel];
 
   if (policy.requiresServicingDecision) {
@@ -467,11 +469,7 @@ export function approve(
   });
 }
 
-export function returnToMaker(
-  request: AwaitingReview,
-  reviewer: Principal,
-  note: string,
-): Result<ReturnedToMaker> {
+export function returnToMaker(request: AwaitingReview, reviewer: Principal, note: string): Result<ReturnedToMaker> {
   if (note.trim().length === 0) {
     return reject(
       'OP-DETERMINACY',
@@ -489,11 +487,7 @@ export function returnToMaker(
   });
 }
 
-export function rejectRequest(
-  request: AwaitingReview,
-  reviewer: Principal,
-  reasonCode: string,
-): Result<Rejected> {
+export function rejectRequest(request: AwaitingReview, reviewer: Principal, reasonCode: string): Result<Rejected> {
   if (reasonCode.trim().length === 0) {
     return reject(
       'OP-DETERMINACY',
@@ -519,9 +513,11 @@ export function expire(
   observedAt: TsaInstant,
 ): Result<Expired> {
   const since =
-    request.state === 'PENDING_INFORMATION' ? request.requestedAt.epochSeconds
-    : 'submittedAt' in request ? request.submittedAt.epochSeconds
-    : request.core.raisedAt.epochSeconds;
+    request.state === 'PENDING_INFORMATION'
+      ? request.requestedAt.epochSeconds
+      : 'submittedAt' in request
+        ? request.submittedAt.epochSeconds
+        : request.core.raisedAt.epochSeconds;
   if (!isExpired(policy, request.state, since, observedAt.epochSeconds)) {
     return reject(
       'OP-DETERMINACY',
@@ -544,11 +540,22 @@ export function requestInformation(
 ): Result<PendingInformation> {
   const named = items.map((i) => i.trim()).filter((i) => i.length > 0);
   if (named.length === 0) {
-    return reject('OP-DETERMINACY', 'INFORMATION_REQUEST_EMPTY', 'Say what is needed; a request for nothing cannot be answered', { requestId: request.core.requestId });
+    return reject(
+      'OP-DETERMINACY',
+      'INFORMATION_REQUEST_EMPTY',
+      'Say what is needed; a request for nothing cannot be answered',
+      { requestId: request.core.requestId },
+    );
   }
   return ok({
-    state: 'PENDING_INFORMATION', core: request.core, maker: request.maker, submittedAt: request.submittedAt,
-    requestedBy, from, items: named, requestedAt: at,
+    state: 'PENDING_INFORMATION',
+    core: request.core,
+    maker: request.maker,
+    submittedAt: request.submittedAt,
+    requestedBy,
+    from,
+    items: named,
+    requestedAt: at,
     ...(request.servicing === undefined ? {} : { servicing: request.servicing }),
     ...(request.changes === undefined ? {} : { changes: request.changes }),
   });
@@ -557,7 +564,10 @@ export function requestInformation(
 /** The information arrived. Back in front of a person; the earlier servicing answer stands. */
 export function provideInformation(request: PendingInformation, _at: TsaInstant): AwaitingReview {
   return {
-    state: 'AWAITING_REVIEW', core: request.core, maker: request.maker, submittedAt: request.submittedAt,
+    state: 'AWAITING_REVIEW',
+    core: request.core,
+    maker: request.maker,
+    submittedAt: request.submittedAt,
     ...(request.servicing === undefined ? {} : { servicing: request.servicing }),
     ...(request.changes === undefined ? {} : { changes: request.changes }),
   };
@@ -571,11 +581,19 @@ export function recordServicingFailure(
   reason: string,
 ): Result<ServicingUnavailable> {
   if (reason.trim().length === 0) {
-    return reject('OP-DETERMINACY', 'SERVICING_FAILURE_WITHOUT_REASON', 'Record why the platform could not be reached', { requestId: request.core.requestId });
+    return reject(
+      'OP-DETERMINACY',
+      'SERVICING_FAILURE_WITHOUT_REASON',
+      'Record why the platform could not be reached',
+      { requestId: request.core.requestId },
+    );
   }
   const prior = request.state === 'SERVICING_UNAVAILABLE' ? request.attempts : (request.attempts ?? []);
   return ok({
-    state: 'SERVICING_UNAVAILABLE', core: request.core, maker: request.maker, submittedAt: request.submittedAt,
+    state: 'SERVICING_UNAVAILABLE',
+    core: request.core,
+    maker: request.maker,
+    submittedAt: request.submittedAt,
     attempts: [...prior, { at, reason }],
     ...(request.changes === undefined ? {} : { changes: request.changes }),
   });
@@ -599,17 +617,33 @@ export function retryServicing(
   const lastAttempt = request.attempts[request.attempts.length - 1];
   if (manual === undefined) {
     if (request.attempts.length >= policy.servicingRetry.maxAttempts) {
-      return reject('OP-DETERMINACY', 'SERVICING_RETRIES_EXHAUSTED', 'Automatic retries are exhausted; a named person must resubmit', { requestId: request.core.requestId, attempts: request.attempts.length });
+      return reject(
+        'OP-DETERMINACY',
+        'SERVICING_RETRIES_EXHAUSTED',
+        'Automatic retries are exhausted; a named person must resubmit',
+        { requestId: request.core.requestId, attempts: request.attempts.length },
+      );
     }
-    if (lastAttempt !== undefined && at.epochSeconds - lastAttempt.at.epochSeconds < BigInt(policy.servicingRetry.backoffSeconds)) {
-      return reject('OP-DETERMINACY', 'SERVICING_RETRY_TOO_SOON', 'The backoff interval has not elapsed', { requestId: request.core.requestId });
+    if (
+      lastAttempt !== undefined &&
+      at.epochSeconds - lastAttempt.at.epochSeconds < BigInt(policy.servicingRetry.backoffSeconds)
+    ) {
+      return reject('OP-DETERMINACY', 'SERVICING_RETRY_TOO_SOON', 'The backoff interval has not elapsed', {
+        requestId: request.core.requestId,
+      });
     }
   } else if (manual.note.trim().length === 0) {
-    return reject('OP-DETERMINACY', 'MANUAL_RESUBMISSION_WITHOUT_NOTE', 'A manual resubmission must say why', { requestId: request.core.requestId });
+    return reject('OP-DETERMINACY', 'MANUAL_RESUBMISSION_WITHOUT_NOTE', 'A manual resubmission must say why', {
+      requestId: request.core.requestId,
+    });
   }
-  const attempts = manual === undefined ? request.attempts : [...request.attempts, { at, reason: 'manual resubmission', manual }];
+  const attempts =
+    manual === undefined ? request.attempts : [...request.attempts, { at, reason: 'manual resubmission', manual }];
   return ok({
-    state: 'AWAITING_SERVICING_RESPONSE', core: request.core, maker: request.maker, submittedAt: request.submittedAt,
+    state: 'AWAITING_SERVICING_RESPONSE',
+    core: request.core,
+    maker: request.maker,
+    submittedAt: request.submittedAt,
     attempts,
     ...(request.changes === undefined ? {} : { changes: request.changes }),
   });
@@ -618,7 +652,8 @@ export function retryServicing(
 // -- Resubmission after a return, with a diff ---------------------------------
 
 const FIELD_VALUES: Readonly<Record<string, (c: OriginationRequestCore) => string>> = {
-  tradeReference: (c) => `${c.tradeReference.type}:${c.tradeReference.invoiceUuid ?? ''}:${c.tradeReference.issuerCr}:${c.tradeReference.recipientCr}`,
+  tradeReference: (c) =>
+    `${c.tradeReference.type}:${c.tradeReference.invoiceUuid ?? ''}:${c.tradeReference.issuerCr}:${c.tradeReference.recipientCr}`,
   requestedAmount: (c) => `${c.requestedAmount.currency}:${c.requestedAmount.minorUnits.toString()}`,
   counterpartyId: (c) => c.counterpartyId,
   programmeId: (c) => c.programmeId,
@@ -642,12 +677,24 @@ export function resubmit(
   policy: OriginationPolicy,
 ): Result<AwaitingServicingResponse | AwaitingReview> {
   if (revised.requestId !== request.core.requestId || revised.tenantId !== request.core.tenantId) {
-    return reject('OP-DETERMINACY', 'RESUBMISSION_CHANGES_IDENTITY', 'A resubmitted request keeps its identifier and tenant', { requestId: request.core.requestId });
+    return reject(
+      'OP-DETERMINACY',
+      'RESUBMISSION_CHANGES_IDENTITY',
+      'A resubmitted request keeps its identifier and tenant',
+      { requestId: request.core.requestId },
+    );
   }
   if (revised.channel !== request.core.channel) {
-    return reject('OP-DETERMINACY', 'RESUBMISSION_CHANGES_CHANNEL', 'A request cannot change the door it came through', { requestId: request.core.requestId });
+    return reject(
+      'OP-DETERMINACY',
+      'RESUBMISSION_CHANGES_CHANNEL',
+      'A request cannot change the door it came through',
+      { requestId: request.core.requestId },
+    );
   }
-  const fields = Object.keys(FIELD_VALUES).filter((f) => FIELD_VALUES[f]?.(request.core) !== FIELD_VALUES[f]?.(revised));
+  const fields = Object.keys(FIELD_VALUES).filter(
+    (f) => FIELD_VALUES[f]?.(request.core) !== FIELD_VALUES[f]?.(revised),
+  );
   const material = fields.some((f) => policy.revalidateOn.includes(f));
   const changes: ChangeSet = { fields, material, returnedNote: request.note, resubmittedAt: at };
 
@@ -680,8 +727,8 @@ export function reopen(request: ReturnedToMaker): Keying {
  * not this function.
  */
 export function withdraw(
-  request: Keying | AwaitingServicingResponse | AwaitingReview | ReturnedToMaker | PendingInformation | ServicingUnavailable,
+  request:
+    Keying | AwaitingServicingResponse | AwaitingReview | ReturnedToMaker | PendingInformation | ServicingUnavailable,
 ): Withdrawn {
   return { state: 'WITHDRAWN', core: request.core };
 }
-

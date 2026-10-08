@@ -1,19 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "lib": [
-      "ES2023",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    "types": [
-      "node"
-    ]
+    "types": ["node"]
   },
-  "include": [
-    "packages/**/*",
-    "test/ui/**/*"
-  ],
+  "include": ["packages/**/*", "test/ui/**/*"],
   "exclude": []
 }

@@ -69,23 +69,14 @@ export default async function ChooseTheTradePage({
                       <span className="text-sm text-ink-quiet">
                         {t.invoice} <span className="identifier">{trade.invoiceNumber}</span>
                       </span>
-                      <span className="font-medium">
-                        {arabic ? trade.buyerNameAr : trade.buyerNameEn}
-                      </span>
-                      <DualDate
-                        gregorian={trade.issuedGregorian}
-                        hijri={trade.issuedHijri}
-                        locale={locale}
-                      />
+                      <span className="font-medium">{arabic ? trade.buyerNameAr : trade.buyerNameEn}</span>
+                      <DualDate gregorian={trade.issuedGregorian} hijri={trade.issuedHijri} locale={locale} />
                     </div>
 
                     <div className="flex flex-col items-end gap-2">
                       <span className="text-base font-semibold tabular-nums">
                         <bdi>
-                          {formatMinorUnits(
-                            { minorUnits: trade.amountMinorUnits, currency: trade.currency },
-                            numerals,
-                          )}
+                          {formatMinorUnits({ minorUnits: trade.amountMinorUnits, currency: trade.currency }, numerals)}
                         </bdi>{' '}
                         <span className="text-xs text-ink-quiet">{trade.currency}</span>
                       </span>
@@ -100,11 +91,7 @@ export default async function ChooseTheTradePage({
                     <div className="mt-3">
                       <ControlRejection
                         control={trade.availability.control}
-                        explanation={
-                          arabic
-                            ? trade.availability.reason.ar
-                            : trade.availability.reason.en
-                        }
+                        explanation={arabic ? trade.availability.reason.ar : trade.availability.reason.en}
                         controlLabel={t.blockedBy}
                       />
                     </div>

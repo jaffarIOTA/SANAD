@@ -162,12 +162,7 @@ describe('SH-07 — a chain verifies after moving between deployments', () => {
     // order. The chain is content-linked, so the order is recoverable without
     // trusting the sequence numbers or the storage.
     const moved = migrate(executedChain(), { shuffle: true, reassignIds: true });
-    expect(moved.map((l) => l.contentHash)).toEqual([
-      'h-waad',
-      'h-purchase',
-      'h-offer',
-      'h-acceptance',
-    ]);
+    expect(moved.map((l) => l.contentHash)).toEqual(['h-waad', 'h-purchase', 'h-offer', 'h-acceptance']);
     expect(verifyChain(moved).ok).toBe(true);
   });
 
@@ -199,12 +194,15 @@ describe('what a migration has to know about the wire format', () => {
     // 2^53 + 1 seconds. A `Number` cannot hold this; the point of the bigint
     // is that the attested time is never approximated.
     const huge = 9_007_199_254_740_993n;
-    const one = { ...(executedChain()[0] as ContractLeg), executedAt: tsaInstant({
-      verified: true,
-      genTimeEpochSeconds: huge,
-      tokenDigest: 'tsa-huge',
-      authorityId: 'accredited-authority',
-    }) };
+    const one = {
+      ...(executedChain()[0] as ContractLeg),
+      executedAt: tsaInstant({
+        verified: true,
+        genTimeEpochSeconds: huge,
+        tokenDigest: 'tsa-huge',
+        authorityId: 'accredited-authority',
+      }),
+    };
 
     const moved = decode(encode([one]))[0];
     expect(moved?.executedAt.epochSeconds).toBe(huge);
@@ -257,8 +255,6 @@ describe('SH-07 — a moved chain still refuses what it refused before', () => {
     const moved = migrate(original, { reassignIds: true, shuffle: true });
 
     expect(moved.map((l) => l.tsaTokenDigest)).toEqual(original.map((l) => l.tsaTokenDigest));
-    expect(moved.map((l) => l.executedAt.epochSeconds)).toEqual(
-      original.map((l) => l.executedAt.epochSeconds),
-    );
+    expect(moved.map((l) => l.executedAt.epochSeconds)).toEqual(original.map((l) => l.executedAt.epochSeconds));
   });
 });

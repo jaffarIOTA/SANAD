@@ -41,21 +41,35 @@ export interface ConsentRecord {
 
 export function grant(params: Omit<ConsentRecord, 'withdraws' | 'withdrawnAt'>): Result<ConsentRecord> {
   if (params.evidenceRef.trim().length === 0) {
-    return reject('OP-DETERMINACY', 'CONSENT_WITHOUT_EVIDENCE', 'A consent must reference the evidence of its grant', { type: params.type });
+    return reject('OP-DETERMINACY', 'CONSENT_WITHOUT_EVIDENCE', 'A consent must reference the evidence of its grant', {
+      type: params.type,
+    });
   }
   if (params.purpose.trim().length === 0) {
-    return reject('OP-DETERMINACY', 'CONSENT_WITHOUT_PURPOSE', 'A consent must state its purpose', { type: params.type });
+    return reject('OP-DETERMINACY', 'CONSENT_WITHOUT_PURPOSE', 'A consent must state its purpose', {
+      type: params.type,
+    });
   }
   if (params.expiresAt !== undefined && params.expiresAt.epochSeconds <= params.grantedAt.epochSeconds) {
-    return reject('OP-DETERMINACY', 'CONSENT_EXPIRY_BEFORE_GRANT', 'A consent cannot expire before it is granted', { type: params.type });
+    return reject('OP-DETERMINACY', 'CONSENT_EXPIRY_BEFORE_GRANT', 'A consent cannot expire before it is granted', {
+      type: params.type,
+    });
   }
   return ok({ ...params });
 }
 
 /** A withdrawal is a new record. The grant it withdraws is retained. */
-export function withdraw(grantRecord: ConsentRecord, consentId: string, at: TsaInstant, channel: ConsentChannel, evidenceRef: string): Result<ConsentRecord> {
+export function withdraw(
+  grantRecord: ConsentRecord,
+  consentId: string,
+  at: TsaInstant,
+  channel: ConsentChannel,
+  evidenceRef: string,
+): Result<ConsentRecord> {
   if (grantRecord.withdraws !== undefined) {
-    return reject('OP-DETERMINACY', 'CANNOT_WITHDRAW_A_WITHDRAWAL', 'Only a grant can be withdrawn', { consentId: grantRecord.consentId });
+    return reject('OP-DETERMINACY', 'CANNOT_WITHDRAW_A_WITHDRAWAL', 'Only a grant can be withdrawn', {
+      consentId: grantRecord.consentId,
+    });
   }
   return ok({ ...grantRecord, consentId, channel, evidenceRef, withdraws: grantRecord.consentId, withdrawnAt: at });
 }
@@ -67,7 +81,16 @@ export function validConsent(
   type: ConsentType,
   observedAt: TsaInstant,
 ): ConsentRecord | undefined {
-  const withdrawn = new Set(records.filter((r) => r.withdraws !== undefined && r.withdrawnAt !== undefined && r.withdrawnAt.epochSeconds <= observedAt.epochSeconds).map((r) => r.withdraws));
+  const withdrawn = new Set(
+    records
+      .filter(
+        (r) =>
+          r.withdraws !== undefined &&
+          r.withdrawnAt !== undefined &&
+          r.withdrawnAt.epochSeconds <= observedAt.epochSeconds,
+      )
+      .map((r) => r.withdraws),
+  );
   return records.find(
     (r) =>
       r.counterpartyId === counterpartyId &&
@@ -92,7 +115,12 @@ export function requireConsent(
 ): Result<ConsentRecord> {
   const live = validConsent(records, counterpartyId, type, observedAt);
   if (live === undefined) {
-    return reject('OP-DETERMINACY', 'CONSENT_MISSING', 'No valid consent of the required type is on record for this counterparty', { type });
+    return reject(
+      'OP-DETERMINACY',
+      'CONSENT_MISSING',
+      'No valid consent of the required type is on record for this counterparty',
+      { type },
+    );
   }
   return ok(live);
 }

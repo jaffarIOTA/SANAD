@@ -45,21 +45,49 @@ export function inMemoryOutboxStore(): OutboxStore {
       return Promise.resolve();
     },
     claim(now, limit, leaseSeconds) {
-      const due = [...rows.values()].filter((r) => r.state === 'PENDING' && r.nextAttemptAtEpochSeconds <= now && (r.leasedUntil === undefined || r.leasedUntil <= now)).slice(0, limit);
+      const due = [...rows.values()]
+        .filter(
+          (r) =>
+            r.state === 'PENDING' &&
+            r.nextAttemptAtEpochSeconds <= now &&
+            (r.leasedUntil === undefined || r.leasedUntil <= now),
+        )
+        .slice(0, limit);
       for (const r of due) rows.set(r.event.eventId, { ...r, leasedUntil: now + BigInt(leaseSeconds) });
       return Promise.resolve(due);
     },
-    markDelivered(eventId, deliveryRef) { const r = rows.get(eventId); if (r) rows.set(eventId, { ...r, state: 'DELIVERED', attempts: r.attempts + 1, deliveryRef }); return Promise.resolve(); },
-    markRetry(eventId, next, error) { const r = rows.get(eventId); if (r) rows.set(eventId, { ...r, attempts: r.attempts + 1, nextAttemptAtEpochSeconds: next, lastError: error }); return Promise.resolve(); },
-    markDead(eventId, error) { const r = rows.get(eventId); if (r) rows.set(eventId, { ...r, state: 'DEAD', attempts: r.attempts + 1, lastError: error }); return Promise.resolve(); },
-    rows() { return Promise.resolve([...rows.values()].map(({ leasedUntil: _l, ...r }) => r)); },
+    markDelivered(eventId, deliveryRef) {
+      const r = rows.get(eventId);
+      if (r) rows.set(eventId, { ...r, state: 'DELIVERED', attempts: r.attempts + 1, deliveryRef });
+      return Promise.resolve();
+    },
+    markRetry(eventId, next, error) {
+      const r = rows.get(eventId);
+      if (r) rows.set(eventId, { ...r, attempts: r.attempts + 1, nextAttemptAtEpochSeconds: next, lastError: error });
+      return Promise.resolve();
+    },
+    markDead(eventId, error) {
+      const r = rows.get(eventId);
+      if (r) rows.set(eventId, { ...r, state: 'DEAD', attempts: r.attempts + 1, lastError: error });
+      return Promise.resolve();
+    },
+    rows() {
+      return Promise.resolve([...rows.values()].map(({ leasedUntil: _l, ...r }) => r));
+    },
   };
 }
 
 /** One pass of the worker: claim what is due, dispatch each, record the outcome. Returns what happened, for logs and tests. */
 export async function runOutboxPass(
   store: OutboxStore,
-  dispatch: (event: OutboxEvent, attempt: number) => Promise<{ readonly kind: 'DELIVERED'; readonly deliveryRef: string } | { readonly kind: 'RETRY'; readonly afterSeconds: number; readonly reason: string } | { readonly kind: 'DEAD'; readonly reason: string }>,
+  dispatch: (
+    event: OutboxEvent,
+    attempt: number,
+  ) => Promise<
+    | { readonly kind: 'DELIVERED'; readonly deliveryRef: string }
+    | { readonly kind: 'RETRY'; readonly afterSeconds: number; readonly reason: string }
+    | { readonly kind: 'DEAD'; readonly reason: string }
+  >,
   nowEpochSeconds: bigint,
   options: { readonly limit?: number; readonly leaseSeconds?: number } = {},
 ): Promise<readonly { readonly eventId: string; readonly kind: string; readonly outcome: string }[]> {
@@ -68,7 +96,8 @@ export async function runOutboxPass(
   for (const row of claimed) {
     const outcome = await dispatch(row.event, row.attempts + 1);
     if (outcome.kind === 'DELIVERED') await store.markDelivered(row.event.eventId, outcome.deliveryRef);
-    else if (outcome.kind === 'RETRY') await store.markRetry(row.event.eventId, nowEpochSeconds + BigInt(outcome.afterSeconds), outcome.reason);
+    else if (outcome.kind === 'RETRY')
+      await store.markRetry(row.event.eventId, nowEpochSeconds + BigInt(outcome.afterSeconds), outcome.reason);
     else await store.markDead(row.event.eventId, outcome.reason);
     results.push({ eventId: row.event.eventId, kind: row.event.kind, outcome: outcome.kind });
   }

@@ -41,8 +41,10 @@ export interface Schedule {
  * absorbs the rounding so the principal sums exactly to P.
  */
 export function reducingBalanceMonthly(principal: Money, annual: Rate, months: number): Result<Schedule> {
-  if (!Number.isInteger(months) || months <= 0) return reject('PLAT-02', 'SCHEDULE_MONTHS', 'months is a positive integer');
-  if (annual.period !== 'ANNUAL' || annual.basis !== 'REDUCING') return reject('PLAT-02', 'SCHEDULE_RATE_SHAPE', 'reducingBalanceMonthly takes an annual REDUCING rate');
+  if (!Number.isInteger(months) || months <= 0)
+    return reject('PLAT-02', 'SCHEDULE_MONTHS', 'months is a positive integer');
+  if (annual.period !== 'ANNUAL' || annual.basis !== 'REDUCING')
+    return reject('PLAT-02', 'SCHEDULE_RATE_SHAPE', 'reducingBalanceMonthly takes an annual REDUCING rate');
   if (annual.bp < 0n) return reject('PLAT-02', 'SCHEDULE_RATE_NEGATIVE', 'A negative rate is not a schedule');
   if (principal.minorUnits <= 0n) return reject('PLAT-02', 'SCHEDULE_PRINCIPAL', 'principal must be positive');
 
@@ -65,18 +67,35 @@ export function reducingBalanceMonthly(principal: Money, annual: Rate, months: n
     const last = k === months;
     const principalPart = last ? balance : paymentMinor - profit;
     const amount = last ? balance + profit : paymentMinor;
-    instalments.push({ number: k, at: { months: k, days: 0 }, amount: money(amount, principal.currency), principal: money(principalPart, principal.currency), profit: money(profit, principal.currency) });
+    instalments.push({
+      number: k,
+      at: { months: k, days: 0 },
+      amount: money(amount, principal.currency),
+      principal: money(principalPart, principal.currency),
+      profit: money(profit, principal.currency),
+    });
     balance -= principalPart;
   }
   const totalPayable = instalments.reduce((s, x) => s + x.amount.minorUnits, 0n);
   const totalProfit = instalments.reduce((s, x) => s + x.profit.minorUnits, 0n);
-  return ok({ instalments, totalPayable: money(totalPayable, principal.currency), totalProfit: money(totalProfit, principal.currency) });
+  return ok({
+    instalments,
+    totalPayable: money(totalPayable, principal.currency),
+    totalProfit: money(totalProfit, principal.currency),
+  });
 }
 
 /** A fixed total split into equal instalments at a fixed interval; the remainder on the last. */
-export function flatInstalments(principal: Money, totalProfit: Money, count: number, intervalDays: number): Result<Schedule> {
-  if (!Number.isInteger(count) || count <= 0 || !Number.isInteger(intervalDays) || intervalDays <= 0) return reject('PLAT-02', 'SCHEDULE_SHAPE', 'count and intervalDays are positive integers');
-  if (totalProfit.minorUnits < 0n || principal.minorUnits <= 0n) return reject('PLAT-02', 'SCHEDULE_AMOUNTS', 'principal positive, profit non-negative');
+export function flatInstalments(
+  principal: Money,
+  totalProfit: Money,
+  count: number,
+  intervalDays: number,
+): Result<Schedule> {
+  if (!Number.isInteger(count) || count <= 0 || !Number.isInteger(intervalDays) || intervalDays <= 0)
+    return reject('PLAT-02', 'SCHEDULE_SHAPE', 'count and intervalDays are positive integers');
+  if (totalProfit.minorUnits < 0n || principal.minorUnits <= 0n)
+    return reject('PLAT-02', 'SCHEDULE_AMOUNTS', 'principal positive, profit non-negative');
   const n = BigInt(count);
   const total = principal.minorUnits + totalProfit.minorUnits;
   const base = total / n;
@@ -87,16 +106,28 @@ export function flatInstalments(principal: Money, totalProfit: Money, count: num
     const amount = last ? total - base * (n - 1n) : base;
     const principalPart = last ? principal.minorUnits - baseP * (n - 1n) : baseP;
     const profit = last ? totalProfit.minorUnits - baseF * (n - 1n) : baseF;
-    return { number: idx + 1, at: { months: 0, days: intervalDays * (idx + 1) }, amount: money(amount, principal.currency), principal: money(principalPart, principal.currency), profit: money(profit, principal.currency) };
+    return {
+      number: idx + 1,
+      at: { months: 0, days: intervalDays * (idx + 1) },
+      amount: money(amount, principal.currency),
+      principal: money(principalPart, principal.currency),
+      profit: money(profit, principal.currency),
+    };
   });
   return ok({ instalments, totalPayable: money(total, principal.currency), totalProfit });
 }
 
 /** The cash flows the APR is computed from: the drawdown, every instalment, every fee. */
-export function cashFlows(principal: Money, schedule: Schedule, upfrontFees: readonly Money[] = []): readonly CashFlow[] {
+export function cashFlows(
+  principal: Money,
+  schedule: Schedule,
+  upfrontFees: readonly Money[] = [],
+): readonly CashFlow[] {
   return [
     { at: { months: 0, days: 0 }, amount: principal, direction: 'DRAWDOWN' },
-    ...upfrontFees.filter((f) => f.minorUnits > 0n).map((f) => ({ at: { months: 0, days: 0 }, amount: f, direction: 'REPAYMENT' as const })),
+    ...upfrontFees
+      .filter((f) => f.minorUnits > 0n)
+      .map((f) => ({ at: { months: 0, days: 0 }, amount: f, direction: 'REPAYMENT' as const })),
     ...schedule.instalments.map((x) => ({ at: x.at, amount: x.amount, direction: 'REPAYMENT' as const })),
   ];
 }

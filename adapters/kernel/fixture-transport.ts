@@ -45,11 +45,10 @@ interface Envelope {
 export class FixtureNotFoundError extends Error {
   constructor(operation: string, request: Readonly<Record<string, unknown>>, url?: string) {
     const where = url === undefined ? operation : `${operation} ${url}`;
-    const keys = Object.keys(request).sort((a, b) => a.localeCompare(b)).join(',');
-    super(
-      `no recorded fixture for ${where}; re-record it rather than loosening the match. ` +
-        `request keys: ${keys}`,
-    );
+    const keys = Object.keys(request)
+      .sort((a, b) => a.localeCompare(b))
+      .join(',');
+    super(`no recorded fixture for ${where}; re-record it rather than loosening the match. ` + `request keys: ${keys}`);
     this.name = 'FixtureNotFoundError';
   }
 }
@@ -70,9 +69,7 @@ export class FixtureTransport {
     maybeHeaders: Readonly<Record<string, string>> = {},
   ): Promise<Readonly<Record<string, unknown>>> {
     const envelope = isEnvelope(payloadOrEnvelope) ? payloadOrEnvelope : undefined;
-    const request = envelope
-      ? (envelope.body ?? {})
-      : (payloadOrEnvelope as Readonly<Record<string, unknown>>);
+    const request = envelope ? (envelope.body ?? {}) : (payloadOrEnvelope as Readonly<Record<string, unknown>>);
     const headers = envelope ? envelope.headers : maybeHeaders;
 
     this.#calls.push({
@@ -88,8 +85,7 @@ export class FixtureTransport {
 
     const fixture = this.fixtures.find(
       (f) =>
-        f.operation === operation &&
-        Object.entries(f.match).every(([key, value]) => matches(candidate[key], value)),
+        f.operation === operation && Object.entries(f.match).every(([key, value]) => matches(candidate[key], value)),
     );
 
     if (fixture === undefined) throw new FixtureNotFoundError(operation, request, envelope?.url);
@@ -99,13 +95,7 @@ export class FixtureTransport {
 }
 
 function isEnvelope(value: unknown): value is Envelope {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'url' in value &&
-    'headers' in value &&
-    'method' in value
-  );
+  return typeof value === 'object' && value !== null && 'url' in value && 'headers' in value && 'method' in value;
 }
 
 /** A `RegExp` in a match is tested; anything else is compared structurally. */

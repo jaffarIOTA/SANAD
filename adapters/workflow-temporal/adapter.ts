@@ -25,20 +25,38 @@ export const SEQUENCING_TASK_QUEUE = 'sanad-sequencing';
 export async function connectTemporal(config: TemporalAdapterConfig): Promise<TemporalWorkflowAdapter> {
   const connection = await Connection.connect({
     address: config.address,
-    ...(config.tls === undefined ? {} : { tls: { clientCertPair: { crt: config.tls.clientCertPem, key: config.tls.clientKeyPem }, ...(config.tls.serverRootCaPem === undefined ? {} : { serverRootCACertificate: config.tls.serverRootCaPem }) } }),
+    ...(config.tls === undefined
+      ? {}
+      : {
+          tls: {
+            clientCertPair: { crt: config.tls.clientCertPem, key: config.tls.clientKeyPem },
+            ...(config.tls.serverRootCaPem === undefined
+              ? {}
+              : { serverRootCACertificate: config.tls.serverRootCaPem }),
+          },
+        }),
   });
   return new TemporalWorkflowAdapter(new Client({ connection, namespace: config.namespace }), config.taskQueue);
 }
 
 export class TemporalWorkflowAdapter implements WorkflowPort {
-  constructor(private readonly client: Client, private readonly taskQueue: string) {}
+  constructor(
+    private readonly client: Client,
+    private readonly taskQueue: string,
+  ) {}
 
   /** Tenant-qualified, so two tenants' identifiers cannot collide in one namespace. */
   static id(tenantId: string, workflowId: string): string {
     return `${tenantId}/${workflowId}`;
   }
 
-  async start(params: { readonly tenantId: string; readonly workflowType: string; readonly workflowId: string; readonly input: unknown; readonly correlationId: string }): Promise<Result<WorkflowHandle>> {
+  async start(params: {
+    readonly tenantId: string;
+    readonly workflowType: string;
+    readonly workflowId: string;
+    readonly input: unknown;
+    readonly correlationId: string;
+  }): Promise<Result<WorkflowHandle>> {
     const workflowId = TemporalWorkflowAdapter.id(params.tenantId, params.workflowId);
     try {
       const handle = await this.client.workflow.start(params.workflowType, {
@@ -54,7 +72,9 @@ export class TemporalWorkflowAdapter implements WorkflowPort {
         const existing = await this.client.workflow.getHandle(workflowId).describe();
         return ok({ workflowId: params.workflowId, runId: existing.runId });
       }
-      return reject('OP-DETERMINACY', 'WORKFLOW_START_FAILED', 'The workflow engine did not accept the start', { workflowType: params.workflowType });
+      return reject('OP-DETERMINACY', 'WORKFLOW_START_FAILED', 'The workflow engine did not accept the start', {
+        workflowType: params.workflowType,
+      });
     }
   }
 
@@ -63,7 +83,12 @@ export class TemporalWorkflowAdapter implements WorkflowPort {
       await this.client.workflow.getHandle(this.#qualified(handle), handle.runId).signal(signal, payload);
       return ok(undefined);
     } catch (error) {
-      return reject('OP-DETERMINACY', error instanceof WorkflowNotFoundError ? 'WORKFLOW_NOT_FOUND' : 'WORKFLOW_SIGNAL_FAILED', 'The signal was not delivered', { signal });
+      return reject(
+        'OP-DETERMINACY',
+        error instanceof WorkflowNotFoundError ? 'WORKFLOW_NOT_FOUND' : 'WORKFLOW_SIGNAL_FAILED',
+        'The signal was not delivered',
+        { signal },
+      );
     }
   }
 

@@ -38,14 +38,23 @@ export function Steps({ current, arabic }: { readonly current: Step; readonly ar
                 <span
                   aria-hidden
                   className={`inline-flex size-7 items-center justify-center rounded-full text-xs font-semibold tabular-nums ${
-                    active ? 'bg-brand-deep text-white' : done ? 'bg-disc-teal text-positive' : 'bg-sunken text-ink-quiet'
+                    active
+                      ? 'bg-brand-deep text-white'
+                      : done
+                        ? 'bg-disc-teal text-positive'
+                        : 'bg-sunken text-ink-quiet'
                   }`}
                 >
                   {done ? <Icon name="check-circle" size={14} /> : i + 1}
                 </span>
                 {arabic ? LABEL[step].ar : LABEL[step].en}
               </span>
-              {active ? <span aria-hidden className="nav-indicator absolute inset-x-0 bottom-0 h-[3px] rounded-t-full bg-brand-deep" /> : null}
+              {active ? (
+                <span
+                  aria-hidden
+                  className="nav-indicator absolute inset-x-0 bottom-0 h-[3px] rounded-t-full bg-brand-deep"
+                />
+              ) : null}
             </li>
           );
         })}

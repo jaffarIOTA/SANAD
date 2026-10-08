@@ -22,19 +22,25 @@ const query = (over: Parameters<typeof strongApplicant>[1] = {}, amount = 5_000_
 describe('eligibility pre-check', () => {
   it('approves a strong applicant and names the policy version it used', () => {
     const r = expectOk(preCheck(versions, query()));
-    expect(r.outcome).toBe('APPROVE'); expect(r.policyId).toBe('wasl-distributor'); expect(r.policyVersion).toBe('1.0.0'); expect(r.persisted).toBe(false);
+    expect(r.outcome).toBe('APPROVE');
+    expect(r.policyId).toBe('wasl-distributor');
+    expect(r.policyVersion).toBe('1.0.0');
+    expect(r.persisted).toBe(false);
   });
   it('declines an applicant whose registration is not active, with the reason', () => {
     const r = expectOk(preCheck(versions, query({ registration: { status: 'EXPIRED' } })));
-    expect(r.outcome).toBe('DECLINE'); expect(r.reasonCodes).toContain('R_REGISTRATION_NOT_ACTIVE');
+    expect(r.outcome).toBe('DECLINE');
+    expect(r.reasonCodes).toContain('R_REGISTRATION_NOT_ACTIVE');
   });
   it('refers when a source is inconclusive rather than approving on a gap', () => {
     const r = expectOk(preCheck(versions, query({ screening: { sanctions: 'UNAVAILABLE' } })));
-    expect(r.outcome).toBe('REFER'); expect(r.reasonCodes).toContain('R_SCREENING_UNAVAILABLE');
+    expect(r.outcome).toBe('REFER');
+    expect(r.reasonCodes).toContain('R_SCREENING_UNAVAILABLE');
   });
   it('refers, not approves, when the engine would grant less than was asked', () => {
     const r = expectOk(preCheck(versions, query({}, 900_000_000_000n)));
-    expect(r.outcome).toBe('REFER'); expect(r.reasonCodes).toContain(REASON_BELOW_REQUESTED);
+    expect(r.outcome).toBe('REFER');
+    expect(r.reasonCodes).toContain(REASON_BELOW_REQUESTED);
   });
   it('refuses a non-positive amount', () => {
     expect(preCheck(versions, query({}, 0n)).ok).toBe(false);

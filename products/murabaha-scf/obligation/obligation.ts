@@ -14,14 +14,7 @@
  * invariant is one-directional rather than "the total never changes".
  */
 
-import {
-  type Money,
-  compare,
-  equals,
-  isNegative,
-  subtract,
-  sum,
-} from '@sanad/core/kernel/money.ts';
+import { type Money, compare, equals, isNegative, subtract, sum } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import type { MurabahaPricing } from '../pricing/murabaha.ts';
 
@@ -73,10 +66,7 @@ export function createObligation(params: {
  * This function has no parameter through which a new total could be supplied.
  * The only total in scope is the one already on the obligation.
  */
-export function reschedule(
-  obligation: Obligation,
-  newInstalments: readonly Instalment[],
-): Result<Obligation> {
+export function reschedule(obligation: Obligation, newInstalments: readonly Instalment[]): Result<Obligation> {
   const payable = amountPayable(obligation);
   const check = validateSchedule(newInstalments, payable);
   if (!check.ok) return check;
@@ -107,12 +97,9 @@ export function applyEarlySettlementRelief(
   }
   const payableBefore = amountPayable(obligation);
   if (compare(waiver, payableBefore) > 0) {
-    return reject(
-      'SH-02',
-      'WAIVER_EXCEEDS_PAYABLE',
-      'A waiver cannot exceed the amount still payable',
-      { configKey: basis.configKey },
-    );
+    return reject('SH-02', 'WAIVER_EXCEEDS_PAYABLE', 'A waiver cannot exceed the amount still payable', {
+      configKey: basis.configKey,
+    });
   }
 
   const waived: Obligation = {
@@ -154,10 +141,7 @@ export function outstanding(o: Obligation): Money {
 
 // -----------------------------------------------------------------------------
 
-function validateSchedule(
-  instalments: readonly Instalment[],
-  mustEqual: Money,
-): Result<true> {
+function validateSchedule(instalments: readonly Instalment[], mustEqual: Money): Result<true> {
   if (instalments.length === 0) {
     return reject('SH-03', 'SCHEDULE_EMPTY', 'The schedule must be determinate at execution');
   }
@@ -169,12 +153,9 @@ function validateSchedule(
       });
     }
     if (i.dueDateGregorian.length === 0 || i.dueDateHijri.length === 0) {
-      return reject(
-        'SH-03',
-        'INSTALMENT_DATE_INDETERMINATE',
-        'Each instalment carries a due date in both calendars',
-        { sequenceNumber: i.sequenceNumber },
-      );
+      return reject('SH-03', 'INSTALMENT_DATE_INDETERMINATE', 'Each instalment carries a due date in both calendars', {
+        sequenceNumber: i.sequenceNumber,
+      });
     }
   }
 

@@ -31,5 +31,10 @@ export async function resolveRailsConfiguration(tenant: TenantCode, asOfEpochSec
   if (row === undefined) return { rails: loadRailsConfiguration(tenant, ADAPTER_CATALOGUE), source: 'FILE' };
   const catalogue = catalogueForTenant(tenant, ADAPTER_CATALOGUE);
   if (!catalogue.ok) return { rails: catalogue, source: 'REVISION', revisionId: row.id, revisionSummary: row.summary };
-  return { rails: parseRailsConfiguration(row.payload, catalogue.value), source: 'REVISION', revisionId: row.id, revisionSummary: row.summary };
+  return {
+    rails: parseRailsConfiguration(row.payload, catalogue.value),
+    source: 'REVISION',
+    revisionId: row.id,
+    revisionSummary: row.summary,
+  };
 }

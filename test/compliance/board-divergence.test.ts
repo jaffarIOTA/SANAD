@@ -15,7 +15,11 @@
 import { describe, expect, it } from 'vitest';
 
 // Only tenants that offer Murabaha SCF have structures; the UAE fund does not (ADR 0005).
-import { MURABAHA_TENANT_CODES as TENANT_CODES, loadAllForTenant, loadStructureDefinition } from '../../config/loader.ts';
+import {
+  MURABAHA_TENANT_CODES as TENANT_CODES,
+  loadAllForTenant,
+  loadStructureDefinition,
+} from '../../config/loader.ts';
 import { expectOk } from '../../core/kernel/result.ts';
 import { evaluateGates } from '../../products/murabaha-scf/sequencing/gates.ts';
 import { parseStructureDefinition } from '../../products/murabaha-scf/structures/definition.ts';
@@ -92,10 +96,7 @@ describe('the divergence is absorbed by configuration', () => {
       evaluateGates({
         definition: structureFor(tenant),
         legs: legs(tenant),
-        evidence: [
-          ownershipEvidence(at(1_000_150), tenant),
-          constructivePossessionEvidence(capturedAt, tenant),
-        ],
+        evidence: [ownershipEvidence(at(1_000_150), tenant), constructivePossessionEvidence(capturedAt, tenant)],
         riskPeriodRequiredSeconds: riskPeriodSecondsFor(tenant),
         observedAt,
       });
@@ -124,10 +125,7 @@ describe('the divergence is absorbed by configuration', () => {
   it('holds the goods for each Board’s own interval, not a shared one', () => {
     for (const tenant of TENANT_CODES) {
       const required = riskPeriodSecondsFor(tenant);
-      const evidence = [
-        ownershipEvidence(at(1_000_150), tenant),
-        deliveryEvidence(at(1_000_200), tenant),
-      ];
+      const evidence = [ownershipEvidence(at(1_000_150), tenant), deliveryEvidence(at(1_000_200), tenant)];
       const shared = {
         definition: structureFor(tenant),
         legs: legs(tenant),
@@ -167,9 +165,7 @@ describe('configuration may tighten the platform floor but never loosen it', () 
     const definition = structureFor('bank-a');
     const zeroed = {
       ...definition,
-      gates: definition.gates.map((g) =>
-        g.id === 'GATE_3_RISK_PERIOD' ? { ...g, minimumSeconds: 0 } : g,
-      ),
+      gates: definition.gates.map((g) => (g.id === 'GATE_3_RISK_PERIOD' ? { ...g, minimumSeconds: 0 } : g)),
     };
 
     const result = parseStructureDefinition(zeroed);
@@ -182,9 +178,7 @@ describe('configuration may tighten the platform floor but never loosen it', () 
     const definition = structureFor('bank-a');
     const localClock = {
       ...definition,
-      gates: definition.gates.map((g) =>
-        g.id === 'GATE_3_RISK_PERIOD' ? { ...g, clock: 'SERVER' } : g,
-      ),
+      gates: definition.gates.map((g) => (g.id === 'GATE_3_RISK_PERIOD' ? { ...g, clock: 'SERVER' } : g)),
     };
 
     const result = parseStructureDefinition(localClock);

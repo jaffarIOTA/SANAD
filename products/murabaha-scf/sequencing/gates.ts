@@ -94,9 +94,7 @@ export function evaluateGates(input: GateEvaluationInput): GateEvaluation {
     }
 
     const outcome =
-      gate.kind === 'EVIDENCE'
-        ? evaluateEvidenceGate(gate, input)
-        : evaluateElapseGate(gate, input, byId);
+      gate.kind === 'EVIDENCE' ? evaluateEvidenceGate(gate, input) : evaluateElapseGate(gate, input, byId);
 
     if (gate.kind === 'ELAPSE') {
       const start = riskPeriodStart(gate, input, byId);
@@ -135,10 +133,7 @@ function predecessorComplete(
   return byId.get(gate.after.gate)?.status === 'SATISFIED';
 }
 
-function evaluateEvidenceGate(
-  gate: EvidenceGateDefinition,
-  input: GateEvaluationInput,
-): GateOutcome {
+function evaluateEvidenceGate(gate: EvidenceGateDefinition, input: GateEvaluationInput): GateOutcome {
   const admissible = new Set(gate.requires.anyOf);
   const candidates = input.evidence.filter(
     (e) => isLive(e) && e.gateSatisfied === gate.id && admissible.has(e.evidenceType),

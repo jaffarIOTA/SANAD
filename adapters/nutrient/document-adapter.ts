@@ -66,8 +66,7 @@ export const NUTRIENT_DEVIATIONS: readonly KnownDeviation[] = [
   },
   {
     id: 'NUTR-DEV-002',
-    summary:
-      'Locked template regions may be a template convention rather than an API-enforced guarantee.',
+    summary: 'Locked template regions may be a template convention rather than an API-enforced guarantee.',
     containment:
       'The adapter refuses any render whose merge fields are not a subset of the template version’s declared fields, before the call is made.',
     verificationRef: 'OI-05',
@@ -140,10 +139,7 @@ export class NutrientDocumentAdapter
    * here; the type closed it (SH-07 for the Murabaha module).
    */
   async render(request: DocumentRenderRequest): Promise<Result<RenderedDocument>> {
-    const template = await this.resolveTemplateVersionById(
-      request.tenantId,
-      request.templateVersionId,
-    );
+    const template = await this.resolveTemplateVersionById(request.tenantId, request.templateVersionId);
     if (!template.ok) return template;
 
     // NUTR-DEV-002. Enforced here rather than trusted to the engine.
@@ -179,11 +175,7 @@ export class NutrientDocumentAdapter
     const documentId = body['documentId'];
     const contentHash = body['contentHash'];
     const artefactUri = body['artefactUri'];
-    if (
-      typeof documentId !== 'string' ||
-      typeof contentHash !== 'string' ||
-      typeof artefactUri !== 'string'
-    ) {
+    if (typeof documentId !== 'string' || typeof contentHash !== 'string' || typeof artefactUri !== 'string') {
       return reject('OP-CHAIN', 'RENDER_RESPONSE_MALFORMED', 'The render response was not understood');
     }
 
@@ -214,10 +206,7 @@ export class NutrientDocumentAdapter
     });
   }
 
-  async archive(
-    documentId: string,
-    retentionYears: number,
-  ): Promise<Result<{ readonly archiveUri: string }>> {
+  async archive(documentId: string, retentionYears: number): Promise<Result<{ readonly archiveUri: string }>> {
     const response = await this.#invoke('document.archive', this.config.tenantId, {
       documentId,
       retentionYears,
@@ -373,12 +362,9 @@ export class NutrientDocumentAdapter
     const body = response.value;
     const shariahApprovalRef = body['shariahApprovalRef'];
     if (typeof shariahApprovalRef !== 'string') {
-      return reject(
-        'SH-17',
-        'TEMPLATE_METADATA_INCOMPLETE',
-        'A template version must carry its approval reference',
-        { templateVersionId },
-      );
+      return reject('SH-17', 'TEMPLATE_METADATA_INCOMPLETE', 'A template version must carry its approval reference', {
+        templateVersionId,
+      });
     }
     return ok({
       templateVersionId,

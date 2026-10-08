@@ -178,12 +178,9 @@ export function evaluate(expr: Expr, ctx: EvaluationContext): Result<PolicyValue
       const n = asBigInt(v.value);
       if (!n.ok) return n;
       if (!Number.isInteger(expr.basisPoints) || expr.basisPoints < 0) {
-        return reject(
-          'OP-DETERMINACY',
-          'BASIS_POINTS_INVALID',
-          'Basis points must be a non-negative whole number',
-          { basisPoints: expr.basisPoints },
-        );
+        return reject('OP-DETERMINACY', 'BASIS_POINTS_INVALID', 'Basis points must be a non-negative whole number', {
+          basisPoints: expr.basisPoints,
+        });
       }
       // Integer arithmetic, truncating toward zero. A limit rounds down.
       return ok((n.value * BigInt(expr.basisPoints)) / 10000n);

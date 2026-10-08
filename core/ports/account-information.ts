@@ -12,5 +12,22 @@ import type { Result } from '../kernel/result.ts';
 import type { RailOutcome } from './rail.ts';
 
 export interface AccountInformationPort {
-  affordabilityFacts(params: { readonly tenantId: string; readonly applicantRef: string; readonly consentId: string; readonly months: number; readonly correlationId: string }): Promise<Result<RailOutcome<{ readonly averageMonthlyInflow: Money; readonly lowestMonthEndBalance: Money; readonly returnedPaymentsLast6Months: number; readonly salaryCreditsObserved: number; readonly retrievedAtEpochSeconds: bigint; readonly referenceId: string }>>>;
+  affordabilityFacts(params: {
+    readonly tenantId: string;
+    readonly applicantRef: string;
+    readonly consentId: string;
+    readonly months: number;
+    readonly correlationId: string;
+  }): Promise<
+    Result<
+      RailOutcome<{
+        readonly averageMonthlyInflow: Money;
+        readonly lowestMonthEndBalance: Money;
+        readonly returnedPaymentsLast6Months: number;
+        readonly salaryCreditsObserved: number;
+        readonly retrievedAtEpochSeconds: bigint;
+        readonly referenceId: string;
+      }>
+    >
+  >;
 }

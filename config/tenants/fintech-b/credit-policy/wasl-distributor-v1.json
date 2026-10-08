@@ -99,10 +99,38 @@
         "defaultPoints": 0,
         "defaultReasonCode": "R_LIMITED_ANCHOR_TENURE",
         "bands": [
-          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.monthsTrading" }, "right": { "const": 24 } }, "points": 20 },
-          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.monthsTrading" }, "right": { "const": 12 } }, "points": 15 },
-          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.monthsTrading" }, "right": { "const": 6 } }, "points": 10 },
-          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.monthsTrading" }, "right": { "const": 3 } }, "points": 5 }
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "tradeHistory.withAnchor.monthsTrading" },
+              "right": { "const": 24 }
+            },
+            "points": 20
+          },
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "tradeHistory.withAnchor.monthsTrading" },
+              "right": { "const": 12 }
+            },
+            "points": 15
+          },
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "tradeHistory.withAnchor.monthsTrading" },
+              "right": { "const": 6 }
+            },
+            "points": 10
+          },
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "tradeHistory.withAnchor.monthsTrading" },
+              "right": { "const": 3 }
+            },
+            "points": 5
+          }
         ]
       },
       {
@@ -111,10 +139,38 @@
         "defaultPoints": 0,
         "defaultReasonCode": "R_LIMITED_ANCHOR_VOLUME",
         "bands": [
-          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" }, "right": { "constMoneyMinorUnits": "30000000" } }, "points": 25 },
-          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" }, "right": { "constMoneyMinorUnits": "10000000" } }, "points": 18 },
-          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" }, "right": { "constMoneyMinorUnits": "4000000" } }, "points": 10 },
-          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" }, "right": { "constMoneyMinorUnits": "1500000" } }, "points": 5 }
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" },
+              "right": { "constMoneyMinorUnits": "30000000" }
+            },
+            "points": 25
+          },
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" },
+              "right": { "constMoneyMinorUnits": "10000000" }
+            },
+            "points": 18
+          },
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" },
+              "right": { "constMoneyMinorUnits": "4000000" }
+            },
+            "points": 10
+          },
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" },
+              "right": { "constMoneyMinorUnits": "1500000" }
+            },
+            "points": 5
+          }
         ]
       },
       {
@@ -123,9 +179,30 @@
         "defaultPoints": 0,
         "defaultReasonCode": "R_PAYMENT_BEHAVIOUR",
         "bands": [
-          { "when": { "op": "lte", "left": { "field": "tradeHistory.withAnchor.latePaymentPerTenThousand" }, "right": { "const": 1000 } }, "points": 20 },
-          { "when": { "op": "lte", "left": { "field": "tradeHistory.withAnchor.latePaymentPerTenThousand" }, "right": { "const": 2500 } }, "points": 12 },
-          { "when": { "op": "lte", "left": { "field": "tradeHistory.withAnchor.latePaymentPerTenThousand" }, "right": { "const": 4000 } }, "points": 5 }
+          {
+            "when": {
+              "op": "lte",
+              "left": { "field": "tradeHistory.withAnchor.latePaymentPerTenThousand" },
+              "right": { "const": 1000 }
+            },
+            "points": 20
+          },
+          {
+            "when": {
+              "op": "lte",
+              "left": { "field": "tradeHistory.withAnchor.latePaymentPerTenThousand" },
+              "right": { "const": 2500 }
+            },
+            "points": 12
+          },
+          {
+            "when": {
+              "op": "lte",
+              "left": { "field": "tradeHistory.withAnchor.latePaymentPerTenThousand" },
+              "right": { "const": 4000 }
+            },
+            "points": 5
+          }
         ]
       },
       {
@@ -134,9 +211,30 @@
         "defaultPoints": 0,
         "defaultReasonCode": "R_CASH_FLOW_COVER",
         "bands": [
-          { "when": { "op": "gte", "left": { "field": "openBanking.averageMonthlyInflowMinorUnits" }, "right": { "constMoneyMinorUnits": "40000000" } }, "points": 25 },
-          { "when": { "op": "gte", "left": { "field": "openBanking.averageMonthlyInflowMinorUnits" }, "right": { "constMoneyMinorUnits": "15000000" } }, "points": 17 },
-          { "when": { "op": "gte", "left": { "field": "openBanking.averageMonthlyInflowMinorUnits" }, "right": { "constMoneyMinorUnits": "5000000" } }, "points": 9 }
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "openBanking.averageMonthlyInflowMinorUnits" },
+              "right": { "constMoneyMinorUnits": "40000000" }
+            },
+            "points": 25
+          },
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "openBanking.averageMonthlyInflowMinorUnits" },
+              "right": { "constMoneyMinorUnits": "15000000" }
+            },
+            "points": 17
+          },
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "openBanking.averageMonthlyInflowMinorUnits" },
+              "right": { "constMoneyMinorUnits": "5000000" }
+            },
+            "points": 9
+          }
         ]
       },
       {
@@ -145,8 +243,22 @@
         "defaultPoints": 2,
         "defaultReasonCode": "R_BUYER_CONCENTRATION",
         "bands": [
-          { "when": { "op": "lte", "left": { "field": "tradeHistory.largestBuyerSharePerTenThousand" }, "right": { "const": 6000 } }, "points": 10 },
-          { "when": { "op": "lte", "left": { "field": "tradeHistory.largestBuyerSharePerTenThousand" }, "right": { "const": 8000 } }, "points": 6 }
+          {
+            "when": {
+              "op": "lte",
+              "left": { "field": "tradeHistory.largestBuyerSharePerTenThousand" },
+              "right": { "const": 6000 }
+            },
+            "points": 10
+          },
+          {
+            "when": {
+              "op": "lte",
+              "left": { "field": "tradeHistory.largestBuyerSharePerTenThousand" },
+              "right": { "const": 8000 }
+            },
+            "points": 6
+          }
         ]
       }
     ]
@@ -164,15 +276,31 @@
       "A": {
         "op": "min",
         "args": [
-          { "op": "scaleBasisPoints", "arg": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" }, "basisPoints": 20000 },
-          { "op": "scaleBasisPoints", "arg": { "field": "openBanking.averageMonthlyInflowMinorUnits" }, "basisPoints": 15000 }
+          {
+            "op": "scaleBasisPoints",
+            "arg": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" },
+            "basisPoints": 20000
+          },
+          {
+            "op": "scaleBasisPoints",
+            "arg": { "field": "openBanking.averageMonthlyInflowMinorUnits" },
+            "basisPoints": 15000
+          }
         ]
       },
       "B": {
         "op": "min",
         "args": [
-          { "op": "scaleBasisPoints", "arg": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" }, "basisPoints": 12500 },
-          { "op": "scaleBasisPoints", "arg": { "field": "openBanking.averageMonthlyInflowMinorUnits" }, "basisPoints": 10000 }
+          {
+            "op": "scaleBasisPoints",
+            "arg": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" },
+            "basisPoints": 12500
+          },
+          {
+            "op": "scaleBasisPoints",
+            "arg": { "field": "openBanking.averageMonthlyInflowMinorUnits" },
+            "basisPoints": 10000
+          }
         ]
       }
     },

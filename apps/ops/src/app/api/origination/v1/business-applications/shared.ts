@@ -43,14 +43,34 @@ export function toStatusWire(v: BusinessApplicationView): BusinessApplicationSta
 }
 
 /** The tenant this credential may act for, or the response to send instead. */
-export async function businessTenantOr403(principal: PartnerPrincipal, scope: Scope, correlationId: string): Promise<TenantCode | Response> {
+export async function businessTenantOr403(
+  principal: PartnerPrincipal,
+  scope: Scope,
+  correlationId: string,
+): Promise<TenantCode | Response> {
   if (!hasScope(principal, scope)) {
-    return refuse(problem({ status: 403, title: 'Forbidden', detail: 'The credential does not carry the scope required.', reason: 'SCOPE_INSUFFICIENT', correlationId }));
+    return refuse(
+      problem({
+        status: 403,
+        title: 'Forbidden',
+        detail: 'The credential does not carry the scope required.',
+        reason: 'SCOPE_INSUFFICIENT',
+        correlationId,
+      }),
+    );
   }
   const tenant = principal.tenantId;
   const deployment = await deploymentJurisdiction();
   if (!isTenantCode(tenant) || !deployment.activeTenants.includes(tenant)) {
-    return refuse(problem({ status: 403, title: 'Forbidden', detail: 'The credential’s institution is not served under the deployment’s jurisdiction.', reason: 'TENANT_NOT_ACTIVE', correlationId }));
+    return refuse(
+      problem({
+        status: 403,
+        title: 'Forbidden',
+        detail: 'The credential’s institution is not served under the deployment’s jurisdiction.',
+        reason: 'TENANT_NOT_ACTIVE',
+        correlationId,
+      }),
+    );
   }
   return tenant;
 }

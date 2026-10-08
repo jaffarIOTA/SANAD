@@ -59,7 +59,8 @@ export function computeApr(flows: readonly CashFlow[]): Result<AprResult> {
     return reject('PLAT-02', 'APR_NEEDS_BOTH_SIDES', 'APR needs at least one drawdown and one repayment');
   }
   for (const f of flows) {
-    if (f.amount.minorUnits <= 0n) return reject('PLAT-02', 'APR_NON_POSITIVE_FLOW', 'Every cash flow must be positive');
+    if (f.amount.minorUnits <= 0n)
+      return reject('PLAT-02', 'APR_NON_POSITIVE_FLOW', 'Every cash flow must be positive');
     if (f.at.months < 0 || f.at.days < 0 || !Number.isInteger(f.at.months) || !Number.isInteger(f.at.days)) {
       return reject('PLAT-02', 'APR_MALFORMED_TENOR', 'Tenor is whole non-negative months and days');
     }

@@ -31,5 +31,9 @@ export function aed(value: unknown, currency?: unknown): Money | undefined {
 export function requireAed(m: Money): Result<true> {
   return m.currency === UAE_CURRENCY
     ? ok(true)
-    : reject('OP-DETERMINACY', 'CURRENCY_MISMATCH', 'A UAE rail is instructed in dirhams only; an amount in another currency is refused, never converted');
+    : reject(
+        'OP-DETERMINACY',
+        'CURRENCY_MISMATCH',
+        'A UAE rail is instructed in dirhams only; an amount in another currency is refused, never converted',
+      );
 }

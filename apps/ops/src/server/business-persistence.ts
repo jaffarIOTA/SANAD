@@ -127,7 +127,9 @@ const decode = (v: unknown): unknown => decodeJson(typeof v === 'string' ? v : J
  */
 export async function illustrativeSeedPermitted(pool: Pool): Promise<boolean> {
   try {
-    const { rows } = await pool.query<{ production_data_permitted: boolean }>('select production_data_permitted from config.deployment_profile limit 1');
+    const { rows } = await pool.query<{ production_data_permitted: boolean }>(
+      'select production_data_permitted from config.deployment_profile limit 1',
+    );
     const row = rows[0];
     return row !== undefined && row.production_data_permitted === false;
   } catch {
@@ -145,8 +147,20 @@ export async function loadBusinessBook(pool: Pool, tenantCode: string): Promise<
   );
 
   const figures = await pool.query<{
-    id: string; application_id: string; metric: string; period: string; currency: string; read_minor: string | null; verified_minor: string | null;
-    source_kind: string; source_ref: string; verified_by: string | null; verified_at_epoch: string | null; supersedes: string | null; created_by: string; created_epoch: string;
+    id: string;
+    application_id: string;
+    metric: string;
+    period: string;
+    currency: string;
+    read_minor: string | null;
+    verified_minor: string | null;
+    source_kind: string;
+    source_ref: string;
+    verified_by: string | null;
+    verified_at_epoch: string | null;
+    supersedes: string | null;
+    created_by: string;
+    created_epoch: string;
   }>(
     `select id::text, application_id, metric, period, currency, read_minor::text, verified_minor::text, source_kind, source_ref,
             verified_by, verified_at_epoch::text, supersedes::text, created_by, floor(extract(epoch from created_at))::bigint::text as created_epoch
@@ -156,19 +170,47 @@ export async function loadBusinessBook(pool: Pool, tenantCode: string): Promise<
     [tenant],
   );
 
-  const assessments = await pool.query<{ id: string; application_id: string; outcome: string; risk_level: string | null; cumulative_score: number | null; trace: unknown; policy_ref: string; assessed_at_epoch: string; created_by: string }>(
+  const assessments = await pool.query<{
+    id: string;
+    application_id: string;
+    outcome: string;
+    risk_level: string | null;
+    cumulative_score: number | null;
+    trace: unknown;
+    policy_ref: string;
+    assessed_at_epoch: string;
+    created_by: string;
+  }>(
     `select id::text, application_id, outcome, risk_level, cumulative_score, trace, policy_ref, assessed_at_epoch::text, created_by
        from core.business_assessment where tenant_id = $1::uuid order by assessed_at_epoch asc`,
     [tenant],
   );
 
-  const offers = await pool.query<{ id: string; application_id: string; letter_version: string; letter: unknown; schedule: unknown; currency: string; facility_minor: string; created_by: string }>(
+  const offers = await pool.query<{
+    id: string;
+    application_id: string;
+    letter_version: string;
+    letter: unknown;
+    schedule: unknown;
+    currency: string;
+    facility_minor: string;
+    created_by: string;
+  }>(
     `select id::text, application_id, letter_version, letter, schedule, currency, facility_minor::text, created_by
        from core.business_offer_letter where tenant_id = $1::uuid order by created_at asc`,
     [tenant],
   );
 
-  const events = await pool.query<{ id: string; application_id: string; event_type: string; from_stage: number | null; to_stage: number | null; actor: string; detail: unknown; occurred_at_epoch: string }>(
+  const events = await pool.query<{
+    id: string;
+    application_id: string;
+    event_type: string;
+    from_stage: number | null;
+    to_stage: number | null;
+    actor: string;
+    detail: unknown;
+    occurred_at_epoch: string;
+  }>(
     `select id::text, application_id, event_type, from_stage, to_stage, actor, detail, occurred_at_epoch::text
        from core.business_application_event where tenant_id = $1::uuid order by occurred_at_epoch asc, created_at asc`,
     [tenant],
@@ -184,13 +226,23 @@ export async function loadBusinessBook(pool: Pool, tenantCode: string): Promise<
       if (k === 'seq') sequence = Number.parseInt(String(v), 10) || 0;
       else detail[k] = String(v);
     }
-    if (r.event_type === 'FIGURE_PROPOSED' && detail['figureId'] !== undefined) proposedAt.set(detail['figureId'], BigInt(r.occurred_at_epoch));
+    if (r.event_type === 'FIGURE_PROPOSED' && detail['figureId'] !== undefined)
+      proposedAt.set(detail['figureId'], BigInt(r.occurred_at_epoch));
     return {
-      applicationId: r.application_id, eventId: r.id, eventType: r.event_type, fromStage: r.from_stage, toStage: r.to_stage,
-      actor: r.actor, atEpochSeconds: BigInt(r.occurred_at_epoch), detail, sequence,
+      applicationId: r.application_id,
+      eventId: r.id,
+      eventType: r.event_type,
+      fromStage: r.from_stage,
+      toStage: r.to_stage,
+      actor: r.actor,
+      atEpochSeconds: BigInt(r.occurred_at_epoch),
+      detail,
+      sequence,
     };
   });
-  eventRows.sort((a, b) => (a.atEpochSeconds === b.atEpochSeconds ? a.sequence - b.sequence : a.atEpochSeconds < b.atEpochSeconds ? -1 : 1));
+  eventRows.sort((a, b) =>
+    a.atEpochSeconds === b.atEpochSeconds ? a.sequence - b.sequence : a.atEpochSeconds < b.atEpochSeconds ? -1 : 1,
+  );
 
   const byId = new Map(figures.rows.map((r) => [r.id, r]));
   const figureRows = figures.rows.map((r) => {
@@ -222,26 +274,46 @@ export async function loadBusinessBook(pool: Pool, tenantCode: string): Promise<
           },
         }
       : { ...base, status: 'PROPOSED' };
-    return { applicationId: r.application_id, rowId: r.id, ...(r.supersedes === null ? {} : { supersedes: r.supersedes }), figure, createdBy: r.created_by };
+    return {
+      applicationId: r.application_id,
+      rowId: r.id,
+      ...(r.supersedes === null ? {} : { supersedes: r.supersedes }),
+      figure,
+      createdBy: r.created_by,
+    };
   });
 
   const applications = apps.rows.map((r) => decode(r.record) as BusinessApplication);
   const versions = new Map<string, ApplicationVersion>();
-  apps.rows.forEach((r, i) => { const a = applications[i]; if (a !== undefined) versions.set(a.applicationId, { status: r.status, updatedAt: r.updated_at }); });
+  apps.rows.forEach((r, i) => {
+    const a = applications[i];
+    if (a !== undefined) versions.set(a.applicationId, { status: r.status, updatedAt: r.updated_at });
+  });
 
   return {
     applications,
     versions,
     figures: figureRows,
     assessments: assessments.rows.map((r) => ({
-      assessmentId: r.id, applicationId: r.application_id, outcome: r.outcome,
+      assessmentId: r.id,
+      applicationId: r.application_id,
+      outcome: r.outcome,
       ...(r.risk_level === null ? {} : { riskLevel: r.risk_level }),
       ...(r.cumulative_score === null ? {} : { cumulativeScore: r.cumulative_score }),
-      policyRef: r.policy_ref, assessedAtEpochSeconds: BigInt(r.assessed_at_epoch), assessedBy: r.created_by, trace: decode(r.trace),
+      policyRef: r.policy_ref,
+      assessedAtEpochSeconds: BigInt(r.assessed_at_epoch),
+      assessedBy: r.created_by,
+      trace: decode(r.trace),
     })),
     offers: offers.rows.map((r) => ({
-      offerId: r.id, applicationId: r.application_id, letterVersion: r.letter_version, currency: r.currency,
-      facilityMinorUnits: BigInt(r.facility_minor), createdBy: r.created_by, letter: decode(r.letter), schedule: decode(r.schedule),
+      offerId: r.id,
+      applicationId: r.application_id,
+      letterVersion: r.letter_version,
+      currency: r.currency,
+      facilityMinorUnits: BigInt(r.facility_minor),
+      createdBy: r.created_by,
+      letter: decode(r.letter),
+      schedule: decode(r.schedule),
     })),
     events: eventRows,
   };
@@ -261,8 +333,18 @@ export async function loadBusinessBook(pool: Pool, tenantCode: string): Promise<
  * new one is inserted only if no other process inserted it first. Otherwise
  * the whole transaction is rolled back and the outcome is STALE.
  */
-export async function saveBusinessChanges(pool: Pool, tenantCode: string, changes: BusinessChanges): Promise<SaveOutcome> {
-  const total = changes.applications.length + changes.figures.length + changes.assessments.length + changes.offers.length + changes.events.length + changes.outbox.length;
+export async function saveBusinessChanges(
+  pool: Pool,
+  tenantCode: string,
+  changes: BusinessChanges,
+): Promise<SaveOutcome> {
+  const total =
+    changes.applications.length +
+    changes.figures.length +
+    changes.assessments.length +
+    changes.offers.length +
+    changes.events.length +
+    changes.outbox.length;
   const versions = new Map<string, ApplicationVersion>();
   if (total === 0) return { kind: 'SAVED', versions };
   const tenant = await tenantUuidByCode(pool, tenantCode);
@@ -281,8 +363,24 @@ export async function saveBusinessChanges(pool: Pool, tenantCode: string, change
            where core.business_application.status = $15::text
              and core.business_application.updated_at = $16::timestamptz
          returning status, updated_at::text as updated_at`,
-        [tenant, a.applicationId, a.upstreamRef, a.stage, a.status, a.productCode, a.variantCode, a.requested.currency, a.requested.minorUnits.toString(),
-          a.tenorMonths, a.graceMonths, encodeJson(a), a.applicationId, a.submittedBy ?? 'upstream-handover', expected?.status ?? null, expected?.updatedAt ?? null],
+        [
+          tenant,
+          a.applicationId,
+          a.upstreamRef,
+          a.stage,
+          a.status,
+          a.productCode,
+          a.variantCode,
+          a.requested.currency,
+          a.requested.minorUnits.toString(),
+          a.tenorMonths,
+          a.graceMonths,
+          encodeJson(a),
+          a.applicationId,
+          a.submittedBy ?? 'upstream-handover',
+          expected?.status ?? null,
+          expected?.updatedAt ?? null,
+        ],
       );
       const row = written.rows[0];
       if (row === undefined) {
@@ -298,9 +396,23 @@ export async function saveBusinessChanges(pool: Pool, tenantCode: string, change
            (id, tenant_id, application_id, metric, period, currency, read_minor, verified_minor, source_kind, source_ref, verified_by, verified_at_epoch, supersedes, correlation_id, created_by)
          values ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::bigint, $8::bigint, $9, $10, $11, $12::bigint, $13::uuid, $14, $15)
          on conflict (id) do nothing`,
-        [f.rowId, tenant, f.applicationId, f.figure.metric, f.figure.periodLabel, f.figure.proposedValue.currency, f.figure.proposedValue.minorUnits.toString(),
-          v === undefined ? null : v.value.minorUnits.toString(), f.figure.sourceKind, f.figure.sourceRef, v?.verifiedBy ?? null,
-          v === undefined ? null : v.verifiedAtEpochSeconds.toString(), f.supersedes ?? null, f.applicationId, f.createdBy],
+        [
+          f.rowId,
+          tenant,
+          f.applicationId,
+          f.figure.metric,
+          f.figure.periodLabel,
+          f.figure.proposedValue.currency,
+          f.figure.proposedValue.minorUnits.toString(),
+          v === undefined ? null : v.value.minorUnits.toString(),
+          f.figure.sourceKind,
+          f.figure.sourceRef,
+          v?.verifiedBy ?? null,
+          v === undefined ? null : v.verifiedAtEpochSeconds.toString(),
+          f.supersedes ?? null,
+          f.applicationId,
+          f.createdBy,
+        ],
       );
     }
     for (const s of changes.assessments) {
@@ -309,7 +421,19 @@ export async function saveBusinessChanges(pool: Pool, tenantCode: string, change
            (id, tenant_id, application_id, outcome, risk_level, cumulative_score, trace, policy_ref, assessed_at_epoch, correlation_id, created_by)
          values ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8, $9::bigint, $10, $11)
          on conflict (id) do nothing`,
-        [s.assessmentId, tenant, s.applicationId, s.outcome, s.riskLevel ?? null, s.cumulativeScore ?? null, encodeJson(s.trace), s.policyRef, s.assessedAtEpochSeconds.toString(), s.applicationId, s.assessedBy],
+        [
+          s.assessmentId,
+          tenant,
+          s.applicationId,
+          s.outcome,
+          s.riskLevel ?? null,
+          s.cumulativeScore ?? null,
+          encodeJson(s.trace),
+          s.policyRef,
+          s.assessedAtEpochSeconds.toString(),
+          s.applicationId,
+          s.assessedBy,
+        ],
       );
     }
     for (const o of changes.offers) {
@@ -318,7 +442,18 @@ export async function saveBusinessChanges(pool: Pool, tenantCode: string, change
            (id, tenant_id, application_id, letter_version, letter, schedule, currency, facility_minor, correlation_id, created_by)
          values ($1::uuid, $2::uuid, $3, $4, $5::jsonb, $6::jsonb, $7, $8::bigint, $9, $10)
          on conflict (tenant_id, application_id, letter_version) do nothing`,
-        [o.offerId, tenant, o.applicationId, o.letterVersion, encodeJson(o.letter), encodeJson(o.schedule), o.currency, o.facilityMinorUnits.toString(), o.applicationId, o.createdBy],
+        [
+          o.offerId,
+          tenant,
+          o.applicationId,
+          o.letterVersion,
+          encodeJson(o.letter),
+          encodeJson(o.schedule),
+          o.currency,
+          o.facilityMinorUnits.toString(),
+          o.applicationId,
+          o.createdBy,
+        ],
       );
     }
     for (const e of changes.events) {
@@ -327,7 +462,18 @@ export async function saveBusinessChanges(pool: Pool, tenantCode: string, change
            (id, tenant_id, application_id, event_type, from_stage, to_stage, actor, detail, occurred_at_epoch, correlation_id)
          values ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8::jsonb, $9::bigint, $10)
          on conflict (id) do nothing`,
-        [e.eventId, tenant, e.applicationId, e.eventType, e.fromStage, e.toStage, e.actor, JSON.stringify({ ...e.detail, seq: String(e.sequence) }), e.atEpochSeconds.toString(), e.applicationId],
+        [
+          e.eventId,
+          tenant,
+          e.applicationId,
+          e.eventType,
+          e.fromStage,
+          e.toStage,
+          e.actor,
+          JSON.stringify({ ...e.detail, seq: String(e.sequence) }),
+          e.atEpochSeconds.toString(),
+          e.applicationId,
+        ],
       );
     }
     // The outbox table keys on the tenant's uuid; the events carry its code. Idempotent on (tenant, kind, key), as the outbox store is.
@@ -344,7 +490,11 @@ export async function saveBusinessChanges(pool: Pool, tenantCode: string, change
   } catch (error) {
     // A rollback on a broken connection fails too; the original error is the one that matters, and the
     // transaction is abandoned with the connection either way.
-    try { await client.query('rollback'); } catch { /* the connection is gone; nothing was committed */ }
+    try {
+      await client.query('rollback');
+    } catch {
+      /* the connection is gone; nothing was committed */
+    }
     throw error;
   } finally {
     client.release();

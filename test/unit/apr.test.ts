@@ -14,8 +14,16 @@ import { computeApr, type CashFlow } from '@sanad/core/pricing/apr.ts';
 import { money } from '@sanad/core/kernel/money.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
 
-const draw = (amount: bigint, months = 0, days = 0): CashFlow => ({ at: { months, days }, amount: money(amount), direction: 'DRAWDOWN' });
-const pay = (amount: bigint, months = 0, days = 0): CashFlow => ({ at: { months, days }, amount: money(amount), direction: 'REPAYMENT' });
+const draw = (amount: bigint, months = 0, days = 0): CashFlow => ({
+  at: { months, days },
+  amount: money(amount),
+  direction: 'DRAWDOWN',
+});
+const pay = (amount: bigint, months = 0, days = 0): CashFlow => ({
+  at: { months, days },
+  amount: money(amount),
+  direction: 'REPAYMENT',
+});
 
 describe('computeApr', () => {
   it('1 000 advanced, 1 100 repaid after one year → 10.00%', () => {
@@ -53,9 +61,11 @@ describe('computeApr', () => {
 
 describe('the APR module is integer arithmetic', () => {
   const src = readFileSync(fileURLToPath(new URL('../../core/pricing/apr.ts', import.meta.url)), 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*$/gm, '$1');
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
   it('uses no float helper', () => {
-    expect(src).not.toMatch(/\bMath\.\w+/); expect(src).not.toMatch(/\bparseFloat\b|\btoFixed\b/);
+    expect(src).not.toMatch(/\bMath\.\w+/);
+    expect(src).not.toMatch(/\bparseFloat\b|\btoFixed\b/);
   });
   it('types no amount or rate as number', () => {
     expect(src).not.toMatch(/\b(bp|amount|minorUnits)\s*:\s*number\b/);

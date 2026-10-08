@@ -60,13 +60,23 @@ export const murabahaScf: ProductModule<MurabahaTerms, MurabahaQuote, MurabahaEx
   validateTerms(raw: unknown): Result<MurabahaTerms> {
     if (!isRecord(raw)) return reject('OP-DETERMINACY', 'TERMS_MALFORMED', 'Murabaha terms are an object');
     const unknown = Object.keys(raw).filter((k) => !['instalments', 'structureCode', 'maxTenorDays'].includes(k));
-    if (unknown.length > 0) return reject('OP-DETERMINACY', 'TERMS_UNKNOWN_KEY', 'Unknown key in Murabaha terms', { keys: unknown.join(',') });
+    if (unknown.length > 0)
+      return reject('OP-DETERMINACY', 'TERMS_UNKNOWN_KEY', 'Unknown key in Murabaha terms', {
+        keys: unknown.join(','),
+      });
     const inst = raw['instalments'];
     const instalments: MurabahaTerms['instalments'] | undefined =
-      inst === 'BULLET' ? 'BULLET' : isRecord(inst) && typeof inst['count'] === 'number' && Number.isInteger(inst['count']) && inst['count'] > 0 ? { count: inst['count'] } : undefined;
-    if (instalments === undefined) return reject('OP-DETERMINACY', 'TERMS_INSTALMENTS', "instalments is 'BULLET' or { count }");
-    if (!STRUCTURE_CODES.includes(raw['structureCode'] as StructureCode)) return reject('OP-DETERMINACY', 'TERMS_STRUCTURE', 'structureCode is one of the declared structures');
-    if (typeof raw['maxTenorDays'] !== 'number' || !Number.isInteger(raw['maxTenorDays']) || raw['maxTenorDays'] <= 0) return reject('OP-DETERMINACY', 'TERMS_TENOR', 'maxTenorDays is a positive integer');
+      inst === 'BULLET'
+        ? 'BULLET'
+        : isRecord(inst) && typeof inst['count'] === 'number' && Number.isInteger(inst['count']) && inst['count'] > 0
+          ? { count: inst['count'] }
+          : undefined;
+    if (instalments === undefined)
+      return reject('OP-DETERMINACY', 'TERMS_INSTALMENTS', "instalments is 'BULLET' or { count }");
+    if (!STRUCTURE_CODES.includes(raw['structureCode'] as StructureCode))
+      return reject('OP-DETERMINACY', 'TERMS_STRUCTURE', 'structureCode is one of the declared structures');
+    if (typeof raw['maxTenorDays'] !== 'number' || !Number.isInteger(raw['maxTenorDays']) || raw['maxTenorDays'] <= 0)
+      return reject('OP-DETERMINACY', 'TERMS_TENOR', 'maxTenorDays is a positive integer');
     return ok({ instalments, structureCode: raw['structureCode'] as StructureCode, maxTenorDays: raw['maxTenorDays'] });
   },
 
@@ -78,7 +88,9 @@ export const murabahaScf: ProductModule<MurabahaTerms, MurabahaQuote, MurabahaEx
       return reject('SH-03', 'PROFIT_AMOUNT_REQUIRED', 'A Murabaha is priced by a profit amount');
     }
     if (request.requestedTenorDays > terms.maxTenorDays) {
-      return reject('OP-DETERMINACY', 'TENOR_EXCEEDS_PRODUCT', 'Tenor exceeds what this product allows', { max: String(terms.maxTenorDays) });
+      return reject('OP-DETERMINACY', 'TENOR_EXCEEDS_PRODUCT', 'Tenor exceeds what this product allows', {
+        max: String(terms.maxTenorDays),
+      });
     }
     const pricing = priceMurabaha(request.requestedAmount, request.pricing.profitAmount);
     if (!pricing.ok) return pricing;

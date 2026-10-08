@@ -21,9 +21,9 @@ services:
       PGPASSWORD: ${PGPASSWORD:?written by scripts/nutrient-dev-keys.sh}
       PGDATABASE: document_engine
       PGHOST: db
-      PGPORT: "5432"
+      PGPORT: '5432'
     ports:
-      - "127.0.0.1:5000:5000"
+      - '127.0.0.1:5000:5000'
     depends_on:
       db:
         condition: service_healthy
@@ -34,7 +34,7 @@ services:
       POSTGRES_PASSWORD: ${PGPASSWORD:?written by scripts/nutrient-dev-keys.sh}
       POSTGRES_DB: document_engine
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U engine -d document_engine"]
+      test: ['CMD-SHELL', 'pg_isready -U engine -d document_engine']
       interval: 5s
       timeout: 3s
       retries: 20

@@ -16,28 +16,71 @@ import { tsaInstant } from '@sanad/core/time/tsa.ts';
 import { bnpl } from '@sanad/products/bnpl/index.ts';
 import { book } from '@sanad/products/bnpl/execution.ts';
 import { tawarruqPersonal } from '@sanad/products/tawarruq-personal/index.ts';
-import { disburse, purchaseCommodity, realiseProceeds, sellToCustomer, transferTitle } from '@sanad/products/tawarruq-personal/execution.ts';
+import {
+  disburse,
+  purchaseCommodity,
+  realiseProceeds,
+  sellToCustomer,
+  transferTitle,
+} from '@sanad/products/tawarruq-personal/execution.ts';
 
-const at = (s: number) => tsaInstant({ verified: true, genTimeEpochSeconds: BigInt(s), tokenDigest: `t${String(s)}`, authorityId: 'test' });
+const at = (s: number) =>
+  tsaInstant({ verified: true, genTimeEpochSeconds: BigInt(s), tokenDigest: `t${String(s)}`, authorityId: 'test' });
 const T0 = 1_790_000_000;
 const bankA = expectOk(loadProductCatalogue('bank-a'));
 const fintechB = expectOk(loadProductCatalogue('fintech-b'));
-const tawTerms = expectOk(tawarruqPersonal.validateTerms(expectOk(entryFor(bankA, 'tawarruq-personal', 'prg-0001', BigInt(T0))).terms));
+const tawTerms = expectOk(
+  tawarruqPersonal.validateTerms(expectOk(entryFor(bankA, 'tawarruq-personal', 'prg-0001', BigInt(T0))).terms),
+);
 const bnplTerms = expectOk(bnpl.validateTerms(expectOk(entryFor(fintechB, 'bnpl', 'prg-0001', BigInt(T0))).terms));
-const benchmark = { code: 'SAIBOR-3M', rate: rate(560n, 'REDUCING'), asOfEpochSeconds: BigInt(T0), referenceId: 'pub-1' };
-const range = { productClass: 'PERSONAL', lowBp: 600n, medianBp: 900n, highBp: 1_400n, asOfEpochSeconds: BigInt(T0), referenceId: 'm' };
+const benchmark = {
+  code: 'SAIBOR-3M',
+  rate: rate(560n, 'REDUCING'),
+  asOfEpochSeconds: BigInt(T0),
+  referenceId: 'pub-1',
+};
+const range = {
+  productClass: 'PERSONAL',
+  lowBp: 600n,
+  medianBp: 900n,
+  highBp: 1_400n,
+  asOfEpochSeconds: BigInt(T0),
+  referenceId: 'm',
+};
 const tawRule = expectOk(entryFor(bankA, 'tawarruq-personal', 'prg-0001', BigInt(T0))).pricingRule;
-const inputs = (principal: bigint, months: number) => expectOk(resolvePricingInputs(tawRule, { principal: money(principal), tenorDays: months * 30, asOfEpochSeconds: BigInt(T0), benchmark, marketRange: range }));
+const inputs = (principal: bigint, months: number) =>
+  expectOk(
+    resolvePricingInputs(tawRule, {
+      principal: money(principal),
+      tenorDays: months * 30,
+      asOfEpochSeconds: BigInt(T0),
+      benchmark,
+      marketRange: range,
+    }),
+  );
 const tawRequest = (principal: bigint, months: number, income: bigint, obligations = 0n) => ({
-  tenantId: 'bank-a', programmeId: 'prg-0001', counterpartyId: 'app-1', requestedAmount: money(principal), requestedTenorDays: months * 30, asOf: at(T0),
-  pricing: inputs(principal, months), affordability: { monthlyIncome: money(income), existingMonthlyObligations: money(obligations) },
+  tenantId: 'bank-a',
+  programmeId: 'prg-0001',
+  counterpartyId: 'app-1',
+  requestedAmount: money(principal),
+  requestedTenorDays: months * 30,
+  asOf: at(T0),
+  pricing: inputs(principal, months),
+  affordability: { monthlyIncome: money(income), existingMonthlyObligations: money(obligations) },
 });
-const approved = { state: 'APPROVED' as const, core: { tenantId: 'bank-a' } } as unknown as Parameters<typeof tawarruqPersonal.execute>[1];
+const approved = { state: 'APPROVED' as const, core: { tenantId: 'bank-a' } } as unknown as Parameters<
+  typeof tawarruqPersonal.execute
+>[1];
 
 describe('quote a benchmark-linked product with a stale or missing publisher rate', () => {
   it('is refused, never priced on a default', () => {
-    const r = resolvePricingInputs(tawRule, { principal: money(1_000_000n), tenorDays: 360, asOfEpochSeconds: BigInt(T0) });
-    expect(r.ok).toBe(false); if (!r.ok) expect(r.error.reason).toBe('BENCHMARK_UNAVAILABLE');
+    const r = resolvePricingInputs(tawRule, {
+      principal: money(1_000_000n),
+      tenorDays: 360,
+      asOfEpochSeconds: BigInt(T0),
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.reason).toBe('BENCHMARK_UNAVAILABLE');
   });
 });
 
@@ -45,13 +88,21 @@ describe('exceed a tenant deduction ratio', () => {
   it('refuses with the citation attached', () => {
     // 50 000 over 12 months at ~10.1% → ~4 400/month against 10 000 income = 44% > 33.33%
     const r = tawarruqPersonal.quote(tawTerms, tawRequest(5_000_000n, 12, 1_000_000n));
-    expect(r.ok).toBe(false); if (!r.ok) { expect(r.error.reason).toBe('DEDUCTION_RATIO_EXCEEDED'); expect(String(r.error.context?.['citation'])).toContain('Responsible Lending'); }
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.reason).toBe('DEDUCTION_RATIO_EXCEEDED');
+      expect(String(r.error.context?.['citation'])).toContain('Responsible Lending');
+    }
     expect(tawarruqPersonal.quote(tawTerms, tawRequest(5_000_000n, 12, 2_000_000n)).ok).toBe(true);
   });
   it('a term sheet without a citation for the threshold does not parse', () => {
     const raw = expectOk(entryFor(bankA, 'tawarruq-personal', 'prg-0001', BigInt(T0))).terms as Record<string, unknown>;
-    const r = tawarruqPersonal.validateTerms({ ...raw, affordability: { maxDeductionPerTenThousand: 3333, citation: '' } });
-    expect(r.ok).toBe(false); if (!r.ok) expect(r.error.reason).toBe('TERMS_CITATION_REQUIRED');
+    const r = tawarruqPersonal.validateTerms({
+      ...raw,
+      affordability: { maxDeductionPerTenThousand: 3333, citation: '' },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.reason).toBe('TERMS_CITATION_REQUIRED');
   });
 });
 
@@ -68,8 +119,22 @@ describe('present an offer whose APR was not computed by core/pricing/apr.ts', (
 
 describe('the Tawarruq sequence cannot be reordered', () => {
   const q = expectOk(tawarruqPersonal.quote(tawTerms, tawRequest(5_000_000n, 12, 2_000_000n)));
-  const ctx = { transactionId: 'txn-t1', applicantRef: 'app-1', bureauEnquiryRef: 'enq-1', consentId: 'cns-1', openedAt: at(T0), correlationId: 'c' };
-  const lot = { lotRef: 'lot-1', commodityCode: 'LME-AL', quantity: '10', unit: 'MT', price: money(5_000_000n), confirmedAtEpochSeconds: BigInt(T0 + 1) };
+  const ctx = {
+    transactionId: 'txn-t1',
+    applicantRef: 'app-1',
+    bureauEnquiryRef: 'enq-1',
+    consentId: 'cns-1',
+    openedAt: at(T0),
+    correlationId: 'c',
+  };
+  const lot = {
+    lotRef: 'lot-1',
+    commodityCode: 'LME-AL',
+    quantity: '10',
+    unit: 'MT',
+    price: money(5_000_000n),
+    confirmedAtEpochSeconds: BigInt(T0 + 1),
+  };
 
   it('approve without a bureau enquiry or consent is refused', () => {
     expect(tawarruqPersonal.execute(tawTerms, approved, q, { ...ctx, bureauEnquiryRef: '' }).ok).toBe(false);
@@ -92,37 +157,73 @@ describe('the Tawarruq sequence cannot be reordered', () => {
     expect(eventsOfKind(disbursed.outbox, 'BUREAU_REPORT')).toHaveLength(1);
     // disburse twice on one idempotency key: the outbox refuses the second
     const again = enqueue(disbursed.outbox, disbursed.outbox.events[0]!);
-    expect(again.ok).toBe(false); if (!again.ok) expect(again.error.reason).toBe('DUPLICATE_SIDE_EFFECT');
+    expect(again.ok).toBe(false);
+    if (!again.ok) expect(again.error.reason).toBe('DUPLICATE_SIDE_EFFECT');
   });
   it('agency is a board decision: a tenant whose board forbids it cannot sell on as agent', () => {
     const noAgency = { ...tawTerms, agencyPermitted: false };
     const draft = expectOk(tawarruqPersonal.execute(noAgency, approved, q, ctx));
-    const titled = expectOk(transferTitle(expectOk(sellToCustomer(expectOk(purchaseCommodity(draft, lot, at(T0 + 1))), 'd', at(T0 + 2))), 'tr', at(T0 + 3)));
+    const titled = expectOk(
+      transferTitle(
+        expectOk(sellToCustomer(expectOk(purchaseCommodity(draft, lot, at(T0 + 1))), 'd', at(T0 + 2))),
+        'tr',
+        at(T0 + 3),
+      ),
+    );
     const r = realiseProceeds(titled, { saleRef: 's', proceeds: money(5_000_000n), agencyRef: 'agency-1' }, at(T0 + 4));
-    expect(r.ok).toBe(false); if (!r.ok) expect(r.error.control).toBe('SH-18');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.control).toBe('SH-18');
   });
 });
 
 describe('BNPL', () => {
-  const request = (basket: bigint, outstanding = 0n) => ({ tenantId: 'fintech-b', programmeId: 'prg-0001', counterpartyId: 'app-2', requestedAmount: money(basket), requestedTenorDays: 120, asOf: at(T0), pricing: { profitAmount: money(0n) }, affordability: { outstandingSameClass: money(outstanding) } });
+  const request = (basket: bigint, outstanding = 0n) => ({
+    tenantId: 'fintech-b',
+    programmeId: 'prg-0001',
+    counterpartyId: 'app-2',
+    requestedAmount: money(basket),
+    requestedTenorDays: 120,
+    asOf: at(T0),
+    pricing: { profitAmount: money(0n) },
+    affordability: { outstandingSameClass: money(outstanding) },
+  });
   it('the consumer pays the basket and nothing more; the APR is zero and the platform still computed it', () => {
     const q = expectOk(bnpl.quote(bnplTerms, request(100_001n)));
-    expect(q.schedule.filter((f) => f.direction === 'REPAYMENT').reduce((s, f) => s + f.amount.minorUnits, 0n)).toBe(100_001n);
-    expect(q.merchantFee.amount.minorUnits).toBe(4_000n); expect(q.fees).toEqual([]);
+    expect(q.schedule.filter((f) => f.direction === 'REPAYMENT').reduce((s, f) => s + f.amount.minorUnits, 0n)).toBe(
+      100_001n,
+    );
+    expect(q.merchantFee.amount.minorUnits).toBe(4_000n);
+    expect(q.fees).toEqual([]);
     const offer = expectOk(buildOffer(bnpl, q, at(T0)));
-    expect(offer.apr.bp).toBe(0n); expect(offer.apr.computedBy).toBe('core/pricing/apr.ts');
+    expect(offer.apr.bp).toBe(0n);
+    expect(offer.apr.computedBy).toBe('core/pricing/apr.ts');
     expect(offer.disclosure.fees).toEqual([]);
   });
   it('refuses a consumer-side cost and a basket over the tenant consumer limit', () => {
     expect(bnpl.quote(bnplTerms, { ...request(100_000n), pricing: { profitAmount: money(1n) } }).ok).toBe(false);
     const r = bnpl.quote(bnplTerms, request(100_000n, 450_000n));
-    expect(r.ok).toBe(false); if (!r.ok) { expect(r.error.reason).toBe('BNPL_CONSUMER_LIMIT_EXCEEDED'); expect(String(r.error.context?.['citation'])).toContain('BNPL'); }
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.reason).toBe('BNPL_CONSUMER_LIMIT_EXCEEDED');
+      expect(String(r.error.context?.['citation'])).toContain('BNPL');
+    }
   });
   it('books nothing without the bureau, and booking carries the bureau-reporting event', () => {
     const q = expectOk(bnpl.quote(bnplTerms, request(100_000n)));
-    const bApproved = { state: 'APPROVED' as const, core: { tenantId: 'fintech-b' } } as unknown as Parameters<typeof bnpl.execute>[1];
+    const bApproved = { state: 'APPROVED' as const, core: { tenantId: 'fintech-b' } } as unknown as Parameters<
+      typeof bnpl.execute
+    >[1];
     const eligibility = { ageHijriYears: 24, residentInKingdom: true, identityVerificationRef: 'idv-1' };
-    const ctx = { transactionId: 'txn-b1', applicantRef: 'app-2', merchantRef: 'mer-1', bureauEnquiryRef: 'enq-9', consentId: 'cns-9', eligibility, openedAt: at(T0), correlationId: 'c' };
+    const ctx = {
+      transactionId: 'txn-b1',
+      applicantRef: 'app-2',
+      merchantRef: 'mer-1',
+      bureauEnquiryRef: 'enq-9',
+      consentId: 'cns-9',
+      eligibility,
+      openedAt: at(T0),
+      correlationId: 'c',
+    };
     expect(bnpl.execute(bnplTerms, bApproved, q, { ...ctx, bureauEnquiryRef: '' }).ok).toBe(false);
     const booked = expectOk(book(expectOk(bnpl.execute(bnplTerms, bApproved, q, ctx)), at(T0 + 1)));
     expect(eventsOfKind(booked.outbox, 'BUREAU_REPORT')).toHaveLength(1);
@@ -130,33 +231,69 @@ describe('BNPL', () => {
   });
 
   // SAMA Rules for Regulating BNPL Companies (Nov 2023), Chapter IV. Each attempt below is one the Rules forbid.
-  const rawTerms = { instalments: 4, intervalDays: 30, consumerLimitMinorUnits: '500000', merchantDiscountPerTenThousand: 400, citation: 'SAMA Rules for Regulating BNPL Companies, Art. 22' };
+  const rawTerms = {
+    instalments: 4,
+    intervalDays: 30,
+    consumerLimitMinorUnits: '500000',
+    merchantDiscountPerTenThousand: 400,
+    citation: 'SAMA Rules for Regulating BNPL Companies, Art. 22',
+  };
   it('Art. 22(2): a term sheet granting more than twelve instalments does not parse', () => {
     const r = bnpl.validateTerms({ ...rawTerms, instalments: 13 });
-    expect(r.ok).toBe(false); if (!r.ok) { expect(r.error.reason).toBe('TERMS_INSTALMENTS'); expect(String(r.error.context?.['citation'])).toContain('Art. 22(2)'); }
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.reason).toBe('TERMS_INSTALMENTS');
+      expect(String(r.error.context?.['citation'])).toContain('Art. 22(2)');
+    }
     expect(bnpl.validateTerms({ ...rawTerms, instalments: 12 }).ok).toBe(true);
   });
   it('Art. 22(1): a consumer limit above SAR 10,000 needs the SAMA decision that varied it', () => {
     const over = bnpl.validateTerms({ ...rawTerms, consumerLimitMinorUnits: '1000001' });
-    expect(over.ok).toBe(false); if (!over.ok) { expect(over.error.reason).toBe('TERMS_LIMIT_ABOVE_RULES'); expect(String(over.error.context?.['citation'])).toContain('Art. 22(1)'); }
+    expect(over.ok).toBe(false);
+    if (!over.ok) {
+      expect(over.error.reason).toBe('TERMS_LIMIT_ABOVE_RULES');
+      expect(String(over.error.context?.['citation'])).toContain('Art. 22(1)');
+    }
     expect(bnpl.validateTerms({ ...rawTerms, consumerLimitMinorUnits: '1000000' }).ok).toBe(true);
-    expect(bnpl.validateTerms({ ...rawTerms, consumerLimitMinorUnits: '1000001', samaLimitVariationRef: 'SAMA-DEC-2027-0042' }).ok).toBe(true);
+    expect(
+      bnpl.validateTerms({
+        ...rawTerms,
+        consumerLimitMinorUnits: '1000001',
+        samaLimitVariationRef: 'SAMA-DEC-2027-0042',
+      }).ok,
+    ).toBe(true);
   });
   it('Art. 22(3): cash is not a collection method', () => {
     const r = bnpl.validateTerms({ ...rawTerms, collectionMethods: ['SADAD', 'CASH'] });
-    expect(r.ok).toBe(false); if (!r.ok) expect(r.error.reason).toBe('TERMS_COLLECTION_NOT_ELECTRONIC');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.reason).toBe('TERMS_COLLECTION_NOT_ELECTRONIC');
     expect(expectOk(bnpl.validateTerms(rawTerms)).collectionMethods).not.toContain('CASH');
   });
   it('Art. 20(5): a basket in another currency is refused', () => {
     // The currency type admits only SAR, so the compiler closes this first; the cast reaches the runtime guard behind it.
-    const r = bnpl.quote(bnplTerms, { ...request(100_000n), requestedAmount: { minorUnits: 100_000n, currency: 'USD' as unknown as 'SAR' } });
-    expect(r.ok).toBe(false); if (!r.ok) expect(r.error.reason).toBe('BNPL_CURRENCY_NOT_SAR');
+    const r = bnpl.quote(bnplTerms, {
+      ...request(100_000n),
+      requestedAmount: { minorUnits: 100_000n, currency: 'USD' as unknown as 'SAR' },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.reason).toBe('BNPL_CURRENCY_NOT_SAR');
   });
   it('Art. 19(6), 20(3), 20(4): no dealing with an unverified, under-age or non-resident consumer', () => {
     const q = expectOk(bnpl.quote(bnplTerms, request(100_000n)));
-    const bApproved = { state: 'APPROVED' as const, core: { tenantId: 'fintech-b' } } as unknown as Parameters<typeof bnpl.execute>[1];
+    const bApproved = { state: 'APPROVED' as const, core: { tenantId: 'fintech-b' } } as unknown as Parameters<
+      typeof bnpl.execute
+    >[1];
     const ok = { ageHijriYears: 18, residentInKingdom: true, identityVerificationRef: 'idv-1' };
-    const ctx = (eligibility: typeof ok & { nonResidentNonObjectionRef?: string }) => ({ transactionId: 'txn-b2', applicantRef: 'app-2', merchantRef: 'mer-1', bureauEnquiryRef: 'enq-9', consentId: 'cns-9', eligibility, openedAt: at(T0), correlationId: 'c' });
+    const ctx = (eligibility: typeof ok & { nonResidentNonObjectionRef?: string }) => ({
+      transactionId: 'txn-b2',
+      applicantRef: 'app-2',
+      merchantRef: 'mer-1',
+      bureauEnquiryRef: 'enq-9',
+      consentId: 'cns-9',
+      eligibility,
+      openedAt: at(T0),
+      correlationId: 'c',
+    });
     expect(bnpl.execute(bnplTerms, bApproved, q, ctx(ok)).ok).toBe(true);
     const reasons = [
       bnpl.execute(bnplTerms, bApproved, q, ctx({ ...ok, identityVerificationRef: '' })),
@@ -164,12 +301,29 @@ describe('BNPL', () => {
       bnpl.execute(bnplTerms, bApproved, q, ctx({ ...ok, residentInKingdom: false })),
     ].map((r) => (r.ok ? 'OK' : r.error.reason));
     expect(reasons).toEqual(['IDENTITY_NOT_VERIFIED', 'BNPL_CONSUMER_UNDER_AGE', 'BNPL_CONSUMER_NON_RESIDENT']);
-    expect(bnpl.execute(bnplTerms, bApproved, q, ctx({ ...ok, residentInKingdom: false, nonResidentNonObjectionRef: 'SAMA-NO-2027-0007' })).ok).toBe(true);
+    expect(
+      bnpl.execute(
+        bnplTerms,
+        bApproved,
+        q,
+        ctx({ ...ok, residentInKingdom: false, nonResidentNonObjectionRef: 'SAMA-NO-2027-0007' }),
+      ).ok,
+    ).toBe(true);
   });
 });
 
 describe('the outbox', () => {
   it('refuses an effect without a key', () => {
-    expect(enqueue(emptyOutbox(), { eventId: 'e', tenantId: 't', kind: 'NOTIFICATION', subjectRef: 's', idempotencyKey: '', payload: {}, correlationId: 'c' }).ok).toBe(false);
+    expect(
+      enqueue(emptyOutbox(), {
+        eventId: 'e',
+        tenantId: 't',
+        kind: 'NOTIFICATION',
+        subjectRef: 's',
+        idempotencyKey: '',
+        payload: {},
+        correlationId: 'c',
+      }).ok,
+    ).toBe(false);
   });
 });

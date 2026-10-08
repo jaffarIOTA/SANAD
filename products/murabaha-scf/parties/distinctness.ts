@@ -46,10 +46,7 @@ function resolve(legs: readonly ContractLeg[], slot: PartySlot): ContractLeg | u
  * the check runs again as the chain grows, and the acceptance transition will not
  * complete until it holds.
  */
-export function verifyDistinctParties(
-  definition: StructureDefinition,
-  legs: readonly ContractLeg[],
-): Result<true> {
+export function verifyDistinctParties(definition: StructureDefinition, legs: readonly ContractLeg[]): Result<true> {
   for (const [leftRef, rightRef] of definition.constraints.distinctParties) {
     const left = parsePartySlot(leftRef);
     if (!left.ok) return left;
@@ -61,12 +58,10 @@ export function verifyDistinctParties(
     if (leftLeg === undefined || rightLeg === undefined) continue;
 
     if (normaliseCr(leftLeg.counterpartyCr) === normaliseCr(rightLeg.counterpartyCr)) {
-      return reject(
-        'SH-08',
-        'PARTIES_NOT_DISTINCT',
-        'The same legal entity appears on both sides of the transaction',
-        { left: leftRef, right: rightRef },
-      );
+      return reject('SH-08', 'PARTIES_NOT_DISTINCT', 'The same legal entity appears on both sides of the transaction', {
+        left: leftRef,
+        right: rightRef,
+      });
     }
   }
   return ok(true);

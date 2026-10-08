@@ -56,8 +56,7 @@ const PHYSICAL_UTILITY: readonly { readonly pattern: RegExp; readonly why: strin
 ];
 
 /** `className="…"`, `className='…'`, `className={`…`}` and `className={'…'}`. */
-const CLASS_ATTRIBUTE =
-  /class(?:Name)?\s*=\s*(?:"([^"]*)"|'([^']*)'|\{`([^`]*)`\}|\{\s*['"]([^'"]*)['"]\s*\})/gs;
+const CLASS_ATTRIBUTE = /class(?:Name)?\s*=\s*(?:"([^"]*)"|'([^']*)'|\{`([^`]*)`\}|\{\s*['"]([^'"]*)['"]\s*\})/gs;
 
 /** Class tokens, with `${…}` holes removed and variant prefixes stripped. */
 function classTokens(source: string): { token: string; line: number }[] {
@@ -131,9 +130,7 @@ describe('SH-01 — no rate reaches a screen', () => {
     const block = /export interface MoneyProps \{([\s\S]*?)\n\}/.exec(source);
     expect(block, 'MoneyProps is declared').not.toBeNull();
 
-    const declared = [...(block?.[1] ?? '').matchAll(/^\s*readonly\s+(\w+)\??:/gm)].map(
-      (m) => m[1],
-    );
+    const declared = [...(block?.[1] ?? '').matchAll(/^\s*readonly\s+(\w+)\??:/gm)].map((m) => m[1]);
     expect(declared.sort()).toEqual(['labels', 'locale', 'numerals', 'pricing']);
   });
 

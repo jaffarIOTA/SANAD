@@ -16,10 +16,7 @@
  */
 
 import type { EligibilityOutcome } from '@sanad/core/decisioning/eligibility.ts';
-import type {
-  OriginationRequest,
-  OriginationRequestCore,
-} from '@sanad/core/origination/request.ts';
+import type { OriginationRequest, OriginationRequestCore } from '@sanad/core/origination/request.ts';
 import type { TsaInstant } from '@sanad/core/time/tsa.ts';
 
 export interface AttestedInstantWire {
@@ -90,10 +87,7 @@ function tradeReference(core: OriginationRequestCore): TradeReferenceWire {
   };
 }
 
-export function toWire(
-  request: OriginationRequest,
-  partnerReference: string | undefined,
-): OriginationRequestWire {
+export function toWire(request: OriginationRequest, partnerReference: string | undefined): OriginationRequestWire {
   const core = request.core;
 
   const servicing =
@@ -101,9 +95,7 @@ export function toWire(
       ? {
           decision: request.servicing.decision,
           reference: request.servicing.reference,
-          ...(request.servicing.reasonCode === undefined
-            ? {}
-            : { reasonCode: request.servicing.reasonCode }),
+          ...(request.servicing.reasonCode === undefined ? {} : { reasonCode: request.servicing.reasonCode }),
           respondedAt: attested(request.servicing.respondedAt),
         }
       : undefined;
@@ -147,7 +139,8 @@ export function toWire(
       ? { outcome: { servicingAttempts: request.attempts.length, ...revised(request.changes) } }
       : {}),
     ...((request.state === 'AWAITING_REVIEW' || request.state === 'AWAITING_SERVICING_RESPONSE') &&
-    (request.changes !== undefined || ('attempts' in request && request.attempts !== undefined && request.attempts.length > 0))
+    (request.changes !== undefined ||
+      ('attempts' in request && request.attempts !== undefined && request.attempts.length > 0))
       ? {
           outcome: {
             ...revised(request.changes),

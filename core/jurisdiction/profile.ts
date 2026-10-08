@@ -53,21 +53,39 @@ export function parseJurisdictionProfile(raw: unknown): Result<JurisdictionProfi
   if (!isRecord(raw)) return bad('JURISDICTION_MALFORMED', 'A jurisdiction profile is an object');
   const code = raw['code'];
   if (!JURISDICTION_CODES.includes(code as JurisdictionCode)) return bad('JURISDICTION_CODE', 'code is SA or AE');
-  if (!nonEmpty(raw['nameEn']) || !nonEmpty(raw['nameAr'])) return bad('JURISDICTION_NAME', 'nameEn and nameAr are required');
-  if (!CURRENCY_CODES.includes(raw['currency'] as CurrencyCode)) return bad('JURISDICTION_CURRENCY', 'currency is a supported ISO 4217 code');
+  if (!nonEmpty(raw['nameEn']) || !nonEmpty(raw['nameAr']))
+    return bad('JURISDICTION_NAME', 'nameEn and nameAr are required');
+  if (!CURRENCY_CODES.includes(raw['currency'] as CurrencyCode))
+    return bad('JURISDICTION_CURRENCY', 'currency is a supported ISO 4217 code');
   if (!nonEmpty(raw['timeZone'])) return bad('JURISDICTION_TIME_ZONE', 'timeZone is an IANA zone');
   const calendars = raw['contractualCalendars'];
-  if (!Array.isArray(calendars) || calendars.length === 0 || !calendars.every((c) => c === 'GREGORIAN' || c === 'HIJRI') || !calendars.includes('GREGORIAN')) return bad('JURISDICTION_CALENDARS', 'contractualCalendars lists GREGORIAN and, where required, HIJRI');
+  if (
+    !Array.isArray(calendars) ||
+    calendars.length === 0 ||
+    !calendars.every((c) => c === 'GREGORIAN' || c === 'HIJRI') ||
+    !calendars.includes('GREGORIAN')
+  )
+    return bad('JURISDICTION_CALENDARS', 'contractualCalendars lists GREGORIAN and, where required, HIJRI');
   const regulator = raw['regulator'];
-  if (!isRecord(regulator) || !nonEmpty(regulator['code']) || !nonEmpty(regulator['nameEn']) || !nonEmpty(regulator['nameAr'])) return bad('JURISDICTION_REGULATOR', 'regulator has a code and both names');
+  if (
+    !isRecord(regulator) ||
+    !nonEmpty(regulator['code']) ||
+    !nonEmpty(regulator['nameEn']) ||
+    !nonEmpty(regulator['nameAr'])
+  )
+    return bad('JURISDICTION_REGULATOR', 'regulator has a code and both names');
   const rails = raw['railAdapters'];
-  if (!isRecord(rails) || !Object.values(rails).every((list) => Array.isArray(list) && list.every(nonEmpty))) return bad('JURISDICTION_RAILS', 'railAdapters maps each capability to a list of adapter codes');
-  if (!nonEmpty(raw['regulatoryDirectory']) || !/^[a-z]{2}$/.test(raw['regulatoryDirectory'])) return bad('JURISDICTION_REGULATORY_DIR', 'regulatoryDirectory is the two-letter folder under config/regulatory');
+  if (!isRecord(rails) || !Object.values(rails).every((list) => Array.isArray(list) && list.every(nonEmpty)))
+    return bad('JURISDICTION_RAILS', 'railAdapters maps each capability to a list of adapter codes');
+  if (!nonEmpty(raw['regulatoryDirectory']) || !/^[a-z]{2}$/.test(raw['regulatoryDirectory']))
+    return bad('JURISDICTION_REGULATORY_DIR', 'regulatoryDirectory is the two-letter folder under config/regulatory');
   const citations = raw['citations'];
-  if (!Array.isArray(citations) || !citations.every((c) => nonEmpty(c) && c.length >= 10)) return bad('JURISDICTION_CITATIONS', 'citations lists the sources of the profile’s regulatory statements');
+  if (!Array.isArray(citations) || !citations.every((c) => nonEmpty(c) && c.length >= 10))
+    return bad('JURISDICTION_CITATIONS', 'citations lists the sources of the profile’s regulatory statements');
   return ok({
     code: code as JurisdictionCode,
-    nameEn: raw['nameEn'], nameAr: raw['nameAr'],
+    nameEn: raw['nameEn'],
+    nameAr: raw['nameAr'],
     currency: raw['currency'] as CurrencyCode,
     timeZone: raw['timeZone'],
     contractualCalendars: calendars as Calendar[],
@@ -96,19 +114,40 @@ export interface TenantOnboarding {
   readonly window: 'ISLAMIC' | 'CONVENTIONAL' | 'BOTH';
 }
 
-export function parseTenantOnboarding(raw: unknown, profiles: Readonly<Record<JurisdictionCode, JurisdictionProfile>>): Result<TenantOnboarding> {
+export function parseTenantOnboarding(
+  raw: unknown,
+  profiles: Readonly<Record<JurisdictionCode, JurisdictionProfile>>,
+): Result<TenantOnboarding> {
   const bad = (reason: string, detail: string): Result<never> => reject('OP-DETERMINACY', reason, detail);
   if (!isRecord(raw)) return bad('ONBOARDING_MALFORMED', 'An onboarding record is an object');
-  if (!nonEmpty(raw['tenantCode']) || !/^[a-z][a-z0-9-]{1,40}$/.test(raw['tenantCode'])) return bad('ONBOARDING_TENANT_CODE', 'tenantCode is a lower-case slug');
-  if (!nonEmpty(raw['legalNameEn']) || !nonEmpty(raw['legalNameAr'])) return bad('ONBOARDING_LEGAL_NAME', 'legalNameEn and legalNameAr are required');
+  if (!nonEmpty(raw['tenantCode']) || !/^[a-z][a-z0-9-]{1,40}$/.test(raw['tenantCode']))
+    return bad('ONBOARDING_TENANT_CODE', 'tenantCode is a lower-case slug');
+  if (!nonEmpty(raw['legalNameEn']) || !nonEmpty(raw['legalNameAr']))
+    return bad('ONBOARDING_LEGAL_NAME', 'legalNameEn and legalNameAr are required');
   const jurisdiction = raw['jurisdiction'];
-  if (!JURISDICTION_CODES.includes(jurisdiction as JurisdictionCode)) return bad('ONBOARDING_JURISDICTION', 'jurisdiction is SA or AE');
-  if (!LICENCE_TYPES.includes(raw['licenceType'] as LicenceType)) return bad('ONBOARDING_LICENCE', 'licenceType is BANK, FINANCE_COMPANY, DEVELOPMENT_FUND or FINTECH');
+  if (!JURISDICTION_CODES.includes(jurisdiction as JurisdictionCode))
+    return bad('ONBOARDING_JURISDICTION', 'jurisdiction is SA or AE');
+  if (!LICENCE_TYPES.includes(raw['licenceType'] as LicenceType))
+    return bad('ONBOARDING_LICENCE', 'licenceType is BANK, FINANCE_COMPANY, DEVELOPMENT_FUND or FINTECH');
   const profile = profiles[jurisdiction as JurisdictionCode];
   if (raw['baseCurrency'] !== profile.currency) {
-    return reject('OP-DETERMINACY', 'ONBOARDING_CURRENCY_NOT_JURISDICTION', 'The base currency is the jurisdiction’s currency', { jurisdiction: String(jurisdiction), expected: profile.currency, given: String(raw['baseCurrency']) });
+    return reject(
+      'OP-DETERMINACY',
+      'ONBOARDING_CURRENCY_NOT_JURISDICTION',
+      'The base currency is the jurisdiction’s currency',
+      { jurisdiction: String(jurisdiction), expected: profile.currency, given: String(raw['baseCurrency']) },
+    );
   }
   const window = raw['window'];
-  if (window !== 'ISLAMIC' && window !== 'CONVENTIONAL' && window !== 'BOTH') return bad('ONBOARDING_WINDOW', 'window is ISLAMIC, CONVENTIONAL or BOTH');
-  return ok({ tenantCode: raw['tenantCode'], legalNameEn: raw['legalNameEn'], legalNameAr: raw['legalNameAr'], jurisdiction: jurisdiction as JurisdictionCode, licenceType: raw['licenceType'] as LicenceType, baseCurrency: profile.currency, window });
+  if (window !== 'ISLAMIC' && window !== 'CONVENTIONAL' && window !== 'BOTH')
+    return bad('ONBOARDING_WINDOW', 'window is ISLAMIC, CONVENTIONAL or BOTH');
+  return ok({
+    tenantCode: raw['tenantCode'],
+    legalNameEn: raw['legalNameEn'],
+    legalNameAr: raw['legalNameAr'],
+    jurisdiction: jurisdiction as JurisdictionCode,
+    licenceType: raw['licenceType'] as LicenceType,
+    baseCurrency: profile.currency,
+    window,
+  });
 }

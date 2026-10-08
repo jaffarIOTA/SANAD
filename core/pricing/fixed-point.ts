@@ -25,8 +25,14 @@ export function ln(y: bigint): bigint {
   if (y <= 0n) throw new RangeError('ln of non-positive');
   let k = 0n;
   let v = y;
-  while (v >= 2n * ONE) { v /= 2n; k += 1n; }
-  while (v < ONE / 2n) { v *= 2n; k -= 1n; }
+  while (v >= 2n * ONE) {
+    v /= 2n;
+    k += 1n;
+  }
+  while (v < ONE / 2n) {
+    v *= 2n;
+    k -= 1n;
+  }
   const z = div(v - ONE, v + ONE);
   const z2 = mul(z, z);
   let term = z;
@@ -45,7 +51,10 @@ export function exp(z: bigint): bigint {
   let halvings = 0n;
   let v = z;
   const limit = ONE / 8n;
-  while (v > limit || v < -limit) { v /= 2n; halvings += 1n; }
+  while (v > limit || v < -limit) {
+    v /= 2n;
+    halvings += 1n;
+  }
   let term = ONE;
   let sum = ONE;
   for (let n = 1n; n < 60n; n += 1n) {

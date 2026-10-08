@@ -1,11 +1,7 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "lib": [
-      "ES2023",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "preserve",
     "module": "ESNext",
     "moduleResolution": "Bundler",
@@ -18,41 +14,18 @@
       }
     ],
     "paths": {
-      "@sanad/core/*": [
-        "../../core/*"
-      ],
-      "@sanad/design/*": [
-        "../../packages/design/*"
-      ],
-      "@sanad/i18n/*": [
-        "../../packages/i18n/*"
-      ],
-      "@/*": [
-        "./src/*"
-      ],
-      "@sanad/products/*": [
-        "../../products/*"
-      ],
-      "@sanad/config/*": [
-        "../../config/*"
-      ],
-      "@sanad/origination/*": [
-        "../../services/origination/src/*"
-      ],
-      "@sanad/auth/*": [
-        "../../packages/auth/*"
-      ]
+      "@sanad/core/*": ["../../core/*"],
+      "@sanad/design/*": ["../../packages/design/*"],
+      "@sanad/i18n/*": ["../../packages/i18n/*"],
+      "@/*": ["./src/*"],
+      "@sanad/products/*": ["../../products/*"],
+      "@sanad/config/*": ["../../config/*"],
+      "@sanad/origination/*": ["../../services/origination/src/*"],
+      "@sanad/auth/*": ["../../packages/auth/*"]
     },
     "esModuleInterop": true,
     "baseUrl": "."
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "next-env.d.ts",
-    ".next/types/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "next-env.d.ts", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
 }

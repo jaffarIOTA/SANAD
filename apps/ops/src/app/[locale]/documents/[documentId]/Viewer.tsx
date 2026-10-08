@@ -9,7 +9,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-export function Viewer({ documentUrl, licenseKey, arabic }: { readonly documentUrl: string; readonly licenseKey?: string; readonly arabic: boolean }) {
+export function Viewer({
+  documentUrl,
+  licenseKey,
+  arabic,
+}: {
+  readonly documentUrl: string;
+  readonly licenseKey?: string;
+  readonly arabic: boolean;
+}) {
   const container = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [detail, setDetail] = useState('');
@@ -42,15 +50,31 @@ export function Viewer({ documentUrl, licenseKey, arabic }: { readonly documentU
         setDetail(error instanceof Error ? error.message.replace(/\s+/g, ' ').slice(0, 240) : 'unknown');
       }
     })();
-    return () => { unloaded = true; try { sdk?.unload(node); } catch { /* already gone */ } };
+    return () => {
+      unloaded = true;
+      try {
+        sdk?.unload(node);
+      } catch {
+        /* already gone */
+      }
+    };
   }, [documentUrl, licenseKey, arabic]);
 
   return (
     <div className="relative">
-      <div ref={container} className="h-[75vh] min-h-[480px] w-full overflow-hidden rounded-tile border border-line-strong bg-sunken" />
+      <div
+        ref={container}
+        className="h-[75vh] min-h-[480px] w-full overflow-hidden rounded-tile border border-line-strong bg-sunken"
+      />
       {state !== 'ready' ? (
         <p role="status" className="mt-3 text-[14px] text-ink-quiet">
-          {state === 'loading' ? (arabic ? 'جارٍ تحميل العارض…' : 'Loading the viewer…') : (arabic ? `تعذّر تحميل العارض: ${detail}` : `The viewer could not load: ${detail}`)}
+          {state === 'loading'
+            ? arabic
+              ? 'جارٍ تحميل العارض…'
+              : 'Loading the viewer…'
+            : arabic
+              ? `تعذّر تحميل العارض: ${detail}`
+              : `The viewer could not load: ${detail}`}
         </p>
       ) : null}
     </div>

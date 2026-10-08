@@ -22,13 +22,19 @@ const isUuid = (s: string): boolean => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-
 
 export async function loadMerchants(pool: Pool, tenantCode: string): Promise<readonly Merchant[]> {
   const tenant = await tenantUuidByCode(pool, tenantCode);
-  const { rows } = await pool.query<{ merchant: unknown }>('select merchant from core.merchant where tenant_id = $1::uuid order by sequence asc', [tenant]);
+  const { rows } = await pool.query<{ merchant: unknown }>(
+    'select merchant from core.merchant where tenant_id = $1::uuid order by sequence asc',
+    [tenant],
+  );
   return rows.map((r) => decodeJson(asText(r.merchant)) as Merchant);
 }
 
 export async function findMerchant(pool: Pool, tenantCode: string, merchantId: string): Promise<Merchant | undefined> {
   const tenant = await tenantUuidByCode(pool, tenantCode);
-  const { rows } = await pool.query<{ merchant: unknown }>('select merchant from core.merchant where tenant_id = $1::uuid and merchant_id = $2', [tenant, merchantId]);
+  const { rows } = await pool.query<{ merchant: unknown }>(
+    'select merchant from core.merchant where tenant_id = $1::uuid and merchant_id = $2',
+    [tenant, merchantId],
+  );
   const row = rows[0];
   return row === undefined ? undefined : (decodeJson(asText(row.merchant)) as Merchant);
 }
@@ -49,13 +55,24 @@ export async function saveMerchant(pool: Pool, tenantCode: string, change: Merch
   const client = await pool.connect();
   try {
     await client.query('begin');
-    const before = await client.query<{ status: string }>('select status from core.merchant where tenant_id = $1::uuid and merchant_id = $2 for update', [tenant, m.core.merchantId]);
+    const before = await client.query<{ status: string }>(
+      'select status from core.merchant where tenant_id = $1::uuid and merchant_id = $2 for update',
+      [tenant, m.core.merchantId],
+    );
     await client.query(
       `insert into core.merchant (tenant_id, merchant_id, commercial_registration, status, merchant, correlation_id, created_by)
        values ($1::uuid, $2, $3, $4, $5::jsonb, $6, $7)
        on conflict (tenant_id, merchant_id) do update
          set status = excluded.status, merchant = excluded.merchant, updated_at = now()`,
-      [tenant, m.core.merchantId, m.core.commercialRegistration, m.status, encodeJson(m), m.core.correlationId, change.actor],
+      [
+        tenant,
+        m.core.merchantId,
+        m.core.commercialRegistration,
+        m.status,
+        encodeJson(m),
+        m.core.correlationId,
+        change.actor,
+      ],
     );
     // The audit subject is a uuid; a merchant's id is text. The subject is derived from it, deterministically.
     await client.query(
@@ -80,10 +97,17 @@ export async function saveMerchant(pool: Pool, tenantCode: string, change: Merch
   }
 }
 
-export interface MerchantActivity { readonly state: string; readonly sessions: number }
+export interface MerchantActivity {
+  readonly state: string;
+  readonly sessions: number;
+}
 
 /** How a merchant's checkout sessions stand, by state. Counts only; the sessions themselves are the checkout API's. */
-export async function merchantActivity(pool: Pool, tenantCode: string, merchantId: string): Promise<readonly MerchantActivity[]> {
+export async function merchantActivity(
+  pool: Pool,
+  tenantCode: string,
+  merchantId: string,
+): Promise<readonly MerchantActivity[]> {
   const tenant = await tenantUuidByCode(pool, tenantCode);
   const { rows } = await pool.query<{ state: string; sessions: string }>(
     'select state, count(*)::text as sessions from core.checkout_session where tenant_id = $1::uuid and merchant_id = $2 group by state order by state',

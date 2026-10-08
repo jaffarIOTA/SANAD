@@ -5,12 +5,36 @@ import { Pool, type PoolConfig } from 'pg';
 import type { OutboxEvent } from '../../../core/outbox/outbox.ts';
 import type { OutboxRow, OutboxStore } from '../../../core/outbox/store.ts';
 
-interface Row { readonly tenant_id: string; readonly event_id: string; readonly kind: OutboxEvent['kind']; readonly subject_ref: string; readonly idempotency_key: string; readonly payload: Record<string, string>; readonly state: OutboxRow['state']; readonly attempts: number; readonly next_attempt_at: string; readonly last_error: string | null; readonly delivery_ref: string | null; readonly correlation_id: string }
+interface Row {
+  readonly tenant_id: string;
+  readonly event_id: string;
+  readonly kind: OutboxEvent['kind'];
+  readonly subject_ref: string;
+  readonly idempotency_key: string;
+  readonly payload: Record<string, string>;
+  readonly state: OutboxRow['state'];
+  readonly attempts: number;
+  readonly next_attempt_at: string;
+  readonly last_error: string | null;
+  readonly delivery_ref: string | null;
+  readonly correlation_id: string;
+}
 
 const toRow = (r: Row): OutboxRow => ({
-  event: { eventId: r.event_id, tenantId: r.tenant_id, kind: r.kind, subjectRef: r.subject_ref, idempotencyKey: r.idempotency_key, payload: r.payload, correlationId: r.correlation_id },
-  state: r.state, attempts: r.attempts, nextAttemptAtEpochSeconds: BigInt(Math.floor(new Date(r.next_attempt_at).getTime() / 1000)),
-  ...(r.last_error === null ? {} : { lastError: r.last_error }), ...(r.delivery_ref === null ? {} : { deliveryRef: r.delivery_ref }),
+  event: {
+    eventId: r.event_id,
+    tenantId: r.tenant_id,
+    kind: r.kind,
+    subjectRef: r.subject_ref,
+    idempotencyKey: r.idempotency_key,
+    payload: r.payload,
+    correlationId: r.correlation_id,
+  },
+  state: r.state,
+  attempts: r.attempts,
+  nextAttemptAtEpochSeconds: BigInt(Math.floor(new Date(r.next_attempt_at).getTime() / 1000)),
+  ...(r.last_error === null ? {} : { lastError: r.last_error }),
+  ...(r.delivery_ref === null ? {} : { deliveryRef: r.delivery_ref }),
 });
 
 export function postgresOutboxStore(config: PoolConfig | Pool): OutboxStore & { close(): Promise<void> } {
@@ -38,10 +62,30 @@ export function postgresOutboxStore(config: PoolConfig | Pool): OutboxStore & { 
       );
       return rows.map(toRow);
     },
-    async markDelivered(eventId, deliveryRef) { await pool.query(`update core.outbox_event set state = 'DELIVERED', attempts = attempts + 1, delivery_ref = $2, leased_until = null where event_id = $1`, [eventId, deliveryRef]); },
-    async markRetry(eventId, next, error) { await pool.query(`update core.outbox_event set attempts = attempts + 1, next_attempt_at = to_timestamp($2), last_error = $3, leased_until = null where event_id = $1`, [eventId, Number(next), error]); },
-    async markDead(eventId, error) { await pool.query(`update core.outbox_event set state = 'DEAD', attempts = attempts + 1, last_error = $2, leased_until = null where event_id = $1`, [eventId, error]); },
-    async rows() { const { rows } = await pool.query<Row>(`select * from core.outbox_event order by created_at`); return rows.map(toRow); },
-    async close() { await pool.end(); },
+    async markDelivered(eventId, deliveryRef) {
+      await pool.query(
+        `update core.outbox_event set state = 'DELIVERED', attempts = attempts + 1, delivery_ref = $2, leased_until = null where event_id = $1`,
+        [eventId, deliveryRef],
+      );
+    },
+    async markRetry(eventId, next, error) {
+      await pool.query(
+        `update core.outbox_event set attempts = attempts + 1, next_attempt_at = to_timestamp($2), last_error = $3, leased_until = null where event_id = $1`,
+        [eventId, Number(next), error],
+      );
+    },
+    async markDead(eventId, error) {
+      await pool.query(
+        `update core.outbox_event set state = 'DEAD', attempts = attempts + 1, last_error = $2, leased_until = null where event_id = $1`,
+        [eventId, error],
+      );
+    },
+    async rows() {
+      const { rows } = await pool.query<Row>(`select * from core.outbox_event order by created_at`);
+      return rows.map(toRow);
+    },
+    async close() {
+      await pool.end();
+    },
   };
 }

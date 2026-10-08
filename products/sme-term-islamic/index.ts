@@ -47,7 +47,10 @@ export const smeTermIslamic: ProductModule<SmeIslamicTerms, SmeIslamicQuote, Sme
       applicantRef: context.applicantRef,
       quote,
       brokerRef: terms.brokerRef,
-      agency: { permitted: terms.agencyPermitted, ...(context.agencyRef === undefined ? {} : { agencyRef: context.agencyRef }) },
+      agency: {
+        permitted: terms.agencyPermitted,
+        ...(context.agencyRef === undefined ? {} : { agencyRef: context.agencyRef }),
+      },
       bureauEnquiryRef: context.bureauEnquiryRef,
       consentId: context.consentId,
       businessRegistryRef: context.businessRegistryRef,

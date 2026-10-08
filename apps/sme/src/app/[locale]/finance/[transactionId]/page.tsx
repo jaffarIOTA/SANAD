@@ -53,22 +53,14 @@ export default async function OfferPage({
       </div>
 
       <Card>
-        <Money
-          pricing={offer.pricing}
-          locale={locale}
-          labels={{ cost: t.cost, profit: t.profit, total: t.total }}
-        />
+        <Money pricing={offer.pricing} locale={locale} labels={{ cost: t.cost, profit: t.profit, total: t.total }} />
         <p className="mt-3 text-xs text-ink-quiet">{t.disclosureNote}</p>
       </Card>
 
       <Card>
         <p className="text-sm text-ink-quiet">{t.maturityDate}</p>
         <div className="mt-1">
-          <DualDate
-            gregorian={offer.maturityGregorian}
-            hijri={offer.maturityHijri}
-            locale={locale}
-          />
+          <DualDate gregorian={offer.maturityGregorian} hijri={offer.maturityHijri} locale={locale} />
         </div>
       </Card>
 

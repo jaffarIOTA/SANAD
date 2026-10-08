@@ -5,7 +5,11 @@
   "currency": "AED",
   "timeZone": "Asia/Dubai",
   "contractualCalendars": ["GREGORIAN"],
-  "regulator": { "code": "CBUAE", "nameEn": "Central Bank of the UAE", "nameAr": "مصرف الإمارات العربية المتحدة المركزي" },
+  "regulator": {
+    "code": "CBUAE",
+    "nameEn": "Central Bank of the UAE",
+    "nameAr": "مصرف الإمارات العربية المتحدة المركزي"
+  },
   "railAdapters": {
     "CORE_BANKING": ["TUUM"],
     "DOCUMENT_PLATFORM": ["NUTRIENT"],

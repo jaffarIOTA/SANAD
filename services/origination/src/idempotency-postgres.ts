@@ -35,7 +35,9 @@ export function postgresIdempotencyStore(config: PoolConfig | Pool): Idempotency
       if (row === undefined) return { kind: 'IN_FLIGHT' };
       if (row.fingerprint !== fingerprint) return { kind: 'CONFLICT' };
       if (row.status !== 'COMPLETE' || row.response === null) return { kind: 'IN_FLIGHT' };
-      const response = decodeJson(typeof row.response === 'string' ? row.response : JSON.stringify(row.response)) as StoredResponse;
+      const response = decodeJson(
+        typeof row.response === 'string' ? row.response : JSON.stringify(row.response),
+      ) as StoredResponse;
       return { kind: 'REPLAY', response };
     },
 

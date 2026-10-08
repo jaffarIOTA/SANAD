@@ -79,7 +79,10 @@ export async function runMurabahaSequence(fx: MurabahaEffects, input: MurabahaSe
 
   fx.progress('VALIDATING');
   const opened = await fx.validateAndReserve();
-  if (opened === 'REJECTED') { fx.progress('REJECTED'); return 'REJECTED'; }
+  if (opened === 'REJECTED') {
+    fx.progress('REJECTED');
+    return 'REJECTED';
+  }
 
   fx.progress('WAAD');
   await fx.executeLeg('WAAD');
@@ -129,7 +132,10 @@ async function passGate(fx: MurabahaEffects, gate: GateId, maxChecks: number): P
     const next = report.next;
     if (report.allSatisfied || next === undefined || next.gateId !== gate) {
       if (report.allSatisfied || (next !== undefined && isLater(next.gateId, gate))) return;
-      throw new SequenceRefusal('GATE_OUT_OF_SEQUENCE', `Expected to be at ${gate}; the domain reports ${String(next?.gateId)}`);
+      throw new SequenceRefusal(
+        'GATE_OUT_OF_SEQUENCE',
+        `Expected to be at ${gate}; the domain reports ${String(next?.gateId)}`,
+      );
     }
     fx.progress(`WAITING_${gate}`);
     if (next.kind === 'EVIDENCE') {
@@ -147,7 +153,10 @@ const isLater = (a: GateId, b: GateId): boolean => ORDER.indexOf(a) > ORDER.inde
 
 /** A refusal the orchestration itself raises. Never retried: it is a fact about the sequence, not about a rail. */
 export class SequenceRefusal extends Error {
-  constructor(readonly reason: string, message: string) {
+  constructor(
+    readonly reason: string,
+    message: string,
+  ) {
     super(message);
     this.name = 'SequenceRefusal';
   }

@@ -20,7 +20,11 @@ import { sharedPool, tenantUuidByCode } from '@sanad/origination/credentials.ts'
 
 import type { Acceptance, StoredOffer } from './store.ts';
 
-export interface IdempotencyRecord { readonly merchantId: string; readonly idempotencyKey: string; readonly sessionId: string }
+export interface IdempotencyRecord {
+  readonly merchantId: string;
+  readonly idempotencyKey: string;
+  readonly sessionId: string;
+}
 
 export interface ConsumerBook {
   readonly offers: readonly StoredOffer[];
@@ -43,24 +47,55 @@ const asText = (v: unknown): string => (typeof v === 'string' ? v : JSON.stringi
 
 export async function loadConsumerBook(pool: Pool, tenantCode: string): Promise<ConsumerBook> {
   const tenant = await tenantUuidByCode(pool, tenantCode);
-  const offers = await pool.query<{ body: unknown }>('select body from core.offer where tenant_id = $1::uuid order by sequence asc', [tenant]);
-  const acceptances = await pool.query<{ acceptance_id: string; offer_id: string; disclosure_version: string; identity_assertion_id: string; locale_shown: 'ar-SA' | 'en-SA'; accepted_at_epoch: string; accepted_tsa_digest: string; accepted_tsa_authority: string }>(
+  const offers = await pool.query<{ body: unknown }>(
+    'select body from core.offer where tenant_id = $1::uuid order by sequence asc',
+    [tenant],
+  );
+  const acceptances = await pool.query<{
+    acceptance_id: string;
+    offer_id: string;
+    disclosure_version: string;
+    identity_assertion_id: string;
+    locale_shown: 'ar-SA' | 'en-SA';
+    accepted_at_epoch: string;
+    accepted_tsa_digest: string;
+    accepted_tsa_authority: string;
+  }>(
     `select acceptance_id, offer_id, disclosure_version, identity_assertion_id, locale_shown,
             accepted_at_epoch::text, accepted_tsa_digest, accepted_tsa_authority
        from core.offer_acceptance where tenant_id = $1::uuid order by created_at asc`,
     [tenant],
   );
-  const sessions = await pool.query<{ session: unknown }>('select session from core.checkout_session where tenant_id = $1::uuid order by sequence asc', [tenant]);
-  const idempotency = await pool.query<{ merchant_id: string; idempotency_key: string; session_id: string }>('select merchant_id, idempotency_key, session_id from core.checkout_idempotency where tenant_id = $1::uuid', [tenant]);
+  const sessions = await pool.query<{ session: unknown }>(
+    'select session from core.checkout_session where tenant_id = $1::uuid order by sequence asc',
+    [tenant],
+  );
+  const idempotency = await pool.query<{ merchant_id: string; idempotency_key: string; session_id: string }>(
+    'select merchant_id, idempotency_key, session_id from core.checkout_idempotency where tenant_id = $1::uuid',
+    [tenant],
+  );
   return {
     offers: offers.rows.map((r) => decodeJson(asText(r.body)) as StoredOffer),
     acceptances: acceptances.rows.map((r) => ({
-      acceptanceId: r.acceptance_id, offerId: r.offer_id, disclosureVersion: r.disclosure_version, identityAssertionId: r.identity_assertion_id, localeShown: r.locale_shown,
+      acceptanceId: r.acceptance_id,
+      offerId: r.offer_id,
+      disclosureVersion: r.disclosure_version,
+      identityAssertionId: r.identity_assertion_id,
+      localeShown: r.locale_shown,
       // Rebuilt through the one function allowed to establish an attested instant.
-      acceptedAt: tsaInstant({ verified: true, genTimeEpochSeconds: BigInt(r.accepted_at_epoch), tokenDigest: r.accepted_tsa_digest, authorityId: r.accepted_tsa_authority }),
+      acceptedAt: tsaInstant({
+        verified: true,
+        genTimeEpochSeconds: BigInt(r.accepted_at_epoch),
+        tokenDigest: r.accepted_tsa_digest,
+        authorityId: r.accepted_tsa_authority,
+      }),
     })),
     sessions: sessions.rows.map((r) => decodeJson(asText(r.session)) as CheckoutSession),
-    idempotency: idempotency.rows.map((r) => ({ merchantId: r.merchant_id, idempotencyKey: r.idempotency_key, sessionId: r.session_id })),
+    idempotency: idempotency.rows.map((r) => ({
+      merchantId: r.merchant_id,
+      idempotencyKey: r.idempotency_key,
+      sessionId: r.session_id,
+    })),
   };
 }
 
@@ -84,7 +119,8 @@ async function inTransaction(pool: Pool, work: (client: PoolClient) => Promise<v
  * refer to those. Either the whole change is durable or none of it is.
  */
 export async function saveConsumerBook(pool: Pool, tenantCode: string, changed: ConsumerBook): Promise<void> {
-  if (changed.offers.length + changed.acceptances.length + changed.sessions.length + changed.idempotency.length === 0) return;
+  if (changed.offers.length + changed.acceptances.length + changed.sessions.length + changed.idempotency.length === 0)
+    return;
   const tenant = await tenantUuidByCode(pool, tenantCode);
   await inTransaction(pool, async (client) => {
     for (const o of changed.offers) {
@@ -92,7 +128,17 @@ export async function saveConsumerBook(pool: Pool, tenantCode: string, changed: 
         `insert into core.offer (tenant_id, offer_id, applicant_ref, product_code, body, disclosure_version, expires_at_epoch, correlation_id, created_by)
          values ($1::uuid, $2, $3, $4, $5::jsonb, $6, $7::bigint, $8, $9)
          on conflict (tenant_id, offer_id) do nothing`,
-        [tenant, o.offerId, o.applicantRef, o.productCode, encodeJson(o), o.offer.disclosureVersion, o.expiresAtEpochSeconds.toString(), o.offerId, o.applicantRef],
+        [
+          tenant,
+          o.offerId,
+          o.applicantRef,
+          o.productCode,
+          encodeJson(o),
+          o.offer.disclosureVersion,
+          o.expiresAtEpochSeconds.toString(),
+          o.offerId,
+          o.applicantRef,
+        ],
       );
     }
     for (const a of changed.acceptances) {
@@ -103,7 +149,19 @@ export async function saveConsumerBook(pool: Pool, tenantCode: string, changed: 
             accepted_at_epoch, accepted_tsa_digest, accepted_tsa_authority, correlation_id, created_by)
          values ($1::uuid, $2, $3, $4, $5, $6, $7::bigint, $8, $9, $10, $11)
          on conflict (tenant_id, acceptance_id) do nothing`,
-        [tenant, a.acceptanceId, a.offerId, a.disclosureVersion, a.identityAssertionId, a.localeShown, a.acceptedAt.epochSeconds.toString(), a.acceptedAt.tokenDigest, a.acceptedAt.authorityId, a.acceptanceId, a.identityAssertionId],
+        [
+          tenant,
+          a.acceptanceId,
+          a.offerId,
+          a.disclosureVersion,
+          a.identityAssertionId,
+          a.localeShown,
+          a.acceptedAt.epochSeconds.toString(),
+          a.acceptedAt.tokenDigest,
+          a.acceptedAt.authorityId,
+          a.acceptanceId,
+          a.identityAssertionId,
+        ],
       );
     }
     for (const s of changed.sessions) {

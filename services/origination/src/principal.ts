@@ -66,8 +66,7 @@ export interface CredentialRegistry {
   findByTokenDigest(digest: string): PartnerPrincipal | undefined;
 }
 
-const digestOf = (token: string): string =>
-  createHash('sha256').update(token, 'utf8').digest('hex');
+const digestOf = (token: string): string => createHash('sha256').update(token, 'utf8').digest('hex');
 
 /**
  * Development registry.
@@ -79,10 +78,7 @@ const digestOf = (token: string): string =>
 export function developmentRegistry(env: NodeJS.ProcessEnv): CredentialRegistry {
   const entries = new Map<string, PartnerPrincipal>();
 
-  const add = (
-    token: string | undefined,
-    principal: PartnerPrincipal,
-  ): void => {
+  const add = (token: string | undefined, principal: PartnerPrincipal): void => {
     if (token === undefined || token.trim().length === 0) return;
     entries.set(digestOf(token), principal);
   };
@@ -149,10 +145,7 @@ export type AuthOutcome =
  * Deliberately takes the header rather than the request, so nothing in this
  * function can reach for a gateway-injected value by accident.
  */
-export function authenticate(
-  authorization: string | undefined,
-  registry: CredentialRegistry,
-): AuthOutcome {
+export function authenticate(authorization: string | undefined, registry: CredentialRegistry): AuthOutcome {
   if (authorization === undefined) return { ok: false, reason: 'CREDENTIAL_MISSING' };
 
   const match = /^Bearer\s+(\S+)$/i.exec(authorization.trim());
@@ -164,5 +157,4 @@ export function authenticate(
   return { ok: true, principal };
 }
 
-export const hasScope = (principal: PartnerPrincipal, scope: Scope): boolean =>
-  principal.scopes.includes(scope);
+export const hasScope = (principal: PartnerPrincipal, scope: Scope): boolean => principal.scopes.includes(scope);

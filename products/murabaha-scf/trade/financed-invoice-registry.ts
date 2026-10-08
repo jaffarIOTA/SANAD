@@ -48,10 +48,7 @@ export interface FinancedInvoiceRegistryPort {
    */
   register(record: FinancedInvoiceRecord): Promise<Result<{ readonly registryId: string }>>;
 
-  lookup(
-    tenantId: string,
-    invoiceUuid: string,
-  ): Promise<{ readonly transactionId: string } | undefined>;
+  lookup(tenantId: string, invoiceUuid: string): Promise<{ readonly transactionId: string } | undefined>;
 }
 
 /**

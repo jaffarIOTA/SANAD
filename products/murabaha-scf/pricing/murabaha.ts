@@ -56,16 +56,11 @@ export function priceMurabaha(costAmount: Money, profitAmount: Money): Result<Mu
  */
 export function verifyPricingIntegrity(p: MurabahaPricing): Result<true> {
   if (!equals(p.salePriceAmount, add(p.costAmount, p.profitAmount))) {
-    return reject(
-      'SH-01',
-      'SALE_PRICE_NOT_COST_PLUS_PROFIT',
-      'The total is not the sum of cost and profit',
-      {
-        cost: String(p.costAmount.minorUnits),
-        profit: String(p.profitAmount.minorUnits),
-        total: String(p.salePriceAmount.minorUnits),
-      },
-    );
+    return reject('SH-01', 'SALE_PRICE_NOT_COST_PLUS_PROFIT', 'The total is not the sum of cost and profit', {
+      cost: String(p.costAmount.minorUnits),
+      profit: String(p.profitAmount.minorUnits),
+      total: String(p.salePriceAmount.minorUnits),
+    });
   }
   return ok(true);
 }

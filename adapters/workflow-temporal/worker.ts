@@ -29,7 +29,10 @@ export function retryFor(policy: OriginationPolicy): RetryInput {
   return { maxAttempts: policy.servicingRetry.maxAttempts, backoffSeconds: policy.servicingRetry.backoffSeconds };
 }
 
-export async function startSequencingWorker(config: WorkerConfig, ports: { readonly murabaha: SequencingPorts; readonly tawarruq: TawarruqPorts }): Promise<Worker> {
+export async function startSequencingWorker(
+  config: WorkerConfig,
+  ports: { readonly murabaha: SequencingPorts; readonly tawarruq: TawarruqPorts },
+): Promise<Worker> {
   const connection = await NativeConnection.connect({ address: config.address });
   const worker = await Worker.create({
     connection,

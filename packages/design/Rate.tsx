@@ -39,7 +39,10 @@ export function Rate({ rate, locale, numerals, label }: RateProps): ReactElement
     <span className="inline-flex items-baseline gap-1" data-rate-basis={rate.basis} data-rate-period={rate.period}>
       <span className="text-sm text-ink-quiet">{label}</span>
       <span className="font-semibold text-ink tabular-nums" data-testid="rate-value">
-        <bdi>{formatBasisPoints(rate.bp, system)}{percent}</bdi>
+        <bdi>
+          {formatBasisPoints(rate.bp, system)}
+          {percent}
+        </bdi>
       </span>
     </span>
   );

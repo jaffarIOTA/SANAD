@@ -15,12 +15,7 @@
 import { type Result, ok, reject } from '../kernel/result.ts';
 
 export type OutboxKind =
-  | 'PAYMENT_DISBURSE'
-  | 'PAYMENT_COLLECT'
-  | 'BUREAU_REPORT'
-  | 'PARTNER_CALLBACK'
-  | 'NOTIFICATION'
-  | 'BILL_PRESENT';
+  'PAYMENT_DISBURSE' | 'PAYMENT_COLLECT' | 'BUREAU_REPORT' | 'PARTNER_CALLBACK' | 'NOTIFICATION' | 'BILL_PRESENT';
 
 export interface OutboxEvent {
   readonly eventId: string;
@@ -43,11 +38,19 @@ export function enqueue(outbox: Outbox, event: OutboxEvent): Result<Outbox> {
   if (event.idempotencyKey.trim().length === 0) {
     return reject('OP-DETERMINACY', 'SIDE_EFFECT_WITHOUT_KEY', 'Every external side effect carries an idempotency key');
   }
-  const clash = outbox.events.find((e) => e.tenantId === event.tenantId && e.kind === event.kind && e.idempotencyKey === event.idempotencyKey);
+  const clash = outbox.events.find(
+    (e) => e.tenantId === event.tenantId && e.kind === event.kind && e.idempotencyKey === event.idempotencyKey,
+  );
   if (clash !== undefined) {
-    return reject('OP-DETERMINACY', 'DUPLICATE_SIDE_EFFECT', 'An effect with this idempotency key is already queued; a second would be a duplicate', { kind: event.kind, idempotencyKey: event.idempotencyKey });
+    return reject(
+      'OP-DETERMINACY',
+      'DUPLICATE_SIDE_EFFECT',
+      'An effect with this idempotency key is already queued; a second would be a duplicate',
+      { kind: event.kind, idempotencyKey: event.idempotencyKey },
+    );
   }
   return ok({ events: [...outbox.events, event] });
 }
 
-export const eventsOfKind = (outbox: Outbox, kind: OutboxKind): readonly OutboxEvent[] => outbox.events.filter((e) => e.kind === kind);
+export const eventsOfKind = (outbox: Outbox, kind: OutboxKind): readonly OutboxEvent[] =>
+  outbox.events.filter((e) => e.kind === kind);

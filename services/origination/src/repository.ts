@@ -72,9 +72,7 @@ export function inMemoryRequestRepository(): RequestRepository {
 
     find(tenantId, partnerId, requestId): Promise<StoredRequest | undefined> {
       const record = records.get(requestId);
-      return Promise.resolve(
-        record !== undefined && scoped(record, tenantId, partnerId) ? record : undefined,
-      );
+      return Promise.resolve(record !== undefined && scoped(record, tenantId, partnerId) ? record : undefined);
     },
 
     list({ tenantId, partnerId, states, cursor, limit }): Promise<Page> {

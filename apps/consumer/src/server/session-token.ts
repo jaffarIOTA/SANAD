@@ -6,7 +6,13 @@
  * never extended by activity.
  */
 
-import { type SealKey, deriveSealKey, ephemeralMasterSecret as ephemeral, open, seal } from '@sanad/auth/sealed-token.ts';
+import {
+  type SealKey,
+  deriveSealKey,
+  ephemeralMasterSecret as ephemeral,
+  open,
+  seal,
+} from '@sanad/auth/sealed-token.ts';
 
 export interface ConsumerSession {
   readonly applicantRef: string;
@@ -40,15 +46,33 @@ export interface IssueParams {
 export function issueSession(p: IssueParams): ConsumerSession {
   const lifetime = p.lifetimeSeconds ?? SESSION_LIFETIME_SECONDS;
   if (lifetime <= 0n || lifetime > SESSION_LIFETIME_SECONDS) throw new Error('session lifetime out of range');
-  return { applicantRef: p.applicantRef, identityAssertionId: p.identityAssertionId, identityRef: p.identityRef, authenticatedAtEpochSeconds: p.authenticatedAtEpochSeconds, expiresAtEpochSeconds: p.authenticatedAtEpochSeconds + lifetime };
+  return {
+    applicantRef: p.applicantRef,
+    identityAssertionId: p.identityAssertionId,
+    identityRef: p.identityRef,
+    authenticatedAtEpochSeconds: p.authenticatedAtEpochSeconds,
+    expiresAtEpochSeconds: p.authenticatedAtEpochSeconds + lifetime,
+  };
 }
 
-interface Payload { readonly a: string; readonly s: string; readonly i: string }
+interface Payload {
+  readonly a: string;
+  readonly s: string;
+  readonly i: string;
+}
 const isRef = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= 200;
-const isPayload = (p: Readonly<Record<string, unknown>>): p is Payload & Record<string, string> => isRef(p['a']) && isRef(p['s']) && isRef(p['i']);
+const isPayload = (p: Readonly<Record<string, unknown>>): p is Payload & Record<string, string> =>
+  isRef(p['a']) && isRef(p['s']) && isRef(p['i']);
 
 export function sealSession(session: ConsumerSession, key: SessionKey): string {
-  return seal({ payload: { a: session.applicantRef, s: session.identityAssertionId, i: session.identityRef }, issuedAtEpochSeconds: session.authenticatedAtEpochSeconds, expiresAtEpochSeconds: session.expiresAtEpochSeconds }, key);
+  return seal(
+    {
+      payload: { a: session.applicantRef, s: session.identityAssertionId, i: session.identityRef },
+      issuedAtEpochSeconds: session.authenticatedAtEpochSeconds,
+      expiresAtEpochSeconds: session.expiresAtEpochSeconds,
+    },
+    key,
+  );
 }
 
 export type OpenOutcome =
@@ -60,5 +84,14 @@ export function openSession(token: string, key: SessionKey, nowEpochSeconds: big
   const opened = open(token, key, nowEpochSeconds, SESSION_LIFETIME_SECONDS, isPayload);
   if (opened.kind !== 'VALID') return opened;
   const { payload: p, issuedAtEpochSeconds, expiresAtEpochSeconds } = opened.value;
-  return { kind: 'VALID', session: { applicantRef: p.a, identityAssertionId: p.s, identityRef: p.i, authenticatedAtEpochSeconds: issuedAtEpochSeconds, expiresAtEpochSeconds } };
+  return {
+    kind: 'VALID',
+    session: {
+      applicantRef: p.a,
+      identityAssertionId: p.s,
+      identityRef: p.i,
+      authenticatedAtEpochSeconds: issuedAtEpochSeconds,
+      expiresAtEpochSeconds,
+    },
+  };
 }

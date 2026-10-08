@@ -44,17 +44,8 @@ import { type TsaInstant, tsaInstant } from '@sanad/core/time/tsa.ts';
 import { validatorFor, type Validator } from './contract.ts';
 import { statusCodeFor, type HealthService } from './health.ts';
 import { fromRejection, problem, type Problem } from './problem.ts';
-import {
-  fingerprint,
-  type IdempotencyStore,
-  type StoredResponse,
-} from './idempotency.ts';
-import {
-  authenticate,
-  hasScope,
-  type CredentialRegistry,
-  type PartnerPrincipal,
-} from './principal.ts';
+import { fingerprint, type IdempotencyStore, type StoredResponse } from './idempotency.ts';
+import { authenticate, hasScope, type CredentialRegistry, type PartnerPrincipal } from './principal.ts';
 import { eligibilityToWire, toWire, type EligibilityRequestBody, type RaiseRequestBody } from './representation.ts';
 import type { RequestRepository, StoredRequest } from './repository.ts';
 
@@ -215,8 +206,7 @@ export function createService(deps: ServiceDependencies): DrainableServer {
 
   async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const supplied = request.headers['x-correlation-id'];
-    const correlationId =
-      typeof supplied === 'string' && /^[0-9a-f-]{36}$/i.test(supplied) ? supplied : randomUUID();
+    const correlationId = typeof supplied === 'string' && /^[0-9a-f-]{36}$/i.test(supplied) ? supplied : randomUUID();
 
     const url = new URL(request.url ?? '/', 'http://service.invalid');
     const method = (request.method ?? 'GET').toUpperCase();
@@ -256,9 +246,7 @@ export function createService(deps: ServiceDependencies): DrainableServer {
     // 2. Authenticate. Tenant, channel and partner all come from here — never
     //    from the body, never from a gateway header.
     const auth = authenticate(
-      typeof request.headers.authorization === 'string'
-        ? request.headers.authorization
-        : undefined,
+      typeof request.headers.authorization === 'string' ? request.headers.authorization : undefined,
       deps.credentials,
     );
     if (!auth.ok) {
@@ -460,10 +448,7 @@ export function createService(deps: ServiceDependencies): DrainableServer {
               reservation.kind === 'CONFLICT'
                 ? 'This Idempotency-Key has already been used with a different request body.'
                 : 'A request with this Idempotency-Key is still being processed.',
-            reason:
-              reservation.kind === 'CONFLICT'
-                ? 'IDEMPOTENCY_KEY_REUSED'
-                : 'IDEMPOTENCY_KEY_IN_FLIGHT',
+            reason: reservation.kind === 'CONFLICT' ? 'IDEMPOTENCY_KEY_REUSED' : 'IDEMPOTENCY_KEY_IN_FLIGHT',
             correlationId,
           }),
         ),
@@ -509,11 +494,7 @@ export function createService(deps: ServiceDependencies): DrainableServer {
     send(response, reply, correlationId);
   }
 
-  async function complete(
-    principal: PartnerPrincipal,
-    key: string,
-    reply: Reply,
-  ): Promise<void> {
+  async function complete(principal: PartnerPrincipal, key: string, reply: Reply): Promise<void> {
     const stored: StoredResponse = { status: reply.status, body: reply.body };
     await deps.idempotency.complete({
       tenantId: principal.tenantId,
@@ -525,11 +506,7 @@ export function createService(deps: ServiceDependencies): DrainableServer {
 
   // -- Operations ----------------------------------------------------------
 
-  async function raiseHandler(
-    body: unknown,
-    principal: PartnerPrincipal,
-    correlationId: string,
-  ): Promise<Reply> {
+  async function raiseHandler(body: unknown, principal: PartnerPrincipal, correlationId: string): Promise<Reply> {
     // 6. Validate against the published contract, not against a local copy of
     //    what we remember it saying.
     const failures = validateRaise(body);
@@ -547,9 +524,7 @@ export function createService(deps: ServiceDependencies): DrainableServer {
             aggregatorId: principal.partnerId,
             credentialRef: principal.credentialRef,
             merchantMandateRef:
-              payload.initiator.kind === 'AGGREGATOR_ON_BEHALF'
-                ? payload.initiator.merchantMandateRef
-                : '',
+              payload.initiator.kind === 'AGGREGATOR_ON_BEHALF' ? payload.initiator.merchantMandateRef : '',
           }
         : {
             kind: 'PARTNER_SYSTEM',
@@ -606,9 +581,7 @@ export function createService(deps: ServiceDependencies): DrainableServer {
       tenantId: principal.tenantId,
       partnerId: principal.partnerId,
       request: submitted.value,
-      ...(payload.partnerReference === undefined
-        ? {}
-        : { partnerReference: payload.partnerReference }),
+      ...(payload.partnerReference === undefined ? {} : { partnerReference: payload.partnerReference }),
       sequence,
     };
     await deps.repository.save(record);
@@ -623,11 +596,7 @@ export function createService(deps: ServiceDependencies): DrainableServer {
    * no snapshot row. The only state it touches is the idempotency store, so
    * a partner retrying the same question gets the same answer.
    */
-  async function eligibilityHandler(
-    body: unknown,
-    principal: PartnerPrincipal,
-    correlationId: string,
-  ): Promise<Reply> {
+  async function eligibilityHandler(body: unknown, principal: PartnerPrincipal, correlationId: string): Promise<Reply> {
     const failures = validateEligibility(body);
     if (failures.length > 0) return malformed(failures, correlationId);
     if (deps.snapshots === undefined || deps.creditPolicies === undefined) {
@@ -662,16 +631,8 @@ export function createService(deps: ServiceDependencies): DrainableServer {
     return ok(200, eligibilityToWire(outcome.value));
   }
 
-  async function getHandler(
-    requestId: string,
-    principal: PartnerPrincipal,
-    correlationId: string,
-  ): Promise<Reply> {
-    const record = await deps.repository.find(
-      principal.tenantId,
-      principal.partnerId,
-      requestId,
-    );
+  async function getHandler(requestId: string, principal: PartnerPrincipal, correlationId: string): Promise<Reply> {
+    const record = await deps.repository.find(principal.tenantId, principal.partnerId, requestId);
     if (record === undefined) return notFound(correlationId, 'REQUEST_NOT_FOUND');
     return ok(200, toWire(record.request, record.partnerReference));
   }
@@ -704,17 +665,10 @@ export function createService(deps: ServiceDependencies): DrainableServer {
   ): Promise<Reply> {
     const reason = (body as { reason?: unknown } | null)?.reason;
     if (typeof reason !== 'string' || reason.trim().length === 0 || reason.length > 500) {
-      return malformed(
-        [{ path: '/reason', message: "Missing required property 'reason'." }],
-        correlationId,
-      );
+      return malformed([{ path: '/reason', message: "Missing required property 'reason'." }], correlationId);
     }
 
-    const record = await deps.repository.find(
-      principal.tenantId,
-      principal.partnerId,
-      requestId,
-    );
+    const record = await deps.repository.find(principal.tenantId, principal.partnerId, requestId);
     if (record === undefined) return notFound(correlationId, 'REQUEST_NOT_FOUND');
 
     const current = record.request;
@@ -725,11 +679,7 @@ export function createService(deps: ServiceDependencies): DrainableServer {
       return ok(200, toWire(current, record.partnerReference));
     }
 
-    if (
-      current.state === 'APPROVED' ||
-      current.state === 'REJECTED' ||
-      current.state === 'EXPIRED'
-    ) {
+    if (current.state === 'APPROVED' || current.state === 'REJECTED' || current.state === 'EXPIRED') {
       return fail(
         problem({
           status: 422,

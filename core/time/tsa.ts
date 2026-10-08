@@ -69,8 +69,7 @@ export const isAfter = (a: TsaInstant, b: TsaInstant): boolean => a.epochSeconds
 export const isStrictlyLater = (later: TsaInstant, earlier: TsaInstant): boolean =>
   later.epochSeconds > earlier.epochSeconds;
 
-export const elapsedSeconds = (from: TsaInstant, to: TsaInstant): bigint =>
-  to.epochSeconds - from.epochSeconds;
+export const elapsedSeconds = (from: TsaInstant, to: TsaInstant): bigint => to.epochSeconds - from.epochSeconds;
 
 /**
  * Has the required interval passed between two attested instants?
@@ -78,10 +77,6 @@ export const elapsedSeconds = (from: TsaInstant, to: TsaInstant): bigint =>
  * Both arguments are attested. There is no overload taking a number of
  * milliseconds or a `Date`, which is the point.
  */
-export function hasElapsed(
-  from: TsaInstant,
-  requiredSeconds: number,
-  observedAt: TsaInstant,
-): boolean {
+export function hasElapsed(from: TsaInstant, requiredSeconds: number, observedAt: TsaInstant): boolean {
   return elapsedSeconds(from, observedAt) >= BigInt(requiredSeconds);
 }

@@ -43,7 +43,11 @@ export class HttpTransport implements RailTransport {
     try {
       const response = await this.fetchImpl(envelope.url, {
         method: envelope.method,
-        headers: { accept: 'application/json', ...(envelope.body === undefined ? {} : { 'content-type': 'application/json' }), ...envelope.headers },
+        headers: {
+          accept: 'application/json',
+          ...(envelope.body === undefined ? {} : { 'content-type': 'application/json' }),
+          ...envelope.headers,
+        },
         ...(envelope.body === undefined ? {} : { body: JSON.stringify(envelope.body) }),
         signal: controller.signal,
       });
@@ -55,10 +59,16 @@ export class HttpTransport implements RailTransport {
       }
       if (text.trim().length === 0) return {};
       const parsed: unknown = JSON.parse(text);
-      return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : { value: parsed };
+      return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : { value: parsed };
     } catch (error) {
       if (error instanceof TransportError) throw error;
-      throw new TransportError(operation, undefined, `${operation}: ${error instanceof Error ? error.name : 'transport failure'}`);
+      throw new TransportError(
+        operation,
+        undefined,
+        `${operation}: ${error instanceof Error ? error.name : 'transport failure'}`,
+      );
     } finally {
       clearTimeout(timer);
     }

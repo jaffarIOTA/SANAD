@@ -13,9 +13,19 @@ export function discloseTawarruq(q: TawarruqQuote): Disclosure {
     totalPayable: q.totalPayable,
     fees: q.fees,
     lines: [
-      { code: 'COMMODITY_COST', labelEn: 'Commodity purchase price', labelAr: 'ثمن شراء السلعة', amount: q.commodityCost },
+      {
+        code: 'COMMODITY_COST',
+        labelEn: 'Commodity purchase price',
+        labelAr: 'ثمن شراء السلعة',
+        amount: q.commodityCost,
+      },
       { code: 'PROFIT', labelEn: 'Profit', labelAr: 'الربح', amount: q.profitAmount },
-      { code: 'DEFERRED_SALE_PRICE', labelEn: 'Deferred sale price', labelAr: 'ثمن البيع المؤجل', amount: q.deferredSalePrice },
+      {
+        code: 'DEFERRED_SALE_PRICE',
+        labelEn: 'Deferred sale price',
+        labelAr: 'ثمن البيع المؤجل',
+        amount: q.deferredSalePrice,
+      },
     ],
   };
 }

@@ -14,12 +14,38 @@ import type { RailOutcome } from '@sanad/core/ports/rail.ts';
 
 export function developmentIdentity(nowEpochSeconds: () => bigint): IdentityAuthenticationPort {
   return {
-    startAuthentication(p): Promise<Result<RailOutcome<{ readonly transactionRef: string; readonly expiresAtEpochSeconds: bigint }>>> {
-      return Promise.resolve(ok({ kind: 'ANSWERED', value: { transactionRef: `dev-auth-${p.applicantRef}`, expiresAtEpochSeconds: nowEpochSeconds() + 300n } }));
+    startAuthentication(
+      p,
+    ): Promise<Result<RailOutcome<{ readonly transactionRef: string; readonly expiresAtEpochSeconds: bigint }>>> {
+      return Promise.resolve(
+        ok({
+          kind: 'ANSWERED',
+          value: { transactionRef: `dev-auth-${p.applicantRef}`, expiresAtEpochSeconds: nowEpochSeconds() + 300n },
+        }),
+      );
     },
-    confirmAuthentication(p): Promise<Result<RailOutcome<{ readonly assertionId: string; readonly identityRef: string; readonly authenticatedAtEpochSeconds: bigint }>>> {
+    confirmAuthentication(
+      p,
+    ): Promise<
+      Result<
+        RailOutcome<{
+          readonly assertionId: string;
+          readonly identityRef: string;
+          readonly authenticatedAtEpochSeconds: bigint;
+        }>
+      >
+    > {
       const applicantRef = p.transactionRef.replace(/^dev-auth-/, '');
-      return Promise.resolve(ok({ kind: 'ANSWERED', value: { assertionId: `asr-dev-${applicantRef}-${nowEpochSeconds().toString()}`, identityRef: `idp-ref-${applicantRef}`, authenticatedAtEpochSeconds: nowEpochSeconds() } }));
+      return Promise.resolve(
+        ok({
+          kind: 'ANSWERED',
+          value: {
+            assertionId: `asr-dev-${applicantRef}-${nowEpochSeconds().toString()}`,
+            identityRef: `idp-ref-${applicantRef}`,
+            authenticatedAtEpochSeconds: nowEpochSeconds(),
+          },
+        }),
+      );
     },
   };
 }

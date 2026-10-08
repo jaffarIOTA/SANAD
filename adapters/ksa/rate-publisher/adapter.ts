@@ -14,15 +14,30 @@ import { ok } from '../../../core/kernel/result.ts';
 import { money } from '../../../core/kernel/money.ts';
 import type { KnownDeviation } from '../../kernel/adapter.ts';
 import type { RailTransport } from '../../kernel/http-transport.ts';
-import { RailAdapter, type RailAdapterConfig, bool, decimalToMinor, epoch, int, malformed, str } from '../kernel/rail-adapter.ts';
-import type { RatePublisherPort, PublishedBenchmark, MarketRange, PublisherOutcome } from '../../../core/ports/rate-publisher.ts';
+import {
+  RailAdapter,
+  type RailAdapterConfig,
+  bool,
+  decimalToMinor,
+  epoch,
+  int,
+  malformed,
+  str,
+} from '../kernel/rail-adapter.ts';
+import type {
+  RatePublisherPort,
+  PublishedBenchmark,
+  MarketRange,
+  PublisherOutcome,
+} from '../../../core/ports/rate-publisher.ts';
 import type { TsaInstant } from '../../../core/time/tsa.ts';
 
 export const RATEPUBLISHERADAPTER_DEVIATIONS: readonly KnownDeviation[] = [
   {
     id: 'RATEPUB-DEV-001',
     summary: 'Rates are published as decimal percentages.',
-    containment: 'Converted to integer basis points by digit manipulation at this boundary; a rate that does not parse exactly is UNAVAILABLE, never rounded through a float.',
+    containment:
+      'Converted to integer basis points by digit manipulation at this boundary; a rate that does not parse exactly is UNAVAILABLE, never rounded through a float.',
     verificationRef: 'KSA-RAIL-RATEPUB-01',
   },
 ];
@@ -37,19 +52,54 @@ export class RatePublisherAdapter extends RailAdapter implements RatePublisherPo
   }
 
   async benchmark(code: string, asOf: TsaInstant): Promise<Result<PublisherOutcome<PublishedBenchmark>>> {
-    const r = await this.invoke('rates.benchmark', { method: 'GET', path: `/v1/benchmarks/${encodeURIComponent(code)}?asOf=${asOf.epochSeconds.toString()}` }, `rates-${asOf.epochSeconds.toString()}`);
-    if (r.kind !== 'ANSWERED') return ok({ kind: 'UNAVAILABLE' as const, reason: r.kind === 'REFUSED' ? `refused: ${r.code}` : r.reason });
-    const bp = percentToBp(r.value['ratePercent']); const at = epoch(r.value['asOf']); const referenceId = str(r.value['publicationId']);
-    if (bp === undefined || at === undefined || referenceId === undefined) return ok({ kind: 'UNAVAILABLE' as const, reason: 'response malformed' });
-    return ok({ kind: 'PUBLISHED' as const, value: { code, rate: { bp, basis: 'REDUCING' as const, period: 'ANNUAL' as const }, asOfEpochSeconds: at, referenceId } });
+    const r = await this.invoke(
+      'rates.benchmark',
+      { method: 'GET', path: `/v1/benchmarks/${encodeURIComponent(code)}?asOf=${asOf.epochSeconds.toString()}` },
+      `rates-${asOf.epochSeconds.toString()}`,
+    );
+    if (r.kind !== 'ANSWERED')
+      return ok({ kind: 'UNAVAILABLE' as const, reason: r.kind === 'REFUSED' ? `refused: ${r.code}` : r.reason });
+    const bp = percentToBp(r.value['ratePercent']);
+    const at = epoch(r.value['asOf']);
+    const referenceId = str(r.value['publicationId']);
+    if (bp === undefined || at === undefined || referenceId === undefined)
+      return ok({ kind: 'UNAVAILABLE' as const, reason: 'response malformed' });
+    return ok({
+      kind: 'PUBLISHED' as const,
+      value: {
+        code,
+        rate: { bp, basis: 'REDUCING' as const, period: 'ANNUAL' as const },
+        asOfEpochSeconds: at,
+        referenceId,
+      },
+    });
   }
 
   async marketRates(productClass: string, asOf: TsaInstant): Promise<Result<PublisherOutcome<MarketRange>>> {
-    const r = await this.invoke('rates.market', { method: 'GET', path: `/v1/market/${encodeURIComponent(productClass)}?asOf=${asOf.epochSeconds.toString()}` }, `rates-${asOf.epochSeconds.toString()}`);
-    if (r.kind !== 'ANSWERED') return ok({ kind: 'UNAVAILABLE' as const, reason: r.kind === 'REFUSED' ? `refused: ${r.code}` : r.reason });
-    const low = percentToBp(r.value['lowPercent']); const median = percentToBp(r.value['medianPercent']); const high = percentToBp(r.value['highPercent']); const at = epoch(r.value['asOf']); const referenceId = str(r.value['publicationId']);
-    if (low === undefined || median === undefined || high === undefined || at === undefined || referenceId === undefined) return ok({ kind: 'UNAVAILABLE' as const, reason: 'response malformed' });
-    return ok({ kind: 'PUBLISHED' as const, value: { productClass, lowBp: low, medianBp: median, highBp: high, asOfEpochSeconds: at, referenceId } });
+    const r = await this.invoke(
+      'rates.market',
+      { method: 'GET', path: `/v1/market/${encodeURIComponent(productClass)}?asOf=${asOf.epochSeconds.toString()}` },
+      `rates-${asOf.epochSeconds.toString()}`,
+    );
+    if (r.kind !== 'ANSWERED')
+      return ok({ kind: 'UNAVAILABLE' as const, reason: r.kind === 'REFUSED' ? `refused: ${r.code}` : r.reason });
+    const low = percentToBp(r.value['lowPercent']);
+    const median = percentToBp(r.value['medianPercent']);
+    const high = percentToBp(r.value['highPercent']);
+    const at = epoch(r.value['asOf']);
+    const referenceId = str(r.value['publicationId']);
+    if (
+      low === undefined ||
+      median === undefined ||
+      high === undefined ||
+      at === undefined ||
+      referenceId === undefined
+    )
+      return ok({ kind: 'UNAVAILABLE' as const, reason: 'response malformed' });
+    return ok({
+      kind: 'PUBLISHED' as const,
+      value: { productClass, lowBp: low, medianBp: median, highBp: high, asOfEpochSeconds: at, referenceId },
+    });
   }
 }
 

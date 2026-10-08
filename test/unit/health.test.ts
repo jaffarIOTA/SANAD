@@ -24,11 +24,7 @@ const report = (name: string, status: ComponentReport['status']): ComponentRepor
   tookMs: 1,
 });
 
-const check = (
-  name: string,
-  critical: boolean,
-  run: HealthCheck['run'],
-): HealthCheck => ({ name, critical, run });
+const check = (name: string, critical: boolean, run: HealthCheck['run']): HealthCheck => ({ name, critical, run });
 
 describe('aggregation', () => {
   const critical = new Map([
@@ -102,7 +98,11 @@ describe('running the checks', () => {
 
   it('runs checks concurrently, not one after another', async () => {
     const slow = (): Promise<{ status: 'UP' }> =>
-      new Promise((resolve) => setTimeout(() => { resolve({ status: 'UP' }); }, 60));
+      new Promise((resolve) =>
+        setTimeout(() => {
+          resolve({ status: 'UP' });
+        }, 60),
+      );
 
     const service = createHealthService({
       checks: [check('a', true, slow), check('b', true, slow), check('c', true, slow)],
@@ -122,9 +122,7 @@ describe('running the checks', () => {
     const service = createHealthService({
       checks: [
         check('leaky', true, () =>
-          Promise.reject(
-            new Error('connect failed: postgres://sanad:hunter2@db.internal:5432/sanad'),
-          ),
+          Promise.reject(new Error('connect failed: postgres://sanad:hunter2@db.internal:5432/sanad')),
         ),
       ],
     });

@@ -51,61 +51,151 @@ export function backoffSeconds(policy: RetryPolicy, attempt: number): number {
 const field = (event: OutboxEvent, name: string): string | undefined => event.payload[name];
 const asMoney = (event: OutboxEvent): ReturnType<typeof money> | undefined => {
   const minor = field(event, 'minorUnits');
-  return minor !== undefined && /^\d+$/.test(minor) ? money(BigInt(minor), (field(event, 'currency') as 'SAR' | undefined) ?? 'SAR') : undefined;
+  return minor !== undefined && /^\d+$/.test(minor)
+    ? money(BigInt(minor), (field(event, 'currency') as 'SAR' | undefined) ?? 'SAR')
+    : undefined;
 };
 
-function fromRail<T>(outcome: RailOutcome<T>, ref: (value: T) => string, attempt: number, policy: RetryPolicy): DispatchOutcome {
+function fromRail<T>(
+  outcome: RailOutcome<T>,
+  ref: (value: T) => string,
+  attempt: number,
+  policy: RetryPolicy,
+): DispatchOutcome {
   if (outcome.kind === 'ANSWERED') return { kind: 'DELIVERED', deliveryRef: ref(outcome.value) };
   if (outcome.kind === 'REFUSED') return { kind: 'DEAD', reason: `refused: ${outcome.code}` };
   return attempt >= policy.maxAttempts
     ? { kind: 'DEAD', reason: `unavailable after ${String(attempt)} attempts: ${outcome.reason}` }
-    : { kind: 'RETRY', afterSeconds: outcome.retryAfterSeconds ?? backoffSeconds(policy, attempt), reason: outcome.reason };
+    : {
+        kind: 'RETRY',
+        afterSeconds: outcome.retryAfterSeconds ?? backoffSeconds(policy, attempt),
+        reason: outcome.reason,
+      };
 }
 
 /** `attempt` is the number of this attempt, starting at 1. */
-export async function dispatchOnce(event: OutboxEvent, ports: DispatchPorts, policy: RetryPolicy, attempt: number): Promise<DispatchOutcome> {
+export async function dispatchOnce(
+  event: OutboxEvent,
+  ports: DispatchPorts,
+  policy: RetryPolicy,
+  attempt: number,
+): Promise<DispatchOutcome> {
   const dead = (reason: string): DispatchOutcome => ({ kind: 'DEAD', reason });
   const retryOrDead = (reason: string): DispatchOutcome =>
-    attempt >= policy.maxAttempts ? dead(`${reason} after ${String(attempt)} attempts`) : { kind: 'RETRY', afterSeconds: backoffSeconds(policy, attempt), reason };
+    attempt >= policy.maxAttempts
+      ? dead(`${reason} after ${String(attempt)} attempts`)
+      : { kind: 'RETRY', afterSeconds: backoffSeconds(policy, attempt), reason };
 
   switch (event.kind) {
     case 'PAYMENT_DISBURSE': {
-      const amount = asMoney(event); const beneficiaryRef = field(event, 'beneficiaryRef');
-      if (amount === undefined || beneficiaryRef === undefined) return dead('payload lacks beneficiaryRef or minorUnits');
-      const r = await ports.payments.disburse({ tenantId: event.tenantId, beneficiaryRef, amount, purposeCode: field(event, 'reason') ?? 'FINANCE_DISBURSEMENT', reference: event.subjectRef, idempotencyKey: event.idempotencyKey, correlationId: event.correlationId });
+      const amount = asMoney(event);
+      const beneficiaryRef = field(event, 'beneficiaryRef');
+      if (amount === undefined || beneficiaryRef === undefined)
+        return dead('payload lacks beneficiaryRef or minorUnits');
+      const r = await ports.payments.disburse({
+        tenantId: event.tenantId,
+        beneficiaryRef,
+        amount,
+        purposeCode: field(event, 'reason') ?? 'FINANCE_DISBURSEMENT',
+        reference: event.subjectRef,
+        idempotencyKey: event.idempotencyKey,
+        correlationId: event.correlationId,
+      });
       return r.ok ? fromRail(r.value, (v) => v.instructionRef, attempt, policy) : dead(r.error.reason);
     }
     case 'PAYMENT_COLLECT': {
-      const amount = asMoney(event); const payerRef = field(event, 'payerRef');
+      const amount = asMoney(event);
+      const payerRef = field(event, 'payerRef');
       if (amount === undefined || payerRef === undefined) return dead('payload lacks payerRef or minorUnits');
-      const r = await ports.payments.collect({ tenantId: event.tenantId, payerRef, amount, reference: event.subjectRef, idempotencyKey: event.idempotencyKey, correlationId: event.correlationId });
+      const r = await ports.payments.collect({
+        tenantId: event.tenantId,
+        payerRef,
+        amount,
+        reference: event.subjectRef,
+        idempotencyKey: event.idempotencyKey,
+        correlationId: event.correlationId,
+      });
       return r.ok ? fromRail(r.value, (v) => v.instructionRef, attempt, policy) : dead(r.error.reason);
     }
     case 'BUREAU_REPORT': {
-      const amount = asMoney(event); const facilityRef = field(event, 'facilityRef'); const ev = field(event, 'event');
-      if (amount === undefined || facilityRef === undefined || ev === undefined) return dead('payload lacks facilityRef, event or minorUnits');
-      const r = await ports.bureau.report({ tenantId: event.tenantId, facilityRef, counterpartyId: field(event, 'counterpartyId') ?? '', event: ev as 'OPENED', amount, asOfEpochSeconds: BigInt(field(event, 'asOfEpochSeconds') ?? '0'), idempotencyKey: event.idempotencyKey, correlationId: event.correlationId });
+      const amount = asMoney(event);
+      const facilityRef = field(event, 'facilityRef');
+      const ev = field(event, 'event');
+      if (amount === undefined || facilityRef === undefined || ev === undefined)
+        return dead('payload lacks facilityRef, event or minorUnits');
+      const r = await ports.bureau.report({
+        tenantId: event.tenantId,
+        facilityRef,
+        counterpartyId: field(event, 'counterpartyId') ?? '',
+        event: ev as 'OPENED',
+        amount,
+        asOfEpochSeconds: BigInt(field(event, 'asOfEpochSeconds') ?? '0'),
+        idempotencyKey: event.idempotencyKey,
+        correlationId: event.correlationId,
+      });
       if (!r.ok) return dead(r.error.reason);
-      return r.value.kind === 'ACKNOWLEDGED' ? { kind: 'DELIVERED', deliveryRef: r.value.acknowledgementRef } : retryOrDead(r.value.reason);
+      return r.value.kind === 'ACKNOWLEDGED'
+        ? { kind: 'DELIVERED', deliveryRef: r.value.acknowledgementRef }
+        : retryOrDead(r.value.reason);
     }
     case 'PARTNER_CALLBACK': {
       const partnerRef = field(event, 'partnerRef') ?? field(event, 'merchantId');
       const webhook = field(event, 'webhook') ?? 'requestStateChanged';
       if (partnerRef === undefined) return dead('payload lacks partnerRef');
-      const r = await ports.webhooks.deliver({ tenantId: event.tenantId, partnerRef, event: webhook, payload: { eventId: event.eventId, subjectRef: event.subjectRef, ...event.payload }, idempotencyKey: event.idempotencyKey, correlationId: event.correlationId });
+      const r = await ports.webhooks.deliver({
+        tenantId: event.tenantId,
+        partnerRef,
+        event: webhook,
+        payload: { eventId: event.eventId, subjectRef: event.subjectRef, ...event.payload },
+        idempotencyKey: event.idempotencyKey,
+        correlationId: event.correlationId,
+      });
       return r.ok ? fromRail(r.value, (v) => v.deliveryRef, attempt, policy) : dead(r.error.reason);
     }
     case 'NOTIFICATION': {
-      const recipientKind = field(event, 'recipientKind'); const recipientRef = field(event, 'recipientRef'); const notificationEvent = field(event, 'event');
-      if (recipientKind === undefined || recipientRef === undefined || notificationEvent === undefined) return dead('payload lacks recipient or event');
-      const recipient = recipientKind === 'PARTNER' ? { kind: 'PARTNER' as const, partnerId: recipientRef } : recipientKind === 'PRINCIPAL' ? { kind: 'PRINCIPAL' as const, principalId: recipientRef } : { kind: 'COUNTERPARTY' as const, counterpartyId: recipientRef };
-      const r = await ports.notifications.send({ tenantId: event.tenantId, event: notificationEvent as 'REQUEST_RECEIVED', recipient, channels: (field(event, 'channels') ?? 'SMS').split(',') as ('SMS' | 'EMAIL' | 'PUSH' | 'IN_APP' | 'PARTNER_CALLBACK')[], variables: Object.fromEntries(Object.entries(event.payload).filter(([k]) => !['recipientKind', 'recipientRef', 'event', 'channels'].includes(k))), correlationId: event.correlationId, dedupeKey: event.idempotencyKey });
+      const recipientKind = field(event, 'recipientKind');
+      const recipientRef = field(event, 'recipientRef');
+      const notificationEvent = field(event, 'event');
+      if (recipientKind === undefined || recipientRef === undefined || notificationEvent === undefined)
+        return dead('payload lacks recipient or event');
+      const recipient =
+        recipientKind === 'PARTNER'
+          ? { kind: 'PARTNER' as const, partnerId: recipientRef }
+          : recipientKind === 'PRINCIPAL'
+            ? { kind: 'PRINCIPAL' as const, principalId: recipientRef }
+            : { kind: 'COUNTERPARTY' as const, counterpartyId: recipientRef };
+      const r = await ports.notifications.send({
+        tenantId: event.tenantId,
+        event: notificationEvent as 'REQUEST_RECEIVED',
+        recipient,
+        channels: (field(event, 'channels') ?? 'SMS').split(',') as (
+          'SMS' | 'EMAIL' | 'PUSH' | 'IN_APP' | 'PARTNER_CALLBACK'
+        )[],
+        variables: Object.fromEntries(
+          Object.entries(event.payload).filter(
+            ([k]) => !['recipientKind', 'recipientRef', 'event', 'channels'].includes(k),
+          ),
+        ),
+        correlationId: event.correlationId,
+        dedupeKey: event.idempotencyKey,
+      });
       return r.ok ? { kind: 'DELIVERED', deliveryRef: r.value.deliveryRef } : retryOrDead(r.error.reason);
     }
     case 'BILL_PRESENT': {
-      const amount = asMoney(event); const payerRef = field(event, 'payerRef'); const due = field(event, 'dueDateGregorian');
-      if (amount === undefined || payerRef === undefined || due === undefined) return dead('payload lacks payerRef, dueDateGregorian or minorUnits');
-      const r = await ports.bills.present({ tenantId: event.tenantId, obligationRef: event.subjectRef, payerRef, amount, dueDateGregorian: due, idempotencyKey: event.idempotencyKey, correlationId: event.correlationId });
+      const amount = asMoney(event);
+      const payerRef = field(event, 'payerRef');
+      const due = field(event, 'dueDateGregorian');
+      if (amount === undefined || payerRef === undefined || due === undefined)
+        return dead('payload lacks payerRef, dueDateGregorian or minorUnits');
+      const r = await ports.bills.present({
+        tenantId: event.tenantId,
+        obligationRef: event.subjectRef,
+        payerRef,
+        amount,
+        dueDateGregorian: due,
+        idempotencyKey: event.idempotencyKey,
+        correlationId: event.correlationId,
+      });
       return r.ok ? fromRail(r.value, (v) => v.billRef, attempt, policy) : dead(r.error.reason);
     }
   }

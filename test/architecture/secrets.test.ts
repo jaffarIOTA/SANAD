@@ -49,9 +49,7 @@ const SECRET_SHAPED = /(token|secret|password|passwd|api[_-]?key|credential|priv
 
 describe('§4 — no secret is committed', () => {
   it('tracks no environment file except the example', () => {
-    const offenders = tracked().filter(
-      (f) => /(^|\/)\.env/.test(f) && !f.endsWith('.env.example'),
-    );
+    const offenders = tracked().filter((f) => /(^|\/)\.env/.test(f) && !f.endsWith('.env.example'));
     expect(offenders).toEqual([]);
   });
 
@@ -78,7 +76,8 @@ describe('§4 — no secret is committed', () => {
    */
   it('does not read a names-only file as a value when an empty assignment precedes a long name', async () => {
     const { OPAQUE_ASSIGNMENT } = await import('../../scripts/secret-patterns.mjs');
-    const namesOnly = 'SANAD_CREDENTIAL_DOCUMENT_PLATFORM_SANDBOX_WEB_SDK_LICENSE_KEY=\nSANAD_CREDENTIAL_DOCUMENT_PLATFORM_SANDBOX_DOCUMENT_ENGINE_BASE_URL=\n';
+    const namesOnly =
+      'SANAD_CREDENTIAL_DOCUMENT_PLATFORM_SANDBOX_WEB_SDK_LICENSE_KEY=\nSANAD_CREDENTIAL_DOCUMENT_PLATFORM_SANDBOX_DOCUMENT_ENGINE_BASE_URL=\n';
     expect([...namesOnly.matchAll(OPAQUE_ASSIGNMENT)]).toHaveLength(0);
     const withValue = 'SOME_API_TOKEN=' + 'a'.repeat(32) + '\n';
     expect([...withValue.matchAll(OPAQUE_ASSIGNMENT)]).toHaveLength(1);
@@ -239,7 +238,11 @@ describe('the pre-commit hook is installed and bites', () => {
     // product's own name. It refused a catalog-properties file holding two
     // hostnames. A scanner that flags ordinary files gets bypassed, and a
     // bypassed scanner is worse than none.
-    ['gateway/ibm/catalog-properties/sandbox.yaml', 'tuum-base-url: https://example.test', 'a file merely starting with "sa"'],
+    [
+      'gateway/ibm/catalog-properties/sandbox.yaml',
+      'tuum-base-url: https://example.test',
+      'a file merely starting with "sa"',
+    ],
     ['sanad.json', '{}', "the product's own name"],
     ['sales.yaml', 'total: 5', 'an ordinary file starting with "sa"'],
   ])('allows %s — %s', (path, content) => {

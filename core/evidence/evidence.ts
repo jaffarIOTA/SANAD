@@ -90,10 +90,7 @@ export function isLive(e: EvidenceRecord): boolean {
   return e.supersededBy === undefined && e.validationStatus === 'VALID';
 }
 
-export function liveEvidenceForGate(
-  evidence: readonly EvidenceRecord[],
-  gate: GateId,
-): readonly EvidenceRecord[] {
+export function liveEvidenceForGate(evidence: readonly EvidenceRecord[], gate: GateId): readonly EvidenceRecord[] {
   return evidence.filter((e) => isLive(e) && e.gateSatisfied === gate);
 }
 
@@ -102,9 +99,7 @@ export function liveEvidenceForGate(
  * risk-holding interval from possession, so it needs the moment possession
  * actually became true, not the moment the last artefact happened to arrive.
  */
-export function earliestCapturedAt(
-  evidence: readonly EvidenceRecord[],
-): TsaInstant | undefined {
+export function earliestCapturedAt(evidence: readonly EvidenceRecord[]): TsaInstant | undefined {
   let earliest: TsaInstant | undefined;
   for (const e of evidence) {
     if (earliest === undefined || e.capturedAt.epochSeconds < earliest.epochSeconds) {

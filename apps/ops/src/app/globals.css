@@ -209,55 +209,95 @@ html[lang='en'] body {
  * removed under prefers-reduced-motion.
  */
 .nav-indicator {
-  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 160ms ease;
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 160ms ease;
 }
 .card-lift {
-  transition: transform 180ms ease, box-shadow 180ms ease;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
 }
 .card-lift:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px -2px rgb(46 44 70 / 0.08);
 }
 .press {
-  transition: transform 120ms ease, background-color 160ms ease, color 160ms ease;
+  transition:
+    transform 120ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
 }
 .press:active {
   transform: scale(0.97);
 }
 @keyframes grow-y {
-  from { transform: scaleY(0); }
-  to { transform: scaleY(1); }
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
 }
 .grow-y {
   transform-origin: bottom;
   animation: grow-y 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 @keyframes draw {
-  from { stroke-dashoffset: var(--draw-length, 2000); }
-  to { stroke-dashoffset: 0; }
+  from {
+    stroke-dashoffset: var(--draw-length, 2000);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 .draw {
   stroke-dasharray: var(--draw-length, 2000);
   animation: draw 1100ms ease-out both;
 }
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 .fade-up {
   animation: fade-up 360ms ease-out both;
 }
 @keyframes slice-in {
-  from { opacity: 0; transform: scale(0.85); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 .slice-in {
   transform-origin: center;
   animation: slice-in 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 @media (prefers-reduced-motion: reduce) {
-  .nav-indicator, .card-lift, .press { transition: none; }
-  .card-lift:hover { transform: none; }
-  .grow-y, .draw, .fade-up, .slice-in { animation: none; }
-  .draw { stroke-dasharray: none; }
+  .nav-indicator,
+  .card-lift,
+  .press {
+    transition: none;
+  }
+  .card-lift:hover {
+    transform: none;
+  }
+  .grow-y,
+  .draw,
+  .fade-up,
+  .slice-in {
+    animation: none;
+  }
+  .draw {
+    stroke-dasharray: none;
+  }
 }

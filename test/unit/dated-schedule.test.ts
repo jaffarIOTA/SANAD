@@ -69,13 +69,21 @@ describe('datedAmortisingSchedule — golden (core-banking output, AED, conventi
   });
 
   it('currency is preserved: AED in, AED out', () => {
-    expect(s.rows.every((r) => [r.openingBalance, r.principal, r.interest, r.instalment, r.closingBalance].every((m) => m.currency === 'AED'))).toBe(true);
+    expect(
+      s.rows.every((r) =>
+        [r.openingBalance, r.principal, r.interest, r.instalment, r.closingBalance].every((m) => m.currency === 'AED'),
+      ),
+    ).toBe(true);
     expect(s.totalPayable.currency).toBe('AED');
     expect(s.cashFlows.every((f) => f.amount.currency === 'AED')).toBe(true);
   });
 
   it('cash flows feed the platform APR: drawdown at zero, first repayment at 1 month 6 days', () => {
-    expect(s.cashFlows[0]).toEqual({ at: { months: 0, days: 0 }, amount: money(200_000_000n, 'AED'), direction: 'DRAWDOWN' });
+    expect(s.cashFlows[0]).toEqual({
+      at: { months: 0, days: 0 },
+      amount: money(200_000_000n, 'AED'),
+      direction: 'DRAWDOWN',
+    });
     expect(s.cashFlows[1]?.at).toEqual({ months: 1, days: 6 });
     expect(s.cashFlows[60]?.at).toEqual({ months: 60, days: 6 });
     expect(s.cashFlows).toHaveLength(61);
@@ -149,7 +157,16 @@ describe('datedAmortisingSchedule — refusals', () => {
 
 describe('datedAmortisingSchedule — calendar', () => {
   it('clamps a 31st payment day to month end and counts actual days', () => {
-    const s = expectOk(datedAmortisingSchedule({ ...golden, principal: money(1_200_000n, 'SAR'), disbursementDate: '2028-01-01', firstDueDate: '2028-01-31', numberOfPayments: 3, paymentDay: 31 }));
+    const s = expectOk(
+      datedAmortisingSchedule({
+        ...golden,
+        principal: money(1_200_000n, 'SAR'),
+        disbursementDate: '2028-01-01',
+        firstDueDate: '2028-01-31',
+        numberOfPayments: 3,
+        paymentDay: 31,
+      }),
+    );
     expect(s.rows.map((r) => r.dueDate)).toEqual(['2028-01-31', '2028-02-29', '2028-03-31']);
     expect(s.rows.map((r) => r.days)).toEqual([30, 29, 31]);
     expect(s.rows[2]?.closingBalance.minorUnits).toBe(0n);
@@ -161,7 +178,14 @@ describe('datedAmortisingSchedule — calendar', () => {
     expect(s.rows[0]?.closingBalance.minorUnits).toBe(0n);
   });
   it('a zero rate splits the principal with the remainder last', () => {
-    const s = expectOk(datedAmortisingSchedule({ ...golden, principal: money(1_000n, 'AED'), annualRate: rate(0n, 'REDUCING'), numberOfPayments: 3 }));
+    const s = expectOk(
+      datedAmortisingSchedule({
+        ...golden,
+        principal: money(1_000n, 'AED'),
+        annualRate: rate(0n, 'REDUCING'),
+        numberOfPayments: 3,
+      }),
+    );
     expect(s.rows.map((r) => r.instalment.minorUnits)).toEqual([334n, 334n, 332n]);
   });
 });

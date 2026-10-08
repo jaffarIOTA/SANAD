@@ -14,11 +14,7 @@
  * Fixture-backed for now. See ADR 0001.
  */
 
-import {
-  CHANNEL_POLICIES,
-  ORIGINATION_CHANNELS,
-  type OriginationChannel,
-} from '@sanad/core/origination/channel.ts';
+import { CHANNEL_POLICIES, ORIGINATION_CHANNELS, type OriginationChannel } from '@sanad/core/origination/channel.ts';
 import { listRequests } from './store.ts';
 
 export type Readiness =
@@ -38,7 +34,6 @@ export interface ChannelCard {
   readonly readiness: Readiness;
   readonly openRequests: number;
 }
-
 
 const COPY: Readonly<
   Record<
@@ -93,12 +88,9 @@ export async function channelCards(): Promise<readonly ChannelCard[]> {
     channel,
     ...COPY[channel],
     requiresFourEyes: CHANNEL_POLICIES[channel].requiresFourEyes,
-    openRequests: listRequests().filter(
-      (q) => q.channel === channel && q.state === 'AWAITING_REVIEW',
-    ).length,
+    openRequests: listRequests().filter((q) => q.channel === channel && q.state === 'AWAITING_REVIEW').length,
   }));
 }
-
 
 // -- Capabilities that are not intake channels --------------------------------
 
@@ -127,8 +119,7 @@ export async function servicingCapabilities(): Promise<readonly CapabilityCard[]
       id: 'COMMODITY_BROKER',
       titleEn: 'Commodity broker integration',
       titleAr: 'الربط مع وسطاء السلع',
-      summaryEn:
-        'Buying and selling metals through a commodity platform to generate a deferred-payment obligation.',
+      summaryEn: 'Buying and selling metals through a commodity platform to generate a deferred-payment obligation.',
       readiness: {
         kind: 'EXCLUDED_THIS_PHASE',
         basis:

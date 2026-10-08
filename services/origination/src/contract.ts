@@ -165,8 +165,7 @@ export function validatorFor(schemaName: string): Validator {
 /** Compile a validator for an inline request-body schema at a given operation. */
 export function validatorForBodyOf(path: string, method: string): Validator {
   const operation = document.paths[path]?.[method] as
-    | { requestBody?: { content?: Record<string, { schema?: object }> } }
-    | undefined;
+    { requestBody?: { content?: Record<string, { schema?: object }> } } | undefined;
 
   const schema = operation?.requestBody?.content?.['application/json']?.schema;
   if (schema === undefined) {
@@ -174,9 +173,7 @@ export function validatorForBodyOf(path: string, method: string): Validator {
   }
 
   const validate: ValidateFunction =
-    '$ref' in schema
-      ? ajv.compile({ $ref: String((schema as { $ref: string }).$ref) })
-      : ajv.compile(schema);
+    '$ref' in schema ? ajv.compile({ $ref: String((schema as { $ref: string }).$ref) }) : ajv.compile(schema);
 
   return (body: unknown): readonly ValidationFailure[] => {
     if (validate(body)) return [];

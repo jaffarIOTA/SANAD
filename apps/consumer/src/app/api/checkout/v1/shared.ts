@@ -13,8 +13,21 @@ import { type MerchantPrincipal, authenticateMerchant } from '@/server/merchants
 
 export const contract = compileContract(contractPath('checkout.v1.yaml'));
 
-export function json(status: number, body: unknown, correlationId: string, extra: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), { status, headers: { 'content-type': status >= 400 ? 'application/problem+json' : 'application/json', 'x-correlation-id': correlationId, 'cache-control': 'no-store', ...extra } });
+export function json(
+  status: number,
+  body: unknown,
+  correlationId: string,
+  extra: Record<string, string> = {},
+): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'content-type': status >= 400 ? 'application/problem+json' : 'application/json',
+      'x-correlation-id': correlationId,
+      'cache-control': 'no-store',
+      ...extra,
+    },
+  });
 }
 export const refuse = (p: Problem): Response => json(p.status, p, p.correlationId);
 export function correlation(request: Request): string {
@@ -23,13 +36,31 @@ export function correlation(request: Request): string {
 }
 export function merchantOr401(request: Request, correlationId: string): MerchantPrincipal | Response {
   const principal = authenticateMerchant(request.headers.get('authorization') ?? undefined);
-  return principal ?? refuse(problem({ status: 401, title: 'Unauthenticated', detail: 'No merchant credential was recognised.', reason: 'CREDENTIAL_NOT_RECOGNISED', correlationId }));
+  return (
+    principal ??
+    refuse(
+      problem({
+        status: 401,
+        title: 'Unauthenticated',
+        detail: 'No merchant credential was recognised.',
+        reason: 'CREDENTIAL_NOT_RECOGNISED',
+        correlationId,
+      }),
+    )
+  );
 }
 
-const instant = (epochSeconds: bigint, ref: string) => ({ instant: new Date(Number(epochSeconds) * 1000).toISOString(), attestationRef: ref });
+const instant = (epochSeconds: bigint, ref: string) => ({
+  instant: new Date(Number(epochSeconds) * 1000).toISOString(),
+  attestationRef: ref,
+});
 
 /** The session as the contract describes it. Nothing about the shopper's person; the offer's figures stay on the platform. */
-export function toWire(session: CheckoutSession, consumerBaseUrl: string, localeSegment = 'ar'): Record<string, unknown> {
+export function toWire(
+  session: CheckoutSession,
+  consumerBaseUrl: string,
+  localeSegment = 'ar',
+): Record<string, unknown> {
   const c = session.core;
   return {
     sessionId: c.sessionId,
@@ -45,4 +76,5 @@ export function toWire(session: CheckoutSession, consumerBaseUrl: string, locale
   };
 }
 
-export const consumerBaseUrl = (request: Request): string => process.env['CONSUMER_BASE_URL'] ?? new URL(request.url).origin;
+export const consumerBaseUrl = (request: Request): string =>
+  process.env['CONSUMER_BASE_URL'] ?? new URL(request.url).origin;

@@ -14,16 +14,8 @@ import { describe, expect, it } from 'vitest';
 
 import { loadCreditPolicyVersions, type TenantCode } from '../../config/loader.ts';
 import { expectOk } from '../../core/kernel/result.ts';
-import {
-  evaluateCreditPolicy,
-  evaluateWithChallenger,
-  gradeFor,
-} from '../../core/decisioning/engine.ts';
-import {
-  type CreditPolicy,
-  parseCreditPolicy,
-  resolveEffectivePolicy,
-} from '../../core/decisioning/policy.ts';
+import { evaluateCreditPolicy, evaluateWithChallenger, gradeFor } from '../../core/decisioning/engine.ts';
+import { type CreditPolicy, parseCreditPolicy, resolveEffectivePolicy } from '../../core/decisioning/policy.ts';
 import { pathResolver } from '../../core/decisioning/expression.ts';
 import { strongApplicant, type SnapshotOverrides } from '../support/fixtures.ts';
 
@@ -82,9 +74,7 @@ describe('a strong applicant is approved, and the two institutions size it diffe
   });
 
   it('gives the same applicant a different limit at each institution', () => {
-    expect(decide('bank-a').assignedLimitMinorUnits).not.toBe(
-      decide('fintech-b').assignedLimitMinorUnits,
-    );
+    expect(decide('bank-a').assignedLimitMinorUnits).not.toBe(decide('fintech-b').assignedLimitMinorUnits);
   });
 });
 
@@ -115,9 +105,7 @@ describe('knockouts', () => {
     // One Board's institution refers a potential match for a human to look at;
     // the other declines it outright. Both are defensible; both are config.
     expect(decide('bank-a', { screening: { sanctions: 'POTENTIAL_MATCH' } }).outcome).toBe('REFER');
-    expect(decide('fintech-b', { screening: { sanctions: 'POTENTIAL_MATCH' } }).outcome).toBe(
-      'DECLINE',
-    );
+    expect(decide('fintech-b', { screening: { sanctions: 'POTENTIAL_MATCH' } }).outcome).toBe('DECLINE');
   });
 
   it('declines a recent default at the bank, which asks the bureau, and not at the fintech, which does not', () => {
@@ -185,9 +173,7 @@ describe('the score, the grade and the reasons', () => {
 
   it('traces every rule that ran, in order, with what it concluded', () => {
     const decision = decide('bank-a');
-    expect(decision.trace.map((t) => t.sequence)).toEqual(
-      decision.trace.map((_, i) => i),
-    );
+    expect(decision.trace.map((t) => t.sequence)).toEqual(decision.trace.map((_, i) => i));
     const stages = new Set(decision.trace.map((t) => t.stage));
     expect(stages).toContain('DATA_SUFFICIENCY');
     expect(stages).toContain('KNOCKOUT');
@@ -286,13 +272,7 @@ describe('champion and challenger', () => {
       },
     };
 
-    const result = evaluateWithChallenger(
-      champion,
-      challenger,
-      strongApplicant('bank-a'),
-      'dec-0001',
-      'dec-0001-c',
-    );
+    const result = evaluateWithChallenger(champion, challenger, strongApplicant('bank-a'), 'dec-0001', 'dec-0001-c');
 
     expect(result.applied.assignedLimitMinorUnits).toBe(160_000_000n);
     expect(result.challenger?.assignedLimitMinorUnits).toBe(180_000_000n);

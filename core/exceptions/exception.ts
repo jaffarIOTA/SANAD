@@ -46,7 +46,13 @@ export type ExceptionEvent =
   | { readonly kind: 'OPENED'; readonly at: TsaInstant; readonly by: Principal; readonly detail: string }
   | { readonly kind: 'ASSIGNED'; readonly at: TsaInstant; readonly by: Principal; readonly to: Principal }
   | { readonly kind: 'NOTE'; readonly at: TsaInstant; readonly by: Principal; readonly note: string }
-  | { readonly kind: 'ESCALATED'; readonly at: TsaInstant; readonly by: Principal; readonly to: Principal; readonly reason: string }
+  | {
+      readonly kind: 'ESCALATED';
+      readonly at: TsaInstant;
+      readonly by: Principal;
+      readonly to: Principal;
+      readonly reason: string;
+    }
   | { readonly kind: 'RESOLVED'; readonly at: TsaInstant; readonly by: Principal; readonly resolution: string };
 
 export interface CaseException {
@@ -103,10 +109,14 @@ export function open(params: {
   readonly detail: string;
 }): Result<CaseException> {
   if (params.detail.trim().length === 0) {
-    return reject('OP-DETERMINACY', 'EXCEPTION_WITHOUT_DETAIL', 'An exception must say what is wrong', { type: params.type });
+    return reject('OP-DETERMINACY', 'EXCEPTION_WITHOUT_DETAIL', 'An exception must say what is wrong', {
+      type: params.type,
+    });
   }
   if (params.slaSeconds <= 0) {
-    return reject('OP-DETERMINACY', 'EXCEPTION_SLA_INVALID', 'An exception needs a positive SLA', { type: params.type });
+    return reject('OP-DETERMINACY', 'EXCEPTION_SLA_INVALID', 'An exception needs a positive SLA', {
+      type: params.type,
+    });
   }
   return ok({
     exceptionId: params.exceptionId,
@@ -121,36 +131,61 @@ export function open(params: {
 
 function openOnly(e: CaseException, action: string): Result<true> {
   if (statusOf(e) === 'RESOLVED') {
-    return reject('OP-DETERMINACY', 'EXCEPTION_ALREADY_RESOLVED', `Cannot ${action} a resolved exception`, { exceptionId: e.exceptionId });
+    return reject('OP-DETERMINACY', 'EXCEPTION_ALREADY_RESOLVED', `Cannot ${action} a resolved exception`, {
+      exceptionId: e.exceptionId,
+    });
   }
   return ok(true);
 }
 
 export function assign(e: CaseException, by: Principal, to: Principal, at: TsaInstant): Result<CaseException> {
-  const openCheck = openOnly(e, 'assign'); if (!openCheck.ok) return openCheck;
+  const openCheck = openOnly(e, 'assign');
+  if (!openCheck.ok) return openCheck;
   if (to.tenantId !== e.tenantId) {
-    return reject('OP-DETERMINACY', 'EXCEPTION_OWNER_TENANT_MISMATCH', 'An exception is owned within its own tenant', { exceptionId: e.exceptionId });
+    return reject('OP-DETERMINACY', 'EXCEPTION_OWNER_TENANT_MISMATCH', 'An exception is owned within its own tenant', {
+      exceptionId: e.exceptionId,
+    });
   }
   return ok({ ...e, events: [...e.events, { kind: 'ASSIGNED', at, by, to }] });
 }
 
 export function note(e: CaseException, by: Principal, text: string, at: TsaInstant): Result<CaseException> {
-  const openCheck = openOnly(e, 'annotate'); if (!openCheck.ok) return openCheck;
-  if (text.trim().length === 0) return reject('OP-DETERMINACY', 'EXCEPTION_NOTE_EMPTY', 'A note must say something', { exceptionId: e.exceptionId });
+  const openCheck = openOnly(e, 'annotate');
+  if (!openCheck.ok) return openCheck;
+  if (text.trim().length === 0)
+    return reject('OP-DETERMINACY', 'EXCEPTION_NOTE_EMPTY', 'A note must say something', {
+      exceptionId: e.exceptionId,
+    });
   return ok({ ...e, events: [...e.events, { kind: 'NOTE', at, by, note: text }] });
 }
 
-export function escalate(e: CaseException, by: Principal, to: Principal, reason: string, at: TsaInstant): Result<CaseException> {
-  const openCheck = openOnly(e, 'escalate'); if (!openCheck.ok) return openCheck;
-  if (reason.trim().length === 0) return reject('OP-DETERMINACY', 'ESCALATION_WITHOUT_REASON', 'Escalating requires a reason', { exceptionId: e.exceptionId });
+export function escalate(
+  e: CaseException,
+  by: Principal,
+  to: Principal,
+  reason: string,
+  at: TsaInstant,
+): Result<CaseException> {
+  const openCheck = openOnly(e, 'escalate');
+  if (!openCheck.ok) return openCheck;
+  if (reason.trim().length === 0)
+    return reject('OP-DETERMINACY', 'ESCALATION_WITHOUT_REASON', 'Escalating requires a reason', {
+      exceptionId: e.exceptionId,
+    });
   return ok({ ...e, events: [...e.events, { kind: 'ESCALATED', at, by, to, reason }] });
 }
 
 /** The only way out. A resolution is required; "closed" without one is not reachable. */
 export function resolve(e: CaseException, by: Principal, resolution: string, at: TsaInstant): Result<CaseException> {
-  const openCheck = openOnly(e, 'resolve'); if (!openCheck.ok) return openCheck;
+  const openCheck = openOnly(e, 'resolve');
+  if (!openCheck.ok) return openCheck;
   if (resolution.trim().length === 0) {
-    return reject('OP-DETERMINACY', 'RESOLUTION_REQUIRED', 'An exception is resolved by saying how, not by closing it', { exceptionId: e.exceptionId });
+    return reject(
+      'OP-DETERMINACY',
+      'RESOLUTION_REQUIRED',
+      'An exception is resolved by saying how, not by closing it',
+      { exceptionId: e.exceptionId },
+    );
   }
   return ok({ ...e, events: [...e.events, { kind: 'RESOLVED', at, by, resolution }] });
 }

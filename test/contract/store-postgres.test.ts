@@ -19,7 +19,8 @@ import { postgresRequestRepository } from '../../services/origination/src/reposi
 
 const url = process.env['SANAD_TEST_DATABASE_URL'];
 const TENANT = '11111111-1111-4111-8111-111111111111';
-const at = (s: number) => tsaInstant({ verified: true, genTimeEpochSeconds: BigInt(s), tokenDigest: `t${String(s)}`, authorityId: 'test' });
+const at = (s: number) =>
+  tsaInstant({ verified: true, genTimeEpochSeconds: BigInt(s), tokenDigest: `t${String(s)}`, authorityId: 'test' });
 
 describe.skipIf(url === undefined)('PostgreSQL store (SANAD_TEST_DATABASE_URL)', () => {
   it('saves, finds by tenant and partner, lists newest first, and hides other partners', async () => {
@@ -27,12 +28,36 @@ describe.skipIf(url === undefined)('PostgreSQL store (SANAD_TEST_DATABASE_URL)',
     const policy = expectOk(loadOriginationPolicy('bank-a'));
     const maker: Principal = { principalId: 'partner-dev-01', tenantId: TENANT };
     const id = await repo.nextRequestId();
-    const request = expectOk(submitForReview(expectOk(raise({ core: {
-      requestId: id, tenantId: TENANT, programmeId: 'prg-0001', counterpartyId: 'cp', channel: 'PARTNER_API',
-      identification: { kind: 'PARTNER_SYSTEM', partnerId: 'partner-dev-01', credentialRef: 'c' },
-      tradeReference: { type: 'CLEARED_INVOICE', invoiceUuid: id, invoiceHash: 'h', issuerCr: '1010000002', recipientCr: '7001000001' },
-      requestedAmount: money(5_000_000n), requestedTenorDays: 60, correlationId: 'c', raisedAt: at(1_000),
-    }, maker, policy })), at(1_100)));
+    const request = expectOk(
+      submitForReview(
+        expectOk(
+          raise({
+            core: {
+              requestId: id,
+              tenantId: TENANT,
+              programmeId: 'prg-0001',
+              counterpartyId: 'cp',
+              channel: 'PARTNER_API',
+              identification: { kind: 'PARTNER_SYSTEM', partnerId: 'partner-dev-01', credentialRef: 'c' },
+              tradeReference: {
+                type: 'CLEARED_INVOICE',
+                invoiceUuid: id,
+                invoiceHash: 'h',
+                issuerCr: '1010000002',
+                recipientCr: '7001000001',
+              },
+              requestedAmount: money(5_000_000n),
+              requestedTenorDays: 60,
+              correlationId: 'c',
+              raisedAt: at(1_000),
+            },
+            maker,
+            policy,
+          }),
+        ),
+        at(1_100),
+      ),
+    );
     await repo.save({ requestId: id, tenantId: TENANT, partnerId: 'partner-dev-01', request, sequence: 0 });
     const found = await repo.find(TENANT, 'partner-dev-01', id);
     expect(found?.request).toEqual(request);
@@ -47,7 +72,10 @@ describe.skipIf(url === undefined)('PostgreSQL store (SANAD_TEST_DATABASE_URL)',
   });
 
   it('orders the feed by the stored sequence, not by its text rendering', () => {
-    const source = readFileSync(new URL('../../services/origination/src/repository-postgres.ts', import.meta.url), 'utf8');
+    const source = readFileSync(
+      new URL('../../services/origination/src/repository-postgres.ts', import.meta.url),
+      'utf8',
+    );
     expect(source).toMatch(/order by r\.sequence desc/);
     expect(source).not.toMatch(/order by sequence desc/);
   });
@@ -60,7 +88,8 @@ describe.skipIf(url === undefined)('PostgreSQL store (SANAD_TEST_DATABASE_URL)',
     expect((await store.reserve({ ...scope, fingerprint: 'a' })).kind).toBe('IN_FLIGHT');
     await store.complete({ ...scope, response: { status: 201, body: { ok: true, n: 1n } } });
     const replay = await store.reserve({ ...scope, fingerprint: 'a' });
-    expect(replay.kind).toBe('REPLAY'); if (replay.kind === 'REPLAY') expect(replay.response.body).toEqual({ ok: true, n: 1n });
+    expect(replay.kind).toBe('REPLAY');
+    if (replay.kind === 'REPLAY') expect(replay.response.body).toEqual({ ok: true, n: 1n });
     expect((await store.reserve({ ...scope, fingerprint: 'b' })).kind).toBe('CONFLICT');
     await store.close();
   });

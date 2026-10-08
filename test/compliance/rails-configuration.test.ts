@@ -10,9 +10,17 @@ import { parseRailsConfiguration, railFor } from '@sanad/core/config/rails.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
 import { catalogueForTenant, loadRailsConfiguration } from '@sanad/config/loader.ts';
 
-const base = { version: 't', rails: [{ capability: 'CREDIT_BUREAU', adapter: 'SIMAH', fallbackAdapter: 'BAYAN', environment: 'sandbox', enabled: true }] };
+const base = {
+  version: 't',
+  rails: [
+    { capability: 'CREDIT_BUREAU', adapter: 'SIMAH', fallbackAdapter: 'BAYAN', environment: 'sandbox', enabled: true },
+  ],
+};
 const parse = (raw: unknown) => parseRailsConfiguration(raw, ADAPTER_CATALOGUE);
-const reason = (raw: unknown): string => { const r = parse(raw); return r.ok ? 'OK' : r.error.reason; };
+const reason = (raw: unknown): string => {
+  const r = parse(raw);
+  return r.ok ? 'OK' : r.error.reason;
+};
 
 describe('the rail configuration', () => {
   it('both tenants’ checked-in files parse, and the bureau has a fallback', () => {
@@ -24,7 +32,11 @@ describe('the rail configuration', () => {
   });
   it('refuses an adapter that does not serve the capability, with the allowed codes named', () => {
     const r = parse({ ...base, rails: [{ ...base.rails[0], adapter: 'NAFATH' }] });
-    expect(r.ok).toBe(false); if (!r.ok) { expect(r.error.reason).toBe('RAIL_ADAPTER_UNKNOWN'); expect(String(r.error.context?.['allowed'])).toBe('SIMAH,BAYAN,AECB'); }
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.reason).toBe('RAIL_ADAPTER_UNKNOWN');
+      expect(String(r.error.context?.['allowed'])).toBe('SIMAH,BAYAN,AECB');
+    }
   });
   it('a tenant may use only the adapters its onboarded jurisdiction permits (ADR 0005)', () => {
     const sa = expectOk(catalogueForTenant('bank-a', ADAPTER_CATALOGUE));
@@ -32,11 +44,19 @@ describe('the rail configuration', () => {
     expect(sa.CREDIT_BUREAU).toEqual(['SIMAH', 'BAYAN']);
     expect(ae.CREDIT_BUREAU).toEqual(['AECB']);
     expect(ae.E_INVOICING).toBeUndefined();
-    const saOnAecb = parseRailsConfiguration({ ...base, rails: [{ ...base.rails[0], adapter: 'AECB', fallbackAdapter: undefined }] }, sa);
-    expect(saOnAecb.ok).toBe(false); if (!saOnAecb.ok) expect(saOnAecb.error.reason).toBe('RAIL_ADAPTER_UNKNOWN');
+    const saOnAecb = parseRailsConfiguration(
+      { ...base, rails: [{ ...base.rails[0], adapter: 'AECB', fallbackAdapter: undefined }] },
+      sa,
+    );
+    expect(saOnAecb.ok).toBe(false);
+    if (!saOnAecb.ok) expect(saOnAecb.error.reason).toBe('RAIL_ADAPTER_UNKNOWN');
     const aeOnSimah = parseRailsConfiguration(base, ae);
     expect(aeOnSimah.ok).toBe(false);
-    expect(expectOk(loadRailsConfiguration('sme-fund-ae', ADAPTER_CATALOGUE)).rails.find((r) => r.capability === 'CREDIT_BUREAU')?.adapter).toBe('AECB');
+    expect(
+      expectOk(loadRailsConfiguration('sme-fund-ae', ADAPTER_CATALOGUE)).rails.find(
+        (r) => r.capability === 'CREDIT_BUREAU',
+      )?.adapter,
+    ).toBe('AECB');
   });
   it('refuses a fallback that is the primary, or that does not serve the capability', () => {
     expect(reason({ ...base, rails: [{ ...base.rails[0], fallbackAdapter: 'SIMAH' }] })).toBe('RAIL_FALLBACK_SAME');
@@ -47,13 +67,21 @@ describe('the rail configuration', () => {
     expect(reason({ ...base, rails: [base.rails[0], base.rails[0]] })).toBe('RAIL_CAPABILITY_DUPLICATED');
   });
   it('beyond the sandbox a rail is reached over TLS only; a base URL never carries a path', () => {
-    expect(reason({ ...base, rails: [{ ...base.rails[0], environment: 'uat', baseUrl: 'http://bureau.example' }] })).toBe('RAIL_BASE_URL_NOT_TLS');
-    expect(reason({ ...base, rails: [{ ...base.rails[0], environment: 'production', baseUrl: 'https://bureau.example' }] })).toBe('OK');
-    expect(reason({ ...base, rails: [{ ...base.rails[0], baseUrl: 'https://bureau.example/api/v1' }] })).toBe('RAIL_BASE_URL_MALFORMED');
+    expect(
+      reason({ ...base, rails: [{ ...base.rails[0], environment: 'uat', baseUrl: 'http://bureau.example' }] }),
+    ).toBe('RAIL_BASE_URL_NOT_TLS');
+    expect(
+      reason({ ...base, rails: [{ ...base.rails[0], environment: 'production', baseUrl: 'https://bureau.example' }] }),
+    ).toBe('OK');
+    expect(reason({ ...base, rails: [{ ...base.rails[0], baseUrl: 'https://bureau.example/api/v1' }] })).toBe(
+      'RAIL_BASE_URL_MALFORMED',
+    );
   });
   it('refuses an unknown environment, an unknown key and a missing enabled flag', () => {
     expect(reason({ ...base, rails: [{ ...base.rails[0], environment: 'staging' }] })).toBe('RAIL_ENVIRONMENT_UNKNOWN');
     expect(reason({ ...base, rails: [{ ...base.rails[0], timeoutMs: 5 }] })).toBe('RAIL_UNKNOWN_KEY');
-    expect(reason({ ...base, rails: [{ capability: 'CREDIT_BUREAU', adapter: 'SIMAH', environment: 'sandbox' }] })).toBe('RAIL_ENABLED_REQUIRED');
+    expect(
+      reason({ ...base, rails: [{ capability: 'CREDIT_BUREAU', adapter: 'SIMAH', environment: 'sandbox' }] }),
+    ).toBe('RAIL_ENABLED_REQUIRED');
   });
 });

@@ -31,11 +31,23 @@ function cell(value: string): string {
 
 export async function GET(): Promise<Response> {
   const j = await workbenchJurisdiction();
-  if (j.tenant === undefined) return new Response('No institution is onboarded under this jurisdiction', { status: 404 });
+  if (j.tenant === undefined)
+    return new Response('No institution is onboarded under this jurisdiction', { status: 404 });
   await syncBusiness(j.tenant);
   const [views, variants] = await Promise.all([listApplications(j.tenant), productVariants(j.tenant)]);
   const now = developmentAttestation().epochSeconds;
-  const header = ['applicationId', 'business', 'variant', 'purpose', 'amount', 'currency', 'stage', 'status', 'receivedOn', 'turnaroundDays'];
+  const header = [
+    'applicationId',
+    'business',
+    'variant',
+    'purpose',
+    'amount',
+    'currency',
+    'stage',
+    'status',
+    'receivedOn',
+    'turnaroundDays',
+  ];
   const rows = views.map((v) => {
     const a = v.application;
     return [
@@ -49,7 +61,9 @@ export async function GET(): Promise<Response> {
       a.status,
       new Date(Number(a.receivedAtEpochSeconds) * 1000).toISOString().slice(0, 10),
       String(wholeDays(turnaroundSeconds(v, now))),
-    ].map(cell).join(',');
+    ]
+      .map(cell)
+      .join(',');
   });
   const body = [header.join(','), ...rows].join('\r\n');
   return new Response(body, {

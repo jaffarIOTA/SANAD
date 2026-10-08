@@ -15,8 +15,20 @@ export async function GET(request: Request, context: { params: Promise<{ request
   const headers = { 'x-correlation-id': correlationId, 'cache-control': 'no-store' };
   if (stored === undefined) {
     // Absent, not forbidden: the API does not confirm other partners' business.
-    const p = problem({ status: 404, title: 'Not found', detail: 'No such resource within this credential’s scope.', reason: 'REQUEST_NOT_FOUND', correlationId });
-    return new Response(JSON.stringify(p), { status: 404, headers: { ...headers, 'content-type': 'application/problem+json' } });
+    const p = problem({
+      status: 404,
+      title: 'Not found',
+      detail: 'No such resource within this credential’s scope.',
+      reason: 'REQUEST_NOT_FOUND',
+      correlationId,
+    });
+    return new Response(JSON.stringify(p), {
+      status: 404,
+      headers: { ...headers, 'content-type': 'application/problem+json' },
+    });
   }
-  return new Response(JSON.stringify(toWire(stored.request, stored.partnerReference)), { status: 200, headers: { ...headers, 'content-type': 'application/json' } });
+  return new Response(JSON.stringify(toWire(stored.request, stored.partnerReference)), {
+    status: 200,
+    headers: { ...headers, 'content-type': 'application/json' },
+  });
 }

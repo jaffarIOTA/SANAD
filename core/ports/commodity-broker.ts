@@ -54,5 +54,9 @@ export interface CommodityBrokerPort {
     readonly agencyRef?: string;
     readonly idempotencyKey: string;
     readonly correlationId: string;
-  }): Promise<Result<RailOutcome<{ readonly saleRef: string; readonly proceeds: Money; readonly confirmedAtEpochSeconds: bigint }>>>;
+  }): Promise<
+    Result<
+      RailOutcome<{ readonly saleRef: string; readonly proceeds: Money; readonly confirmedAtEpochSeconds: bigint }>
+    >
+  >;
 }

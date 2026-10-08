@@ -16,50 +16,100 @@ import type { StructureDefinition } from '../../../products/murabaha-scf/structu
 import type { TawarruqTransaction } from '../../../products/tawarruq-personal/execution.ts';
 import { createMurabahaActivities } from '../activities.ts';
 import { type TawarruqPorts, createTawarruqActivities } from '../activities-tawarruq.ts';
-import type { Attestation, EvidenceStore, LegPreparer, SequencingPorts, StructureSource, TawarruqStore, TransactionStore } from '../ports.ts';
-import { type MurabahaEffects, type MurabahaOutcome, type MurabahaSequenceInput, runMurabahaSequence } from '../programs/murabaha.ts';
-import { type TawarruqEffects, type TawarruqOutcome, type TawarruqSequenceInput, runTawarruqSequence } from '../programs/tawarruq.ts';
+import type {
+  Attestation,
+  EvidenceStore,
+  LegPreparer,
+  SequencingPorts,
+  StructureSource,
+  TawarruqStore,
+  TransactionStore,
+} from '../ports.ts';
+import {
+  type MurabahaEffects,
+  type MurabahaOutcome,
+  type MurabahaSequenceInput,
+  runMurabahaSequence,
+} from '../programs/murabaha.ts';
+import {
+  type TawarruqEffects,
+  type TawarruqOutcome,
+  type TawarruqSequenceInput,
+  runTawarruqSequence,
+} from '../programs/tawarruq.ts';
 
 export class VirtualAttestation implements Attestation {
   #epochSeconds: bigint;
   #serial = 0;
-  constructor(startEpochSeconds: bigint) { this.#epochSeconds = startEpochSeconds; }
-  advance(seconds: number): void { this.#epochSeconds += BigInt(seconds); }
-  get now(): bigint { return this.#epochSeconds; }
+  constructor(startEpochSeconds: bigint) {
+    this.#epochSeconds = startEpochSeconds;
+  }
+  advance(seconds: number): void {
+    this.#epochSeconds += BigInt(seconds);
+  }
+  get now(): bigint {
+    return this.#epochSeconds;
+  }
   /** Every attestation is a strictly later instant, as the authority's would be. */
   attest(): Promise<TsaInstant> {
     this.#serial += 1;
     this.#epochSeconds += 1n;
-    return Promise.resolve(tsaInstant({ verified: true, genTimeEpochSeconds: this.#epochSeconds, tokenDigest: `virtual-${String(this.#serial)}`, authorityId: 'virtual-tsa' }));
+    return Promise.resolve(
+      tsaInstant({
+        verified: true,
+        genTimeEpochSeconds: this.#epochSeconds,
+        tokenDigest: `virtual-${String(this.#serial)}`,
+        authorityId: 'virtual-tsa',
+      }),
+    );
   }
 }
 
 export class MapTransactionStore implements TransactionStore {
   readonly #rows = new Map<string, Transaction>();
   readonly history: Transaction['state'][] = [];
-  load(tenantId: string, transactionId: string): Promise<Transaction | undefined> { return Promise.resolve(this.#rows.get(`${tenantId}/${transactionId}`)); }
-  save(t: Transaction): Promise<void> { this.#rows.set(`${t.core.tenantId}/${t.core.transactionId}`, t); this.history.push(t.state); return Promise.resolve(); }
+  load(tenantId: string, transactionId: string): Promise<Transaction | undefined> {
+    return Promise.resolve(this.#rows.get(`${tenantId}/${transactionId}`));
+  }
+  save(t: Transaction): Promise<void> {
+    this.#rows.set(`${t.core.tenantId}/${t.core.transactionId}`, t);
+    this.history.push(t.state);
+    return Promise.resolve();
+  }
 }
 
 export class MapTawarruqStore implements TawarruqStore {
   readonly #rows = new Map<string, TawarruqTransaction>();
   readonly history: TawarruqTransaction['state'][] = [];
-  load(tenantId: string, transactionId: string): Promise<TawarruqTransaction | undefined> { return Promise.resolve(this.#rows.get(`${tenantId}/${transactionId}`)); }
-  save(t: TawarruqTransaction): Promise<void> { this.#rows.set(`${t.core.tenantId}/${t.core.transactionId}`, t); this.history.push(t.state); return Promise.resolve(); }
+  load(tenantId: string, transactionId: string): Promise<TawarruqTransaction | undefined> {
+    return Promise.resolve(this.#rows.get(`${tenantId}/${transactionId}`));
+  }
+  save(t: TawarruqTransaction): Promise<void> {
+    this.#rows.set(`${t.core.tenantId}/${t.core.transactionId}`, t);
+    this.history.push(t.state);
+    return Promise.resolve();
+  }
 }
 
 export class MapEvidenceStore implements EvidenceStore {
   readonly #rows: EvidenceRecord[] = [];
-  add(record: EvidenceRecord): void { this.#rows.push(record); }
+  add(record: EvidenceRecord): void {
+    this.#rows.push(record);
+  }
   forTransaction(tenantId: string, transactionId: string): Promise<readonly EvidenceRecord[]> {
     return Promise.resolve(this.#rows.filter((e) => e.tenantId === tenantId && e.transactionId === transactionId));
   }
 }
 
-export const fixedStructure = (definition: StructureDefinition): StructureSource => ({ definition: () => Promise.resolve(ok(definition)) });
+export const fixedStructure = (definition: StructureDefinition): StructureSource => ({
+  definition: () => Promise.resolve(ok(definition)),
+});
 
 /** A leg preparer that stands in for the document pipeline: chained hashes, attested instants, the party the structure names. */
-export function simpleLegPreparer(attestation: Attestation, parties: { readonly institutionCr: string; readonly buyerCr: string; readonly sellerCr: string }): LegPreparer {
+export function simpleLegPreparer(
+  attestation: Attestation,
+  parties: { readonly institutionCr: string; readonly buyerCr: string; readonly sellerCr: string },
+): LegPreparer {
   return {
     async prepare(p): Promise<Result<ContractLeg>> {
       const executedAt = await attestation.attest();
@@ -91,7 +141,11 @@ export interface MurabahaScenario {
   offerOutcome: 'ACCEPTED' | 'LAPSED';
 }
 
-export async function runMurabahaInMemory(ports: SequencingPorts & { readonly attestation: VirtualAttestation }, input: MurabahaSequenceInput, scenario: MurabahaScenario): Promise<{ readonly outcome: MurabahaOutcome; readonly progress: readonly string[]; readonly slept: number[] }> {
+export async function runMurabahaInMemory(
+  ports: SequencingPorts & { readonly attestation: VirtualAttestation },
+  input: MurabahaSequenceInput,
+  scenario: MurabahaScenario,
+): Promise<{ readonly outcome: MurabahaOutcome; readonly progress: readonly string[]; readonly slept: number[] }> {
   const acts = createMurabahaActivities(ports);
   const ref = { tenantId: input.tenantId, transactionId: input.transactionId };
   const progress: string[] = [];
@@ -107,18 +161,33 @@ export async function runMurabahaInMemory(ports: SequencingPorts & { readonly at
     bookObligation: () => acts.bookObligation(ref),
     lapseOffer: () => acts.lapseOffer(ref),
     unwind: (d) => acts.unwind(ref, d),
-    waitForEvidence: async (gate) => { await scenario.onWaitEvidence(gate, ports.attestation); },
+    waitForEvidence: async (gate) => {
+      await scenario.onWaitEvidence(gate, ports.attestation);
+    },
     // A lapse is a timer expiring, so the virtual authority moves past the
     // offer's validity — as wall time would have. The domain still checks.
-    waitForOfferOutcome: (validity) => { if (scenario.offerOutcome === 'LAPSED') ports.attestation.advance(validity + 1); return Promise.resolve(scenario.offerOutcome); },
-    sleepSeconds: (s) => { slept.push(s); ports.attestation.advance(s); return Promise.resolve(); },
-    progress: (step) => { progress.push(step); },
+    waitForOfferOutcome: (validity) => {
+      if (scenario.offerOutcome === 'LAPSED') ports.attestation.advance(validity + 1);
+      return Promise.resolve(scenario.offerOutcome);
+    },
+    sleepSeconds: (s) => {
+      slept.push(s);
+      ports.attestation.advance(s);
+      return Promise.resolve();
+    },
+    progress: (step) => {
+      progress.push(step);
+    },
   };
   const outcome = await runMurabahaSequence(fx, input);
   return { outcome, progress, slept };
 }
 
-export async function runTawarruqInMemory(ports: TawarruqPorts, input: TawarruqSequenceInput, scenario: { readonly signature: 'SIGNED' | 'TIMED_OUT' }): Promise<{ readonly outcome: TawarruqOutcome; readonly progress: readonly string[] }> {
+export async function runTawarruqInMemory(
+  ports: TawarruqPorts,
+  input: TawarruqSequenceInput,
+  scenario: { readonly signature: 'SIGNED' | 'TIMED_OUT' },
+): Promise<{ readonly outcome: TawarruqOutcome; readonly progress: readonly string[] }> {
   const acts = createTawarruqActivities(ports);
   const ref = { tenantId: input.tenantId, transactionId: input.transactionId };
   const progress: string[] = [];
@@ -130,7 +199,9 @@ export async function runTawarruqInMemory(ports: TawarruqPorts, input: TawarruqS
     disburse: () => acts.disburse(ref),
     waitForSaleSignature: () => Promise.resolve(scenario.signature),
     unwind: (r) => acts.unwind(ref, r),
-    progress: (s) => { progress.push(s); },
+    progress: (s) => {
+      progress.push(s);
+    },
   };
   return { outcome: await runTawarruqSequence(fx, input), progress };
 }

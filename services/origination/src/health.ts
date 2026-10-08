@@ -72,10 +72,9 @@ async function runOne(check: HealthCheck, nowMs: () => number): Promise<Componen
   const started = nowMs();
 
   const timeout = new Promise<CheckResult>((resolve) => {
-    setTimeout(
-      () => { resolve({ status: 'DOWN', detail: 'check timed out' }); },
-      CHECK_TIMEOUT_MS,
-    ).unref?.();
+    setTimeout(() => {
+      resolve({ status: 'DOWN', detail: 'check timed out' });
+    }, CHECK_TIMEOUT_MS).unref?.();
   });
 
   let result: CheckResult;

@@ -42,7 +42,12 @@ import {
   type ServicingUnavailable,
 } from '@sanad/core/origination/request.ts';
 import { loadDocumentChecklist } from '@sanad/config/loader.ts';
-import { checklistReport, type DocumentChecklist, type ItemReport, type PresentedDocument } from '@sanad/core/documents/checklist.ts';
+import {
+  checklistReport,
+  type DocumentChecklist,
+  type ItemReport,
+  type PresentedDocument,
+} from '@sanad/core/documents/checklist.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
 import { loadOriginationPolicy } from '@sanad/config/loader.ts';
 import type { OriginationPolicy } from '@sanad/core/origination/policy.ts';
@@ -50,7 +55,16 @@ import { resolveOriginationPolicy } from '@sanad/origination/origination-policy.
 
 import type { Pool } from 'pg';
 
-import { type PersistedDocument, type PersistedRequest, loadDocuments, loadRequests, persistencePool, persistenceUrl, saveDocuments, saveRequests } from './persistence.ts';
+import {
+  type PersistedDocument,
+  type PersistedRequest,
+  loadDocuments,
+  loadRequests,
+  persistencePool,
+  persistenceUrl,
+  saveDocuments,
+  saveRequests,
+} from './persistence.ts';
 import { MAKER } from './session.ts';
 
 /**
@@ -61,14 +75,23 @@ import { MAKER } from './session.ts';
  * sync accessor; the layout syncs before they render.
  */
 const FILE_POLICY = expectOk(loadOriginationPolicy('bank-a'));
-interface PolicyState { policy: OriginationPolicy; source: 'FILE' | 'REVISION' }
-const policyState: PolicyState = ((globalThis as { __sanadOpsPolicy?: PolicyState }).__sanadOpsPolicy ??= { policy: FILE_POLICY, source: 'FILE' });
+interface PolicyState {
+  policy: OriginationPolicy;
+  source: 'FILE' | 'REVISION';
+}
+const policyState: PolicyState = ((globalThis as { __sanadOpsPolicy?: PolicyState }).__sanadOpsPolicy ??= {
+  policy: FILE_POLICY,
+  source: 'FILE',
+});
 export const originationPolicy = (): OriginationPolicy => policyState.policy;
 export const originationPolicySource = (): 'FILE' | 'REVISION' => policyState.source;
 
 export async function syncOriginationPolicy(atEpochSeconds: bigint): Promise<void> {
   const resolved = await resolveOriginationPolicy('bank-a', atEpochSeconds);
-  if (resolved.policy.ok) { policyState.policy = resolved.policy.value; policyState.source = resolved.source; }
+  if (resolved.policy.ok) {
+    policyState.policy = resolved.policy.value;
+    policyState.source = resolved.source;
+  }
 }
 
 /**
@@ -227,7 +250,12 @@ export interface RequestRow {
   /** While waiting on someone outside the institution. */
   readonly pending?: { readonly from: InformationSource; readonly items: readonly string[] };
   /** The servicing attempt ledger, where one exists. */
-  readonly attempts?: readonly { readonly atEpochSeconds: bigint; readonly reason: string; readonly manualBy?: string; readonly manualNote?: string }[];
+  readonly attempts?: readonly {
+    readonly atEpochSeconds: bigint;
+    readonly reason: string;
+    readonly manualBy?: string;
+    readonly manualNote?: string;
+  }[];
 }
 
 const INVOICE_NUMBERS = state.invoiceNumbers;
@@ -242,24 +270,32 @@ export function toRow(requestId: string, request: OriginationRequest): RequestRo
     invoiceNumber: INVOICE_NUMBERS.get(requestId) ?? '—',
     amountMinorUnits: core.requestedAmount.minorUnits,
     raisedAtEpochSeconds: core.raisedAt.epochSeconds,
-    ...('submittedAt' in request
-      ? { submittedAtEpochSeconds: request.submittedAt.epochSeconds }
-      : {}),
+    ...('submittedAt' in request ? { submittedAtEpochSeconds: request.submittedAt.epochSeconds } : {}),
     ...('maker' in request ? { makerPrincipalId: request.maker.principalId } : {}),
-    ...('servicing' in request && request.servicing !== undefined
-      ? { servicing: request.servicing }
-      : {}),
+    ...('servicing' in request && request.servicing !== undefined ? { servicing: request.servicing } : {}),
     ...('note' in request ? { note: request.note } : {}),
     ...('reasonCode' in request ? { reasonCode: request.reasonCode } : {}),
     ...('contraryToServicing' in request && request.contraryToServicing !== undefined
       ? { contraryJustification: request.contraryToServicing.justification }
       : {}),
     ...('changes' in request && request.changes !== undefined
-      ? { changes: { fields: request.changes.fields, material: request.changes.material, returnedNote: request.changes.returnedNote } }
+      ? {
+          changes: {
+            fields: request.changes.fields,
+            material: request.changes.material,
+            returnedNote: request.changes.returnedNote,
+          },
+        }
       : {}),
     ...(request.state === 'PENDING_INFORMATION' ? { pending: { from: request.from, items: request.items } } : {}),
     ...('attempts' in request && request.attempts !== undefined && request.attempts.length > 0
-      ? { attempts: request.attempts.map((a) => ({ atEpochSeconds: a.at.epochSeconds, reason: a.reason, ...(a.manual === undefined ? {} : { manualBy: a.manual.by.principalId, manualNote: a.manual.note }) })) }
+      ? {
+          attempts: request.attempts.map((a) => ({
+            atEpochSeconds: a.at.epochSeconds,
+            reason: a.reason,
+            ...(a.manual === undefined ? {} : { manualBy: a.manual.by.principalId, manualNote: a.manual.note }),
+          })),
+        }
       : {}),
   };
 }
@@ -324,8 +360,8 @@ export function keyRequest(input: KeyRequestInput): Result<RequestRow> {
             credentialRef: input.credentialRef ?? '',
           } satisfies OriginationRequestCore['identification'])
         : input.channel === 'AGENT_ASSISTED'
-          ? ({ kind: 'AGENT' as const, agentId: input.agentId ?? '', branchCode: input.branchCode ?? '' })
-          : ({ kind: 'STAFF_PRINCIPAL' as const, principalId: input.maker.principalId });
+          ? { kind: 'AGENT' as const, agentId: input.agentId ?? '', branchCode: input.branchCode ?? '' }
+          : { kind: 'STAFF_PRINCIPAL' as const, principalId: input.maker.principalId };
 
   const core: OriginationRequestCore = {
     requestId,
@@ -367,7 +403,7 @@ export function keyRequest(input: KeyRequestInput): Result<RequestRow> {
 
   INVOICE_NUMBERS.set(requestId, input.invoiceNumber);
   if (input.partnerReference !== undefined) state.partnerReferences.set(requestId, input.partnerReference);
-  putRequest(requestId,keyed.value);
+  putRequest(requestId, keyed.value);
   return ok(toRow(requestId, keyed.value));
 }
 
@@ -378,7 +414,7 @@ export function submit(requestId: string): Result<RequestRow> {
   const next = submitForReview(current as Keying, developmentAttestation());
   if (!next.ok) return next;
 
-  putRequest(requestId,next.value);
+  putRequest(requestId, next.value);
   return ok(toRow(requestId, next.value));
 }
 
@@ -388,10 +424,7 @@ export function submit(requestId: string): Result<RequestRow> {
  * In production this arrives from the core banking adapter, asynchronously.
  * Exposed as a command here so the two-stage flow can be walked by hand.
  */
-export function applyServicingOutcome(
-  requestId: string,
-  outcome: ServicingOutcome,
-): Result<RequestRow> {
+export function applyServicingOutcome(requestId: string, outcome: ServicingOutcome): Result<RequestRow> {
   const current = REQUESTS.get(requestId);
   if (current?.state !== 'AWAITING_SERVICING_RESPONSE') {
     return notInState(requestId, 'AWAITING_SERVICING_RESPONSE');
@@ -400,7 +433,7 @@ export function applyServicingOutcome(
   const next = recordServicingOutcome(current as AwaitingServicingResponse, outcome);
   if (!next.ok) return next;
 
-  putRequest(requestId,next.value);
+  putRequest(requestId, next.value);
   return ok(toRow(requestId, next.value));
 }
 
@@ -421,37 +454,29 @@ export function approveRequest(
   );
   if (!next.ok) return next;
 
-  putRequest(requestId,next.value);
+  putRequest(requestId, next.value);
   return ok(toRow(requestId, next.value));
 }
 
-export function returnRequest(
-  requestId: string,
-  reviewer: Principal,
-  note: string,
-): Result<RequestRow> {
+export function returnRequest(requestId: string, reviewer: Principal, note: string): Result<RequestRow> {
   const current = REQUESTS.get(requestId);
   if (current?.state !== 'AWAITING_REVIEW') return notInState(requestId, 'AWAITING_REVIEW');
 
   const next = returnToMaker(current as AwaitingReview, reviewer, note);
   if (!next.ok) return next;
 
-  putRequest(requestId,next.value);
+  putRequest(requestId, next.value);
   return ok(toRow(requestId, next.value));
 }
 
-export function declineRequest(
-  requestId: string,
-  reviewer: Principal,
-  reasonCode: string,
-): Result<RequestRow> {
+export function declineRequest(requestId: string, reviewer: Principal, reasonCode: string): Result<RequestRow> {
   const current = REQUESTS.get(requestId);
   if (current?.state !== 'AWAITING_REVIEW') return notInState(requestId, 'AWAITING_REVIEW');
 
   const next = rejectRequest(current as AwaitingReview, reviewer, reasonCode);
   if (!next.ok) return next;
 
-  putRequest(requestId,next.value);
+  putRequest(requestId, next.value);
   return ok(toRow(requestId, next.value));
 }
 
@@ -468,10 +493,11 @@ export function expireOverdue(observedAt: TsaInstant): readonly string[] {
       request.state !== 'AWAITING_SERVICING_RESPONSE' &&
       request.state !== 'AWAITING_REVIEW' &&
       request.state !== 'RETURNED_TO_MAKER'
-    ) continue;
+    )
+      continue;
     const result = expire(request, originationPolicy(), observedAt);
     if (result.ok) {
-      putRequest(requestId,result.value);
+      putRequest(requestId, result.value);
       expired.push(requestId);
     }
   }
@@ -480,12 +506,17 @@ export function expireOverdue(observedAt: TsaInstant): readonly string[] {
 
 // -- Lifecycle: information, servicing failures, resubmission ------------------
 
-export function requestInformation(requestId: string, reviewer: Principal, from: InformationSource, items: readonly string[]): Result<RequestRow> {
+export function requestInformation(
+  requestId: string,
+  reviewer: Principal,
+  from: InformationSource,
+  items: readonly string[],
+): Result<RequestRow> {
   const current = REQUESTS.get(requestId);
   if (current?.state !== 'AWAITING_REVIEW') return notInState(requestId, 'AWAITING_REVIEW');
   const next = requestInformationTransition(current as AwaitingReview, reviewer, from, items, developmentAttestation());
   if (!next.ok) return next;
-  putRequest(requestId,next.value);
+  putRequest(requestId, next.value);
   return ok(toRow(requestId, next.value));
 }
 
@@ -493,31 +524,47 @@ export function provideInformation(requestId: string): Result<RequestRow> {
   const current = REQUESTS.get(requestId);
   if (current?.state !== 'PENDING_INFORMATION') return notInState(requestId, 'PENDING_INFORMATION');
   const next = provideInformationTransition(current as PendingInformation, developmentAttestation());
-  putRequest(requestId,next);
+  putRequest(requestId, next);
   return ok(toRow(requestId, next));
 }
 
 /** The platform could not be reached. Production: the adapter reports it; here: a button. */
 export function failServicing(requestId: string, reason: string): Result<RequestRow> {
   const current = REQUESTS.get(requestId);
-  if (current?.state !== 'AWAITING_SERVICING_RESPONSE' && current?.state !== 'SERVICING_UNAVAILABLE') return notInState(requestId, 'AWAITING_SERVICING_RESPONSE');
-  const next = recordServicingFailure(current as AwaitingServicingResponse | ServicingUnavailable, developmentAttestation(), reason);
+  if (current?.state !== 'AWAITING_SERVICING_RESPONSE' && current?.state !== 'SERVICING_UNAVAILABLE')
+    return notInState(requestId, 'AWAITING_SERVICING_RESPONSE');
+  const next = recordServicingFailure(
+    current as AwaitingServicingResponse | ServicingUnavailable,
+    developmentAttestation(),
+    reason,
+  );
   if (!next.ok) return next;
-  putRequest(requestId,next.value);
+  putRequest(requestId, next.value);
   return ok(toRow(requestId, next.value));
 }
 
-export function retryServicing(requestId: string, manual?: { readonly by: Principal; readonly note: string }): Result<RequestRow> {
+export function retryServicing(
+  requestId: string,
+  manual?: { readonly by: Principal; readonly note: string },
+): Result<RequestRow> {
   const current = REQUESTS.get(requestId);
   if (current?.state !== 'SERVICING_UNAVAILABLE') return notInState(requestId, 'SERVICING_UNAVAILABLE');
-  const next = retryServicingTransition(current as ServicingUnavailable, developmentAttestation(), originationPolicy(), manual);
+  const next = retryServicingTransition(
+    current as ServicingUnavailable,
+    developmentAttestation(),
+    originationPolicy(),
+    manual,
+  );
   if (!next.ok) return next;
-  putRequest(requestId,next.value);
+  putRequest(requestId, next.value);
   return ok(toRow(requestId, next.value));
 }
 
 /** The maker corrected a returned request. The identifier is kept; the diff travels with it. */
-export function reviseAndResubmit(requestId: string, patch: { readonly programmeId?: string; readonly tenorDays?: number }): Result<RequestRow> {
+export function reviseAndResubmit(
+  requestId: string,
+  patch: { readonly programmeId?: string; readonly tenorDays?: number },
+): Result<RequestRow> {
   const current = REQUESTS.get(requestId);
   if (current?.state !== 'RETURNED_TO_MAKER') return notInState(requestId, 'RETURNED_TO_MAKER');
   const revised: OriginationRequestCore = {
@@ -527,7 +574,7 @@ export function reviseAndResubmit(requestId: string, patch: { readonly programme
   };
   const next = resubmit(current as ReturnedToMaker, revised, developmentAttestation(), originationPolicy());
   if (!next.ok) return next;
-  putRequest(requestId,next.value);
+  putRequest(requestId, next.value);
   return ok(toRow(requestId, next.value));
 }
 
@@ -546,12 +593,17 @@ export function attachDocument(requestId: string, documentType: string): void {
   state.unsavedDocuments.push({ requestId, position: list.length, document });
 }
 
-export function checklistFor(request: RequestRow): { readonly checklist: DocumentChecklist; readonly report: readonly ItemReport[] } | undefined {
+export function checklistFor(
+  request: RequestRow,
+): { readonly checklist: DocumentChecklist; readonly report: readonly ItemReport[] } | undefined {
   const domain = REQUESTS.get(request.requestId);
   if (domain === undefined) return undefined;
   const loaded = loadDocumentChecklist('bank-a', domain.core.programmeId);
   if (!loaded.ok) return undefined;
-  return { checklist: loaded.value, report: checklistReport(loaded.value, presentedDocuments(request.requestId), developmentAttestation()) };
+  return {
+    checklist: loaded.value,
+    report: checklistReport(loaded.value, presentedDocuments(request.requestId), developmentAttestation()),
+  };
 }
 
 // -- Queries ------------------------------------------------------------------
@@ -715,9 +767,7 @@ function seedDevelopmentBook(): void {
       amountMinorUnits: seed.amountMinorUnits,
       tenorDays: seed.tenorDays,
       maker: seed.maker,
-      ...(seed.merchantMandateRef === undefined
-        ? {}
-        : { merchantMandateRef: seed.merchantMandateRef }),
+      ...(seed.merchantMandateRef === undefined ? {} : { merchantMandateRef: seed.merchantMandateRef }),
       ...(seed.aggregatorId === undefined ? {} : { aggregatorId: seed.aggregatorId }),
       ...(seed.agentId === undefined ? {} : { agentId: seed.agentId }),
       ...(seed.branchCode === undefined ? {} : { branchCode: seed.branchCode }),
@@ -736,9 +786,7 @@ function seedDevelopmentBook(): void {
       applyServicingOutcome(keyed.value.requestId, {
         decision: seed.servicingResponded,
         reference: `svc_${keyed.value.requestId}`,
-        ...(seed.servicingResponded === 'APPROVED'
-          ? {}
-          : { reasonCode: 'EXPOSURE_ABOVE_PROGRAMME_LIMIT' }),
+        ...(seed.servicingResponded === 'APPROVED' ? {} : { reasonCode: 'EXPOSURE_ABOVE_PROGRAMME_LIMIT' }),
         respondedAt: developmentAttestation(),
       });
     }
@@ -781,7 +829,14 @@ async function flushRequests(pool: Pool): Promise<void> {
     if (request === undefined) return [];
     const invoiceNumber = state.invoiceNumbers.get(requestId);
     const partnerReference = state.partnerReferences.get(requestId);
-    return [{ requestId, request, ...(invoiceNumber === undefined ? {} : { invoiceNumber }), ...(partnerReference === undefined ? {} : { partnerReference }) }];
+    return [
+      {
+        requestId,
+        request,
+        ...(invoiceNumber === undefined ? {} : { invoiceNumber }),
+        ...(partnerReference === undefined ? {} : { partnerReference }),
+      },
+    ];
   });
   await saveRequests(pool, TENANT_CODE, records);
   for (const id of ids) dirty.delete(id);
@@ -818,7 +873,8 @@ function restore(record: PersistedRequest): void {
   if (record.partnerReference !== undefined) state.partnerReferences.set(record.requestId, record.partnerReference);
   // SH-10: the registry is rebuilt from the book, so an invoice financed before a restart is still refused after it.
   const trade = record.request.core.tradeReference;
-  if (trade.type === 'CLEARED_INVOICE' && trade.invoiceUuid !== undefined) state.financed.set(trade.invoiceUuid, record.requestId);
+  if (trade.type === 'CLEARED_INVOICE' && trade.invoiceUuid !== undefined)
+    state.financed.set(trade.invoiceUuid, record.requestId);
   // The id sequence continues from the highest number already issued.
   const numbered = /^req_(\d+)$/.exec(record.requestId);
   if (numbered !== null) state.sequence = Math.max(state.sequence, Number.parseInt(numbered[1] ?? '0', 10));

@@ -13,7 +13,11 @@ import { localeFromSegment } from '@sanad/i18n/strings.ts';
 import { findViewerDocument, viewerLicence } from '../../../../server/documents.ts';
 import { Viewer } from './Viewer.tsx';
 
-export default async function DocumentPage({ params }: { readonly params: Promise<{ readonly locale: string; readonly documentId: string }> }) {
+export default async function DocumentPage({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string; readonly documentId: string }>;
+}) {
   const { locale: segment, documentId } = await params;
   const locale = localeFromSegment(segment);
   if (locale === undefined) notFound();
@@ -30,13 +34,30 @@ export default async function DocumentPage({ params }: { readonly params: Promis
           <p className="mt-1 flex flex-wrap items-center gap-3 text-[15px] text-ink-quiet">
             <span className="identifier">{doc.documentId}</span>
             <Status tone="progress" label={arabic ? 'بيانات اصطناعية' : 'synthetic data'} />
-            <Status tone={licence.kind === 'LICENSED' ? 'settled' : 'blocked'} label={licence.kind === 'LICENSED' ? (arabic ? 'ترخيص مفعّل' : 'licence active') : (arabic ? 'وضع التقييم — لا ترخيص' : 'evaluation mode — no licence key')} />
+            <Status
+              tone={licence.kind === 'LICENSED' ? 'settled' : 'blocked'}
+              label={
+                licence.kind === 'LICENSED'
+                  ? arabic
+                    ? 'ترخيص مفعّل'
+                    : 'licence active'
+                  : arabic
+                    ? 'وضع التقييم — لا ترخيص'
+                    : 'evaluation mode — no licence key'
+              }
+            />
           </p>
         </div>
-        <a href={`/${segment}/documents`} className={BUTTON_SECONDARY}>{arabic ? 'كل المستندات' : 'All documents'}</a>
+        <a href={`/${segment}/documents`} className={BUTTON_SECONDARY}>
+          {arabic ? 'كل المستندات' : 'All documents'}
+        </a>
       </div>
       <Card>
-        <Viewer documentUrl={`/api/documents/v1/artefacts/${doc.documentId}`} arabic={arabic} {...(licence.kind === 'LICENSED' ? { licenseKey: licence.licenseKey } : {})} />
+        <Viewer
+          documentUrl={`/api/documents/v1/artefacts/${doc.documentId}`}
+          arabic={arabic}
+          {...(licence.kind === 'LICENSED' ? { licenseKey: licence.licenseKey } : {})}
+        />
       </Card>
     </div>
   );

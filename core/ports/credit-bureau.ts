@@ -62,5 +62,12 @@ export interface FacilityReport {
 
 export interface CreditBureauPort {
   request(req: BureauRequest): Promise<Result<BureauOutcome>>;
-  report(report: FacilityReport): Promise<Result<{ readonly kind: 'ACKNOWLEDGED'; readonly acknowledgementRef: string } | { readonly kind: 'UNAVAILABLE'; readonly reason: string }>>;
+  report(
+    report: FacilityReport,
+  ): Promise<
+    Result<
+      | { readonly kind: 'ACKNOWLEDGED'; readonly acknowledgementRef: string }
+      | { readonly kind: 'UNAVAILABLE'; readonly reason: string }
+    >
+  >;
 }

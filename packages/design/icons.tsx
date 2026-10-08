@@ -46,8 +46,16 @@ export type IconName =
 
 const PATHS: Record<IconName, ReactElement> = {
   // Logical: start points against the reading direction. Mirrored under RTL by the `rtl:` class in Icon.
-  'chevron-start': <g className="origin-center rtl:-scale-x-100"><path d="M15 6l-6 6 6 6" /></g>,
-  'chevron-end': <g className="origin-center rtl:-scale-x-100"><path d="M9 6l6 6-6 6" /></g>,
+  'chevron-start': (
+    <g className="origin-center rtl:-scale-x-100">
+      <path d="M15 6l-6 6 6 6" />
+    </g>
+  ),
+  'chevron-end': (
+    <g className="origin-center rtl:-scale-x-100">
+      <path d="M9 6l6 6-6 6" />
+    </g>
+  ),
   bell: (
     <>
       <path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2Z" />
@@ -239,9 +247,7 @@ export function IconChip({
   } as const;
 
   return (
-    <span
-      className={`inline-flex size-9 shrink-0 items-center justify-center rounded-full ${tones[tone]}`}
-    >
+    <span className={`inline-flex size-9 shrink-0 items-center justify-center rounded-full ${tones[tone]}`}>
       <Icon name={name} size={18} />
     </span>
   );

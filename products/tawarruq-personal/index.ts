@@ -45,7 +45,10 @@ export const tawarruqPersonal: ProductModule<TawarruqTerms, TawarruqQuote, Tawar
       applicantRef: context.applicantRef,
       quote,
       brokerRef: terms.brokerRef,
-      agency: { permitted: terms.agencyPermitted, ...(context.agencyRef === undefined ? {} : { agencyRef: context.agencyRef }) },
+      agency: {
+        permitted: terms.agencyPermitted,
+        ...(context.agencyRef === undefined ? {} : { agencyRef: context.agencyRef }),
+      },
       bureauEnquiryRef: context.bureauEnquiryRef,
       consentId: context.consentId,
       correlationId: context.correlationId,

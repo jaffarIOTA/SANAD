@@ -120,11 +120,7 @@ describe('SH-01 — no rate construct exists inside the Murabaha module', () => 
     const { expectOk } = await import('../../core/kernel/result.ts');
 
     const pricing = expectOk(priceMurabaha(money(100_000n), money(2_500n)));
-    expect(Object.keys(pricing).sort()).toEqual([
-      'costAmount',
-      'profitAmount',
-      'salePriceAmount',
-    ]);
+    expect(Object.keys(pricing).sort()).toEqual(['costAmount', 'profitAmount', 'salePriceAmount']);
     expect(pricing.salePriceAmount.minorUnits).toBe(102_500n);
   });
 });
@@ -393,9 +389,7 @@ describe('no domain table lives in the exposed schema', () => {
   it('every domain table enables row-level security', () => {
     for (const file of filesUnder('supabase/migrations')) {
       const content = read(file);
-      const created = [...content.matchAll(/create\s+table\s+if\s+not\s+exists\s+([\w.]+)/gi)].map(
-        (m) => m[1] ?? '',
-      );
+      const created = [...content.matchAll(/create\s+table\s+if\s+not\s+exists\s+([\w.]+)/gi)].map((m) => m[1] ?? '');
       if (created.length === 0) continue;
       // Either enabled inline or by the loop at the foot of the migration.
       expect(

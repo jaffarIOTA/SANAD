@@ -136,9 +136,7 @@ export async function findOffer(transactionId: string): Promise<OfferView | unde
   const trade = await findTrade(transactionId);
   if (trade === undefined || trade.availability.kind !== 'AVAILABLE') return undefined;
 
-  const pricing = expectOk(
-    priceMurabaha(money(trade.amountMinorUnits), money(462_500n)),
-  );
+  const pricing = expectOk(priceMurabaha(money(trade.amountMinorUnits), money(462_500n)));
 
   return {
     transactionId: trade.transactionId,

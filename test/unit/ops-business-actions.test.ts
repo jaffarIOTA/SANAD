@@ -12,12 +12,27 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/navigation', () => ({
-  redirect: (url: string) => { throw Object.assign(new Error('NEXT_REDIRECT'), { url }); },
+  redirect: (url: string) => {
+    throw Object.assign(new Error('NEXT_REDIRECT'), { url });
+  },
 }));
 vi.mock('next/cache', () => ({ revalidatePath: () => undefined }));
 
-import { BUSINESS_ROLES, READ_FIGURE_SOURCES, getApplication, handOver, ingestReadFigures, resetBusinessStore } from '../../apps/ops/src/server/business.ts';
-import { presentDocumentAction, proposeFigureAction, submitForAssessmentAction, verifyFigureAction, withdrawApplicationAction } from '../../apps/ops/src/server/business-actions.ts';
+import {
+  BUSINESS_ROLES,
+  READ_FIGURE_SOURCES,
+  getApplication,
+  handOver,
+  ingestReadFigures,
+  resetBusinessStore,
+} from '../../apps/ops/src/server/business.ts';
+import {
+  presentDocumentAction,
+  proposeFigureAction,
+  submitForAssessmentAction,
+  verifyFigureAction,
+  withdrawApplicationAction,
+} from '../../apps/ops/src/server/business-actions.ts';
 
 const TENANT = 'sme-fund-ae' as const;
 const ID = 'FR-00009101';
@@ -41,40 +56,84 @@ async function redirectOf(action: (f: FormData) => Promise<void>, f: FormData): 
 }
 
 describe('business server actions', () => {
-  beforeAll(() => { process.env['SANAD_JURISDICTION'] = 'AE'; });
+  beforeAll(() => {
+    process.env['SANAD_JURISDICTION'] = 'AE';
+  });
   beforeEach(async () => {
     resetBusinessStore({ seed: false });
-    const r = await handOver(TENANT, {
-      applicationId: ID, upstreamRef: 'upstream-actions-9101',
-      applicant: { businessNameEn: 'Actions Test LLC', registrationRef: 'TL-ACT-9101', sector: 'TRADING', yearsInOperation: 4, owners: [{ displayName: 'Actions Owner Example', ref: 'owner-act-9101' }], upstreamVerificationRefs: ['uaepass:assert-act'] },
-      productCode: 'sme-term-conventional', variantCode: 'SMALL_LOAN', purpose: 'INVENTORY', requestedMinorUnits: 25_000_000n, tenorMonths: 24, graceMonths: 0, contributionPerTenThousand: 2_000,
-    }, 'upstream');
+    const r = await handOver(
+      TENANT,
+      {
+        applicationId: ID,
+        upstreamRef: 'upstream-actions-9101',
+        applicant: {
+          businessNameEn: 'Actions Test LLC',
+          registrationRef: 'TL-ACT-9101',
+          sector: 'TRADING',
+          yearsInOperation: 4,
+          owners: [{ displayName: 'Actions Owner Example', ref: 'owner-act-9101' }],
+          upstreamVerificationRefs: ['uaepass:assert-act'],
+        },
+        productCode: 'sme-term-conventional',
+        variantCode: 'SMALL_LOAN',
+        purpose: 'INVENTORY',
+        requestedMinorUnits: 25_000_000n,
+        tenorMonths: 24,
+        graceMonths: 0,
+        contributionPerTenThousand: 2_000,
+      },
+      'upstream',
+    );
     expect(r.ok).toBe(true);
   });
 
   it('#1 records a figure posted with sourceKind=OCR as OFFICER_ENTRY by the officer; a verify posted as OCR goes to the checker', async () => {
-    const proposed = await redirectOf(proposeFigureAction, form({ metric: 'NET_PROFIT', periodLabel: 'FY2025', amount: '900000', sourceKind: 'OCR', sourceRef: 'doc-act' }));
+    const proposed = await redirectOf(
+      proposeFigureAction,
+      form({ metric: 'NET_PROFIT', periodLabel: 'FY2025', amount: '900000', sourceKind: 'OCR', sourceRef: 'doc-act' }),
+    );
     expect(proposed.searchParams.get('notice')).toBe('FIGURE_PROPOSED');
     const figure = (await getApplication(TENANT, ID))?.figures.find((f) => f.figure.metric === 'NET_PROFIT');
     expect(figure?.figure.sourceKind).toBe('OFFICER_ENTRY');
     expect(figure?.figure.enteredBy).toBe(BUSINESS_ROLES.officer);
 
     // The hidden field claims OCR, which used to route verification to the officer — the person who keyed it.
-    const verified = await redirectOf(verifyFigureAction, form({ figureId: figure?.figureId ?? '', sourceKind: 'OCR' }));
+    const verified = await redirectOf(
+      verifyFigureAction,
+      form({ figureId: figure?.figureId ?? '', sourceKind: 'OCR' }),
+    );
     expect(verified.searchParams.get('notice')).toBe('FIGURE_VERIFIED');
     const after = (await getApplication(TENANT, ID))?.figures.find((f) => f.figure.metric === 'NET_PROFIT');
     expect(after?.figure.verification?.verifiedBy).toBe(BUSINESS_ROLES.checker);
   });
 
   it('#1 a read figure (system path) is verified by the officer', async () => {
-    const read = await ingestReadFigures(TENANT, ID, [{ metric: 'ANNUAL_REVENUE', periodLabel: 'FY2025', minorUnits: 1_000_000n, sourceKind: 'OCR', sourceRef: 'doc-act' }], READ_FIGURE_SOURCES.ocr);
-    const id = read.ok ? read.value.figures[0]?.figureId ?? '' : '';
+    const read = await ingestReadFigures(
+      TENANT,
+      ID,
+      [
+        {
+          metric: 'ANNUAL_REVENUE',
+          periodLabel: 'FY2025',
+          minorUnits: 1_000_000n,
+          sourceKind: 'OCR',
+          sourceRef: 'doc-act',
+        },
+      ],
+      READ_FIGURE_SOURCES.ocr,
+    );
+    const id = read.ok ? (read.value.figures[0]?.figureId ?? '') : '';
     await redirectOf(verifyFigureAction, form({ figureId: id }));
-    expect((await getApplication(TENANT, ID))?.figures[0]?.figure.verification?.verifiedBy).toBe(BUSINESS_ROLES.officer);
+    expect((await getApplication(TENANT, ID))?.figures[0]?.figure.verification?.verifiedBy).toBe(
+      BUSINESS_ROLES.officer,
+    );
   });
 
   it('#16 a refusal carries the control and reason codes only, never a message', async () => {
-    const refused = await redirectOf(proposeFigureAction, form({ metric: 'NET_PROFIT', periodLabel: 'FY2025', amount: 'not-a-number', sourceRef: 'doc-act' }));
+    const refused = await redirectOf(
+      proposeFigureAction,
+      form({ metric: 'NET_PROFIT', periodLabel: 'FY2025', amount: 'not-a-number', sourceRef: 'doc-act' }),
+    );
     expect(refused.searchParams.get('control')).toBe('OP-DETERMINACY');
     expect(refused.searchParams.get('reason')).toBe('AMOUNT_MALFORMED');
     expect(refused.searchParams.has('message')).toBe(false);
@@ -89,7 +148,10 @@ describe('business server actions', () => {
       [withdrawApplicationAction, { reason: 'Owner 1012345678 changed plans' }],
       [withdrawApplicationAction, { reason: 'Owner 784-1985-1234567-1 changed plans' }],
       [presentDocumentAction, { documentType: 'TRADE_LICENCE', documentRef: 'doc-2087654321' }],
-      [proposeFigureAction, { metric: 'NET_PROFIT', periodLabel: 'FY2025', amount: '100', sourceRef: 'stmt-1012345678' }],
+      [
+        proposeFigureAction,
+        { metric: 'NET_PROFIT', periodLabel: 'FY2025', amount: '100', sourceRef: 'stmt-1012345678' },
+      ],
     ] as const) {
       const url = await redirectOf(action, form(fields));
       expect(url.searchParams.get('reason')).toBe('IDENTITY_NUMBER_IN_PAYLOAD');
@@ -109,7 +171,10 @@ describe('business server actions', () => {
     ]);
     expect(a.searchParams.get('notice')).toBe('DOCUMENT_PRESENTED');
     expect(b.searchParams.get('notice')).toBe('DOCUMENT_PRESENTED');
-    expect((await getApplication(TENANT, ID))?.documents.map((d) => d.documentRef).sort()).toEqual(['doc-act-a', 'doc-act-b']);
+    expect((await getApplication(TENANT, ID))?.documents.map((d) => d.documentRef).sort()).toEqual([
+      'doc-act-a',
+      'doc-act-b',
+    ]);
   });
 
   it('#13 the finance principal is a distinct role', () => {

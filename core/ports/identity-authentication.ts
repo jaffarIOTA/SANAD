@@ -11,6 +11,23 @@ import type { Result } from '../kernel/result.ts';
 import type { RailOutcome } from './rail.ts';
 
 export interface IdentityAuthenticationPort {
-  startAuthentication(params: { readonly tenantId: string; readonly applicantRef: string; readonly purpose: 'LOGIN' | 'STEP_UP' | 'SIGNATURE_INTENT'; readonly correlationId: string }): Promise<Result<RailOutcome<{ readonly transactionRef: string; readonly expiresAtEpochSeconds: bigint }>>>;
-  confirmAuthentication(params: { readonly tenantId: string; readonly transactionRef: string; readonly correlationId: string }): Promise<Result<RailOutcome<{ readonly assertionId: string; readonly identityRef: string; readonly authenticatedAtEpochSeconds: bigint }>>>;
+  startAuthentication(params: {
+    readonly tenantId: string;
+    readonly applicantRef: string;
+    readonly purpose: 'LOGIN' | 'STEP_UP' | 'SIGNATURE_INTENT';
+    readonly correlationId: string;
+  }): Promise<Result<RailOutcome<{ readonly transactionRef: string; readonly expiresAtEpochSeconds: bigint }>>>;
+  confirmAuthentication(params: {
+    readonly tenantId: string;
+    readonly transactionRef: string;
+    readonly correlationId: string;
+  }): Promise<
+    Result<
+      RailOutcome<{
+        readonly assertionId: string;
+        readonly identityRef: string;
+        readonly authenticatedAtEpochSeconds: bigint;
+      }>
+    >
+  >;
 }

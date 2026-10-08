@@ -13,7 +13,12 @@
  * simply not served by this deployment until the setting points at it.
  */
 
-import { type TenantCode, TENANT_CODES, loadJurisdictionProfile, loadTenantOnboarding } from '../../../config/loader.ts';
+import {
+  type TenantCode,
+  TENANT_CODES,
+  loadJurisdictionProfile,
+  loadTenantOnboarding,
+} from '../../../config/loader.ts';
 import type { JurisdictionCode, JurisdictionProfile } from '../../../core/jurisdiction/profile.ts';
 import type { Result } from '../../../core/kernel/result.ts';
 
@@ -21,7 +26,9 @@ import { databaseUrlFromEnvironment, sharedPool } from './credentials.ts';
 
 const isJurisdiction = (v: unknown): v is JurisdictionCode => v === 'SA' || v === 'AE';
 
-export async function resolveDeploymentJurisdiction(env: Readonly<Record<string, string | undefined>> = process.env): Promise<JurisdictionCode> {
+export async function resolveDeploymentJurisdiction(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): Promise<JurisdictionCode> {
   const url = databaseUrlFromEnvironment(env);
   if (url === undefined) {
     const fromEnv = env['SANAD_JURISDICTION']?.trim().toUpperCase();
@@ -46,7 +53,9 @@ export function tenantsOf(code: JurisdictionCode): readonly TenantCode[] {
   });
 }
 
-export async function deploymentJurisdiction(env: Readonly<Record<string, string | undefined>> = process.env): Promise<DeploymentJurisdiction> {
+export async function deploymentJurisdiction(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): Promise<DeploymentJurisdiction> {
   const code = await resolveDeploymentJurisdiction(env);
   return { code, profile: loadJurisdictionProfile(code), activeTenants: tenantsOf(code) };
 }
@@ -72,28 +81,70 @@ export interface DeploymentJurisdictionRevision {
 export async function listDeploymentJurisdictionRevisions(): Promise<readonly DeploymentJurisdictionRevision[]> {
   const url = databaseUrlFromEnvironment();
   if (url === undefined) return [];
-  const r = await sharedPool(url).query<{ id: string; jurisdiction: string; summary: string; status: DeploymentJurisdictionRevision['status']; proposed_by: string; proposed_at: Date; decided_by: string | null; decided_at: Date | null; rejection_reason: string | null }>('select * from config.list_deployment_jurisdiction_revisions()');
-  return r.rows.map((x) => ({ id: x.id, jurisdiction: (isJurisdiction(x.jurisdiction.trim()) ? x.jurisdiction.trim() : 'SA') as JurisdictionCode, summary: x.summary, status: x.status, proposedBy: x.proposed_by, proposedAt: x.proposed_at.toISOString(), decidedBy: x.decided_by, decidedAt: x.decided_at === null ? null : x.decided_at.toISOString(), rejectionReason: x.rejection_reason }));
+  const r = await sharedPool(url).query<{
+    id: string;
+    jurisdiction: string;
+    summary: string;
+    status: DeploymentJurisdictionRevision['status'];
+    proposed_by: string;
+    proposed_at: Date;
+    decided_by: string | null;
+    decided_at: Date | null;
+    rejection_reason: string | null;
+  }>('select * from config.list_deployment_jurisdiction_revisions()');
+  return r.rows.map((x) => ({
+    id: x.id,
+    jurisdiction: (isJurisdiction(x.jurisdiction.trim()) ? x.jurisdiction.trim() : 'SA') as JurisdictionCode,
+    summary: x.summary,
+    status: x.status,
+    proposedBy: x.proposed_by,
+    proposedAt: x.proposed_at.toISOString(),
+    decidedBy: x.decided_by,
+    decidedAt: x.decided_at === null ? null : x.decided_at.toISOString(),
+    rejectionReason: x.rejection_reason,
+  }));
 }
 
 export async function deploymentJurisdictionLocked(): Promise<boolean> {
   const url = databaseUrlFromEnvironment();
   if (url === undefined) return false;
-  const r = await sharedPool(url).query<{ locked: boolean }>('select config.deployment_jurisdiction_locked() as locked');
+  const r = await sharedPool(url).query<{ locked: boolean }>(
+    'select config.deployment_jurisdiction_locked() as locked',
+  );
   return r.rows[0]?.locked === true;
 }
 
-export async function proposeDeploymentJurisdiction(p: { readonly jurisdiction: JurisdictionCode; readonly summary: string; readonly proposedBy: string; readonly correlationId: string }): Promise<string> {
+export async function proposeDeploymentJurisdiction(p: {
+  readonly jurisdiction: JurisdictionCode;
+  readonly summary: string;
+  readonly proposedBy: string;
+  readonly correlationId: string;
+}): Promise<string> {
   const url = databaseUrlFromEnvironment();
   if (url === undefined) throw new Error('no database: the deployment jurisdiction is chosen in the database');
-  const r = await sharedPool(url).query<{ id: string }>('select config.propose_deployment_jurisdiction($1, $2, $3, $4::uuid) as id', [p.jurisdiction, p.summary, p.proposedBy, p.correlationId]);
+  const r = await sharedPool(url).query<{ id: string }>(
+    'select config.propose_deployment_jurisdiction($1, $2, $3, $4::uuid) as id',
+    [p.jurisdiction, p.summary, p.proposedBy, p.correlationId],
+  );
   const id = r.rows[0]?.id;
   if (id === undefined) throw new Error('the proposal returned no id');
   return id;
 }
 
-export async function decideDeploymentJurisdiction(p: { readonly revisionId: string; readonly approve: boolean; readonly decidedBy: string; readonly reason?: string; readonly correlationId: string }): Promise<void> {
+export async function decideDeploymentJurisdiction(p: {
+  readonly revisionId: string;
+  readonly approve: boolean;
+  readonly decidedBy: string;
+  readonly reason?: string;
+  readonly correlationId: string;
+}): Promise<void> {
   const url = databaseUrlFromEnvironment();
   if (url === undefined) throw new Error('no database');
-  await sharedPool(url).query('select config.decide_deployment_jurisdiction($1::uuid, $2, $3, $4, $5::uuid)', [p.revisionId, p.approve, p.decidedBy, p.reason ?? null, p.correlationId]);
+  await sharedPool(url).query('select config.decide_deployment_jurisdiction($1::uuid, $2, $3, $4, $5::uuid)', [
+    p.revisionId,
+    p.approve,
+    p.decidedBy,
+    p.reason ?? null,
+    p.correlationId,
+  ]);
 }

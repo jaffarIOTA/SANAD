@@ -15,10 +15,26 @@ import type { SmeConventionalQuote } from './pricing.ts';
 export function discloseSmeConventional(q: SmeConventionalQuote): Disclosure {
   const currency = q.financingAmount.currency;
   const graceRows = q.datedSchedule.rows.filter((r) => r.grace);
-  const graceLines: DisclosureLine[] = q.graceMonths === 0 ? [] : [
-    { code: 'GRACE_PERIOD_INTEREST', labelEn: `Interest paid during the ${String(q.graceMonths)}-month grace period`, labelAr: `الفائدة المدفوعة خلال فترة السماح (${String(q.graceMonths)} شهرًا)`, amount: money(graceRows.reduce((s, r) => s + r.interest.minorUnits, 0n), currency) },
-    { code: 'LEVEL_INSTALMENT', labelEn: 'Monthly instalment after the grace period', labelAr: 'القسط الشهري بعد فترة السماح', amount: q.monthlyInstalment },
-  ];
+  const graceLines: DisclosureLine[] =
+    q.graceMonths === 0
+      ? []
+      : [
+          {
+            code: 'GRACE_PERIOD_INTEREST',
+            labelEn: `Interest paid during the ${String(q.graceMonths)}-month grace period`,
+            labelAr: `الفائدة المدفوعة خلال فترة السماح (${String(q.graceMonths)} شهرًا)`,
+            amount: money(
+              graceRows.reduce((s, r) => s + r.interest.minorUnits, 0n),
+              currency,
+            ),
+          },
+          {
+            code: 'LEVEL_INSTALMENT',
+            labelEn: 'Monthly instalment after the grace period',
+            labelAr: 'القسط الشهري بعد فترة السماح',
+            amount: q.monthlyInstalment,
+          },
+        ];
   return {
     financingAmount: q.financingAmount,
     tenorDays: q.tenorDays,
@@ -31,7 +47,16 @@ export function discloseSmeConventional(q: SmeConventionalQuote): Disclosure {
       { code: 'PRINCIPAL', labelEn: 'Financing amount', labelAr: 'مبلغ التمويل', amount: q.financingAmount },
       { code: 'INTEREST', labelEn: 'Total interest', labelAr: 'إجمالي الفائدة', amount: q.interestAmount },
       ...graceLines,
-      ...(q.guaranteedPortion === undefined ? [] : [{ code: 'GUARANTEED_PORTION', labelEn: `Portion guaranteed by ${q.guaranteedPortion.programme}`, labelAr: `الجزء المضمون من ${q.guaranteedPortion.programme}`, amount: q.guaranteedPortion.amount }]),
+      ...(q.guaranteedPortion === undefined
+        ? []
+        : [
+            {
+              code: 'GUARANTEED_PORTION',
+              labelEn: `Portion guaranteed by ${q.guaranteedPortion.programme}`,
+              labelAr: `الجزء المضمون من ${q.guaranteedPortion.programme}`,
+              amount: q.guaranteedPortion.amount,
+            },
+          ]),
     ],
   };
 }

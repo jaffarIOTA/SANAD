@@ -14,7 +14,15 @@
 import type { Result } from '../kernel/result.ts';
 import type { TsaInstant } from '../time/tsa.ts';
 
-export const SCREENING_CHECKS = ['IDENTITY', 'KYC_STATUS', 'SANCTIONS', 'PEP', 'ADVERSE_MEDIA', 'FRAUD', 'DUPLICATE_APPLICATION'] as const;
+export const SCREENING_CHECKS = [
+  'IDENTITY',
+  'KYC_STATUS',
+  'SANCTIONS',
+  'PEP',
+  'ADVERSE_MEDIA',
+  'FRAUD',
+  'DUPLICATE_APPLICATION',
+] as const;
 export type ScreeningCheck = (typeof SCREENING_CHECKS)[number];
 
 export type ScreeningOutcome = 'CLEAR' | 'REFER' | 'REJECT' | 'PENDING_INVESTIGATION';
@@ -34,9 +42,15 @@ export interface ScreeningResult {
   readonly screeningReference: string;
   readonly screenedAt: TsaInstant;
   readonly overall: ScreeningOutcome;
-  readonly perCheck: readonly { readonly check: ScreeningCheck; readonly outcome: ScreeningOutcome; readonly listRef?: string }[];
+  readonly perCheck: readonly {
+    readonly check: ScreeningCheck;
+    readonly outcome: ScreeningOutcome;
+    readonly listRef?: string;
+  }[];
 }
 
 export interface ScreeningPort {
-  screen(req: ScreeningRequest): Promise<Result<ScreeningResult | { readonly kind: 'UNAVAILABLE'; readonly reason: string }>>;
+  screen(
+    req: ScreeningRequest,
+  ): Promise<Result<ScreeningResult | { readonly kind: 'UNAVAILABLE'; readonly reason: string }>>;
 }

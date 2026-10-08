@@ -104,7 +104,15 @@ export interface PersistedDocument {
 /** Every document presented against the tenant's requests, in the order presented (`evidence.presented_document`, migration 0012). */
 export async function loadDocuments(pool: Pool, tenantCode: string): Promise<readonly PersistedDocument[]> {
   const tenant = await tenantUuidByCode(pool, tenantCode);
-  const { rows } = await pool.query<{ request_id: string; position: number; document_type: string; validation_status: PresentedDocument['validationStatus']; captured_at_epoch: string; captured_tsa_digest: string; captured_tsa_authority: string }>(
+  const { rows } = await pool.query<{
+    request_id: string;
+    position: number;
+    document_type: string;
+    validation_status: PresentedDocument['validationStatus'];
+    captured_at_epoch: string;
+    captured_tsa_digest: string;
+    captured_tsa_authority: string;
+  }>(
     `select request_id, position, document_type, validation_status,
             captured_at_epoch::text, captured_tsa_digest, captured_tsa_authority
        from evidence.presented_document
@@ -119,13 +127,23 @@ export async function loadDocuments(pool: Pool, tenantCode: string): Promise<rea
       documentType: r.document_type,
       validationStatus: r.validation_status,
       // Rebuilt through the one function allowed to establish an attested instant.
-      capturedAt: tsaInstant({ verified: true, genTimeEpochSeconds: BigInt(r.captured_at_epoch), tokenDigest: r.captured_tsa_digest, authorityId: r.captured_tsa_authority }),
+      capturedAt: tsaInstant({
+        verified: true,
+        genTimeEpochSeconds: BigInt(r.captured_at_epoch),
+        tokenDigest: r.captured_tsa_digest,
+        authorityId: r.captured_tsa_authority,
+      }),
     },
   }));
 }
 
 /** Appends. The table refuses an update, and a position already written is left as it was. */
-export async function saveDocuments(pool: Pool, tenantCode: string, documents: readonly PersistedDocument[], presentedBy: string): Promise<void> {
+export async function saveDocuments(
+  pool: Pool,
+  tenantCode: string,
+  documents: readonly PersistedDocument[],
+  presentedBy: string,
+): Promise<void> {
   if (documents.length === 0) return;
   const tenant = await tenantUuidByCode(pool, tenantCode);
   const client = await pool.connect();
@@ -137,7 +155,18 @@ export async function saveDocuments(pool: Pool, tenantCode: string, documents: r
            (tenant_id, request_id, document_type, validation_status, captured_at_epoch, captured_tsa_digest, captured_tsa_authority, position, correlation_id, created_by)
          values ($1::uuid, $2, $3, $4, $5::bigint, $6, $7, $8, $9, $10)
          on conflict (tenant_id, request_id, position) do nothing`,
-        [tenant, d.requestId, d.document.documentType, d.document.validationStatus, d.document.capturedAt.epochSeconds.toString(), d.document.capturedAt.tokenDigest, d.document.capturedAt.authorityId, d.position, d.requestId, presentedBy],
+        [
+          tenant,
+          d.requestId,
+          d.document.documentType,
+          d.document.validationStatus,
+          d.document.capturedAt.epochSeconds.toString(),
+          d.document.capturedAt.tokenDigest,
+          d.document.capturedAt.authorityId,
+          d.position,
+          d.requestId,
+          presentedBy,
+        ],
       );
     }
     await client.query('commit');
@@ -150,7 +179,11 @@ export async function saveDocuments(pool: Pool, tenantCode: string, documents: r
 }
 
 /** Upserts each record in one transaction: either the whole change is durable or none of it is. */
-export async function saveRequests(pool: Pool, tenantCode: string, records: readonly PersistedRequest[]): Promise<void> {
+export async function saveRequests(
+  pool: Pool,
+  tenantCode: string,
+  records: readonly PersistedRequest[],
+): Promise<void> {
   if (records.length === 0) return;
   const tenant = await tenantUuidByCode(pool, tenantCode);
   const client = await pool.connect();

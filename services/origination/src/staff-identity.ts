@@ -6,13 +6,19 @@
  */
 
 import { type TenantCode, loadStaffIdentity } from '../../../config/loader.ts';
-import { type DeploymentProfile, type StaffIdentityConfiguration, parseStaffIdentity } from '../../../core/config/staff-identity.ts';
+import {
+  type DeploymentProfile,
+  type StaffIdentityConfiguration,
+  parseStaffIdentity,
+} from '../../../core/config/staff-identity.ts';
 import type { Result } from '../../../core/kernel/result.ts';
 
 import { databaseUrlFromEnvironment, sharedPool, tenantUuidByCode } from './credentials.ts';
 
 export function deploymentProfile(env: Readonly<Record<string, string | undefined>> = process.env): DeploymentProfile {
-  return env['NODE_ENV'] === 'production' || env['SANAD_DEPLOYMENT_PROFILE'] === 'DEPLOYED' ? 'DEPLOYED' : 'DEVELOPMENT';
+  return env['NODE_ENV'] === 'production' || env['SANAD_DEPLOYMENT_PROFILE'] === 'DEPLOYED'
+    ? 'DEPLOYED'
+    : 'DEVELOPMENT';
 }
 
 export interface ResolvedStaffIdentity {
@@ -23,7 +29,10 @@ export interface ResolvedStaffIdentity {
   readonly revisionSummary?: string;
 }
 
-export async function resolveStaffIdentity(tenant: TenantCode, asOfEpochSeconds: bigint): Promise<ResolvedStaffIdentity> {
+export async function resolveStaffIdentity(
+  tenant: TenantCode,
+  asOfEpochSeconds: bigint,
+): Promise<ResolvedStaffIdentity> {
   const profile = deploymentProfile();
   const url = databaseUrlFromEnvironment();
   if (url === undefined) return { identity: loadStaffIdentity(tenant, profile), source: 'FILE', profile };
@@ -35,5 +44,11 @@ export async function resolveStaffIdentity(tenant: TenantCode, asOfEpochSeconds:
   );
   const row = r.rows[0];
   if (row === undefined) return { identity: loadStaffIdentity(tenant, profile), source: 'FILE', profile };
-  return { identity: parseStaffIdentity(row.payload, profile), source: 'REVISION', profile, revisionId: row.id, revisionSummary: row.summary };
+  return {
+    identity: parseStaffIdentity(row.payload, profile),
+    source: 'REVISION',
+    profile,
+    revisionId: row.id,
+    revisionSummary: row.summary,
+  };
 }

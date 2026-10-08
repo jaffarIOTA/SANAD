@@ -17,16 +17,29 @@ import type { OutboxStore } from '@sanad/core/outbox/store.ts';
 import { tenantUuidByCode } from '@sanad/origination/credentials.ts';
 
 import { postgresOutboxStore } from '../../../../services/outbox/src/postgres-store.ts';
-import { markAppended, markCheckoutSaved, outboxStore, restoreCheckout, unappendedEvents, unsavedIdempotency, unsavedSessions, useOutboxStore } from './checkout-store.ts';
+import {
+  markAppended,
+  markCheckoutSaved,
+  outboxStore,
+  restoreCheckout,
+  unappendedEvents,
+  unsavedIdempotency,
+  unsavedSessions,
+  useOutboxStore,
+} from './checkout-store.ts';
 import { loadConsumerBook, persistencePool, persistenceUrl, saveConsumerBook } from './persistence.ts';
 import { continueSequenceFrom, markSaved, restore, unsavedAcceptances, unsavedOffers } from './store.ts';
 
 const TENANT_CODE = 'bank-a';
 
-interface Flags { hydrated?: boolean; outboxSwapped?: boolean }
+interface Flags {
+  hydrated?: boolean;
+  outboxSwapped?: boolean;
+}
 const flags: Flags = ((globalThis as { __sanadConsumerDurable?: Flags }).__sanadConsumerDurable ??= {});
 
-export const consumerBacking = (): 'POSTGRESQL' | 'MEMORY' => (persistenceUrl() === undefined ? 'MEMORY' : 'POSTGRESQL');
+export const consumerBacking = (): 'POSTGRESQL' | 'MEMORY' =>
+  persistenceUrl() === undefined ? 'MEMORY' : 'POSTGRESQL';
 
 const isUuid = (s: string): boolean => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
@@ -67,8 +80,14 @@ export async function flushConsumerStore(): Promise<void> {
     const sessions = unsavedSessions();
     const idempotency = unsavedIdempotency();
     await saveConsumerBook(pool, TENANT_CODE, { offers, acceptances, sessions, idempotency });
-    markSaved(offers.map((o) => o.offerId), acceptances.map((a) => a.acceptanceId));
-    markCheckoutSaved(sessions.map((s) => s.core.sessionId), idempotency);
+    markSaved(
+      offers.map((o) => o.offerId),
+      acceptances.map((a) => a.acceptanceId),
+    );
+    markCheckoutSaved(
+      sessions.map((s) => s.core.sessionId),
+      idempotency,
+    );
   }
   // Events go to the outbox store after the rows they describe are durable, and stay queued until it has them.
   const events = unappendedEvents();
@@ -88,7 +107,11 @@ async function hydrate(): Promise<void> {
   continueSequenceFrom([
     ...book.offers.map((o) => o.offerId),
     ...book.acceptances.map((a) => a.acceptanceId),
-    ...book.sessions.flatMap((s) => [s.core.sessionId, s.core.correlationId, 'transactionId' in s ? s.transactionId : '']),
+    ...book.sessions.flatMap((s) => [
+      s.core.sessionId,
+      s.core.correlationId,
+      'transactionId' in s ? s.transactionId : '',
+    ]),
   ]);
   flags.hydrated = true;
 }

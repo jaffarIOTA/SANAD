@@ -12,6 +12,29 @@ import type { Result } from '../kernel/result.ts';
 import type { RailOutcome } from './rail.ts';
 
 export interface BillCollectionPort {
-  present(params: { readonly tenantId: string; readonly obligationRef: string; readonly payerRef: string; readonly amount: Money; readonly dueDateGregorian: string; readonly idempotencyKey: string; readonly correlationId: string }): Promise<Result<RailOutcome<{ readonly billRef: string; readonly presentedAtEpochSeconds: bigint }>>>;
-  paid(params: { readonly tenantId: string; readonly sinceEpochSeconds: bigint; readonly correlationId: string }): Promise<Result<RailOutcome<readonly { readonly billRef: string; readonly amount: Money; readonly paidAtEpochSeconds: bigint; readonly settlementRef: string }[]>>>;
+  present(params: {
+    readonly tenantId: string;
+    readonly obligationRef: string;
+    readonly payerRef: string;
+    readonly amount: Money;
+    readonly dueDateGregorian: string;
+    readonly idempotencyKey: string;
+    readonly correlationId: string;
+  }): Promise<Result<RailOutcome<{ readonly billRef: string; readonly presentedAtEpochSeconds: bigint }>>>;
+  paid(params: {
+    readonly tenantId: string;
+    readonly sinceEpochSeconds: bigint;
+    readonly correlationId: string;
+  }): Promise<
+    Result<
+      RailOutcome<
+        readonly {
+          readonly billRef: string;
+          readonly amount: Money;
+          readonly paidAtEpochSeconds: bigint;
+          readonly settlementRef: string;
+        }[]
+      >
+    >
+  >;
 }

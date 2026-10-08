@@ -24,11 +24,7 @@ import {
 import { NutrientDocumentAdapter } from '../../adapters/nutrient/document-adapter.ts';
 import { FixtureTransport, type Fixture } from '../../adapters/kernel/fixture-transport.ts';
 import { type AdapterConfig, redactForLogging } from '../../adapters/kernel/adapter.ts';
-import {
-  type CredentialProvider,
-  type CredentialRef,
-  SecretValue,
-} from '../../core/ports/credentials.ts';
+import { type CredentialProvider, type CredentialRef, SecretValue } from '../../core/ports/credentials.ts';
 import { money } from '../../core/kernel/money.ts';
 import { expectOk } from '../../core/kernel/result.ts';
 import { buildLegRenderRequest } from '../../products/murabaha-scf/documents/render.ts';
@@ -89,12 +85,9 @@ const tuumConfig: TuumAdapterConfig = {
 function tuum(fixtures: readonly Fixture[], config: Partial<TuumAdapterConfig> = {}) {
   const transport = new FixtureTransport(fixtures);
   const credentials = new RecordingCredentials();
-  const adapter = new TuumCoreBankingAdapter(
-    { ...tuumConfig, ...config },
-    credentials,
-    transport,
-    async () => ({ restrictedRef: 'resolved-inside-the-boundary' }),
-  );
+  const adapter = new TuumCoreBankingAdapter({ ...tuumConfig, ...config }, credentials, transport, async () => ({
+    restrictedRef: 'resolved-inside-the-boundary',
+  }));
   return { adapter, transport, credentials };
 }
 
@@ -172,9 +165,9 @@ describe('core banking adapter — the sale', () => {
     const details = sent['details'] as Record<string, unknown>;
     expect(details['costMinorUnits']).toBe('18500000');
     expect(details['profitMinorUnits']).toBe('462500');
-    expect(
-      BigInt(details['costMinorUnits'] as string) + BigInt(details['profitMinorUnits'] as string),
-    ).toBe(18_962_500n);
+    expect(BigInt(details['costMinorUnits'] as string) + BigInt(details['profitMinorUnits'] as string)).toBe(
+      18_962_500n,
+    );
   });
 
   it('refuses to book a total that is not cost plus profit', async () => {
@@ -252,9 +245,7 @@ describe('core banking adapter — late amounts', () => {
   });
 
   it('has no posting code for revenue', () => {
-    expect(Object.keys(tuumConfig.transactionTypeCodes).join(',').toLowerCase()).not.toContain(
-      'revenue',
-    );
+    expect(Object.keys(tuumConfig.transactionTypeCodes).join(',').toLowerCase()).not.toContain('revenue');
   });
 });
 
@@ -279,9 +270,7 @@ describe('core banking adapter — failure posture', () => {
   });
 
   it('never repeats the vendor’s own error text, which can echo a payload', async () => {
-    const { adapter } = tuum([
-      { ...failing, failsWith: 'validation failed for nationalId 1234567890' },
-    ]);
+    const { adapter } = tuum([{ ...failing, failsWith: 'validation failed for nationalId 1234567890' }]);
     const result = await adapter.bookObligation(bookingRequest, { value: 'idem-1' });
 
     expect(result.ok).toBe(false);
@@ -387,9 +376,7 @@ describe('document platform adapter', () => {
 
   it('refuses to substitute into anything the approved template did not declare', async () => {
     const { adapter } = nutrient([templateFixture]);
-    const result = await adapter.render(
-      renderRequest({ 'clause.governing_law': 'somewhere else entirely' }),
-    );
+    const result = await adapter.render(renderRequest({ 'clause.governing_law': 'somewhere else entirely' }));
 
     expect(result.ok).toBe(false);
     if (result.ok) return;

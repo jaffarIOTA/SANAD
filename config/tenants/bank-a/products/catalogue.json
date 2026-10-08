@@ -6,10 +6,7 @@
       "enabled": true,
       "nameEn": "Wasl — distributor finance",
       "nameAr": "وصل — تمويل الموزعين",
-      "programmeIds": [
-        "prg-0001",
-        "prg-0002"
-      ],
+      "programmeIds": ["prg-0001", "prg-0002"],
       "boardRulingRef": "SSB-A-2026-014",
       "pricingRule": {
         "kind": "CATALOGUE_RATE",
@@ -103,7 +100,11 @@
             "minYearsInOperation": 0,
             "purposes": [
               { "code": "WORKING_CAPITAL", "labelEn": "Working capital", "labelAr": "رأس المال العامل" },
-              { "code": "CAPEX_OPEX", "labelEn": "Capital and operating expenditure", "labelAr": "النفقات الرأسمالية والتشغيلية" }
+              {
+                "code": "CAPEX_OPEX",
+                "labelEn": "Capital and operating expenditure",
+                "labelAr": "النفقات الرأسمالية والتشغيلية"
+              }
             ],
             "collateral": [],
             "note": "ILLUSTRATIVE — the former single term sheet converted to one variant (2026-10-08); purposes, grace and contribution band are placeholders until the bank's SME product paper is supplied"
@@ -160,7 +161,11 @@
             "minYearsInOperation": 0,
             "purposes": [
               { "code": "WORKING_CAPITAL", "labelEn": "Working capital", "labelAr": "رأس المال العامل" },
-              { "code": "CAPEX_OPEX", "labelEn": "Capital and operating expenditure", "labelAr": "النفقات الرأسمالية والتشغيلية" }
+              {
+                "code": "CAPEX_OPEX",
+                "labelEn": "Capital and operating expenditure",
+                "labelAr": "النفقات الرأسمالية والتشغيلية"
+              }
             ],
             "collateral": [],
             "note": "ILLUSTRATIVE — the former single term sheet converted to one variant (2026-10-08); purposes, grace and contribution band are placeholders until the bank's SME product paper is supplied"

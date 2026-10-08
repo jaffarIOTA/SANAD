@@ -170,14 +170,9 @@ export class TuumCoreBankingAdapter extends BaseAdapter implements CoreBankingPr
 
   // -- Parties ----------------------------------------------------------------
 
-  async resolveOrCreateParty(
-    party: PartyDetails,
-    key: IdempotencyKey,
-  ): Promise<Result<PartyRef>> {
+  async resolveOrCreateParty(party: PartyDetails, key: IdempotencyKey): Promise<Result<PartyRef>> {
     const restricted =
-      party.restrictedAttributesRef === undefined
-        ? {}
-        : await this.restrictedAttributes(party.restrictedAttributesRef);
+      party.restrictedAttributesRef === undefined ? {} : await this.restrictedAttributes(party.restrictedAttributesRef);
 
     const response = await this.#invoke(
       'person.resolveOrCreate',
@@ -204,12 +199,9 @@ export class TuumCoreBankingAdapter extends BaseAdapter implements CoreBankingPr
 
     const typeCode = this.config.accountPurposeCodes[purpose];
     if (typeCode === undefined) {
-      return reject(
-        'OP-DETERMINACY',
-        'ACCOUNT_PURPOSE_UNMAPPED',
-        'No account type is configured for this purpose',
-        { purpose },
-      );
+      return reject('OP-DETERMINACY', 'ACCOUNT_PURPOSE_UNMAPPED', 'No account type is configured for this purpose', {
+        purpose,
+      });
     }
 
     const found = await this.#invoke(
@@ -249,14 +241,8 @@ export class TuumCoreBankingAdapter extends BaseAdapter implements CoreBankingPr
    * deferred profit is a question for the client's finance function under its
    * AAOIFI-aligned chart of accounts, not one this adapter should answer.
    */
-  async bookObligation(
-    request: BookObligationRequest,
-    key: IdempotencyKey,
-  ): Promise<Result<BookingRef>> {
-    if (
-      request.totalAmount.minorUnits !==
-      request.costAmount.minorUnits + request.profitAmount.minorUnits
-    ) {
+  async bookObligation(request: BookObligationRequest, key: IdempotencyKey): Promise<Result<BookingRef>> {
+    if (request.totalAmount.minorUnits !== request.costAmount.minorUnits + request.profitAmount.minorUnits) {
       // Belt to the domain's brace. A total that is not cost plus profit must
       // never reach an external system as though it were.
       return reject(
@@ -295,10 +281,7 @@ export class TuumCoreBankingAdapter extends BaseAdapter implements CoreBankingPr
 
   // -- Money movement ---------------------------------------------------------
 
-  async instructSettlement(
-    instruction: SettlementInstruction,
-    key: IdempotencyKey,
-  ): Promise<Result<SettlementRef>> {
+  async instructSettlement(instruction: SettlementInstruction, key: IdempotencyKey): Promise<Result<SettlementRef>> {
     const response = await this.#invoke(
       'payment.instruct',
       'POST',
@@ -327,10 +310,7 @@ export class TuumCoreBankingAdapter extends BaseAdapter implements CoreBankingPr
    * rather than taken from the caller, so passing a different account reference
    * cannot route a late amount somewhere it must not go (SH-13).
    */
-  async postCharityLiability(
-    request: CharityPostingRequest,
-    key: IdempotencyKey,
-  ): Promise<Result<PostingRef>> {
+  async postCharityLiability(request: CharityPostingRequest, key: IdempotencyKey): Promise<Result<PostingRef>> {
     const account = this.config.institutionAccounts.CHARITY_LIABILITY;
     if (account === undefined) {
       return reject(
@@ -446,10 +426,7 @@ export class TuumCoreBankingAdapter extends BaseAdapter implements CoreBankingPr
 
 // -----------------------------------------------------------------------------
 
-function identifier<T extends { value: string }>(
-  body: Readonly<Record<string, unknown>>,
-  field: string,
-): Result<T> {
+function identifier<T extends { value: string }>(body: Readonly<Record<string, unknown>>, field: string): Result<T> {
   const direct = body[field];
   const nested = (body['data'] as Record<string, unknown> | undefined)?.[field];
   const value = typeof direct === 'string' ? direct : nested;

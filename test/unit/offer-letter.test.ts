@@ -145,7 +145,10 @@ describe('numerals: Arabic-Indic in the Arabic parts, Latin in the English parts
       expect(r.value.ar, r.code).not.toMatch(LATIN_DIGIT);
       expect(r.value.en, r.code).not.toMatch(ARABIC_INDIC_DIGIT);
     }
-    expect(letter.terms.find((r) => r.code === 'FACILITY_AMOUNT')?.value).toEqual({ en: 'AED 2,000,000.00', ar: '٢٬٠٠٠٬٠٠٠٫٠٠ درهم إماراتي' });
+    expect(letter.terms.find((r) => r.code === 'FACILITY_AMOUNT')?.value).toEqual({
+      en: 'AED 2,000,000.00',
+      ar: '٢٬٠٠٠٬٠٠٠٫٠٠ درهم إماراتي',
+    });
     expect(letter.terms.find((r) => r.code === 'TENOR')?.value.ar).toBe('٦٠ شهرًا');
     expect(letter.terms.find((r) => r.code === 'GRACE_PERIOD')?.value.ar).toBe('٦ أشهر');
     expect(letter.terms.find((r) => r.code === 'RATE')?.value.ar).toBe('١٫٥٠٪ سنويًا');
@@ -165,7 +168,10 @@ describe('numerals: Arabic-Indic in the Arabic parts, Latin in the English parts
 
   it('the Arabic digits are part of the hashed content', () => {
     const { version, ...content } = letter;
-    const latinised = { ...content, terms: content.terms.map((r) => ({ ...r, value: { ...r.value, ar: r.value.en } })) };
+    const latinised = {
+      ...content,
+      terms: content.terms.map((r) => ({ ...r, value: { ...r.value, ar: r.value.en } })),
+    };
     expect(offerLetterVersion(latinised)).not.toBe(version);
   });
 
@@ -173,7 +179,10 @@ describe('numerals: Arabic-Indic in the Arabic parts, Latin in the English parts
     expect(containsIdentityPattern('١٠١٢٣٤٥٦٧٨')).toBe(true);
     expect(containsIdentityPattern('٧٨٤-١٩٩٠-١٢٣٤٥٦٧-١')).toBe(true);
     expect(containsIdentityPattern('٢٬٠٠٠٬٠٠٠٫٠٠ درهم إماراتي')).toBe(false);
-    const r = buildOfferLetter({ ...aeConventional, conditions: [{ en: 'Owner to sign', ar: 'يوقّع المالك ٧٨٤١٩٩٠١٢٣٤٥٦٧١' }] });
+    const r = buildOfferLetter({
+      ...aeConventional,
+      conditions: [{ en: 'Owner to sign', ar: 'يوقّع المالك ٧٨٤١٩٩٠١٢٣٤٥٦٧١' }],
+    });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.reason).toBe('FOL_IDENTITY_NUMBER');
   });
@@ -189,7 +198,11 @@ describe('the APR line', () => {
     const letter = expectOk(buildOfferLetter({ ...aeConventional, aprBp: 163n }));
     const codes = letter.terms.map((r) => r.code);
     expect(codes.indexOf('APR')).toBe(codes.indexOf('RATE') + 1);
-    expect(letter.terms.find((r) => r.code === 'APR')).toEqual({ code: 'APR', label: { en: 'Annual percentage rate (APR)', ar: 'معدل النسبة السنوي' }, value: { en: '1.63%', ar: '١٫٦٣٪' } });
+    expect(letter.terms.find((r) => r.code === 'APR')).toEqual({
+      code: 'APR',
+      label: { en: 'Annual percentage rate (APR)', ar: 'معدل النسبة السنوي' },
+      value: { en: '1.63%', ar: '١٫٦٣٪' },
+    });
     expect(letter.version).not.toBe(expectOk(buildOfferLetter(aeConventional)).version);
   });
 
@@ -216,7 +229,10 @@ describe('the letter version is a content hash', () => {
   });
 
   it.each<[string, Partial<OfferLetterInput>]>([
-    ['amount', { facilityAmount: aed(200_000_100n), totals: { ...aeConventional.totals, totalPayable: aed(204_228_100n) } }],
+    [
+      'amount',
+      { facilityAmount: aed(200_000_100n), totals: { ...aeConventional.totals, totalPayable: aed(204_228_100n) } },
+    ],
     ['tenor', { tenorMonths: 48 }],
     ['grace', { graceMonths: 3 }],
     ['rate', { rateBp: 151n }],
@@ -228,7 +244,15 @@ describe('the letter version is a content hash', () => {
     ['reference', { applicationReference: 'APP-2026-000418' }],
     ['business name', { applicantBusinessName: { en: 'Other Trading LLC', ar: 'أخرى للتجارة' } }],
     ['condition', { conditions: [] }],
-    ['signatory role', { signatories: [{ party: 'LENDER', role: { en: 'CEO', ar: 'الرئيس التنفيذي' } }, { party: 'BORROWER', role: { en: 'Owner', ar: 'المالك' } }] }],
+    [
+      'signatory role',
+      {
+        signatories: [
+          { party: 'LENDER', role: { en: 'CEO', ar: 'الرئيس التنفيذي' } },
+          { party: 'BORROWER', role: { en: 'Owner', ar: 'المالك' } },
+        ],
+      },
+    ],
   ])('changes when the %s changes', (_name, patch) => {
     expect(expectOk(buildOfferLetter({ ...aeConventional, ...patch })).version).not.toBe(base);
   });

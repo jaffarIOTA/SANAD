@@ -13,7 +13,10 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-const PAGE = readFileSync(fileURLToPath(new URL('../../apps/ops/src/app/[locale]/products/page.tsx', import.meta.url)), 'utf8');
+const PAGE = readFileSync(
+  fileURLToPath(new URL('../../apps/ops/src/app/[locale]/products/page.tsx', import.meta.url)),
+  'utf8',
+);
 
 const functionBody = (name: string): string => {
   const start = PAGE.indexOf(`function ${name}(`);
@@ -32,7 +35,9 @@ describe('products page samples and the tenant’s onboarding', () => {
   });
 
   it('refuses the quote, with the reason, when the onboarding did not load', () => {
-    expect(PAGE).toMatch(/if \(!sampleBase\.ok\) refusal = `\$\{sampleBase\.error\.reason\}: \$\{sampleBase\.error\.detail\}`/);
+    expect(PAGE).toMatch(
+      /if \(!sampleBase\.ok\) refusal = `\$\{sampleBase\.error\.reason\}: \$\{sampleBase\.error\.detail\}`/,
+    );
     // A sample is built only from a loaded context.
     expect(PAGE).toMatch(/const sample = ctx === undefined \? undefined : sampleFor\(/);
   });

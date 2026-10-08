@@ -30,5 +30,9 @@ export interface RegistrationRecord {
 
 export interface BusinessRegistryPort {
   /** `REFUSED` with code `NOT_FOUND` when the registration is unknown. */
-  lookup(params: { readonly tenantId: string; readonly commercialRegistration: string; readonly correlationId: string }): Promise<Result<RailOutcome<RegistrationRecord>>>;
+  lookup(params: {
+    readonly tenantId: string;
+    readonly commercialRegistration: string;
+    readonly correlationId: string;
+  }): Promise<Result<RailOutcome<RegistrationRecord>>>;
 }

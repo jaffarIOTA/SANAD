@@ -25,9 +25,27 @@ export interface ViewerDocument {
 }
 
 export const VIEWER_DOCUMENTS: readonly ViewerDocument[] = [
-  { documentId: 'sample-delivery-note', titleEn: 'Delivery note (synthetic)', titleAr: 'إشعار تسليم (نموذج اصطناعي)', fileName: 'synthetic-delivery-note.pdf', synthetic: true },
-  { documentId: 'sample-commercial-invoice', titleEn: 'Commercial invoice (synthetic)', titleAr: 'فاتورة تجارية (نموذج اصطناعي)', fileName: 'synthetic-commercial-invoice.pdf', synthetic: true },
-  { documentId: 'sample-identity-page', titleEn: 'Identity page (synthetic)', titleAr: 'صفحة هوية (نموذج اصطناعي)', fileName: 'synthetic-identity-page.pdf', synthetic: true },
+  {
+    documentId: 'sample-delivery-note',
+    titleEn: 'Delivery note (synthetic)',
+    titleAr: 'إشعار تسليم (نموذج اصطناعي)',
+    fileName: 'synthetic-delivery-note.pdf',
+    synthetic: true,
+  },
+  {
+    documentId: 'sample-commercial-invoice',
+    titleEn: 'Commercial invoice (synthetic)',
+    titleAr: 'فاتورة تجارية (نموذج اصطناعي)',
+    fileName: 'synthetic-commercial-invoice.pdf',
+    synthetic: true,
+  },
+  {
+    documentId: 'sample-identity-page',
+    titleEn: 'Identity page (synthetic)',
+    titleAr: 'صفحة هوية (نموذج اصطناعي)',
+    fileName: 'synthetic-identity-page.pdf',
+    synthetic: true,
+  },
 ];
 
 export function findViewerDocument(documentId: string): ViewerDocument | undefined {
@@ -39,8 +57,15 @@ export function readSampleBytes(doc: ViewerDocument): Uint8Array | undefined {
   return existsSync(path) ? new Uint8Array(readFileSync(path)) : undefined;
 }
 
-export interface ViewerLicence { readonly kind: 'LICENSED'; readonly licenseKey: string; readonly source: 'VAULT' | 'ENVIRONMENT' }
-export interface ViewerEvaluation { readonly kind: 'EVALUATION'; readonly source: 'VAULT' | 'ENVIRONMENT' }
+export interface ViewerLicence {
+  readonly kind: 'LICENSED';
+  readonly licenseKey: string;
+  readonly source: 'VAULT' | 'ENVIRONMENT';
+}
+export interface ViewerEvaluation {
+  readonly kind: 'EVALUATION';
+  readonly source: 'VAULT' | 'ENVIRONMENT';
+}
 
 /**
  * The Web SDK licence key is domain-bound configuration handed to the browser;
@@ -51,7 +76,10 @@ export interface ViewerEvaluation { readonly kind: 'EVALUATION'; readonly source
 export async function viewerLicence(): Promise<ViewerLicence | ViewerEvaluation> {
   const source = credentialSource();
   try {
-    const key = await credentialProviderFromEnvironment().get({ tenantId: 'bank-a', provider: 'DOCUMENT_PLATFORM', environment: 'sandbox', keyName: 'web_sdk_license_key' }, 'viewer');
+    const key = await credentialProviderFromEnvironment().get(
+      { tenantId: 'bank-a', provider: 'DOCUMENT_PLATFORM', environment: 'sandbox', keyName: 'web_sdk_license_key' },
+      'viewer',
+    );
     return { kind: 'LICENSED', licenseKey: key.expose(), source };
   } catch (error) {
     if (error instanceof CredentialNotConfiguredError) return { kind: 'EVALUATION', source };

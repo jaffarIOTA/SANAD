@@ -11,15 +11,24 @@
  * names an id.
  */
 
-import { MODULE_GROUPS, type ModuleGroup, type ModuleJurisdiction, type ModuleReadiness } from '../../server/modules.ts';
+import {
+  MODULE_GROUPS,
+  type ModuleGroup,
+  type ModuleJurisdiction,
+  type ModuleReadiness,
+} from '../../server/modules.ts';
 
 export type NavJurisdiction = ModuleJurisdiction;
 
 /** True where an entry with these tags exists in this jurisdiction; untagged is everywhere. */
-const listedIn = (tags: readonly ModuleJurisdiction[] | undefined, code: NavJurisdiction): boolean => tags === undefined || tags.includes(code);
+const listedIn = (tags: readonly ModuleJurisdiction[] | undefined, code: NavJurisdiction): boolean =>
+  tags === undefined || tags.includes(code);
 
 /** The module map as this deployment's jurisdiction sees it. Groups left empty are dropped. */
-export function navigationFor(code: NavJurisdiction, groups: readonly ModuleGroup[] = MODULE_GROUPS): readonly ModuleGroup[] {
+export function navigationFor(
+  code: NavJurisdiction,
+  groups: readonly ModuleGroup[] = MODULE_GROUPS,
+): readonly ModuleGroup[] {
   return groups
     .filter((g) => listedIn(g.jurisdictions, code))
     .map((g) => ({ ...g, items: g.items.filter((i) => listedIn(i.jurisdictions, code)) }))

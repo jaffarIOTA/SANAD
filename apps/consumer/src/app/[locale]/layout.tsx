@@ -21,7 +21,13 @@ export function generateStaticParams(): { locale: LocaleSegment }[] {
   return LOCALE_SEGMENTS.map((locale) => ({ locale }));
 }
 
-export default async function ConsumerLayout({ children, params }: { readonly children: ReactNode; readonly params: Promise<{ readonly locale: string }> }) {
+export default async function ConsumerLayout({
+  children,
+  params,
+}: {
+  readonly children: ReactNode;
+  readonly params: Promise<{ readonly locale: string }>;
+}) {
   const { locale: segment } = await params;
   const locale = localeFromSegment(segment);
   if (locale === undefined) notFound();
@@ -36,12 +42,16 @@ export default async function ConsumerLayout({ children, params }: { readonly ch
         <header className="border-b border-line bg-surface">
           <div className="mx-auto flex max-w-screen-sm items-center gap-3 px-4 py-3">
             <BrandMark size={30} />
-            <span className="text-[22px] font-black tracking-tight text-heading">Sanad<span className="text-brand">.</span></span>
+            <span className="text-[22px] font-black tracking-tight text-heading">
+              Sanad<span className="text-brand">.</span>
+            </span>
             <div className="ms-auto flex items-center gap-2">
               {session !== undefined ? (
                 <form action={signOutAction}>
                   <input type="hidden" name="locale" value={segment} />
-                  <button type="submit" className="press rounded-pill bg-sunken px-3 py-2 text-xs text-ink-quiet">{arabic ? 'خروج' : 'Sign out'} · <span className="identifier">{session.applicantRef}</span></button>
+                  <button type="submit" className="press rounded-pill bg-sunken px-3 py-2 text-xs text-ink-quiet">
+                    {arabic ? 'خروج' : 'Sign out'} · <span className="identifier">{session.applicantRef}</span>
+                  </button>
                 </form>
               ) : null}
               <LanguageSwitch current={segment as LocaleSegment} />
@@ -50,7 +60,9 @@ export default async function ConsumerLayout({ children, params }: { readonly ch
         </header>
         <main className="mx-auto max-w-screen-sm px-4 py-6">{children}</main>
         <footer className="mx-auto max-w-screen-sm px-4 pb-8 text-[0.6875rem] text-ink-quiet">
-          {arabic ? 'بيئة تطوير: الهوية والدخل والمؤشر بدائل تطويرية موسومة. لا يُخزَّن رقم هوية أو بيانات شخصية.' : 'Development environment: identity, income and benchmark are labelled stand-ins. No national identifier or personal datum is stored.'}
+          {arabic
+            ? 'بيئة تطوير: الهوية والدخل والمؤشر بدائل تطويرية موسومة. لا يُخزَّن رقم هوية أو بيانات شخصية.'
+            : 'Development environment: identity, income and benchmark are labelled stand-ins. No national identifier or personal datum is stored.'}
         </footer>
       </body>
     </html>

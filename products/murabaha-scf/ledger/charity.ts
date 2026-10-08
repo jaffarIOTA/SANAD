@@ -24,10 +24,7 @@ import type { TsaInstant } from '@sanad/core/time/tsa.ts';
  */
 export type NonIncomeAccountClass = 'CHARITY_LIABILITY';
 
-export type CharitySourceReason =
-  | 'LATE_PAYMENT'
-  | 'NON_COMPLIANT_INCOME'
-  | 'INCIDENTAL_IMPERMISSIBLE_RECEIPT';
+export type CharitySourceReason = 'LATE_PAYMENT' | 'NON_COMPLIANT_INCOME' | 'INCIDENTAL_IMPERMISSIBLE_RECEIPT';
 
 /** The outcome of assessing a delinquent counterparty (BR-E04). */
 export type AbilityAssessment = 'ABLE_BUT_UNWILLING' | 'UNABLE';

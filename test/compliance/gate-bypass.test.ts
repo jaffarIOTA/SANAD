@@ -191,12 +191,7 @@ describe.each(TENANT_CODES)('adversarial: sequencing gates [%s]', (tenant) => {
 
     // One second short of the Board's interval.
     const tooEarly = POSSESSION_AT + requiredSeconds - 1;
-    const result = offerSale(
-      held,
-      legs[2]!,
-      BigInt(tooEarly + 3600),
-      context(tenant, evidence, tooEarly),
-    );
+    const result = offerSale(held, legs[2]!, BigInt(tooEarly + 3600), context(tenant, evidence, tooEarly));
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -260,9 +255,7 @@ describe.each(TENANT_CODES)('adversarial: sequencing gates [%s]', (tenant) => {
     expect(held.state).toBe('POSSESSION_CONFIRMED');
     expect(held.riskPeriodStartAt.epochSeconds).toBe(BigInt(POSSESSION_AT));
 
-    const offered = expectOk(
-      offerSale(held, legs[2]!, BigInt(acceptAt + 3600), context(tenant, evidence, saleAt)),
-    );
+    const offered = expectOk(offerSale(held, legs[2]!, BigInt(acceptAt + 3600), context(tenant, evidence, saleAt)));
     expect(offered.state).toBe('SALE_OFFERED');
 
     const executed = expectOk(acceptOffer(offered, legs[3]!, context(tenant, evidence, acceptAt)));
@@ -271,9 +264,7 @@ describe.each(TENANT_CODES)('adversarial: sequencing gates [%s]', (tenant) => {
 
     // The total is still exactly cost plus profit, all the way through.
     const { pricing } = executed.core;
-    expect(pricing.salePriceAmount.minorUnits).toBe(
-      pricing.costAmount.minorUnits + pricing.profitAmount.minorUnits,
-    );
+    expect(pricing.salePriceAmount.minorUnits).toBe(pricing.costAmount.minorUnits + pricing.profitAmount.minorUnits);
   });
 
   it('refuses an acceptance attested at the same instant as the offer', () => {
@@ -281,9 +272,7 @@ describe.each(TENANT_CODES)('adversarial: sequencing gates [%s]', (tenant) => {
     const evidence = [validOwnership, acceptedPossession];
     const owned = expectOk(acquireOwnership(purchase, context(tenant, evidence, OWNERSHIP_AT)));
     const held = expectOk(confirmPossession(owned, context(tenant, evidence, POSSESSION_AT)));
-    const offered = expectOk(
-      offerSale(held, legs[2]!, BigInt(acceptAt + 3600), context(tenant, evidence, saleAt)),
-    );
+    const offered = expectOk(offerSale(held, legs[2]!, BigInt(acceptAt + 3600), context(tenant, evidence, saleAt)));
 
     // Offer and acceptance are separate acts. Simultaneity is not separation.
     const sameInstantLeg: ContractLeg = { ...legs[3]!, executedAt: at(saleAt) };

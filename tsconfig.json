@@ -1,9 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2023",
-    "lib": [
-      "ES2023"
-    ],
+    "lib": ["ES2023"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
@@ -21,43 +19,17 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "@core/*": [
-        "core/*"
-      ],
-      "@config/*": [
-        "config/*"
-      ],
-      "@sanad/core/*": [
-        "core/*"
-      ],
-      "@sanad/design/*": [
-        "packages/design/*"
-      ],
-      "@sanad/i18n/*": [
-        "packages/i18n/*"
-      ],
-      "@sanad/config/*": [
-        "config/*"
-      ],
-      "@sanad/products/*": [
-        "products/*"
-      ],
-      "@sanad/auth/*": [
-        "packages/auth/*"
-      ],
-      "@sanad/origination/*": [
-        "services/origination/src/*"
-      ]
+      "@core/*": ["core/*"],
+      "@config/*": ["config/*"],
+      "@sanad/core/*": ["core/*"],
+      "@sanad/design/*": ["packages/design/*"],
+      "@sanad/i18n/*": ["packages/i18n/*"],
+      "@sanad/config/*": ["config/*"],
+      "@sanad/products/*": ["products/*"],
+      "@sanad/auth/*": ["packages/auth/*"],
+      "@sanad/origination/*": ["services/origination/src/*"]
     }
   },
-  "include": [
-    "core/**/*",
-    "products/**/*",
-    "config/**/*",
-    "adapters/**/*",
-    "test/**/*"
-  ],
-  "exclude": [
-    "test/ui"
-  ]
+  "include": ["core/**/*", "products/**/*", "config/**/*", "adapters/**/*", "test/**/*"],
+  "exclude": ["test/ui"]
 }

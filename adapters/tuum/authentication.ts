@@ -78,7 +78,12 @@ export function fetchAuthHttp(fetchImpl: typeof fetch = fetch, timeoutMs = 30_00
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        const response = await fetchImpl(request.url, { method: 'POST', headers: request.headers, body: request.body, signal: controller.signal });
+        const response = await fetchImpl(request.url, {
+          method: 'POST',
+          headers: request.headers,
+          body: request.body,
+          signal: controller.signal,
+        });
         return { status: response.status, body: await response.text() };
       } finally {
         clearTimeout(timer);
@@ -97,9 +102,7 @@ export function fetchAuthHttp(fetchImpl: typeof fetch = fetch, timeoutMs = 30_00
 export function errorCodes(envelope: Envelope<unknown>): string[] {
   const from = (list: readonly unknown[] | undefined): string[] =>
     (list ?? []).map((entry) =>
-      typeof entry === 'string'
-        ? entry
-        : String((entry as { code?: unknown } | null)?.code ?? 'err.unknown'),
+      typeof entry === 'string' ? entry : String((entry as { code?: unknown } | null)?.code ?? 'err.unknown'),
     );
   return [...from(envelope.errors), ...from(envelope.validationErrors)];
 }
@@ -122,9 +125,7 @@ function expiryOf(token: string, nowEpochSeconds: number): number {
   if (parts.length !== 3) return nowEpochSeconds + CONSERVATIVE_LIFETIME_SECONDS;
 
   try {
-    const payload = JSON.parse(
-      Buffer.from(parts[1] ?? '', 'base64url').toString('utf8'),
-    ) as { exp?: unknown };
+    const payload = JSON.parse(Buffer.from(parts[1] ?? '', 'base64url').toString('utf8')) as { exp?: unknown };
     return typeof payload.exp === 'number' && Number.isFinite(payload.exp)
       ? payload.exp
       : nowEpochSeconds + CONSERVATIVE_LIFETIME_SECONDS;
@@ -206,17 +207,12 @@ export function createTuumSession(params: {
     // populated `errors` array.
     const codes = errorCodes(envelope);
     if (codes.length > 0) {
-      return reject(
-        'OP-DETERMINACY',
-        'TUUM_AUTH_REFUSED',
-        'The core banking platform refused the credential',
-        {
-          status: response.status,
-          // Platform error codes, not credential material.
-          codes: codes.join(','),
-          identityKind: credential.identityKind,
-        },
-      );
+      return reject('OP-DETERMINACY', 'TUUM_AUTH_REFUSED', 'The core banking platform refused the credential', {
+        status: response.status,
+        // Platform error codes, not credential material.
+        codes: codes.join(','),
+        identityKind: credential.identityKind,
+      });
     }
 
     if (response.status !== 200) {
@@ -230,12 +226,9 @@ export function createTuumSession(params: {
 
     const issued = envelope.data?.token;
     if (typeof issued !== 'string' || issued.length === 0) {
-      return reject(
-        'OP-DETERMINACY',
-        'TUUM_AUTH_NO_TOKEN',
-        'The authentication call succeeded but carried no token',
-        { status: response.status },
-      );
+      return reject('OP-DETERMINACY', 'TUUM_AUTH_NO_TOKEN', 'The authentication call succeeded but carried no token', {
+        status: response.status,
+      });
     }
 
     token = issued;

@@ -1010,7 +1010,8 @@ components:
     BusinessHandover:
       type: object
       additionalProperties: false
-      required: [applicationId, upstreamRef, applicant, productCode, variantCode, purpose, requestedMinorUnits, tenorMonths]
+      required:
+        [applicationId, upstreamRef, applicant, productCode, variantCode, purpose, requestedMinorUnits, tenorMonths]
       description: |
         An SME application as verified upstream. No tenant, no currency: both
         follow from the credential and the tenant's onboarding.
@@ -1043,7 +1044,20 @@ components:
         upstreamRef: { type: string }
         status:
           type: string
-          enum: [RECEIVED, SPREADING, SUBMITTED, ASSESSED, IN_COMMITTEE, APPROVED, DECLINED, OFFER_SENT, SIGNED, DISBURSED, WITHDRAWN]
+          enum:
+            [
+              RECEIVED,
+              SPREADING,
+              SUBMITTED,
+              ASSESSED,
+              IN_COMMITTEE,
+              APPROVED,
+              DECLINED,
+              OFFER_SENT,
+              SIGNED,
+              DISBURSED,
+              WITHDRAWN,
+            ]
         stage:
           type: integer
           minimum: 5

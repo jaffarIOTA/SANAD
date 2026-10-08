@@ -20,5 +20,7 @@ export interface WebhookDelivery {
 }
 
 export interface WebhooksPort {
-  deliver(delivery: WebhookDelivery): Promise<Result<RailOutcome<{ readonly deliveryRef: string; readonly statusCode: number }>>>;
+  deliver(
+    delivery: WebhookDelivery,
+  ): Promise<Result<RailOutcome<{ readonly deliveryRef: string; readonly statusCode: number }>>>;
 }

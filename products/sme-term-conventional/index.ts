@@ -13,7 +13,12 @@ import { type Draft, type SmeExecutionContext, open } from './execution.ts';
 import { type SmeConventionalQuote, quoteSmeConventional } from './pricing.ts';
 import { type SmeConventionalTerms, parseSmeConventionalTerms } from './terms.ts';
 
-export const smeTermConventional: ProductModule<SmeConventionalTerms, SmeConventionalQuote, SmeExecutionContext, Draft> = {
+export const smeTermConventional: ProductModule<
+  SmeConventionalTerms,
+  SmeConventionalQuote,
+  SmeExecutionContext,
+  Draft
+> = {
   descriptor: {
     code: 'sme-term-conventional',
     nameEn: 'SME term finance',

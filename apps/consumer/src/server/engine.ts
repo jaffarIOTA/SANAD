@@ -23,12 +23,31 @@ export const TENANT: TenantCode = 'bank-a';
 const REGISTRY = new ProductRegistry().register(tawarruqPersonal).register(bnpl).register(conventionalTerm);
 
 /** Development stand-ins for the Rate Publisher and the affordability rails. */
-const DEV_BENCHMARK = { code: 'SAIBOR-3M', rate: rate(560n, 'REDUCING'), asOfEpochSeconds: 0n, referenceId: 'dev-benchmark' };
-const DEV_RANGE = { productClass: 'PERSONAL', lowBp: 600n, medianBp: 900n, highBp: 1_500n, asOfEpochSeconds: 0n, referenceId: 'dev-range' };
-export const DEV_AFFORDABILITY = { monthlyIncome: money(1_500_000n), existingMonthlyObligations: money(0n), outstandingSameClass: money(0n), incomeSourceRef: 'dev-employment-verification' };
+const DEV_BENCHMARK = {
+  code: 'SAIBOR-3M',
+  rate: rate(560n, 'REDUCING'),
+  asOfEpochSeconds: 0n,
+  referenceId: 'dev-benchmark',
+};
+const DEV_RANGE = {
+  productClass: 'PERSONAL',
+  lowBp: 600n,
+  medianBp: 900n,
+  highBp: 1_500n,
+  asOfEpochSeconds: 0n,
+  referenceId: 'dev-range',
+};
+export const DEV_AFFORDABILITY = {
+  monthlyIncome: money(1_500_000n),
+  existingMonthlyObligations: money(0n),
+  outstandingSameClass: money(0n),
+  incomeSourceRef: 'dev-employment-verification',
+};
 
 /** The catalogue defaults to the tenant's file; the pages pass the effective revision when a database is present. */
-export function consumerProducts(catalogue: Result<ProductCatalogue> = loadProductCatalogue(TENANT)): readonly { readonly entry: CatalogueEntry; readonly module: AnyProductModule }[] {
+export function consumerProducts(
+  catalogue: Result<ProductCatalogue> = loadProductCatalogue(TENANT),
+): readonly { readonly entry: CatalogueEntry; readonly module: AnyProductModule }[] {
   if (!catalogue.ok) return [];
   return catalogue.value.entries.flatMap((entry) => {
     const found = REGISTRY.find(entry.productCode);
@@ -36,19 +55,42 @@ export function consumerProducts(catalogue: Result<ProductCatalogue> = loadProdu
   });
 }
 
-export function quoteFor(productCode: string, amountMinorUnits: bigint, months: number, applicantRef: string, at: TsaInstant, catalogue: Result<ProductCatalogue> = loadProductCatalogue(TENANT)): Result<{ readonly offer: Offer; readonly programmeId: string }> {
+export function quoteFor(
+  productCode: string,
+  amountMinorUnits: bigint,
+  months: number,
+  applicantRef: string,
+  at: TsaInstant,
+  catalogue: Result<ProductCatalogue> = loadProductCatalogue(TENANT),
+): Result<{ readonly offer: Offer; readonly programmeId: string }> {
   if (!catalogue.ok) return catalogue;
   const entry = entryFor(catalogue.value, productCode, 'prg-0001', at.epochSeconds);
   if (!entry.ok) return entry;
   const found = REGISTRY.find(productCode);
   if (!found.ok) return found;
-  if (!found.value.descriptor.consumer) return reject('OP-DETERMINACY', 'NOT_A_CONSUMER_PRODUCT', 'This product is not offered to individuals');
+  if (!found.value.descriptor.consumer)
+    return reject('OP-DETERMINACY', 'NOT_A_CONSUMER_PRODUCT', 'This product is not offered to individuals');
   const terms = found.value.validateTerms(entry.value.terms);
   if (!terms.ok) return terms;
   const principal = money(amountMinorUnits);
-  const inputs = resolvePricingInputs(entry.value.pricingRule, { principal, tenorDays: months * 30, asOfEpochSeconds: at.epochSeconds, benchmark: DEV_BENCHMARK, marketRange: DEV_RANGE });
+  const inputs = resolvePricingInputs(entry.value.pricingRule, {
+    principal,
+    tenorDays: months * 30,
+    asOfEpochSeconds: at.epochSeconds,
+    benchmark: DEV_BENCHMARK,
+    marketRange: DEV_RANGE,
+  });
   if (!inputs.ok) return inputs;
-  const quote = found.value.quote(terms.value, { tenantId: TENANT, programmeId: 'prg-0001', counterpartyId: applicantRef, requestedAmount: principal, requestedTenorDays: months * 30, asOf: at, pricing: inputs.value, affordability: DEV_AFFORDABILITY });
+  const quote = found.value.quote(terms.value, {
+    tenantId: TENANT,
+    programmeId: 'prg-0001',
+    counterpartyId: applicantRef,
+    requestedAmount: principal,
+    requestedTenorDays: months * 30,
+    asOf: at,
+    pricing: inputs.value,
+    affordability: DEV_AFFORDABILITY,
+  });
   if (!quote.ok) return quote;
   const offer = buildOffer(found.value, quote.value, at);
   if (!offer.ok) return offer;
@@ -56,10 +98,18 @@ export function quoteFor(productCode: string, amountMinorUnits: bigint, months: 
 }
 
 /** Both calendars from an attested instant plus a tenor — computed once, at quotation, and stored. */
-export function maturityDates(at: TsaInstant, tenorDays: number): { readonly gregorian: string; readonly hijri: string } {
+export function maturityDates(
+  at: TsaInstant,
+  tenorDays: number,
+): { readonly gregorian: string; readonly hijri: string } {
   const date = new Date((Number(at.epochSeconds) + tenorDays * 86_400) * 1000);
   const gregorian = date.toISOString().slice(0, 10);
-  const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura-nu-latn', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'UTC' }).formatToParts(date);
+  const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura-nu-latn', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'UTC',
+  }).formatToParts(date);
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
   return { gregorian, hijri: `${get('year').replace(/\D/g, '')}-${get('month')}-${get('day')}` };
 }

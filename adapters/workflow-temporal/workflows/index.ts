@@ -15,8 +15,18 @@ import { condition, defineQuery, defineSignal, proxyActivities, setHandler, slee
 import type { GateId } from '../../../core/evidence/evidence.ts';
 import type { MurabahaActivities } from '../activities.ts';
 import type { TawarruqActivities } from '../activities-tawarruq.ts';
-import { type MurabahaEffects, type MurabahaOutcome, type MurabahaSequenceInput, runMurabahaSequence } from '../programs/murabaha.ts';
-import { type TawarruqEffects, type TawarruqOutcome, type TawarruqSequenceInput, runTawarruqSequence } from '../programs/tawarruq.ts';
+import {
+  type MurabahaEffects,
+  type MurabahaOutcome,
+  type MurabahaSequenceInput,
+  runMurabahaSequence,
+} from '../programs/murabaha.ts';
+import {
+  type TawarruqEffects,
+  type TawarruqOutcome,
+  type TawarruqSequenceInput,
+  runTawarruqSequence,
+} from '../programs/tawarruq.ts';
 
 export interface RetryInput {
   readonly maxAttempts: number;
@@ -40,14 +50,20 @@ function activities<T>(retry: RetryInput): T {
   } as never) as T;
 }
 
-export async function murabahaSequence(input: MurabahaSequenceInput & { readonly retry: RetryInput }): Promise<MurabahaOutcome> {
+export async function murabahaSequence(
+  input: MurabahaSequenceInput & { readonly retry: RetryInput },
+): Promise<MurabahaOutcome> {
   const acts = activities<MurabahaActivities>(input.retry);
   const ref = { tenantId: input.tenantId, transactionId: input.transactionId };
   const evidenceSeen = new Set<GateId>();
   let offer: 'ACCEPTED' | 'LAPSED' | undefined;
   let progress = 'STARTED';
-  setHandler(evidenceRecorded, ({ gateId }) => { evidenceSeen.add(gateId); });
-  setHandler(offerAnswered, ({ outcome }) => { offer = outcome; });
+  setHandler(evidenceRecorded, ({ gateId }) => {
+    evidenceSeen.add(gateId);
+  });
+  setHandler(offerAnswered, ({ outcome }) => {
+    offer = outcome;
+  });
   setHandler(progressQuery, () => progress);
 
   const fx: MurabahaEffects = {
@@ -62,24 +78,33 @@ export async function murabahaSequence(input: MurabahaSequenceInput & { readonly
     lapseOffer: () => acts.lapseOffer(ref),
     unwind: (disposition) => acts.unwind(ref, disposition),
     // A signal says evidence arrived; only the next evaluateGates() says it counts.
-    waitForEvidence: async (gate) => { await condition(() => evidenceSeen.has(gate)); evidenceSeen.delete(gate); },
+    waitForEvidence: async (gate) => {
+      await condition(() => evidenceSeen.has(gate));
+      evidenceSeen.delete(gate);
+    },
     waitForOfferOutcome: async (validity) => {
       const answered = await condition(() => offer !== undefined, validity * 1000);
       return answered && offer === 'ACCEPTED' ? 'ACCEPTED' : 'LAPSED';
     },
     // The durable timer wakes the workflow. It never decides anything.
     sleepSeconds: (seconds) => sleep(seconds * 1000),
-    progress: (step) => { progress = step; },
+    progress: (step) => {
+      progress = step;
+    },
   };
   return runMurabahaSequence(fx, input);
 }
 
-export async function tawarruqSequence(input: TawarruqSequenceInput & { readonly retry: RetryInput }): Promise<TawarruqOutcome> {
+export async function tawarruqSequence(
+  input: TawarruqSequenceInput & { readonly retry: RetryInput },
+): Promise<TawarruqOutcome> {
   const acts = activities<TawarruqActivities>(input.retry);
   const ref = { tenantId: input.tenantId, transactionId: input.transactionId };
   let signature: string | undefined;
   let progress = 'STARTED';
-  setHandler(saleSigned, ({ documentRef }) => { signature = documentRef; });
+  setHandler(saleSigned, ({ documentRef }) => {
+    signature = documentRef;
+  });
   setHandler(progressQuery, () => progress);
 
   const fx: TawarruqEffects = {
@@ -88,9 +113,12 @@ export async function tawarruqSequence(input: TawarruqSequenceInput & { readonly
     transferTitle: () => acts.transferTitle(ref),
     realiseProceeds: () => acts.realiseProceeds(ref),
     disburse: () => acts.disburse(ref),
-    waitForSaleSignature: async (timeout) => ((await condition(() => signature !== undefined, timeout * 1000)) ? 'SIGNED' : 'TIMED_OUT'),
+    waitForSaleSignature: async (timeout) =>
+      (await condition(() => signature !== undefined, timeout * 1000)) ? 'SIGNED' : 'TIMED_OUT',
     unwind: (reason) => acts.unwind(ref, reason),
-    progress: (step) => { progress = step; },
+    progress: (step) => {
+      progress = step;
+    },
   };
   return runTawarruqSequence(fx, input);
 }

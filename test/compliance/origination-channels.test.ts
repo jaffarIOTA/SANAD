@@ -89,10 +89,7 @@ const SERVICING_APPROVED: ServicingOutcome = {
  * Advance a request to the point a human can act on it, taking the servicing
  * stage where the channel requires one.
  */
-function readyForReview(
-  channel: OriginationChannel,
-  outcome: ServicingOutcome = SERVICING_APPROVED,
-): AwaitingReview {
+function readyForReview(channel: OriginationChannel, outcome: ServicingOutcome = SERVICING_APPROVED): AwaitingReview {
   const keyed = expectOk(raise({ core: requestCore(channel), maker: MAKER }));
   const submitted = expectOk(submitForReview(keyed, at(1_000_050)));
 
@@ -108,10 +105,7 @@ function approvedRequest(channel: OriginationChannel) {
 
 describe.each(ORIGINATION_CHANNELS)('adversarial: origination via %s', (channel) => {
   it('lands at the start of the sequence, not part-way through it', () => {
-    const approvalGivesADraft = openTransaction(
-      approvedRequest(channel),
-      transactionCore('bank-a'),
-    );
+    const approvalGivesADraft = openTransaction(approvedRequest(channel), transactionCore('bank-a'));
 
     const draft = expectOk(approvalGivesADraft);
 
@@ -131,9 +125,7 @@ describe.each(ORIGINATION_CHANNELS)('adversarial: origination via %s', (channel)
     // Every exported function that accepts an approval returns a DRAFT or a
     // rejection. There is no `openExecuted`, no `bookDirectly`, no options bag
     // with a target state.
-    const openers = Object.entries(module).filter(
-      ([name]) => /^(open|convert|book|execute|promote)/i.test(name),
-    );
+    const openers = Object.entries(module).filter(([name]) => /^(open|convert|book|execute|promote)/i.test(name));
     expect(openers.map(([name]) => name)).toEqual(['openTransaction']);
 
     const result = module.openTransaction(approved, transactionCore('bank-a'));
@@ -143,9 +135,7 @@ describe.each(ORIGINATION_CHANNELS)('adversarial: origination via %s', (channel)
   it('refuses identification the channel does not accept', () => {
     for (const other of ORIGINATION_CHANNELS) {
       const result = verifyIdentification(channel, IDENTIFICATION[other]);
-      const acceptable = CHANNEL_POLICIES[channel].acceptableIdentification.includes(
-        IDENTIFICATION[other].kind,
-      );
+      const acceptable = CHANNEL_POLICIES[channel].acceptableIdentification.includes(IDENTIFICATION[other].kind);
       expect(result.ok, `${channel} given ${other} identification`).toBe(acceptable);
     }
   });
@@ -234,8 +224,8 @@ describe('adversarial: four eyes', () => {
 
 describe('the channel changes the door, never the gates', () => {
   it('every channel produces an identical transaction state', () => {
-    const states = ORIGINATION_CHANNELS.map((channel) =>
-      expectOk(openTransaction(approvedRequest(channel), transactionCore('bank-a'))).state,
+    const states = ORIGINATION_CHANNELS.map(
+      (channel) => expectOk(openTransaction(approvedRequest(channel), transactionCore('bank-a'))).state,
     );
     expect(new Set(states)).toEqual(new Set(['DRAFT']));
   });
@@ -258,10 +248,7 @@ describe('the channel changes the door, never the gates', () => {
 // -- The two-stage decision ---------------------------------------------------
 
 describe('two stages: the servicing platform answers, then the institution decides', () => {
-  const servicing = (
-    decision: ServicingOutcome['decision'],
-    reasonCode?: string,
-  ): ServicingOutcome => ({
+  const servicing = (decision: ServicingOutcome['decision'], reasonCode?: string): ServicingOutcome => ({
     decision,
     reference: 'svc-0001',
     ...(reasonCode === undefined ? {} : { reasonCode }),

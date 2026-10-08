@@ -26,13 +26,25 @@ export interface TawarruqQuote extends Quote {
 }
 
 export function quoteTawarruq(terms: TawarruqTerms, request: QuoteRequest): Result<TawarruqQuote> {
-  if (request.pricing.rate === undefined) return reject('PLAT-03', 'RATE_REQUIRED', 'Personal Tawarruq is priced from a sourced rate');
-  if (request.requestedAmount.minorUnits <= 0n) return reject('OP-DETERMINACY', 'REQUESTED_AMOUNT_NOT_POSITIVE', 'The financing amount must be positive');
-  if (request.requestedAmount.minorUnits > terms.maxAmount.minorUnits) return reject('OP-LIMIT', 'AMOUNT_EXCEEDS_PRODUCT', 'Above the product maximum', { max: String(terms.maxAmount.minorUnits) });
+  if (request.pricing.rate === undefined)
+    return reject('PLAT-03', 'RATE_REQUIRED', 'Personal Tawarruq is priced from a sourced rate');
+  if (request.requestedAmount.minorUnits <= 0n)
+    return reject('OP-DETERMINACY', 'REQUESTED_AMOUNT_NOT_POSITIVE', 'The financing amount must be positive');
+  if (request.requestedAmount.minorUnits > terms.maxAmount.minorUnits)
+    return reject('OP-LIMIT', 'AMOUNT_EXCEEDS_PRODUCT', 'Above the product maximum', {
+      max: String(terms.maxAmount.minorUnits),
+    });
   const months = Math.round(request.requestedTenorDays / 30);
-  if (months < terms.minMonths || months > terms.maxMonths) return reject('OP-DETERMINACY', 'TENOR_OUTSIDE_PRODUCT', 'Tenor outside what this product allows', { months: String(months) });
+  if (months < terms.minMonths || months > terms.maxMonths)
+    return reject('OP-DETERMINACY', 'TENOR_OUTSIDE_PRODUCT', 'Tenor outside what this product allows', {
+      months: String(months),
+    });
 
-  const schedule = reducingBalanceMonthly(request.requestedAmount, { ...request.pricing.rate.rate, basis: 'REDUCING' }, months);
+  const schedule = reducingBalanceMonthly(
+    request.requestedAmount,
+    { ...request.pricing.rate.rate, basis: 'REDUCING' },
+    months,
+  );
   if (!schedule.ok) return schedule;
   const s = schedule.value;
   const instalment = s.instalments[0]?.amount ?? money(0n);
@@ -40,23 +52,50 @@ export function quoteTawarruq(terms: TawarruqTerms, request: QuoteRequest): Resu
   // Affordability: (this instalment + existing obligations) / income ≤ cap. Integer, per ten thousand.
   const a = request.affordability;
   if (a?.monthlyIncome === undefined || a.existingMonthlyObligations === undefined) {
-    return reject('OP-DETERMINACY', 'AFFORDABILITY_FACTS_MISSING', 'Income and existing obligations are required before a personal finance quote');
+    return reject(
+      'OP-DETERMINACY',
+      'AFFORDABILITY_FACTS_MISSING',
+      'Income and existing obligations are required before a personal finance quote',
+    );
   }
-  if (a.monthlyIncome.minorUnits <= 0n) return reject('OP-DETERMINACY', 'INCOME_NOT_POSITIVE', 'No income, no instalment');
+  if (a.monthlyIncome.minorUnits <= 0n)
+    return reject('OP-DETERMINACY', 'INCOME_NOT_POSITIVE', 'No income, no instalment');
   const deduction = (add(instalment, a.existingMonthlyObligations).minorUnits * 10_000n) / a.monthlyIncome.minorUnits;
   if (deduction > BigInt(terms.affordability.maxDeductionPerTenThousand)) {
-    return reject('OP-LIMIT', 'DEDUCTION_RATIO_EXCEEDED', 'The instalment would take more of the applicant\'s income than the tenant\'s responsible-lending rule allows', {
-      deductionPerTenThousand: String(deduction), cap: String(terms.affordability.maxDeductionPerTenThousand), citation: terms.affordability.citation,
-    });
+    return reject(
+      'OP-LIMIT',
+      'DEDUCTION_RATIO_EXCEEDED',
+      "The instalment would take more of the applicant's income than the tenant's responsible-lending rule allows",
+      {
+        deductionPerTenThousand: String(deduction),
+        cap: String(terms.affordability.maxDeductionPerTenThousand),
+        citation: terms.affordability.citation,
+      },
+    );
   }
 
-  const fees = terms.adminFee.minorUnits > 0n ? [{ code: 'ADMIN', labelEn: 'Administration fee', labelAr: 'رسوم إدارية', amount: terms.adminFee, when: 'UPFRONT' as const }] : [];
+  const fees =
+    terms.adminFee.minorUnits > 0n
+      ? [
+          {
+            code: 'ADMIN',
+            labelEn: 'Administration fee',
+            labelAr: 'رسوم إدارية',
+            amount: terms.adminFee,
+            when: 'UPFRONT' as const,
+          },
+        ]
+      : [];
   return ok({
     productCode: 'tawarruq-personal',
     financingAmount: request.requestedAmount,
     tenorDays: months * 30,
     months,
-    schedule: cashFlows(request.requestedAmount, s, fees.map((f) => f.amount)),
+    schedule: cashFlows(
+      request.requestedAmount,
+      s,
+      fees.map((f) => f.amount),
+    ),
     fees,
     totalPayable: add(s.totalPayable, terms.adminFee),
     totalCostOfCredit: add(s.totalProfit, terms.adminFee),

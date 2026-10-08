@@ -11,10 +11,30 @@ import { emptyOutbox, eventsOfKind } from '@sanad/core/outbox/outbox.ts';
 import { reconcile } from '@sanad/core/reconciliation/settlement.ts';
 import { tsaInstant } from '@sanad/core/time/tsa.ts';
 
-const at = (s: number) => tsaInstant({ verified: true, genTimeEpochSeconds: BigInt(s), tokenDigest: `t${String(s)}`, authorityId: 'test' });
+const at = (s: number) =>
+  tsaInstant({ verified: true, genTimeEpochSeconds: BigInt(s), tokenDigest: `t${String(s)}`, authorityId: 'test' });
 const T0 = 1_791_000_000;
-const core = { merchantId: 'mer-1', tenantId: 'bank-a', commercialRegistration: '4030000004', legalNameAr: 'متجر', legalNameEn: 'Store', categoryCode: 'RETAIL', settlementAccountRef: 'hub-ref-1', onboardedBy: 'stf-maker-01', correlationId: 'c' };
-const clear = { agreementRef: 'AGR-2026-0001', registryLookupRef: 'w-1', registryStatus: 'ACTIVE' as const, screeningResultRef: 's-1', screeningOutcome: 'CLEAR' as const, activityPermitted: true, verifiedBy: 'ops', verifiedAt: at(T0) };
+const core = {
+  merchantId: 'mer-1',
+  tenantId: 'bank-a',
+  commercialRegistration: '4030000004',
+  legalNameAr: 'متجر',
+  legalNameEn: 'Store',
+  categoryCode: 'RETAIL',
+  settlementAccountRef: 'hub-ref-1',
+  onboardedBy: 'stf-maker-01',
+  correlationId: 'c',
+};
+const clear = {
+  agreementRef: 'AGR-2026-0001',
+  registryLookupRef: 'w-1',
+  registryStatus: 'ACTIVE' as const,
+  screeningResultRef: 's-1',
+  screeningOutcome: 'CLEAR' as const,
+  activityPermitted: true,
+  verifiedBy: 'ops',
+  verifiedAt: at(T0),
+};
 
 describe('merchant onboarding', () => {
   it('becomes active only on registry, screening and activity evidence', () => {
@@ -33,9 +53,14 @@ describe('merchant onboarding', () => {
   it('a store transacts only under an executed contract (SAMA BNPL Rules Art. 27), verified by someone other than whoever onboarded it', () => {
     const pending = expectOk(beginOnboarding(core, at(T0)));
     const noContract = verify(pending, { ...clear, agreementRef: ' ' });
-    expect(noContract.ok).toBe(false); if (!noContract.ok) { expect(noContract.error.reason).toBe('MERCHANT_AGREEMENT_REQUIRED'); expect(String(noContract.error.context?.['citation'])).toContain('Art. 27'); }
+    expect(noContract.ok).toBe(false);
+    if (!noContract.ok) {
+      expect(noContract.error.reason).toBe('MERCHANT_AGREEMENT_REQUIRED');
+      expect(String(noContract.error.context?.['citation'])).toContain('Art. 27');
+    }
     const self = verify(pending, { ...clear, verifiedBy: 'stf-maker-01' });
-    expect(self.ok).toBe(false); if (!self.ok) expect(self.error.reason).toBe('FOUR_EYES_SELF_VERIFICATION');
+    expect(self.ok).toBe(false);
+    if (!self.ok) expect(self.error.reason).toBe('FOUR_EYES_SELF_VERIFICATION');
     expect(beginOnboarding({ ...core, onboardedBy: '' }, at(T0)).ok).toBe(false);
   });
   it('refuses an account by value and a malformed registration', () => {
@@ -45,7 +70,22 @@ describe('merchant onboarding', () => {
 });
 
 describe('checkout sessions', () => {
-  const session = () => expectOk(create({ sessionId: 's-1', tenantId: 'bank-a', merchantId: 'mer-1', merchantOrderRef: 'ORD-9', basket: money(120_000n), productCode: 'bnpl', returnUrl: 'https://shop.example/return', cancelUrl: 'https://shop.example/cancel', createdAt: at(T0), expiresAtEpochSeconds: BigInt(T0 + 1800), correlationId: 'c' }));
+  const session = () =>
+    expectOk(
+      create({
+        sessionId: 's-1',
+        tenantId: 'bank-a',
+        merchantId: 'mer-1',
+        merchantOrderRef: 'ORD-9',
+        basket: money(120_000n),
+        productCode: 'bnpl',
+        returnUrl: 'https://shop.example/return',
+        cancelUrl: 'https://shop.example/cancel',
+        createdAt: at(T0),
+        expiresAtEpochSeconds: BigInt(T0 + 1800),
+        correlationId: 'c',
+      }),
+    );
   it('walks created → identified → offered → accepted → booked, and the merchant can only cancel before acceptance', () => {
     const s0 = session();
     const s1 = expectOk(identify(s0, 'app-1', 'asr-1', at(T0 + 1)));
@@ -65,15 +105,47 @@ describe('checkout sessions', () => {
     expect(identify(session(), 'app-1', 'asr', at(T0 + 5000)).ok).toBe(false);
     expect(expire(session(), at(T0 + 1)).ok).toBe(false);
     expect(expectOk(expire(session(), at(T0 + 5000))).state).toBe('EXPIRED');
-    expect(refuse(expectOk(identify(session(), 'app-1', 'asr', at(T0 + 1))), 'OP-LIMIT', 'BNPL_CONSUMER_LIMIT_EXCEEDED').state).toBe('REFUSED');
+    expect(
+      refuse(expectOk(identify(session(), 'app-1', 'asr', at(T0 + 1))), 'OP-LIMIT', 'BNPL_CONSUMER_LIMIT_EXCEEDED')
+        .state,
+    ).toBe('REFUSED');
   });
 });
 
 describe('partner settlement reconciliation (revenue-linked collection)', () => {
-  const position = { transactionId: 'txn-e', tenantId: 'fintech-b', merchantRef: 'mer-1', partnerRef: 'agg-1', holdbackPerTenThousand: 1200, totalPayable: money(10_690_411n), collectedToDate: money(0n), correlationId: 'c' };
-  const line = (ref: string, revenue: bigint, swept: bigint) => ({ settlementRef: ref, partnerRef: 'agg-1', merchantRef: 'mer-1', periodStart: '2026-10-01', periodEnd: '2026-10-07', grossRevenue: money(revenue), swept: money(swept) });
+  const position = {
+    transactionId: 'txn-e',
+    tenantId: 'fintech-b',
+    merchantRef: 'mer-1',
+    partnerRef: 'agg-1',
+    holdbackPerTenThousand: 1200,
+    totalPayable: money(10_690_411n),
+    collectedToDate: money(0n),
+    correlationId: 'c',
+  };
+  const line = (ref: string, revenue: bigint, swept: bigint) => ({
+    settlementRef: ref,
+    partnerRef: 'agg-1',
+    merchantRef: 'mer-1',
+    periodStart: '2026-10-01',
+    periodEnd: '2026-10-07',
+    grossRevenue: money(revenue),
+    swept: money(swept),
+  });
   it('applies a correct sweep, flags a short one, ignores a duplicate and a foreign line', () => {
-    const r = expectOk(reconcile(position, [line('s1', 50_000_000n, 6_000_000n), line('s2', 50_000_000n, 5_000_000n), line('s1', 50_000_000n, 6_000_000n), { ...line('s3', 1n, 1n), partnerRef: 'other' }], emptyOutbox(), new Set()));
+    const r = expectOk(
+      reconcile(
+        position,
+        [
+          line('s1', 50_000_000n, 6_000_000n),
+          line('s2', 50_000_000n, 5_000_000n),
+          line('s1', 50_000_000n, 6_000_000n),
+          { ...line('s3', 1n, 1n), partnerRef: 'other' },
+        ],
+        emptyOutbox(),
+        new Set(),
+      ),
+    );
     expect(r.outcomes.map((o) => o.outcome.kind)).toEqual(['APPLIED', 'SHORT', 'DUPLICATE', 'FOREIGN']);
     // 6 000 000 + 5 000 000 exceeds the fixed total by 309 589: the total holds, the excess is refunded.
     expect(r.position.collectedToDate.minorUnits).toBe(10_690_411n);
@@ -87,9 +159,13 @@ describe('partner settlement reconciliation (revenue-linked collection)', () => 
     expect(r.position.totalPayable.minorUnits).toBe(10_690_411n);
     expect(r.settled).toBe(true);
     const refunds = eventsOfKind(r.outbox, 'PAYMENT_DISBURSE');
-    expect(refunds).toHaveLength(1); expect(refunds[0]?.payload['minorUnits']).toBe(String(12_000_000n - 690_411n)); expect(refunds[0]?.payload['reason']).toBe('OVER_COLLECTION');
+    expect(refunds).toHaveLength(1);
+    expect(refunds[0]?.payload['minorUnits']).toBe(String(12_000_000n - 690_411n));
+    expect(refunds[0]?.payload['reason']).toBe('OVER_COLLECTION');
   });
   it('refuses to touch a position that already shows over-collection', () => {
-    expect(reconcile({ ...position, collectedToDate: money(20_000_000n) }, [], emptyOutbox(), new Set()).ok).toBe(false);
+    expect(reconcile({ ...position, collectedToDate: money(20_000_000n) }, [], emptyOutbox(), new Set()).ok).toBe(
+      false,
+    );
   });
 });

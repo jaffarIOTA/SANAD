@@ -115,7 +115,11 @@
             "minYearsInOperation": 0,
             "purposes": [
               { "code": "WORKING_CAPITAL", "labelEn": "Working capital", "labelAr": "رأس المال العامل" },
-              { "code": "CAPEX_OPEX", "labelEn": "Capital and operating expenditure", "labelAr": "النفقات الرأسمالية والتشغيلية" }
+              {
+                "code": "CAPEX_OPEX",
+                "labelEn": "Capital and operating expenditure",
+                "labelAr": "النفقات الرأسمالية والتشغيلية"
+              }
             ],
             "collateral": [],
             "note": "ILLUSTRATIVE — the former single term sheet converted to one variant (2026-10-08); purposes, grace and contribution band are placeholders until the company's SME product paper is supplied"
@@ -165,7 +169,11 @@
             "minYearsInOperation": 0,
             "purposes": [
               { "code": "WORKING_CAPITAL", "labelEn": "Working capital", "labelAr": "رأس المال العامل" },
-              { "code": "CAPEX_OPEX", "labelEn": "Capital and operating expenditure", "labelAr": "النفقات الرأسمالية والتشغيلية" }
+              {
+                "code": "CAPEX_OPEX",
+                "labelEn": "Capital and operating expenditure",
+                "labelAr": "النفقات الرأسمالية والتشغيلية"
+              }
             ],
             "collateral": [],
             "note": "ILLUSTRATIVE — the former single term sheet converted to one variant (2026-10-08); purposes, grace and contribution band are placeholders until the company's SME product paper is supplied"

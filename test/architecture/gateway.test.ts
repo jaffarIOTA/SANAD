@@ -112,14 +112,7 @@ describe('the gateway holds no control', () => {
     const steps: Record<string, unknown>[] = doc?.['x-ibm-configuration'].assembly.execute ?? [];
     const kinds = steps.flatMap((s) => Object.keys(s));
 
-    for (const forbidden of [
-      'map',
-      'gatewayscript',
-      'xslt',
-      'json-to-xml',
-      'xml-to-json',
-      'validate',
-    ]) {
+    for (const forbidden of ['map', 'gatewayscript', 'xslt', 'json-to-xml', 'xml-to-json', 'validate']) {
       expect(kinds, `${path}: ${forbidden}`).not.toContain(forbidden);
     }
   });

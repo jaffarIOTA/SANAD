@@ -53,9 +53,7 @@ export interface EvidenceGateDefinition {
  * true when the first qualifying artefact attests it, or not until the last —
  * so it is configuration, not a decision we make for them (§3.11).
  */
-export type RiskPeriodStartBasis =
-  | 'EARLIEST_DISCHARGING_EVIDENCE'
-  | 'LATEST_DISCHARGING_EVIDENCE';
+export type RiskPeriodStartBasis = 'EARLIEST_DISCHARGING_EVIDENCE' | 'LATEST_DISCHARGING_EVIDENCE';
 
 export interface ElapseGateDefinition {
   readonly id: GateId;
@@ -212,10 +210,7 @@ export function parseStructureDefinition(input: unknown): Result<StructureDefini
   return ok(d);
 }
 
-export function findGate(
-  definition: StructureDefinition,
-  gateId: GateId,
-): GateDefinition | undefined {
+export function findGate(definition: StructureDefinition, gateId: GateId): GateDefinition | undefined {
   return definition.gates.find((g) => g.id === gateId);
 }
 

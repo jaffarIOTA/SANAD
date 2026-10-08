@@ -39,8 +39,7 @@ const ar: Strings = {
   appName: 'وصل',
   availableLimit: 'الحد المتاح',
   chooseTheTrade: 'اختر الفاتورة',
-  chooseTheTradeHelp:
-    'يبدأ التمويل من صفقة حقيقية. اختر فاتورة صادرة عنك ومعتمدة لدى هيئة الفوترة.',
+  chooseTheTradeHelp: 'يبدأ التمويل من صفقة حقيقية. اختر فاتورة صادرة عنك ومعتمدة لدى هيئة الفوترة.',
   invoice: 'فاتورة',
   availableForFinance: 'متاحة للتمويل',
   alreadyFinanced: 'مموّلة مسبقًا',
@@ -75,8 +74,7 @@ const en: Strings = {
   disclosureNote: 'The total is fixed and does not change after signing.',
   blockedBy: 'Control',
   noTradesTitle: 'No invoices are available yet',
-  noTradesBody:
-    'Invoices that have cleared with the e-invoicing authority and can be financed will appear here.',
+  noTradesBody: 'Invoices that have cleared with the e-invoicing authority and can be financed will appear here.',
   back: 'Back',
 };
 
@@ -107,12 +105,10 @@ export function localeFromSegment(segment: string): Locale | undefined {
   return undefined;
 }
 
-export const segmentFromLocale = (locale: Locale): LocaleSegment =>
-  locale === 'ar-SA' ? 'ar' : 'en';
+export const segmentFromLocale = (locale: Locale): LocaleSegment => (locale === 'ar-SA' ? 'ar' : 'en');
 
 /** The other language, for the switch in the header. */
-export const otherSegment = (segment: LocaleSegment): LocaleSegment =>
-  segment === 'ar' ? 'en' : 'ar';
+export const otherSegment = (segment: LocaleSegment): LocaleSegment => (segment === 'ar' ? 'en' : 'ar');
 
 /** Always written in its own language, never translated (العربية, not "Arabic"). */
 export const LANGUAGE_NAME: Readonly<Record<LocaleSegment, string>> = {

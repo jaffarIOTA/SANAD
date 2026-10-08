@@ -35,12 +35,17 @@ const bad = (reason: string, detail: string): Result<never> => reject('OP-DETERM
 export function parseSmeConventionalTerms(raw: unknown): Result<SmeConventionalTerms> {
   if (!isRecord(raw)) return bad('TERMS_MALFORMED', 'SME term finance terms are an object');
   const unknown = Object.keys(raw).filter((k) => !KEYS.has(k));
-  if (unknown.length > 0) return reject('OP-DETERMINACY', 'TERMS_UNKNOWN_KEY', 'Unknown key in SME term finance terms', { keys: unknown.join(',') });
+  if (unknown.length > 0)
+    return reject('OP-DETERMINACY', 'TERMS_UNKNOWN_KEY', 'Unknown key in SME term finance terms', {
+      keys: unknown.join(','),
+    });
   const currency = parseCurrency(raw['currency']);
   if (!currency.ok) return currency;
   const c = currency.value;
-  if (!isIntString(raw['minAmountMinorUnits']) || BigInt(raw['minAmountMinorUnits']) <= 0n) return bad('TERMS_AMOUNTS', 'minAmountMinorUnits is a positive integer string');
-  if (raw['adminFeeMinorUnits'] !== undefined && !isIntString(raw['adminFeeMinorUnits'])) return bad('TERMS_FEE', 'adminFeeMinorUnits is an integer string');
+  if (!isIntString(raw['minAmountMinorUnits']) || BigInt(raw['minAmountMinorUnits']) <= 0n)
+    return bad('TERMS_AMOUNTS', 'minAmountMinorUnits is a positive integer string');
+  if (raw['adminFeeMinorUnits'] !== undefined && !isIntString(raw['adminFeeMinorUnits']))
+    return bad('TERMS_FEE', 'adminFeeMinorUnits is an integer string');
   const minAmount = money(BigInt(raw['minAmountMinorUnits']), c);
   const variants = parseVariants(raw['variants'], c, minAmount);
   if (!variants.ok) return variants;

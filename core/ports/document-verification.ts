@@ -11,5 +11,21 @@ import type { Result } from '../kernel/result.ts';
 import type { RailOutcome } from './rail.ts';
 
 export interface DocumentVerificationPort {
-  verifyDocument(params: { readonly tenantId: string; readonly applicantRef: string; readonly documentType: string; readonly documentRef: string; readonly consentId: string; readonly correlationId: string }): Promise<Result<RailOutcome<{ readonly authentic: boolean; readonly verificationRef: string; readonly issuedAtEpochSeconds?: bigint; readonly expiresAtEpochSeconds?: bigint }>>>;
+  verifyDocument(params: {
+    readonly tenantId: string;
+    readonly applicantRef: string;
+    readonly documentType: string;
+    readonly documentRef: string;
+    readonly consentId: string;
+    readonly correlationId: string;
+  }): Promise<
+    Result<
+      RailOutcome<{
+        readonly authentic: boolean;
+        readonly verificationRef: string;
+        readonly issuedAtEpochSeconds?: bigint;
+        readonly expiresAtEpochSeconds?: bigint;
+      }>
+    >
+  >;
 }

@@ -13,10 +13,26 @@ import type { SmeIslamicQuote } from './pricing.ts';
 export function discloseSmeIslamic(q: SmeIslamicQuote): Disclosure {
   const currency = q.financingAmount.currency;
   const graceRows = q.datedSchedule.rows.filter((r) => r.grace);
-  const graceLines: DisclosureLine[] = q.graceMonths === 0 ? [] : [
-    { code: 'GRACE_PERIOD_PROFIT', labelEn: `Profit paid during the ${String(q.graceMonths)}-month grace period`, labelAr: `الربح المدفوع خلال فترة السماح (${String(q.graceMonths)} شهرًا)`, amount: money(graceRows.reduce((s, r) => s + r.interest.minorUnits, 0n), currency) },
-    { code: 'LEVEL_INSTALMENT', labelEn: 'Monthly instalment after the grace period', labelAr: 'القسط الشهري بعد فترة السماح', amount: q.monthlyInstalment },
-  ];
+  const graceLines: DisclosureLine[] =
+    q.graceMonths === 0
+      ? []
+      : [
+          {
+            code: 'GRACE_PERIOD_PROFIT',
+            labelEn: `Profit paid during the ${String(q.graceMonths)}-month grace period`,
+            labelAr: `الربح المدفوع خلال فترة السماح (${String(q.graceMonths)} شهرًا)`,
+            amount: money(
+              graceRows.reduce((s, r) => s + r.interest.minorUnits, 0n),
+              currency,
+            ),
+          },
+          {
+            code: 'LEVEL_INSTALMENT',
+            labelEn: 'Monthly instalment after the grace period',
+            labelAr: 'القسط الشهري بعد فترة السماح',
+            amount: q.monthlyInstalment,
+          },
+        ];
   return {
     financingAmount: q.financingAmount,
     tenorDays: q.tenorDays,
@@ -26,11 +42,30 @@ export function discloseSmeIslamic(q: SmeIslamicQuote): Disclosure {
     totalPayable: q.totalPayable,
     fees: q.fees,
     lines: [
-      { code: 'COMMODITY_COST', labelEn: 'Commodity purchase price', labelAr: 'ثمن شراء السلعة', amount: q.commodityCost },
+      {
+        code: 'COMMODITY_COST',
+        labelEn: 'Commodity purchase price',
+        labelAr: 'ثمن شراء السلعة',
+        amount: q.commodityCost,
+      },
       { code: 'PROFIT', labelEn: 'Profit', labelAr: 'الربح', amount: q.profitAmount },
-      { code: 'DEFERRED_SALE_PRICE', labelEn: 'Deferred sale price', labelAr: 'ثمن البيع المؤجل', amount: q.deferredSalePrice },
+      {
+        code: 'DEFERRED_SALE_PRICE',
+        labelEn: 'Deferred sale price',
+        labelAr: 'ثمن البيع المؤجل',
+        amount: q.deferredSalePrice,
+      },
       ...graceLines,
-      ...(q.guaranteedPortion === undefined ? [] : [{ code: 'GUARANTEED_PORTION', labelEn: `Portion guaranteed by ${q.guaranteedPortion.programme}`, labelAr: `الجزء المضمون من ${q.guaranteedPortion.programme}`, amount: q.guaranteedPortion.amount }]),
+      ...(q.guaranteedPortion === undefined
+        ? []
+        : [
+            {
+              code: 'GUARANTEED_PORTION',
+              labelEn: `Portion guaranteed by ${q.guaranteedPortion.programme}`,
+              labelAr: `الجزء المضمون من ${q.guaranteedPortion.programme}`,
+              amount: q.guaranteedPortion.amount,
+            },
+          ]),
     ],
   };
 }

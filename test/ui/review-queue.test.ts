@@ -61,8 +61,7 @@ describe('four eyes — the screen agrees with the domain', () => {
 });
 
 describe('queue ordering', () => {
-  const waitingSince = (row: RequestRow): bigint =>
-    row.submittedAtEpochSeconds ?? row.raisedAtEpochSeconds;
+  const waitingSince = (row: RequestRow): bigint => row.submittedAtEpochSeconds ?? row.raisedAtEpochSeconds;
 
   /** The comparator the page uses. Kept in one shape so the test is the spec. */
   const fifo = (a: RequestRow, b: RequestRow): number => {
@@ -89,17 +88,16 @@ describe('queue ordering', () => {
       { ...stub('req_00001'), submittedAtEpochSeconds: 1_000n },
       { ...stub('req_00002'), submittedAtEpochSeconds: 1_000n },
     ];
-    expect([...sameSecond].sort(fifo).map((r) => r.requestId)).toEqual([
-      'req_00001',
-      'req_00002',
-      'req_00003',
-    ]);
+    expect([...sameSecond].sort(fifo).map((r) => r.requestId)).toEqual(['req_00001', 'req_00002', 'req_00003']);
   });
 
   it('is a total order, so the queue is stable between renders', () => {
     const rows = listRequests();
     const once = [...rows].sort(fifo).map((r) => r.requestId);
-    const twice = [...rows].reverse().sort(fifo).map((r) => r.requestId);
+    const twice = [...rows]
+      .reverse()
+      .sort(fifo)
+      .map((r) => r.requestId);
     expect(twice).toEqual(once);
   });
 });

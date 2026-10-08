@@ -62,11 +62,7 @@ export function StatTile({
   readonly emphasis?: boolean;
 }): ReactElement {
   return (
-    <div
-      className={`rounded-card border bg-surface p-4 ${
-        emphasis ? 'border-brand-strong' : 'border-line'
-      }`}
-    >
+    <div className={`rounded-card border bg-surface p-4 ${emphasis ? 'border-brand-strong' : 'border-line'}`}>
       <div className="flex items-start gap-3">
         <IconChip name={icon} tone={tone} />
         <div className="flex min-w-0 flex-1 flex-col">
@@ -80,9 +76,7 @@ export function StatTile({
           </div>
           <p className="mt-1 text-amount font-semibold leading-tight text-ink tabular-nums">
             <bdi>{value}</bdi>
-            {unit !== undefined ? (
-              <span className="ms-1 text-sm font-normal text-ink-quiet">{unit}</span>
-            ) : null}
+            {unit !== undefined ? <span className="ms-1 text-sm font-normal text-ink-quiet">{unit}</span> : null}
           </p>
         </div>
       </div>
@@ -218,10 +212,7 @@ export function BarList({
 
 export type IndicatorTone = 'good' | 'warning' | 'serious' | 'critical' | 'neutral';
 
-const INDICATOR: Record<
-  IndicatorTone,
-  { readonly dot: string; readonly text: string; readonly pill: string }
-> = {
+const INDICATOR: Record<IndicatorTone, { readonly dot: string; readonly text: string; readonly pill: string }> = {
   good: { dot: 'bg-positive', text: 'text-positive', pill: 'bg-sunken' },
   warning: { dot: 'bg-attention', text: 'text-attention', pill: 'bg-brand-wash' },
   serious: { dot: 'bg-attention', text: 'text-attention', pill: 'bg-brand-wash' },
@@ -254,9 +245,7 @@ export function Indicator({
         <span className="text-sm text-ink">{label}</span>
         {note !== undefined ? <span className="text-xs text-ink-quiet">{note}</span> : null}
       </span>
-      <span className={`ms-auto shrink-0 text-sm font-semibold tabular-nums ${style.text}`}>
-        {value}
-      </span>
+      <span className={`ms-auto shrink-0 text-sm font-semibold tabular-nums ${style.text}`}>{value}</span>
     </li>
   );
 }
@@ -305,11 +294,17 @@ export function WeekBars({
     <figure className="m-0">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <figcaption className="sr-only">{title}</figcaption>
-        <span aria-hidden className="text-sm text-ink-quiet">{title}</span>
+        <span aria-hidden className="text-sm text-ink-quiet">
+          {title}
+        </span>
         <ul className="ms-auto flex list-none gap-5 p-0 text-[15px] text-ink-quiet">
           {series.map((name, i) => (
             <li key={name} className="flex items-center gap-2">
-              <span aria-hidden className="inline-block size-[15px] rounded-full" style={{ background: i === 0 ? 'var(--color-series-1)' : 'var(--color-series-2)' }} />
+              <span
+                aria-hidden
+                className="inline-block size-[15px] rounded-full"
+                style={{ background: i === 0 ? 'var(--color-series-1)' : 'var(--color-series-2)' }}
+              />
               {name}
             </li>
           ))}
@@ -324,7 +319,9 @@ export function WeekBars({
             return (
               <g key={v}>
                 <line x1={padStart} x2={W} y1={y(v)} y2={y(v)} stroke="var(--color-line)" strokeWidth={1} />
-                <text x={padStart - 10} y={y(v) + 4} textAnchor="end" fontSize={13} fill="var(--color-ink-quiet)">{v}</text>
+                <text x={padStart - 10} y={y(v) + 4} textAnchor="end" fontSize={13} fill="var(--color-ink-quiet)">
+                  {v}
+                </text>
               </g>
             );
           })}
@@ -334,13 +331,33 @@ export function WeekBars({
             const second = { x: cx + 6, h: Math.max(0, y(0) - y(b.second)) };
             return (
               <g key={b.label}>
-                <rect className="grow-y" style={{ animationDelay: `${String(i * 60)}ms` }} x={first.x} y={y(b.first)} width={15} height={first.h} rx={7.5} fill="var(--color-series-1)">
+                <rect
+                  className="grow-y"
+                  style={{ animationDelay: `${String(i * 60)}ms` }}
+                  x={first.x}
+                  y={y(b.first)}
+                  width={15}
+                  height={first.h}
+                  rx={7.5}
+                  fill="var(--color-series-1)"
+                >
                   <title>{`${b.label} · ${series[0]}: ${String(b.first)}`}</title>
                 </rect>
-                <rect className="grow-y" style={{ animationDelay: `${String(i * 60 + 80)}ms` }} x={second.x} y={y(b.second)} width={15} height={second.h} rx={7.5} fill="var(--color-series-2)">
+                <rect
+                  className="grow-y"
+                  style={{ animationDelay: `${String(i * 60 + 80)}ms` }}
+                  x={second.x}
+                  y={y(b.second)}
+                  width={15}
+                  height={second.h}
+                  rx={7.5}
+                  fill="var(--color-series-2)"
+                >
                   <title>{`${b.label} · ${series[1]}: ${String(b.second)}`}</title>
                 </rect>
-                <text x={cx} y={H - 6} textAnchor="middle" fontSize={13} fill="var(--color-ink-quiet)">{b.label}</text>
+                <text x={cx} y={H - 6} textAnchor="middle" fontSize={13} fill="var(--color-ink-quiet)">
+                  {b.label}
+                </text>
               </g>
             );
           })}
@@ -355,7 +372,12 @@ export interface Slice {
   readonly value: number;
 }
 
-const SLICE_COLOURS = ['var(--color-slice-1)', 'var(--color-slice-2)', 'var(--color-slice-3)', 'var(--color-slice-4)'] as const;
+const SLICE_COLOURS = [
+  'var(--color-slice-1)',
+  'var(--color-slice-2)',
+  'var(--color-slice-3)',
+  'var(--color-slice-4)',
+] as const;
 
 /**
  * The design's exploded pie: at most four slices (a fifth folds into
@@ -374,7 +396,10 @@ export function SharePie({
   readonly emptyLabel: string;
 }): ReactElement {
   const sorted = [...slices].filter((s) => s.value > 0).sort((a, b) => b.value - a.value);
-  const shown = sorted.length > 4 ? [...sorted.slice(0, 3), { label: otherLabel, value: sorted.slice(3).reduce((s, x) => s + x.value, 0) }] : sorted;
+  const shown =
+    sorted.length > 4
+      ? [...sorted.slice(0, 3), { label: otherLabel, value: sorted.slice(3).reduce((s, x) => s + x.value, 0) }]
+      : sorted;
   const total = shown.reduce((s, x) => s + x.value, 0);
   const R = 118;
   const C = 150;
@@ -391,11 +416,12 @@ export function SharePie({
     const large = end - start > Math.PI ? 1 : 0;
     const p1 = [C + R * Math.cos(start), C + R * Math.sin(start)];
     const p2 = [C + R * Math.cos(end), C + R * Math.sin(end)];
-    const d = share >= 0.999
-      ? `M ${String(C)} ${String(C - R)} A ${String(R)} ${String(R)} 0 1 1 ${String(C - 0.01)} ${String(C - R)} Z`
-      : `M ${String(C)} ${String(C)} L ${String(p1[0])} ${String(p1[1])} A ${String(R)} ${String(R)} 0 ${String(large)} 1 ${String(p2[0])} ${String(p2[1])} Z`;
-    const lx = C + (R * 0.6) * Math.cos(mid) + dx;
-    const ly = C + (R * 0.6) * Math.sin(mid) + dy;
+    const d =
+      share >= 0.999
+        ? `M ${String(C)} ${String(C - R)} A ${String(R)} ${String(R)} 0 1 1 ${String(C - 0.01)} ${String(C - R)} Z`
+        : `M ${String(C)} ${String(C)} L ${String(p1[0])} ${String(p1[1])} A ${String(R)} ${String(R)} 0 ${String(large)} 1 ${String(p2[0])} ${String(p2[1])} Z`;
+    const lx = C + R * 0.6 * Math.cos(mid) + dx;
+    const ly = C + R * 0.6 * Math.sin(mid) + dy;
     return { ...s, share, d, dx, dy, lx, ly, colour: SLICE_COLOURS[i] ?? SLICE_COLOURS[3] };
   });
   const pct = (share: number) => `${String(Math.round(share * 100))}%`;
@@ -409,12 +435,19 @@ export function SharePie({
         <>
           <svg viewBox="0 0 300 300" className="mx-auto h-auto w-full max-w-[300px]" role="img" aria-label={title}>
             {arcs.map((a, i) => (
-              <g key={a.label} className="slice-in" style={{ animationDelay: `${String(i * 90)}ms` }} transform={`translate(${String(a.dx)} ${String(a.dy)})`}>
+              <g
+                key={a.label}
+                className="slice-in"
+                style={{ animationDelay: `${String(i * 90)}ms` }}
+                transform={`translate(${String(a.dx)} ${String(a.dy)})`}
+              >
                 <path d={a.d} fill={a.colour} stroke="var(--color-surface)" strokeWidth={2}>
                   <title>{`${a.label}: ${String(a.value)} (${pct(a.share)})`}</title>
                 </path>
                 {a.share >= 0.12 ? (
-                  <text x={a.lx} y={a.ly} dy="6" textAnchor="middle" fill="#ffffff" fontWeight={700} fontSize={17}>{pct(a.share)}</text>
+                  <text x={a.lx} y={a.ly} dy="6" textAnchor="middle" fill="#ffffff" fontWeight={700} fontSize={17}>
+                    {pct(a.share)}
+                  </text>
                 ) : null}
               </g>
             ))}
@@ -422,7 +455,11 @@ export function SharePie({
           <ul className="mt-4 flex list-none flex-col gap-1 p-0 text-[13px] text-ink-quiet">
             {arcs.map((a) => (
               <li key={a.label} className="flex items-center gap-2">
-                <span aria-hidden className="inline-block size-3 shrink-0 rounded-full" style={{ background: a.colour }} />
+                <span
+                  aria-hidden
+                  className="inline-block size-3 shrink-0 rounded-full"
+                  style={{ background: a.colour }}
+                />
                 <span className="min-w-0 flex-1 truncate">{a.label}</span>
                 <span className="tabular-nums text-ink">{a.value}</span>
                 <span className="w-10 text-end tabular-nums">{pct(a.share)}</span>
@@ -468,7 +505,10 @@ export function AreaTrend({
   const pts = points.map((p, i) => [x(i), y(p.value)] as const);
   let d = '';
   pts.forEach(([px, py], i) => {
-    if (i === 0) { d += `M ${String(px)} ${String(py)}`; return; }
+    if (i === 0) {
+      d += `M ${String(px)} ${String(py)}`;
+      return;
+    }
     const p0 = pts[i - 2] ?? pts[i - 1] ?? [px, py];
     const p1 = pts[i - 1] ?? [px, py];
     const p3 = pts[i + 1] ?? [px, py];
@@ -478,7 +518,10 @@ export function AreaTrend({
   });
   const last = pts[pts.length - 1];
   const first = pts[0];
-  const area = last !== undefined && first !== undefined ? `${d} L ${String(last[0])} ${String(y(0))} L ${String(first[0])} ${String(y(0))} Z` : '';
+  const area =
+    last !== undefined && first !== undefined
+      ? `${d} L ${String(last[0])} ${String(y(0))} L ${String(first[0])} ${String(y(0))} Z`
+      : '';
 
   return (
     <figure className="m-0">
@@ -497,19 +540,48 @@ export function AreaTrend({
             const v = i * step;
             return (
               <g key={v}>
-                <line x1={padStart} x2={W - 10} y1={y(v)} y2={y(v)} stroke="var(--color-line)" strokeWidth={1} strokeDasharray="4 4" />
-                <text x={padStart - 10} y={y(v) + 4} textAnchor="end" fontSize={12} fill="var(--color-ink-quiet)">{v}</text>
+                <line
+                  x1={padStart}
+                  x2={W - 10}
+                  y1={y(v)}
+                  y2={y(v)}
+                  stroke="var(--color-line)"
+                  strokeWidth={1}
+                  strokeDasharray="4 4"
+                />
+                <text x={padStart - 10} y={y(v) + 4} textAnchor="end" fontSize={12} fill="var(--color-ink-quiet)">
+                  {v}
+                </text>
               </g>
             );
           })}
           {points.map((p, i) => (
             <g key={p.label}>
-              <line x1={x(i)} x2={x(i)} y1={10} y2={y(0)} stroke="var(--color-line)" strokeWidth={1} strokeDasharray="4 4" />
-              <text x={x(i)} y={H - 6} textAnchor="middle" fontSize={13} fill="var(--color-ink-quiet)">{p.label}</text>
+              <line
+                x1={x(i)}
+                x2={x(i)}
+                y1={10}
+                y2={y(0)}
+                stroke="var(--color-line)"
+                strokeWidth={1}
+                strokeDasharray="4 4"
+              />
+              <text x={x(i)} y={H - 6} textAnchor="middle" fontSize={13} fill="var(--color-ink-quiet)">
+                {p.label}
+              </text>
             </g>
           ))}
           <path className="fade-up" d={area} fill="url(#area-fill)" />
-          <path className="draw" style={{ ['--draw-length' as string]: '1400' }} d={d} fill="none" stroke="var(--color-area-line)" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            className="draw"
+            style={{ ['--draw-length' as string]: '1400' }}
+            d={d}
+            fill="none"
+            stroke="var(--color-area-line)"
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
           {pts.map(([px, py], i) => (
             <circle key={points[i]?.label} cx={px} cy={py} r={9} fill="transparent">
               <title>{`${points[i]?.label ?? ''}: ${String(points[i]?.value ?? 0)} ${unit}`}</title>

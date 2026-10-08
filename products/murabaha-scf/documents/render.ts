@@ -20,7 +20,11 @@ export type { RenderLocale };
 export interface LegRenderRequest extends DocumentRenderRequest {
   /** Singular, and deliberately so. */
   readonly leg: ContractLeg;
-  readonly subject: { readonly kind: 'CONTRACT_LEG'; readonly reference: string; readonly detail: { readonly legType: string } };
+  readonly subject: {
+    readonly kind: 'CONTRACT_LEG';
+    readonly reference: string;
+    readonly detail: { readonly legType: string };
+  };
   readonly shariahApprovalId: string;
   readonly approvalRef: string;
 }

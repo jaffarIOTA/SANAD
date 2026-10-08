@@ -41,11 +41,9 @@ export interface Problem {
  */
 const ARABIC: Readonly<Record<string, string>> = {
   // Determinacy and identification
-  IDENTIFICATION_NOT_ACCEPTABLE_FOR_CHANNEL:
-    'لم يُعرَّف مُقدِّم الطلب بطريقة تقبلها هذه القناة.',
+  IDENTIFICATION_NOT_ACCEPTABLE_FOR_CHANNEL: 'لم يُعرَّف مُقدِّم الطلب بطريقة تقبلها هذه القناة.',
   MERCHANT_MANDATE_MISSING: 'تتطلب هذه القناة تفويضاً من الطرف الذي سيتحمل الالتزام.',
-  MERCHANT_MANDATE_EMPTY:
-    'يجوز للوسيط تعريف التاجر، ولا يجوز له الموافقة نيابة عنه.',
+  MERCHANT_MANDATE_EMPTY: 'يجوز للوسيط تعريف التاجر، ولا يجوز له الموافقة نيابة عنه.',
   PRINCIPAL_TENANT_MISMATCH: 'لا يجوز لمستخدم أن يتصرف في مؤسسة أخرى.',
   REQUESTED_AMOUNT_NOT_POSITIVE: 'يجب أن يحدد الطلب مبلغاً موجباً.',
   TENOR_NOT_DETERMINATE: 'يجب أن يحدد الطلب مدةً معلومة.',
@@ -96,8 +94,7 @@ const ARABIC: Readonly<Record<string, string>> = {
 
   // Transport-level refusals raised by this service
   MALFORMED_JSON: 'تعذّرت قراءة محتوى الطلب كبيانات JSON صحيحة.',
-  UNKNOWN_PROPERTY:
-    'حقل غير معروف. يُعبَّر عن العائد بمبلغ ربح يُضاف إلى تكلفة مُفصح عنها، لا بنسبة.',
+  UNKNOWN_PROPERTY: 'حقل غير معروف. يُعبَّر عن العائد بمبلغ ربح يُضاف إلى تكلفة مُفصح عنها، لا بنسبة.',
   SCHEMA_VALIDATION_FAILED: 'محتوى الطلب لا يطابق العقد المنشور.',
   IDEMPOTENCY_KEY_MISSING: 'يتطلب كل طلب مُغيِّر للحالة ترويسة Idempotency-Key.',
   IDEMPOTENCY_KEY_REUSED: 'استُخدم هذا المفتاح سابقاً بمحتوى مختلف.',
@@ -118,9 +115,7 @@ function arabicFor(reason: string, control: ControlCode | undefined): string {
   const known = ARABIC[reason];
   if (known !== undefined) return known;
   // Still names the control, so the reader is never given a bare decline.
-  return control === undefined
-    ? 'تعذّر إتمام الطلب.'
-    : `رُفض الطلب بموجب الضابط ${control}.`;
+  return control === undefined ? 'تعذّر إتمام الطلب.' : `رُفض الطلب بموجب الضابط ${control}.`;
 }
 
 export function problem(params: {
@@ -157,11 +152,7 @@ export function problem(params: {
  * intact, because it is what the counterparty surface renders into a specific
  * explanation and what the Board's audit workspace indexes on.
  */
-export function fromRejection(
-  rejection: Rejection,
-  correlationId: string,
-  instance?: string,
-): Problem {
+export function fromRejection(rejection: Rejection, correlationId: string, instance?: string): Problem {
   return problem({
     status: 422,
     kind: 'control-rejection',

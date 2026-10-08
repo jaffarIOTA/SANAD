@@ -26,9 +26,16 @@ interface State {
 }
 const KEY = Symbol.for('sanad.consumer.checkout');
 const scope = globalThis as unknown as Record<symbol, State | undefined>;
-const state: State = (scope[KEY] ??= { sessions: new Map(), outbox: emptyOutbox(), byIdempotency: new Map(), durable: inMemoryOutboxStore() });
+const state: State = (scope[KEY] ??= {
+  sessions: new Map(),
+  outbox: emptyOutbox(),
+  byIdempotency: new Map(),
+  durable: inMemoryOutboxStore(),
+});
 
-export function findSession(sessionId: string): CheckoutSession | undefined { return state.sessions.get(sessionId); }
+export function findSession(sessionId: string): CheckoutSession | undefined {
+  return state.sessions.get(sessionId);
+}
 
 /** Save, and queue the merchant's webhook event for the new state — once per (session, state). */
 export function saveSession(session: CheckoutSession): void {
@@ -38,8 +45,18 @@ export function saveSession(session: CheckoutSession): void {
   state.dirtySessions.add(session.core.sessionId);
   if (previous?.state === session.state) return;
   const queued = enqueue(state.outbox, {
-    eventId: `${session.core.sessionId}:${session.state}`, tenantId: session.core.tenantId, kind: 'PARTNER_CALLBACK', subjectRef: session.core.sessionId,
-    idempotencyKey: `${session.core.sessionId}:${session.state}`, payload: { merchantId: session.core.merchantId, merchantOrderRef: session.core.merchantOrderRef, state: session.state, webhook: 'checkoutSessionChanged' }, correlationId: session.core.correlationId,
+    eventId: `${session.core.sessionId}:${session.state}`,
+    tenantId: session.core.tenantId,
+    kind: 'PARTNER_CALLBACK',
+    subjectRef: session.core.sessionId,
+    idempotencyKey: `${session.core.sessionId}:${session.state}`,
+    payload: {
+      merchantId: session.core.merchantId,
+      merchantOrderRef: session.core.merchantOrderRef,
+      state: session.state,
+      webhook: 'checkoutSessionChanged',
+    },
+    correlationId: session.core.correlationId,
   });
   if (!queued.ok) return;
   state.outbox = queued.value;
@@ -57,9 +74,12 @@ export function outboxStore(): OutboxStore {
   return state.durable;
 }
 /** The durability layer swaps in the database-backed store once, when a database is configured. */
-export function useOutboxStore(store: OutboxStore): void { state.durable = store; }
+export function useOutboxStore(store: OutboxStore): void {
+  state.durable = store;
+}
 
-export const sessionIdFor = (merchantId: string, idempotencyKey: string): string | undefined => state.byIdempotency.get(`${merchantId}:${idempotencyKey}`);
+export const sessionIdFor = (merchantId: string, idempotencyKey: string): string | undefined =>
+  state.byIdempotency.get(`${merchantId}:${idempotencyKey}`);
 export const rememberIdempotency = (merchantId: string, idempotencyKey: string, sessionId: string): void => {
   const key = `${merchantId}:${idempotencyKey}`;
   state.byIdempotency.set(key, sessionId);
@@ -70,29 +90,46 @@ export const rememberIdempotency = (merchantId: string, idempotencyKey: string, 
 // -- For the durability layer (durable.ts) -------------------------------------
 
 export function unsavedSessions(): readonly CheckoutSession[] {
-  return [...(state.dirtySessions ?? [])].flatMap((id) => { const s = state.sessions.get(id); return s === undefined ? [] : [s]; });
+  return [...(state.dirtySessions ?? [])].flatMap((id) => {
+    const s = state.sessions.get(id);
+    return s === undefined ? [] : [s];
+  });
 }
-export function unsavedIdempotency(): readonly { readonly merchantId: string; readonly idempotencyKey: string; readonly sessionId: string }[] {
+export function unsavedIdempotency(): readonly {
+  readonly merchantId: string;
+  readonly idempotencyKey: string;
+  readonly sessionId: string;
+}[] {
   return [...(state.dirtyIdempotency ?? [])].flatMap((key) => {
     const sessionId = state.byIdempotency.get(key);
     const at = key.indexOf(':');
-    return sessionId === undefined || at < 0 ? [] : [{ merchantId: key.slice(0, at), idempotencyKey: key.slice(at + 1), sessionId }];
+    return sessionId === undefined || at < 0
+      ? []
+      : [{ merchantId: key.slice(0, at), idempotencyKey: key.slice(at + 1), sessionId }];
   });
 }
-export function markCheckoutSaved(sessionIds: readonly string[], idempotency: readonly { readonly merchantId: string; readonly idempotencyKey: string }[]): void {
+export function markCheckoutSaved(
+  sessionIds: readonly string[],
+  idempotency: readonly { readonly merchantId: string; readonly idempotencyKey: string }[],
+): void {
   for (const id of sessionIds) state.dirtySessions?.delete(id);
   for (const i of idempotency) state.dirtyIdempotency?.delete(`${i.merchantId}:${i.idempotencyKey}`);
 }
 
 /** Events queued and not yet in the outbox store; removed only once the store has them. */
-export function unappendedEvents(): readonly OutboxEvent[] { return [...(state.unappended ?? [])]; }
+export function unappendedEvents(): readonly OutboxEvent[] {
+  return [...(state.unappended ?? [])];
+}
 export function markAppended(eventIds: readonly string[]): void {
   const done = new Set(eventIds);
   state.unappended = (state.unappended ?? []).filter((e) => !done.has(e.eventId));
 }
 
 /** Puts stored records back into the working set without marking them as changed or re-queuing their events. */
-export function restoreCheckout(sessions: readonly CheckoutSession[], idempotency: readonly { readonly merchantId: string; readonly idempotencyKey: string; readonly sessionId: string }[]): void {
+export function restoreCheckout(
+  sessions: readonly CheckoutSession[],
+  idempotency: readonly { readonly merchantId: string; readonly idempotencyKey: string; readonly sessionId: string }[],
+): void {
   for (const s of sessions) state.sessions.set(s.core.sessionId, s);
   for (const i of idempotency) state.byIdempotency.set(`${i.merchantId}:${i.idempotencyKey}`, i.sessionId);
 }

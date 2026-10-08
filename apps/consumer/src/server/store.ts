@@ -57,7 +57,12 @@ export function developmentAttestation(): TsaInstant {
   // A store kept across hot reloads may predate this field.
   const last = state.lastAttested ?? 0n;
   state.lastAttested = now > last ? now : last + 1n;
-  return tsaInstant({ verified: true, genTimeEpochSeconds: state.lastAttested, tokenDigest: `development-substitute-${state.lastAttested.toString()}`, authorityId: 'development' });
+  return tsaInstant({
+    verified: true,
+    genTimeEpochSeconds: state.lastAttested,
+    tokenDigest: `development-substitute-${state.lastAttested.toString()}`,
+    authorityId: 'development',
+  });
 }
 
 export function nextId(prefix: string): string {
@@ -70,20 +75,49 @@ export function saveOffer(offer: StoredOffer): void {
   state.dirtyOffers ??= new Set<string>();
   state.dirtyOffers.add(offer.offerId);
 }
-export function findOffer(offerId: string): StoredOffer | undefined { return state.offers.get(offerId); }
-export function acceptanceFor(offerId: string): Acceptance | undefined { return [...state.acceptances.values()].find((a) => a.offerId === offerId); }
+export function findOffer(offerId: string): StoredOffer | undefined {
+  return state.offers.get(offerId);
+}
+export function acceptanceFor(offerId: string): Acceptance | undefined {
+  return [...state.acceptances.values()].find((a) => a.offerId === offerId);
+}
 
-export function accept(params: { readonly offerId: string; readonly identityAssertionId: string; readonly localeShown: Acceptance['localeShown']; readonly disclosureVersionShown: string; readonly at: TsaInstant }): Result<Acceptance> {
+export function accept(params: {
+  readonly offerId: string;
+  readonly identityAssertionId: string;
+  readonly localeShown: Acceptance['localeShown'];
+  readonly disclosureVersionShown: string;
+  readonly at: TsaInstant;
+}): Result<Acceptance> {
   const offer = state.offers.get(params.offerId);
   if (offer === undefined) return reject('OP-DETERMINACY', 'OFFER_NOT_FOUND', 'No such offer');
-  if (params.identityAssertionId.trim().length === 0) return reject('OP-DETERMINACY', 'IDENTITY_ASSERTION_REQUIRED', 'Acceptance is bound to a verified identity assertion');
-  if (acceptanceFor(params.offerId) !== undefined) return reject('OP-DETERMINACY', 'OFFER_ALREADY_ACCEPTED', 'This offer has already been accepted');
-  if (params.at.epochSeconds > offer.expiresAtEpochSeconds) return reject('OP-DETERMINACY', 'OFFER_EXPIRED', 'This offer has expired; ask for a new one');
+  if (params.identityAssertionId.trim().length === 0)
+    return reject(
+      'OP-DETERMINACY',
+      'IDENTITY_ASSERTION_REQUIRED',
+      'Acceptance is bound to a verified identity assertion',
+    );
+  if (acceptanceFor(params.offerId) !== undefined)
+    return reject('OP-DETERMINACY', 'OFFER_ALREADY_ACCEPTED', 'This offer has already been accepted');
+  if (params.at.epochSeconds > offer.expiresAtEpochSeconds)
+    return reject('OP-DETERMINACY', 'OFFER_EXPIRED', 'This offer has expired; ask for a new one');
   // The acceptance is of the disclosure that was on the screen. If the offer
   // was re-quoted between showing and clicking, the versions differ and the
   // click accepts nothing.
-  if (params.disclosureVersionShown !== offer.offer.disclosureVersion) return reject('OP-DETERMINACY', 'DISCLOSURE_VERSION_MISMATCH', 'The disclosure shown is not the current one; read it again');
-  const acceptance: Acceptance = { acceptanceId: nextId('acc'), offerId: params.offerId, disclosureVersion: offer.offer.disclosureVersion, identityAssertionId: params.identityAssertionId, localeShown: params.localeShown, acceptedAt: params.at };
+  if (params.disclosureVersionShown !== offer.offer.disclosureVersion)
+    return reject(
+      'OP-DETERMINACY',
+      'DISCLOSURE_VERSION_MISMATCH',
+      'The disclosure shown is not the current one; read it again',
+    );
+  const acceptance: Acceptance = {
+    acceptanceId: nextId('acc'),
+    offerId: params.offerId,
+    disclosureVersion: offer.offer.disclosureVersion,
+    identityAssertionId: params.identityAssertionId,
+    localeShown: params.localeShown,
+    acceptedAt: params.at,
+  };
   state.acceptances.set(acceptance.acceptanceId, acceptance);
   state.dirtyAcceptances ??= new Set<string>();
   state.dirtyAcceptances.add(acceptance.acceptanceId);
@@ -94,10 +128,16 @@ export function accept(params: { readonly offerId: string; readonly identityAsse
 
 /** What has been written since the last flush. Read, saved, then cleared by id — never cleared unsaved. */
 export function unsavedOffers(): readonly StoredOffer[] {
-  return [...(state.dirtyOffers ?? [])].flatMap((id) => { const o = state.offers.get(id); return o === undefined ? [] : [o]; });
+  return [...(state.dirtyOffers ?? [])].flatMap((id) => {
+    const o = state.offers.get(id);
+    return o === undefined ? [] : [o];
+  });
 }
 export function unsavedAcceptances(): readonly Acceptance[] {
-  return [...(state.dirtyAcceptances ?? [])].flatMap((id) => { const a = state.acceptances.get(id); return a === undefined ? [] : [a]; });
+  return [...(state.dirtyAcceptances ?? [])].flatMap((id) => {
+    const a = state.acceptances.get(id);
+    return a === undefined ? [] : [a];
+  });
 }
 export function markSaved(offerIds: readonly string[], acceptanceIds: readonly string[]): void {
   for (const id of offerIds) state.dirtyOffers?.delete(id);

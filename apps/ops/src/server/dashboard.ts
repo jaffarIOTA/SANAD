@@ -19,7 +19,8 @@ import type { RailEntry } from '@sanad/core/config/rails.ts';
 
 import type { RequestRow } from './store.ts';
 
-export type AttentionKind = 'SLA_BREACHED' | 'AWAITING_REVIEW' | 'SERVICING_UNAVAILABLE' | 'PENDING_INFORMATION' | 'RETURNED_TO_MAKER';
+export type AttentionKind =
+  'SLA_BREACHED' | 'AWAITING_REVIEW' | 'SERVICING_UNAVAILABLE' | 'PENDING_INFORMATION' | 'RETURNED_TO_MAKER';
 
 export interface AttentionItem {
   readonly requestId: string;
@@ -49,7 +50,12 @@ export interface DashboardSummary {
   readonly requestsOnBook: number;
 }
 
-const IN_PROGRESS: ReadonlySet<string> = new Set(['KEYING', 'AWAITING_SERVICING_RESPONSE', 'AWAITING_REVIEW', 'RETURNED_TO_MAKER']);
+const IN_PROGRESS: ReadonlySet<string> = new Set([
+  'KEYING',
+  'AWAITING_SERVICING_RESPONSE',
+  'AWAITING_REVIEW',
+  'RETURNED_TO_MAKER',
+]);
 const WAITING_OUTSIDE: ReadonlySet<string> = new Set(['PENDING_INFORMATION', 'SERVICING_UNAVAILABLE']);
 const CLOSED: ReadonlySet<string> = new Set(['REJECTED', 'WITHDRAWN', 'EXPIRED']);
 
@@ -62,9 +68,20 @@ const KIND_OF: Readonly<Partial<Record<string, AttentionKind>>> = {
 };
 
 /** Breaches first, then the oldest; a breach outranks any amount. */
-const RANK: Readonly<Record<AttentionKind, number>> = { SLA_BREACHED: 0, SERVICING_UNAVAILABLE: 1, AWAITING_REVIEW: 2, RETURNED_TO_MAKER: 3, PENDING_INFORMATION: 4 };
+const RANK: Readonly<Record<AttentionKind, number>> = {
+  SLA_BREACHED: 0,
+  SERVICING_UNAVAILABLE: 1,
+  AWAITING_REVIEW: 2,
+  RETURNED_TO_MAKER: 3,
+  PENDING_INFORMATION: 4,
+};
 
-export function summarise(rows: readonly RequestRow[], policy: OriginationPolicy | undefined, observedEpochSeconds: bigint, observerPrincipalId?: string): DashboardSummary {
+export function summarise(
+  rows: readonly RequestRow[],
+  policy: OriginationPolicy | undefined,
+  observedEpochSeconds: bigint,
+  observerPrincipalId?: string,
+): DashboardSummary {
   const attention: AttentionItem[] = [];
   for (const r of rows) {
     const base = KIND_OF[r.state];
@@ -89,7 +106,13 @@ export function summarise(rows: readonly RequestRow[], policy: OriginationPolicy
   };
   attention.sort((a, b) => RANK[a.kind] - RANK[b.kind] || older(a, b));
 
-  const countsByKind: Record<AttentionKind, number> = { SLA_BREACHED: 0, AWAITING_REVIEW: 0, SERVICING_UNAVAILABLE: 0, PENDING_INFORMATION: 0, RETURNED_TO_MAKER: 0 };
+  const countsByKind: Record<AttentionKind, number> = {
+    SLA_BREACHED: 0,
+    AWAITING_REVIEW: 0,
+    SERVICING_UNAVAILABLE: 0,
+    PENDING_INFORMATION: 0,
+    RETURNED_TO_MAKER: 0,
+  };
   for (const a of attention) countsByKind[a.kind] += 1;
 
   const stage = (name: FunnelStage['stage'], keep: (r: RequestRow) => boolean): FunnelStage => {
@@ -104,7 +127,14 @@ export function summarise(rows: readonly RequestRow[], policy: OriginationPolicy
   ];
   const open = (funnel[0]?.valueMinorUnits ?? 0n) + (funnel[1]?.valueMinorUnits ?? 0n);
 
-  return { attention, countsByKind, funnel, openValueMinorUnits: open, approvedValueMinorUnits: funnel[2]?.valueMinorUnits ?? 0n, requestsOnBook: rows.length };
+  return {
+    attention,
+    countsByKind,
+    funnel,
+    openValueMinorUnits: open,
+    approvedValueMinorUnits: funnel[2]?.valueMinorUnits ?? 0n,
+    requestsOnBook: rows.length,
+  };
 }
 
 export interface RailStatus {
@@ -117,5 +147,11 @@ export interface RailStatus {
 }
 
 export function railStatuses(rails: readonly RailEntry[]): readonly RailStatus[] {
-  return rails.map((r) => ({ capability: r.capability, adapter: r.adapter, environment: r.environment, enabled: r.enabled, ...(r.note === undefined ? {} : { note: r.note }) }));
+  return rails.map((r) => ({
+    capability: r.capability,
+    adapter: r.adapter,
+    environment: r.environment,
+    enabled: r.enabled,
+    ...(r.note === undefined ? {} : { note: r.note }),
+  }));
 }

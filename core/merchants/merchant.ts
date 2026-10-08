@@ -52,19 +52,48 @@ export interface Verification {
   readonly verifiedAt: TsaInstant;
 }
 
-interface WithCore { readonly core: MerchantCore }
-export interface PendingVerification extends WithCore { readonly status: 'PENDING_VERIFICATION'; readonly begunAt: TsaInstant }
-export interface Active extends WithCore { readonly status: 'ACTIVE'; readonly verification: Verification; readonly activatedAt: TsaInstant }
-export interface Suspended extends WithCore { readonly status: 'SUSPENDED'; readonly verification: Verification; readonly suspendedBy: string; readonly reason: string; readonly suspendedAt: TsaInstant }
-export interface Closed extends WithCore { readonly status: 'CLOSED'; readonly closedBy: string; readonly reason: string; readonly closedAt: TsaInstant }
+interface WithCore {
+  readonly core: MerchantCore;
+}
+export interface PendingVerification extends WithCore {
+  readonly status: 'PENDING_VERIFICATION';
+  readonly begunAt: TsaInstant;
+}
+export interface Active extends WithCore {
+  readonly status: 'ACTIVE';
+  readonly verification: Verification;
+  readonly activatedAt: TsaInstant;
+}
+export interface Suspended extends WithCore {
+  readonly status: 'SUSPENDED';
+  readonly verification: Verification;
+  readonly suspendedBy: string;
+  readonly reason: string;
+  readonly suspendedAt: TsaInstant;
+}
+export interface Closed extends WithCore {
+  readonly status: 'CLOSED';
+  readonly closedBy: string;
+  readonly reason: string;
+  readonly closedAt: TsaInstant;
+}
 export type Merchant = PendingVerification | Active | Suspended | Closed;
 
 export function beginOnboarding(core: MerchantCore, at: TsaInstant): Result<PendingVerification> {
-  if (!/^\d{10}$/.test(core.commercialRegistration)) return reject('OP-DETERMINACY', 'CR_MALFORMED', 'A commercial registration number is ten digits');
-  if (core.legalNameAr.trim().length === 0 || core.legalNameEn.trim().length === 0) return reject('OP-DETERMINACY', 'LEGAL_NAME_REQUIRED', 'Both legal names are required');
-  if (core.settlementAccountRef.trim().length === 0) return reject('OP-DETERMINACY', 'SETTLEMENT_ACCOUNT_REQUIRED', 'A settlement account reference is required');
-  if (/^\d{8,}$/.test(core.settlementAccountRef) || /^SA\d{2}/i.test(core.settlementAccountRef)) return reject('OP-DETERMINACY', 'SETTLEMENT_ACCOUNT_BY_VALUE', 'The settlement account is referenced, never given by number');
-  if (core.onboardedBy.trim().length === 0) return reject('OP-DETERMINACY', 'ONBOARDED_BY_REQUIRED', 'An onboarding names who began it');
+  if (!/^\d{10}$/.test(core.commercialRegistration))
+    return reject('OP-DETERMINACY', 'CR_MALFORMED', 'A commercial registration number is ten digits');
+  if (core.legalNameAr.trim().length === 0 || core.legalNameEn.trim().length === 0)
+    return reject('OP-DETERMINACY', 'LEGAL_NAME_REQUIRED', 'Both legal names are required');
+  if (core.settlementAccountRef.trim().length === 0)
+    return reject('OP-DETERMINACY', 'SETTLEMENT_ACCOUNT_REQUIRED', 'A settlement account reference is required');
+  if (/^\d{8,}$/.test(core.settlementAccountRef) || /^SA\d{2}/i.test(core.settlementAccountRef))
+    return reject(
+      'OP-DETERMINACY',
+      'SETTLEMENT_ACCOUNT_BY_VALUE',
+      'The settlement account is referenced, never given by number',
+    );
+  if (core.onboardedBy.trim().length === 0)
+    return reject('OP-DETERMINACY', 'ONBOARDED_BY_REQUIRED', 'An onboarding names who began it');
   return ok({ status: 'PENDING_VERIFICATION', core, begunAt: at });
 }
 
@@ -74,19 +103,55 @@ export function beginOnboarding(core: MerchantCore, at: TsaInstant): Result<Pend
  * permitted. Anything else stays pending.
  */
 export function verify(m: PendingVerification, v: Verification): Result<Active> {
-  if (v.verifiedBy.trim().length === 0) return reject('OP-DETERMINACY', 'VERIFIED_BY_REQUIRED', 'A verification names who performed it');
-  if (v.verifiedBy === m.core.onboardedBy) return reject('OP-DETERMINACY', 'FOUR_EYES_SELF_VERIFICATION', 'The person who onboarded a merchant may not verify it', { onboardedBy: m.core.onboardedBy });
-  if (v.agreementRef.trim().length === 0) return reject('OP-DETERMINACY', 'MERCHANT_AGREEMENT_REQUIRED', 'A store transacts only under an executed contract with the institution', { citation: 'SAMA Rules for Regulating BNPL Companies, Nov 2023 (Jumada I 1445H), Art. 27' });
-  if (v.registryLookupRef.length === 0 || v.screeningResultRef.length === 0) return reject('OP-DETERMINACY', 'VERIFICATION_EVIDENCE_REQUIRED', 'Verification cites the registry lookup and the screening result');
-  if (v.registryStatus !== 'ACTIVE') return reject('OP-DETERMINACY', 'REGISTRATION_NOT_ACTIVE', 'The commercial registration is not active', { status: v.registryStatus });
-  if (v.screeningOutcome !== 'CLEAR') return reject('SH-12', 'SCREENING_NOT_CLEAR', 'Screening did not clear the merchant', { outcome: v.screeningOutcome });
-  if (!v.activityPermitted) return reject('SH-12', 'ACTIVITY_NOT_PERMITTED', 'The merchant’s activity is not permitted under the tenant’s register');
+  if (v.verifiedBy.trim().length === 0)
+    return reject('OP-DETERMINACY', 'VERIFIED_BY_REQUIRED', 'A verification names who performed it');
+  if (v.verifiedBy === m.core.onboardedBy)
+    return reject(
+      'OP-DETERMINACY',
+      'FOUR_EYES_SELF_VERIFICATION',
+      'The person who onboarded a merchant may not verify it',
+      { onboardedBy: m.core.onboardedBy },
+    );
+  if (v.agreementRef.trim().length === 0)
+    return reject(
+      'OP-DETERMINACY',
+      'MERCHANT_AGREEMENT_REQUIRED',
+      'A store transacts only under an executed contract with the institution',
+      { citation: 'SAMA Rules for Regulating BNPL Companies, Nov 2023 (Jumada I 1445H), Art. 27' },
+    );
+  if (v.registryLookupRef.length === 0 || v.screeningResultRef.length === 0)
+    return reject(
+      'OP-DETERMINACY',
+      'VERIFICATION_EVIDENCE_REQUIRED',
+      'Verification cites the registry lookup and the screening result',
+    );
+  if (v.registryStatus !== 'ACTIVE')
+    return reject('OP-DETERMINACY', 'REGISTRATION_NOT_ACTIVE', 'The commercial registration is not active', {
+      status: v.registryStatus,
+    });
+  if (v.screeningOutcome !== 'CLEAR')
+    return reject('SH-12', 'SCREENING_NOT_CLEAR', 'Screening did not clear the merchant', {
+      outcome: v.screeningOutcome,
+    });
+  if (!v.activityPermitted)
+    return reject(
+      'SH-12',
+      'ACTIVITY_NOT_PERMITTED',
+      'The merchant’s activity is not permitted under the tenant’s register',
+    );
   return ok({ status: 'ACTIVE', core: m.core, verification: v, activatedAt: v.verifiedAt });
 }
 
 export function suspend(m: Active, by: string, reason: string, at: TsaInstant): Result<Suspended> {
   if (reason.trim().length === 0) return reject('OP-DETERMINACY', 'REASON_REQUIRED', 'Suspension carries a reason');
-  return ok({ status: 'SUSPENDED', core: m.core, verification: m.verification, suspendedBy: by, reason, suspendedAt: at });
+  return ok({
+    status: 'SUSPENDED',
+    core: m.core,
+    verification: m.verification,
+    suspendedBy: by,
+    reason,
+    suspendedAt: at,
+  });
 }
 
 export function reinstate(m: Suspended, at: TsaInstant): Active {

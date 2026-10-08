@@ -176,10 +176,7 @@ export function deliveryEvidence(capturedAt: TsaInstant, tenant: string = TENANT
   );
 }
 
-export function constructivePossessionEvidence(
-  capturedAt: TsaInstant,
-  tenant: string = TENANT,
-): EvidenceRecord {
+export function constructivePossessionEvidence(capturedAt: TsaInstant, tenant: string = TENANT): EvidenceRecord {
   return evidenceRecord(
     {
       evidenceType: 'CONSTRUCTIVE_POSSESSION',
@@ -191,10 +188,7 @@ export function constructivePossessionEvidence(
   );
 }
 
-export function transactionCore(
-  tenant: TenantCode,
-  overrides: Partial<TransactionCore> = {},
-): TransactionCore {
+export function transactionCore(tenant: TenantCode, overrides: Partial<TransactionCore> = {}): TransactionCore {
   const pricing = expectOk(priceMurabaha(money(18_500_000n), money(462_500n)));
   const definition = structureFor(tenant);
 
@@ -247,10 +241,7 @@ export interface SnapshotOverrides {
  * A strong applicant: long anchor tenure, good volume, clean conduct. Both
  * tenants' policies approve it, which makes it a useful baseline to degrade.
  */
-export function strongApplicant(
-  tenant: TenantCode,
-  overrides: SnapshotOverrides = {},
-): ApplicantSnapshot {
+export function strongApplicant(tenant: TenantCode, overrides: SnapshotOverrides = {}): ApplicantSnapshot {
   const { withAnchor: anchorOverrides, ...tradeOverrides } = overrides.tradeHistory ?? {};
 
   return {

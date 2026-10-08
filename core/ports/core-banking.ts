@@ -149,25 +149,16 @@ export interface CoreBankingProvider {
   resolveAccount(partyRef: PartyRef, purpose: AccountPurpose): Promise<Result<AccountRef>>;
 
   /** Exactly once, with idempotent retry and nightly reconciliation (BR-D12). */
-  bookObligation(
-    request: BookObligationRequest,
-    key: IdempotencyKey,
-  ): Promise<Result<BookingRef>>;
+  bookObligation(request: BookObligationRequest, key: IdempotencyKey): Promise<Result<BookingRef>>;
 
-  instructSettlement(
-    instruction: SettlementInstruction,
-    key: IdempotencyKey,
-  ): Promise<Result<SettlementRef>>;
+  instructSettlement(instruction: SettlementInstruction, key: IdempotencyKey): Promise<Result<SettlementRef>>;
 
   /**
    * Post a late amount to the segregated charity liability. There is no
    * counterpart method that posts to income, in this interface or in any
    * implementation of it.
    */
-  postCharityLiability(
-    request: CharityPostingRequest,
-    key: IdempotencyKey,
-  ): Promise<Result<PostingRef>>;
+  postCharityLiability(request: CharityPostingRequest, key: IdempotencyKey): Promise<Result<PostingRef>>;
 
   fetchExposure(partyRef: PartyRef): Promise<Result<ExposureView>>;
 

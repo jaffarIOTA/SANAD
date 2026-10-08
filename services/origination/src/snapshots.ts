@@ -44,7 +44,12 @@ export function developmentSnapshot(request: SnapshotRequest): ApplicantSnapshot
       paidCapitalMinorUnits: 50_000_000n,
       retrievedSecondsAgo: 3600,
     },
-    signatory: { authorityVerified: true, method: 'NATIONAL_IDENTITY_PROVIDER', assertionId: 'asr-dev', retrievedSecondsAgo: 600 },
+    signatory: {
+      authorityVerified: true,
+      method: 'NATIONAL_IDENTITY_PROVIDER',
+      assertionId: 'asr-dev',
+      retrievedSecondsAgo: 600,
+    },
     screening: {
       sanctions: last === 'e' ? 'POTENTIAL_MATCH' : 'CLEAR',
       politicallyExposed: 'CLEAR',
@@ -82,9 +87,26 @@ export function developmentSnapshot(request: SnapshotRequest): ApplicantSnapshot
       judgmentCount: 0,
       retrievedSecondsAgo: 86_400,
     },
-    openBanking: { availability: 'AVAILABLE', averageMonthlyInflowMinorUnits: 80_000_000n, lowestMonthEndBalanceMinorUnits: 9_000_000n, returnedPaymentsLast6Months: 0, retrievedSecondsAgo: 43_200 },
-    workforce: { availability: 'AVAILABLE', employeeCount: 24, socialInsuranceRegistered: true, retrievedSecondsAgo: 86_400 },
-    programme: { anchorRecourse: 'PARTIAL', programmeLimitMinorUnits: 10_000_000_000n, programmeUtilisedMinorUnits: 1_000_000_000n, sectorCode: 'BUILDING_MATERIALS', goodsCategoryCode: 'CEMENT' },
+    openBanking: {
+      availability: 'AVAILABLE',
+      averageMonthlyInflowMinorUnits: 80_000_000n,
+      lowestMonthEndBalanceMinorUnits: 9_000_000n,
+      returnedPaymentsLast6Months: 0,
+      retrievedSecondsAgo: 43_200,
+    },
+    workforce: {
+      availability: 'AVAILABLE',
+      employeeCount: 24,
+      socialInsuranceRegistered: true,
+      retrievedSecondsAgo: 86_400,
+    },
+    programme: {
+      anchorRecourse: 'PARTIAL',
+      programmeLimitMinorUnits: 10_000_000_000n,
+      programmeUtilisedMinorUnits: 1_000_000_000n,
+      sectorCode: 'BUILDING_MATERIALS',
+      goodsCategoryCode: 'CEMENT',
+    },
     exposure: { platformExposureMinorUnits: 0n, coreBankingExposureMinorUnits: 0n, groupExposureMinorUnits: 0n },
     consent: { eInvoicing: true, creditBureau: true, openBanking: true, workforce: true },
   };
@@ -94,7 +116,14 @@ export function developmentSnapshot(request: SnapshotRequest): ApplicantSnapshot
 export function railSnapshots(sources: SnapshotSources): ApplicantSnapshotPort {
   return {
     assemble(request: SnapshotRequest) {
-      return assembleSnapshot(sources, { tenantId: request.tenantId, counterpartyId: request.counterpartyId, programmeId: request.programmeId, snapshotId: `snp-${request.at.epochSeconds.toString()}`, at: request.at, correlationId: `snapshot-${request.counterpartyId}` });
+      return assembleSnapshot(sources, {
+        tenantId: request.tenantId,
+        counterpartyId: request.counterpartyId,
+        programmeId: request.programmeId,
+        snapshotId: `snp-${request.at.epochSeconds.toString()}`,
+        at: request.at,
+        correlationId: `snapshot-${request.counterpartyId}`,
+      });
     },
   };
 }

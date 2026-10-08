@@ -11,7 +11,12 @@ import { randomUUID } from 'node:crypto';
 import { authenticate, developmentRegistry, type PartnerPrincipal } from '@sanad/origination/principal.ts';
 import { problem, type Problem } from '@sanad/origination/problem.ts';
 
-export function json(status: number, body: unknown, correlationId: string, extra: Record<string, string> = {}): Response {
+export function json(
+  status: number,
+  body: unknown,
+  correlationId: string,
+  extra: Record<string, string> = {},
+): Response {
   const isProblem = status >= 400;
   return new Response(JSON.stringify(body), {
     status,
@@ -41,7 +46,8 @@ export function principalOr401(request: Request, correlationId: string): Partner
     problem({
       status: 401,
       title: 'Unauthenticated',
-      detail: auth.reason === 'CREDENTIAL_MISSING' ? 'No credential was presented.' : 'The credential was not recognised.',
+      detail:
+        auth.reason === 'CREDENTIAL_MISSING' ? 'No credential was presented.' : 'The credential was not recognised.',
       reason: auth.reason,
       correlationId,
     }),

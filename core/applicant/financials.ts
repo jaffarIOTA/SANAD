@@ -105,7 +105,10 @@ export interface FinancialFigure {
   readonly verification?: FigureVerification;
 }
 
-export type VerifiedFigure = FinancialFigure & { readonly status: 'VERIFIED'; readonly verification: FigureVerification };
+export type VerifiedFigure = FinancialFigure & {
+  readonly status: 'VERIFIED';
+  readonly verification: FigureVerification;
+};
 
 export const isVerified = (f: FinancialFigure): f is VerifiedFigure =>
   f.status === 'VERIFIED' && f.verification !== undefined;
@@ -113,7 +116,12 @@ export const isVerified = (f: FinancialFigure): f is VerifiedFigure =>
 /** The value a decision may use, only once verified. */
 export function usableValue(f: FinancialFigure): Result<Money> {
   if (!isVerified(f)) {
-    return reject('OP-DETERMINACY', 'FIGURE_NOT_VERIFIED', 'A financial figure is usable only once an officer has verified it', { metric: f.metric });
+    return reject(
+      'OP-DETERMINACY',
+      'FIGURE_NOT_VERIFIED',
+      'A financial figure is usable only once an officer has verified it',
+      { metric: f.metric },
+    );
   }
   return ok(f.verification.value);
 }
@@ -124,7 +132,11 @@ const PRINCIPAL_SHAPE = /^[A-Za-z0-9][A-Za-z0-9:._@-]{0,127}$/;
 
 function checkAmount(metric: FinancialMetric, value: Money, currency: CurrencyCode, what: string): Result<true> {
   if (value.currency !== currency) {
-    return reject('OP-DETERMINACY', 'FIGURE_CURRENCY_MISMATCH', `The ${what} is not in the application’s currency`, { metric, expected: currency, given: value.currency });
+    return reject('OP-DETERMINACY', 'FIGURE_CURRENCY_MISMATCH', `The ${what} is not in the application’s currency`, {
+      metric,
+      expected: currency,
+      given: value.currency,
+    });
   }
   if (value.minorUnits < 0n && !MAY_BE_NEGATIVE.has(metric)) {
     return reject('OP-DETERMINACY', 'FIGURE_NEGATIVE', `This metric cannot be negative`, { metric });
@@ -138,19 +150,38 @@ export function proposeFigure(p: FigureProposal, applicationCurrency: CurrencyCo
     return reject('OP-DETERMINACY', 'METRIC_UNKNOWN', 'The figure names a metric the financial spread does not know');
   }
   if (!FIGURE_SOURCE_KINDS.includes(p.sourceKind)) {
-    return reject('OP-DETERMINACY', 'SOURCE_KIND_UNKNOWN', 'The figure’s source kind is not OCR, RAIL or OFFICER_ENTRY', { metric: p.metric });
+    return reject(
+      'OP-DETERMINACY',
+      'SOURCE_KIND_UNKNOWN',
+      'The figure’s source kind is not OCR, RAIL or OFFICER_ENTRY',
+      { metric: p.metric },
+    );
   }
   if (!REF_SHAPE.test(p.sourceRef)) {
-    return reject('OP-DETERMINACY', 'SOURCE_REF_INVALID', 'A source reference is a document or rail reference id, not content', { metric: p.metric });
+    return reject(
+      'OP-DETERMINACY',
+      'SOURCE_REF_INVALID',
+      'A source reference is a document or rail reference id, not content',
+      { metric: p.metric },
+    );
   }
   if (!PERIOD_SHAPE.test(p.periodLabel)) {
-    return reject('OP-DETERMINACY', 'PERIOD_LABEL_INVALID', 'A figure names the period it covers', { metric: p.metric });
+    return reject('OP-DETERMINACY', 'PERIOD_LABEL_INVALID', 'A figure names the period it covers', {
+      metric: p.metric,
+    });
   }
   if (p.sourceKind === 'OFFICER_ENTRY' && (p.enteredBy === undefined || !PRINCIPAL_SHAPE.test(p.enteredBy))) {
-    return reject('OP-DETERMINACY', 'ENTERED_BY_REQUIRED', 'A figure keyed in by an officer records which officer keyed it', { metric: p.metric });
+    return reject(
+      'OP-DETERMINACY',
+      'ENTERED_BY_REQUIRED',
+      'A figure keyed in by an officer records which officer keyed it',
+      { metric: p.metric },
+    );
   }
   if (p.sourceKind !== 'OFFICER_ENTRY' && p.enteredBy !== undefined) {
-    return reject('OP-DETERMINACY', 'ENTERED_BY_UNEXPECTED', 'Only an officer-keyed figure has an entering officer', { metric: p.metric });
+    return reject('OP-DETERMINACY', 'ENTERED_BY_UNEXPECTED', 'Only an officer-keyed figure has an entering officer', {
+      metric: p.metric,
+    });
   }
   const amount = checkAmount(p.metric, p.value, applicationCurrency, 'proposed figure');
   if (!amount.ok) return amount;
@@ -177,21 +208,44 @@ export interface VerifyParams {
  * An officer verifies a figure, confirming or correcting it. A verified figure
  * is not re-verified: a later correction is a new proposal that supersedes it.
  */
-export function verifyFigure(f: FinancialFigure, v: VerifyParams, applicationCurrency: CurrencyCode): Result<VerifiedFigure> {
+export function verifyFigure(
+  f: FinancialFigure,
+  v: VerifyParams,
+  applicationCurrency: CurrencyCode,
+): Result<VerifiedFigure> {
   if (f.status === 'VERIFIED') {
-    return reject('OP-DETERMINACY', 'FIGURE_ALREADY_VERIFIED', 'A verified figure is superseded by a new proposal, never re-verified', { metric: f.metric });
+    return reject(
+      'OP-DETERMINACY',
+      'FIGURE_ALREADY_VERIFIED',
+      'A verified figure is superseded by a new proposal, never re-verified',
+      { metric: f.metric },
+    );
   }
   if (!PRINCIPAL_SHAPE.test(v.verifiedBy)) {
-    return reject('OP-DETERMINACY', 'VERIFIER_REQUIRED', 'Verification records the officer who verified', { metric: f.metric });
+    return reject('OP-DETERMINACY', 'VERIFIER_REQUIRED', 'Verification records the officer who verified', {
+      metric: f.metric,
+    });
   }
   if (f.sourceKind === 'OFFICER_ENTRY' && f.enteredBy === v.verifiedBy) {
-    return reject('OP-DETERMINACY', 'FOUR_EYES_REQUIRED', 'A figure keyed in by an officer is verified by a different officer', { metric: f.metric });
+    return reject(
+      'OP-DETERMINACY',
+      'FOUR_EYES_REQUIRED',
+      'A figure keyed in by an officer is verified by a different officer',
+      { metric: f.metric },
+    );
   }
   if (v.verifiedAtEpochSeconds < f.proposedAtEpochSeconds) {
-    return reject('OP-CHAIN', 'TIMESTAMPS_NOT_MONOTONIC', 'A figure is verified after it is proposed', { metric: f.metric });
+    return reject('OP-CHAIN', 'TIMESTAMPS_NOT_MONOTONIC', 'A figure is verified after it is proposed', {
+      metric: f.metric,
+    });
   }
   if (f.proposedValue.currency !== applicationCurrency) {
-    return reject('OP-DETERMINACY', 'FIGURE_CURRENCY_MISMATCH', 'The proposed figure is not in the application’s currency', { metric: f.metric, expected: applicationCurrency, given: f.proposedValue.currency });
+    return reject(
+      'OP-DETERMINACY',
+      'FIGURE_CURRENCY_MISMATCH',
+      'The proposed figure is not in the application’s currency',
+      { metric: f.metric, expected: applicationCurrency, given: f.proposedValue.currency },
+    );
   }
   const value = v.correctedValue ?? f.proposedValue;
   const amount = checkAmount(f.metric, value, applicationCurrency, 'corrected figure');
@@ -200,7 +254,12 @@ export function verifyFigure(f: FinancialFigure, v: VerifyParams, applicationCur
   return ok({
     ...f,
     status: 'VERIFIED',
-    verification: { value, verifiedBy: v.verifiedBy, verifiedAtEpochSeconds: v.verifiedAtEpochSeconds, correctedFromProposal },
+    verification: {
+      value,
+      verifiedBy: v.verifiedBy,
+      verifiedAtEpochSeconds: v.verifiedAtEpochSeconds,
+      correctedFromProposal,
+    },
   });
 }
 
@@ -247,16 +306,31 @@ export function completeSpread(
   for (const f of figures) {
     if (!isVerified(f)) continue;
     if (f.verification.value.currency !== applicationCurrency) {
-      return reject('OP-DETERMINACY', 'FIGURE_CURRENCY_MISMATCH', 'A verified figure is not in the application’s currency', { metric: f.metric, expected: applicationCurrency, given: f.verification.value.currency });
+      return reject(
+        'OP-DETERMINACY',
+        'FIGURE_CURRENCY_MISMATCH',
+        'A verified figure is not in the application’s currency',
+        { metric: f.metric, expected: applicationCurrency, given: f.verification.value.currency },
+      );
     }
     if (verified[f.metric] !== undefined) {
-      return reject('OP-DETERMINACY', 'METRIC_AMBIGUOUS', 'More than one verified figure for the same metric; supersede one before spreading', { metric: f.metric });
+      return reject(
+        'OP-DETERMINACY',
+        'METRIC_AMBIGUOUS',
+        'More than one verified figure for the same metric; supersede one before spreading',
+        { metric: f.metric },
+      );
     }
     verified[f.metric] = f;
   }
   const missing = required.filter((m) => verified[m] === undefined);
   if (missing.length > 0) {
-    return reject('OP-DETERMINACY', 'SPREAD_INCOMPLETE', 'Every required metric must be verified by an officer before the spread is used', { missing: missing.join(',') });
+    return reject(
+      'OP-DETERMINACY',
+      'SPREAD_INCOMPLETE',
+      'Every required metric must be verified by an officer before the spread is used',
+      { missing: missing.join(',') },
+    );
   }
   const correctedCount = Object.values(verified).filter((f) => f?.verification.correctedFromProposal === true).length;
   return ok({ currency: applicationCurrency, figures: verified, requiredMetrics: [...required], correctedCount });
@@ -265,7 +339,12 @@ export function completeSpread(
 function valueOf(spread: VerifiedSpread, metric: FinancialMetric): Result<VerifiedFigure> {
   const f = spread.figures[metric];
   if (f === undefined) {
-    return reject('OP-DETERMINACY', 'METRIC_NOT_IN_SPREAD', 'The ratio needs a verified figure the spread does not hold', { metric });
+    return reject(
+      'OP-DETERMINACY',
+      'METRIC_NOT_IN_SPREAD',
+      'The ratio needs a verified figure the spread does not hold',
+      { metric },
+    );
   }
   return ok(f);
 }
@@ -273,11 +352,7 @@ function valueOf(spread: VerifiedSpread, metric: FinancialMetric): Result<Verifi
 // ---------------------------------------------------------------------- ratios
 
 export type FinancialRatioCode =
-  | 'DEBT_SERVICE_COVER'
-  | 'CURRENT_RATIO'
-  | 'SALES_GROWTH'
-  | 'NET_MARGIN'
-  | 'OWNER_DEBT_BURDEN';
+  'DEBT_SERVICE_COVER' | 'CURRENT_RATIO' | 'SALES_GROWTH' | 'NET_MARGIN' | 'OWNER_DEBT_BURDEN';
 
 export type RatioRounding = 'FLOOR' | 'CEILING';
 
@@ -293,7 +368,11 @@ export interface FinancialRatio {
   /** The exact fraction before rounding, as minor units, so the ratio can be recomputed. */
   readonly numeratorMinorUnits: bigint;
   readonly denominatorMinorUnits: bigint;
-  readonly inputs: readonly { readonly metric: FinancialMetric; readonly periodLabel: string; readonly sourceRef: string }[];
+  readonly inputs: readonly {
+    readonly metric: FinancialMetric;
+    readonly periodLabel: string;
+    readonly sourceRef: string;
+  }[];
 }
 
 interface RatioDefinition {
@@ -378,10 +457,20 @@ export function computeRatio(spread: VerifiedSpread, code: FinancialRatioCode): 
   const numerator = def.numeratorOf(def.numerator.map(value));
   const denominator = value(def.denominator);
   if (denominator === 0n) {
-    return reject('OP-DETERMINACY', 'RATIO_DENOMINATOR_ZERO', `${def.formula} cannot be taken: the denominator is zero`, { ratio: code, denominator: def.denominator });
+    return reject(
+      'OP-DETERMINACY',
+      'RATIO_DENOMINATOR_ZERO',
+      `${def.formula} cannot be taken: the denominator is zero`,
+      { ratio: code, denominator: def.denominator },
+    );
   }
   if (denominator < 0n) {
-    return reject('OP-DETERMINACY', 'RATIO_DENOMINATOR_NEGATIVE', `${def.formula} cannot be taken: the denominator is negative`, { ratio: code, denominator: def.denominator });
+    return reject(
+      'OP-DETERMINACY',
+      'RATIO_DENOMINATOR_NEGATIVE',
+      `${def.formula} cannot be taken: the denominator is negative`,
+      { ratio: code, denominator: def.denominator },
+    );
   }
   const scaled = numerator * PER_TEN_THOUSAND;
   const perTenThousand = def.rounding === 'FLOOR' ? floorDiv(scaled, denominator) : ceilDiv(scaled, denominator);

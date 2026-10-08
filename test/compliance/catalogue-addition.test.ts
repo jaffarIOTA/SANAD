@@ -10,11 +10,16 @@ import { expectOk } from '@sanad/core/kernel/result.ts';
 import { catalogueWithAddition, productsNotInCatalogue } from '../../apps/admin/src/server/products.ts';
 
 const template = expectOk(loadProductCatalogue('bank-a'));
-const without = (...codes: string[]) => ({ ...template, entries: template.entries.filter((e) => !codes.includes(e.productCode)) });
+const without = (...codes: string[]) => ({
+  ...template,
+  entries: template.entries.filter((e) => !codes.includes(e.productCode)),
+});
 
 describe('adding a shipped product to the catalogue', () => {
   it('offers exactly the shipped modules the catalogue in force lacks', () => {
-    expect(productsNotInCatalogue(without('sme-term-conventional', 'sme-term-islamic'), template).map((e) => e.productCode)).toEqual(['sme-term-conventional', 'sme-term-islamic']);
+    expect(
+      productsNotInCatalogue(without('sme-term-conventional', 'sme-term-islamic'), template).map((e) => e.productCode),
+    ).toEqual(['sme-term-conventional', 'sme-term-islamic']);
     expect(productsNotInCatalogue(template, template)).toEqual([]);
   });
 
@@ -30,8 +35,10 @@ describe('adding a shipped product to the catalogue', () => {
 
   it('refuses a product already in the catalogue, and one with no term sheet for this tenant', () => {
     const twice = catalogueWithAddition(template, template, 'bnpl');
-    expect(twice.ok).toBe(false); if (!twice.ok) expect(twice.error.reason).toBe('PRODUCT_ALREADY_IN_CATALOGUE');
+    expect(twice.ok).toBe(false);
+    if (!twice.ok) expect(twice.error.reason).toBe('PRODUCT_ALREADY_IN_CATALOGUE');
     const none = catalogueWithAddition(without('bnpl'), without('bnpl'), 'bnpl');
-    expect(none.ok).toBe(false); if (!none.ok) expect(none.error.reason).toBe('PRODUCT_HAS_NO_TEMPLATE');
+    expect(none.ok).toBe(false);
+    if (!none.ok) expect(none.error.reason).toBe('PRODUCT_HAS_NO_TEMPLATE');
   });
 });

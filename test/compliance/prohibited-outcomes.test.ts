@@ -160,9 +160,7 @@ describe('adversarial: the total never increases (SH-02)', () => {
   });
 
   it('accepts new dates and a new split at the same total', () => {
-    const rescheduled = expectOk(
-      reschedule(obligation, split([6_320_834n, 6_320_833n, 6_320_833n])),
-    );
+    const rescheduled = expectOk(reschedule(obligation, split([6_320_834n, 6_320_833n, 6_320_833n])));
     expect(rescheduled.totalAmount.minorUnits).toBe(total);
     expect(rescheduled.instalments).toHaveLength(3);
   });
@@ -454,9 +452,7 @@ describe('adversarial: no gate-bypass entitlement can be defined (SH-05, BR-D10)
     for (const action of ENTITLEMENT_ACTIONS) {
       expect(transitions.has(action)).toBe(false);
       for (const pattern of FORBIDDEN_ENTITLEMENT_PATTERNS) {
-        expect(pattern.test(action), `catalogue entry ${action} matches ${String(pattern)}`).toBe(
-          false,
-        );
+        expect(pattern.test(action), `catalogue entry ${action} matches ${String(pattern)}`).toBe(false);
       }
     }
   });
@@ -477,10 +473,7 @@ describe('adversarial: no gate-bypass entitlement can be defined (SH-05, BR-D10)
 describe('withdrawal cannot reverse a decision', () => {
   it('accepts only states in which a request is still open', async () => {
     const source = await import('node:fs').then((fs) =>
-      fs.readFileSync(
-        new URL('../../core/origination/request.ts', import.meta.url),
-        'utf8',
-      ),
+      fs.readFileSync(new URL('../../core/origination/request.ts', import.meta.url), 'utf8'),
     );
 
     const signature = /export function withdraw\(\s*request:\s*([^)]+)\)/.exec(source);

@@ -63,10 +63,7 @@ export interface ContractLeg {
  * This is the only way a leg enters the aggregate, so there is no path that
  * produces an unchained or out-of-order leg.
  */
-export function appendLeg(
-  chain: readonly ContractLeg[],
-  leg: ContractLeg,
-): Result<readonly ContractLeg[]> {
+export function appendLeg(chain: readonly ContractLeg[], leg: ContractLeg): Result<readonly ContractLeg[]> {
   const previous = chain.at(-1);
 
   if (previous === undefined) {
@@ -128,10 +125,7 @@ export function verifyChain(chain: readonly ContractLeg[]): Result<true> {
   return ok(true);
 }
 
-export const findLeg = (
-  chain: readonly ContractLeg[],
-  legType: LegType,
-): ContractLeg | undefined => chain.find((l) => l.legType === legType);
+export const findLeg = (chain: readonly ContractLeg[], legType: LegType): ContractLeg | undefined =>
+  chain.find((l) => l.legType === legType);
 
-export const lastExecutedAt = (chain: readonly ContractLeg[]): TsaInstant | undefined =>
-  chain.at(-1)?.executedAt;
+export const lastExecutedAt = (chain: readonly ContractLeg[]): TsaInstant | undefined => chain.at(-1)?.executedAt;

@@ -42,7 +42,7 @@ interface Spec {
 
 interface Operation {
   readonly operationId?: string;
-  readonly parameters?: readonly ({ readonly $ref?: string; readonly name?: string })[];
+  readonly parameters?: readonly { readonly $ref?: string; readonly name?: string }[];
   readonly responses?: Record<string, ResponseObject | { readonly $ref: string }>;
   readonly requestBody?: { readonly content?: Record<string, MediaType> };
 }
@@ -190,14 +190,7 @@ describe('SH-01 — the wire format cannot carry a rate', () => {
    * property name is caught even if its spelling slips past a substring match.
    */
   it('declares no property whose name is proportion-shaped', () => {
-    const banned = [
-      ['rate'],
-      ['margin'],
-      ['a', 'p', 'r'].join(''),
-      ['percent'],
-      ['yield'],
-      ['coupon'],
-    ].flat();
+    const banned = [['rate'], ['margin'], ['a', 'p', 'r'].join(''), ['percent'], ['yield'], ['coupon']].flat();
 
     const offenders: string[] = [];
     for (const { path, node } of nodes(spec)) {
@@ -216,8 +209,7 @@ describe('SH-01 — the wire format cannot carry a rate', () => {
 
 describe('money', () => {
   const money = spec.components.schemas['Money'] as
-    | { properties: Record<string, Schema>; required: string[] }
-    | undefined;
+    { properties: Record<string, Schema>; required: string[] } | undefined;
 
   it('exists and carries an explicit currency', () => {
     expect(money).toBeDefined();
@@ -253,9 +245,7 @@ describe('§8 — API conventions', () => {
     for (const { path, method, op } of operations()) {
       if (!STATE_CHANGING.has(method)) continue;
       const names = (op.parameters ?? []).map((p) =>
-        p.$ref === undefined
-          ? p.name
-          : (resolveRef(p.$ref) as { name?: string } | undefined)?.name,
+        p.$ref === undefined ? p.name : (resolveRef(p.$ref) as { name?: string } | undefined)?.name,
       );
       if (!names.includes('Idempotency-Key')) missing.push(`${method.toUpperCase()} ${path}`);
     }
@@ -277,9 +267,7 @@ describe('§8 — API conventions', () => {
       const bodySchemas = Object.values(op.requestBody?.content ?? {}).map((c) => c.schema);
       for (const schema of bodySchemas) {
         const resolved =
-          typeof schema?.['$ref'] === 'string'
-            ? (resolveRef(schema['$ref'] as string) as Schema)
-            : schema;
+          typeof schema?.['$ref'] === 'string' ? (resolveRef(schema['$ref'] as string) as Schema) : schema;
         for (const { node } of nodes(resolved)) {
           const properties = node['properties'];
           if (properties === null || typeof properties !== 'object') continue;
@@ -299,9 +287,7 @@ describe('§8 — API conventions', () => {
     for (const { path, method, op } of operations()) {
       for (const [status, response] of Object.entries(op.responses ?? {})) {
         if (!/^[45]/.test(status)) continue;
-        const resolved = (
-          '$ref' in response ? resolveRef(response.$ref) : response
-        ) as ResponseObject | undefined;
+        const resolved = ('$ref' in response ? resolveRef(response.$ref) : response) as ResponseObject | undefined;
         const types = Object.keys(resolved?.content ?? {});
         if (!types.includes('application/problem+json')) {
           wrong.push(`${method.toUpperCase()} ${path} ${status}: ${types.join(',') || 'no content'}`);
@@ -313,9 +299,7 @@ describe('§8 — API conventions', () => {
 
   it('makes every problem bilingual and correlated', () => {
     const problem = spec.components.schemas['Problem'] as { required: string[] } | undefined;
-    expect(problem?.required).toEqual(
-      expect.arrayContaining(['detail', 'detailAr', 'correlationId']),
-    );
+    expect(problem?.required).toEqual(expect.arrayContaining(['detail', 'detailAr', 'correlationId']));
   });
 
   it('names a control on the rejection examples, never a generic decline', () => {
@@ -387,10 +371,7 @@ describe('SH-05 — no sequencing shortcut is expressible', () => {
     const request = spec.components.schemas['OriginationRequest'] as {
       properties: Record<string, Schema>;
     };
-    expect(request.properties['channel']?.['enum']).toEqual([
-      'PARTNER_API',
-      'EMBEDDED_AGGREGATOR',
-    ]);
+    expect(request.properties['channel']?.['enum']).toEqual(['PARTNER_API', 'EMBEDDED_AGGREGATOR']);
   });
 });
 
@@ -427,7 +408,10 @@ describe('the contract agrees with the domain it fronts', () => {
   it('offers an eligibility pre-check that persists nothing', () => {
     const op = spec.paths['/eligibility']?.['post'];
     expect(op?.operationId).toBe('checkEligibility');
-    const result = spec.components.schemas['EligibilityResult'] as { properties: Record<string, Schema>; required: string[] };
+    const result = spec.components.schemas['EligibilityResult'] as {
+      properties: Record<string, Schema>;
+      required: string[];
+    };
     expect(result.required).toContain('persisted');
     expect(result.properties['persisted']?.['enum']).toEqual([false]);
     // Whether the institution would trade — never a price.

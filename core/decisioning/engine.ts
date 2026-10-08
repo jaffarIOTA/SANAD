@@ -23,33 +23,11 @@
  */
 
 import type { CurrencyCode } from '../kernel/money.ts';
-import {
-  type EvaluationContext,
-  evaluateCondition,
-  evaluateMoney,
-  pathResolver,
-} from './expression.ts';
-import type {
-  CreditPolicy,
-  DecisionOutcome,
-  GradeBand,
-  LimitCap,
-  ReasonText,
-} from './policy.ts';
-import {
-  type ApplicantSnapshot,
-  aggregateExposureMinorUnits,
-  programmeHeadroomMinorUnits,
-} from './snapshot.ts';
+import { type EvaluationContext, evaluateCondition, evaluateMoney, pathResolver } from './expression.ts';
+import type { CreditPolicy, DecisionOutcome, GradeBand, LimitCap, ReasonText } from './policy.ts';
+import { type ApplicantSnapshot, aggregateExposureMinorUnits, programmeHeadroomMinorUnits } from './snapshot.ts';
 
-export type TraceStage =
-  | 'DATA_SUFFICIENCY'
-  | 'KNOCKOUT'
-  | 'SCORECARD'
-  | 'GRADE'
-  | 'LIMIT_BASIS'
-  | 'CAP'
-  | 'FAULT';
+export type TraceStage = 'DATA_SUFFICIENCY' | 'KNOCKOUT' | 'SCORECARD' | 'GRADE' | 'LIMIT_BASIS' | 'CAP' | 'FAULT';
 
 export interface RuleTraceEntry {
   readonly sequence: number;
@@ -424,9 +402,7 @@ export function evaluateWithChallenger(
 
 /** Highest band whose floor the score reaches. */
 export function gradeFor(grades: readonly GradeBand[], score: number): GradeBand | undefined {
-  return [...grades]
-    .sort((a, b) => b.minScore - a.minScore)
-    .find((g) => score >= g.minScore);
+  return [...grades].sort((a, b) => b.minScore - a.minScore).find((g) => score >= g.minScore);
 }
 
 function applyCap(
@@ -453,8 +429,7 @@ function applyCap(
       return min(current, programmeHeadroomMinorUnits(snapshot));
     case 'SHARE_OF_PROGRAMME_LIMIT': {
       if (!Number.isInteger(cap.shareBasisPoints) || cap.shareBasisPoints < 0) return undefined;
-      const share =
-        (snapshot.programme.programmeLimitMinorUnits * BigInt(cap.shareBasisPoints)) / 10000n;
+      const share = (snapshot.programme.programmeLimitMinorUnits * BigInt(cap.shareBasisPoints)) / 10000n;
       return min(current, share);
     }
     case 'NET_OF_EXISTING_EXPOSURE': {

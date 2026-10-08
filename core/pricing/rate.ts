@@ -62,7 +62,7 @@ export function accrue(principal: Money, r: Rate, days: bigint): Result<Money> {
 /** Integer division rounded half away from zero. */
 export function roundDiv(n: bigint, d: bigint): bigint {
   if (d === 0n) throw new RangeError('division by zero');
-  const negative = (n < 0n) !== (d < 0n);
+  const negative = n < 0n !== d < 0n;
   const an = n < 0n ? -n : n;
   const ad = d < 0n ? -d : d;
   const q = (an * 2n + ad) / (ad * 2n);
@@ -93,11 +93,23 @@ export type RateRecord =
 /** The record in force at an instant, or a rejection. Never a stale rate silently. */
 export function rateInForce(records: readonly RateRecord[], atEpochSeconds: bigint): Result<RateRecord> {
   const inForce = records
-    .filter((r) => r.effectiveFromEpochSeconds <= atEpochSeconds && (r.effectiveToEpochSeconds === undefined || r.effectiveToEpochSeconds > atEpochSeconds))
-    .sort((a, b) => (a.effectiveFromEpochSeconds === b.effectiveFromEpochSeconds ? 0 : a.effectiveFromEpochSeconds < b.effectiveFromEpochSeconds ? 1 : -1));
+    .filter(
+      (r) =>
+        r.effectiveFromEpochSeconds <= atEpochSeconds &&
+        (r.effectiveToEpochSeconds === undefined || r.effectiveToEpochSeconds > atEpochSeconds),
+    )
+    .sort((a, b) =>
+      a.effectiveFromEpochSeconds === b.effectiveFromEpochSeconds
+        ? 0
+        : a.effectiveFromEpochSeconds < b.effectiveFromEpochSeconds
+          ? 1
+          : -1,
+    );
   const latest = inForce[0];
   if (latest === undefined) {
-    return reject('PLAT-03', 'NO_RATE_IN_FORCE', 'No rate is in force at the moment being priced', { atEpochSeconds: String(atEpochSeconds) });
+    return reject('PLAT-03', 'NO_RATE_IN_FORCE', 'No rate is in force at the moment being priced', {
+      atEpochSeconds: String(atEpochSeconds),
+    });
   }
   return ok(latest);
 }
@@ -112,6 +124,10 @@ export interface RateSnapshot {
 
 export function snapshot(record: RateRecord, atEpochSeconds: bigint): RateSnapshot {
   const sourceRef =
-    record.source === 'TENANT_CATALOGUE' ? record.catalogueRef : record.source === 'RATE_PUBLISHER' ? record.publisherReferenceId : record.approvalRef;
+    record.source === 'TENANT_CATALOGUE'
+      ? record.catalogueRef
+      : record.source === 'RATE_PUBLISHER'
+        ? record.publisherReferenceId
+        : record.approvalRef;
   return { rate: record.rate, source: record.source, sourceRef, snapshottedAtEpochSeconds: atEpochSeconds };
 }

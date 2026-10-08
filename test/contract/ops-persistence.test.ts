@@ -17,20 +17,37 @@ import { tsaInstant } from '@sanad/core/time/tsa.ts';
 import { loadRequests, persistenceUrl, saveRequests } from '../../apps/ops/src/server/persistence.ts';
 
 const url = process.env['SANAD_TEST_DATABASE_URL'];
-const at = (s: number) => tsaInstant({ verified: true, genTimeEpochSeconds: BigInt(s), tokenDigest: `t${String(s)}`, authorityId: 'test' });
+const at = (s: number) =>
+  tsaInstant({ verified: true, genTimeEpochSeconds: BigInt(s), tokenDigest: `t${String(s)}`, authorityId: 'test' });
 const T0 = 1_791_500_000;
 const RUN = String(Date.now());
 
 function keying(requestId: string): Keying {
-  return expectOk(raise({
-    core: {
-      requestId, tenantId: 'fintech-b', programmeId: 'prg-0001', counterpartyId: 'Example Industrial Supplies Co.', channel: 'MAKER_CHECKER',
-      tradeReference: { type: 'CLEARED_INVOICE', invoiceUuid: `00000000-0000-4000-8000-${RUN.slice(-12).padStart(12, '0')}`, invoiceHash: 'h', issuerCr: '1010000002', recipientCr: '7001000001' },
-      requestedAmount: money(12_345_678n), requestedTenorDays: 90, raisedAt: at(T0), identification: { kind: 'STAFF_PRINCIPAL', principalId: 'stf-maker-01' }, correlationId: `cor-${RUN}`,
-    },
-    maker: { principalId: 'stf-maker-01', tenantId: 'fintech-b' },
-    policy: expectOk(loadOriginationPolicy('fintech-b')),
-  }));
+  return expectOk(
+    raise({
+      core: {
+        requestId,
+        tenantId: 'fintech-b',
+        programmeId: 'prg-0001',
+        counterpartyId: 'Example Industrial Supplies Co.',
+        channel: 'MAKER_CHECKER',
+        tradeReference: {
+          type: 'CLEARED_INVOICE',
+          invoiceUuid: `00000000-0000-4000-8000-${RUN.slice(-12).padStart(12, '0')}`,
+          invoiceHash: 'h',
+          issuerCr: '1010000002',
+          recipientCr: '7001000001',
+        },
+        requestedAmount: money(12_345_678n),
+        requestedTenorDays: 90,
+        raisedAt: at(T0),
+        identification: { kind: 'STAFF_PRINCIPAL', principalId: 'stf-maker-01' },
+        correlationId: `cor-${RUN}`,
+      },
+      maker: { principalId: 'stf-maker-01', tenantId: 'fintech-b' },
+      policy: expectOk(loadOriginationPolicy('fintech-b')),
+    }),
+  );
 }
 
 describe('the workbench only persists against an explicitly configured database', () => {
@@ -56,7 +73,10 @@ describe.skipIf(url === undefined)('the request book on PostgreSQL (SANAD_TEST_D
     expect(found?.request).toEqual(request);
     expect(found?.request.core.requestedAmount.minorUnits).toBe(12_345_678n);
     expect(found?.invoiceNumber).toBe('INV-CONTRACT-1');
-    const raw = await pool.query<{ request: Record<string, unknown>; display: Record<string, unknown> }>('select request, display from core.origination_request where request_id = $1', [requestId]);
+    const raw = await pool.query<{ request: Record<string, unknown>; display: Record<string, unknown> }>(
+      'select request, display from core.origination_request where request_id = $1',
+      [requestId],
+    );
     expect(raw.rows[0]?.request['invoiceNumber']).toBeUndefined();
     expect(raw.rows[0]?.display['invoiceNumber']).toBe('INV-CONTRACT-1');
   });
@@ -64,7 +84,10 @@ describe.skipIf(url === undefined)('the request book on PostgreSQL (SANAD_TEST_D
   it('a later save of the same request replaces it: one row, the new state', async () => {
     const submitted = expectOk(submitForReview(keying(requestId), at(T0 + 60)));
     await saveRequests(pool, 'fintech-b', [{ requestId, request: submitted, invoiceNumber: 'INV-CONTRACT-1' }]);
-    const rows = await pool.query<{ state: string }>('select state from core.origination_request where request_id = $1', [requestId]);
+    const rows = await pool.query<{ state: string }>(
+      'select state from core.origination_request where request_id = $1',
+      [requestId],
+    );
     expect(rows.rows).toHaveLength(1);
     expect(rows.rows[0]?.state).toBe(submitted.state);
     const found = (await loadRequests(pool, 'fintech-b')).find((r) => r.requestId === requestId);

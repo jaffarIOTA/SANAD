@@ -12,6 +12,37 @@ import type { Result } from '../kernel/result.ts';
 import type { RailOutcome } from './rail.ts';
 
 export interface PaymentsPort {
-  disburse(params: { readonly tenantId: string; readonly beneficiaryRef: string; readonly amount: Money; readonly purposeCode: string; readonly reference: string; readonly idempotencyKey: string; readonly correlationId: string }): Promise<Result<RailOutcome<{ readonly instructionRef: string; readonly status: 'ACCEPTED' | 'SETTLED' | 'REJECTED'; readonly acceptedAtEpochSeconds: bigint }>>>;
-  collect(params: { readonly tenantId: string; readonly payerRef: string; readonly amount: Money; readonly reference: string; readonly idempotencyKey: string; readonly correlationId: string }): Promise<Result<RailOutcome<{ readonly instructionRef: string; readonly status: 'ACCEPTED' | 'SETTLED' | 'REJECTED' | 'RETURNED'; readonly acceptedAtEpochSeconds: bigint }>>>;
+  disburse(params: {
+    readonly tenantId: string;
+    readonly beneficiaryRef: string;
+    readonly amount: Money;
+    readonly purposeCode: string;
+    readonly reference: string;
+    readonly idempotencyKey: string;
+    readonly correlationId: string;
+  }): Promise<
+    Result<
+      RailOutcome<{
+        readonly instructionRef: string;
+        readonly status: 'ACCEPTED' | 'SETTLED' | 'REJECTED';
+        readonly acceptedAtEpochSeconds: bigint;
+      }>
+    >
+  >;
+  collect(params: {
+    readonly tenantId: string;
+    readonly payerRef: string;
+    readonly amount: Money;
+    readonly reference: string;
+    readonly idempotencyKey: string;
+    readonly correlationId: string;
+  }): Promise<
+    Result<
+      RailOutcome<{
+        readonly instructionRef: string;
+        readonly status: 'ACCEPTED' | 'SETTLED' | 'REJECTED' | 'RETURNED';
+        readonly acceptedAtEpochSeconds: bigint;
+      }>
+    >
+  >;
 }

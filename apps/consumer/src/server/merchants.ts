@@ -29,7 +29,11 @@ export interface MerchantPrincipal {
 
 const TENANT_CODE = 'bank-a';
 
-interface State { readonly merchants: Map<string, Merchant>; readonly tokens: Map<string, MerchantPrincipal>; seededDatabase?: boolean }
+interface State {
+  readonly merchants: Map<string, Merchant>;
+  readonly tokens: Map<string, MerchantPrincipal>;
+  seededDatabase?: boolean;
+}
 const KEY = Symbol.for('sanad.consumer.merchants');
 const scope = globalThis as unknown as Record<symbol, State | undefined>;
 const digestOf = (token: string): string => createHash('sha256').update(token, 'utf8').digest('hex');
@@ -37,8 +41,34 @@ const digestOf = (token: string): string => createHash('sha256').update(token, '
 /** The development merchant, made the way any merchant is: onboarded by one person, verified by another, under a contract. */
 function developmentMerchant(): Merchant {
   const at = developmentAttestation();
-  const pending = expectOk(beginOnboarding({ merchantId: 'mer-demo-01', tenantId: TENANT_CODE, commercialRegistration: '4030000004', legalNameAr: 'متجر التجربة', legalNameEn: 'Demo Store', categoryCode: 'RETAIL_ELECTRONICS', settlementAccountRef: 'hub-acct-ref-demo-01', onboardedBy: 'stf-maker-01', correlationId: 'seed' }, at));
-  return expectOk(verify(pending, { agreementRef: 'AGR-DEV-0001', registryLookupRef: 'registry-dev-1', registryStatus: 'ACTIVE', screeningResultRef: 'scr-dev-1', screeningOutcome: 'CLEAR', activityPermitted: true, verifiedBy: 'stf-checker-01', verifiedAt: at }));
+  const pending = expectOk(
+    beginOnboarding(
+      {
+        merchantId: 'mer-demo-01',
+        tenantId: TENANT_CODE,
+        commercialRegistration: '4030000004',
+        legalNameAr: 'متجر التجربة',
+        legalNameEn: 'Demo Store',
+        categoryCode: 'RETAIL_ELECTRONICS',
+        settlementAccountRef: 'hub-acct-ref-demo-01',
+        onboardedBy: 'stf-maker-01',
+        correlationId: 'seed',
+      },
+      at,
+    ),
+  );
+  return expectOk(
+    verify(pending, {
+      agreementRef: 'AGR-DEV-0001',
+      registryLookupRef: 'registry-dev-1',
+      registryStatus: 'ACTIVE',
+      screeningResultRef: 'scr-dev-1',
+      screeningOutcome: 'CLEAR',
+      activityPermitted: true,
+      verifiedBy: 'stf-checker-01',
+      verifiedAt: at,
+    }),
+  );
 }
 
 function initial(): State {
@@ -47,7 +77,12 @@ function initial(): State {
   if (persistencePool() === undefined) merchants.set('mer-demo-01', developmentMerchant());
   const tokens = new Map<string, MerchantPrincipal>();
   const token = process.env['MERCHANT_DEV_TOKEN'];
-  if (token !== undefined && token.trim().length > 0) tokens.set(digestOf(token), { merchantId: 'mer-demo-01', tenantId: TENANT_CODE, credentialRef: 'cred-dev-merchant-01' });
+  if (token !== undefined && token.trim().length > 0)
+    tokens.set(digestOf(token), {
+      merchantId: 'mer-demo-01',
+      tenantId: TENANT_CODE,
+      credentialRef: 'cred-dev-merchant-01',
+    });
   return { merchants, tokens };
 }
 const state: State = (scope[KEY] ??= initial());
@@ -59,7 +94,12 @@ export async function refreshMerchants(): Promise<void> {
   let merchants = await loadMerchants(pool, TENANT_CODE);
   if (merchants.length === 0 && state.seededDatabase !== true) {
     const demo = developmentMerchant();
-    await saveMerchant(pool, TENANT_CODE, { merchant: demo, event: 'MERCHANT_SEEDED_FOR_DEVELOPMENT', actor: 'development', correlationId: demo.core.correlationId });
+    await saveMerchant(pool, TENANT_CODE, {
+      merchant: demo,
+      event: 'MERCHANT_SEEDED_FOR_DEVELOPMENT',
+      actor: 'development',
+      correlationId: demo.core.correlationId,
+    });
     merchants = [demo];
   }
   state.seededDatabase = true;

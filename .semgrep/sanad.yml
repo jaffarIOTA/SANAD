@@ -10,7 +10,7 @@ rules:
     languages: [typescript, javascript]
     severity: ERROR
     paths:
-      include: ["products/murabaha-scf/**"]
+      include: ['products/murabaha-scf/**']
     patterns:
       - pattern-regex: \b(interestRate|interest_rate|profitRate|profit_rate|apr|APR|accruedInterest|accrued_interest|compoundingFrequency|penaltyRate|rateIndex)\b
     message: >-
@@ -22,7 +22,7 @@ rules:
     languages: [generic]
     severity: ERROR
     paths:
-      include: ["**/*.sql"]
+      include: ['**/*.sql']
     patterns:
       - pattern-regex: (?i)create\s+table\s+(if\s+not\s+exists\s+)?public\.
     message: >-
@@ -46,7 +46,7 @@ rules:
     languages: [typescript, javascript]
     severity: ERROR
     paths:
-      include: ["**/sequencing/**", "**/legs/**"]
+      include: ['**/sequencing/**', '**/legs/**']
     patterns:
       - pattern-either:
           - pattern: new Date()

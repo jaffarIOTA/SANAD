@@ -50,10 +50,22 @@ export interface SmeIslamicQuote extends Quote {
 }
 
 export function quoteSmeIslamic(terms: SmeIslamicTerms, request: QuoteRequest): Result<SmeIslamicQuote> {
-  if (request.pricing.rate === undefined) return reject('PLAT-03', 'RATE_REQUIRED', 'SME Tawarruq is priced from a sourced rate');
+  if (request.pricing.rate === undefined)
+    return reject('PLAT-03', 'RATE_REQUIRED', 'SME Tawarruq is priced from a sourced rate');
   const definition = request.regulatory?.smeDefinition;
-  if (definition === undefined) return reject('OP-DETERMINACY', 'SME_DEFINITION_MISSING', 'The regulator’s SME definition was not supplied to the quote');
-  if (request.requestedAmount.currency === terms.currency && request.requestedAmount.minorUnits < terms.minAmount.minorUnits) return reject('OP-LIMIT', 'AMOUNT_BELOW_PRODUCT', 'Below the product minimum', { min: String(terms.minAmount.minorUnits) });
+  if (definition === undefined)
+    return reject(
+      'OP-DETERMINACY',
+      'SME_DEFINITION_MISSING',
+      'The regulator’s SME definition was not supplied to the quote',
+    );
+  if (
+    request.requestedAmount.currency === terms.currency &&
+    request.requestedAmount.minorUnits < terms.minAmount.minorUnits
+  )
+    return reject('OP-LIMIT', 'AMOUNT_BELOW_PRODUCT', 'Below the product minimum', {
+      min: String(terms.minAmount.minorUnits),
+    });
   const chosen = chooseVariant(terms.variants, terms.currency, request);
   if (!chosen.ok) return chosen;
   const c = chosen.value;
@@ -73,11 +85,31 @@ export function quoteSmeIslamic(terms: SmeIslamicTerms, request: QuoteRequest): 
   // A year of debt service at the level instalment: the year after grace, the conservative figure.
   const firstYear = money(s.levelInstalment.minorUnits * BigInt(Math.min(12, c.months)), currency);
 
-  const afford = checkBusinessAffordability(terms.credit, definition, request.affordability?.business, request.requestedAmount, firstYear);
+  const afford = checkBusinessAffordability(
+    terms.credit,
+    definition,
+    request.affordability?.business,
+    request.requestedAmount,
+    firstYear,
+  );
   if (!afford.ok) return afford;
 
-  const fees: Fee[] = terms.adminFee.minorUnits > 0n ? [{ code: 'ADMIN', labelEn: 'Administration fee', labelAr: 'رسوم إدارية', amount: terms.adminFee, when: 'UPFRONT' }] : [];
-  const flows: CashFlow[] = [...s.cashFlows, ...fees.map((f) => ({ at: { months: 0, days: 0 }, amount: f.amount, direction: 'REPAYMENT' as const }))];
+  const fees: Fee[] =
+    terms.adminFee.minorUnits > 0n
+      ? [
+          {
+            code: 'ADMIN',
+            labelEn: 'Administration fee',
+            labelAr: 'رسوم إدارية',
+            amount: terms.adminFee,
+            when: 'UPFRONT',
+          },
+        ]
+      : [];
+  const flows: CashFlow[] = [
+    ...s.cashFlows,
+    ...fees.map((f) => ({ at: { months: 0, days: 0 }, amount: f.amount, direction: 'REPAYMENT' as const })),
+  ];
   const g = terms.guarantee;
   return ok({
     productCode: 'sme-term-islamic',
@@ -106,6 +138,14 @@ export function quoteSmeIslamic(terms: SmeIslamicTerms, request: QuoteRequest): 
     size: afford.value.classification,
     debtServiceCoverPerTenThousand: afford.value.debtServiceCoverPerTenThousand,
     creditPolicyRef: terms.credit.policyRef,
-    ...(g === undefined ? {} : { guaranteedPortion: { programme: g.programme, programmeRef: g.programmeRef, amount: money((request.requestedAmount.minorUnits * BigInt(g.coveragePerTenThousand)) / 10_000n, currency) } }),
+    ...(g === undefined
+      ? {}
+      : {
+          guaranteedPortion: {
+            programme: g.programme,
+            programmeRef: g.programmeRef,
+            amount: money((request.requestedAmount.minorUnits * BigInt(g.coveragePerTenThousand)) / 10_000n, currency),
+          },
+        }),
   });
 }

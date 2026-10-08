@@ -231,7 +231,14 @@ function validate(input: DatedScheduleInput): Result<Validated> {
 }
 
 /** Principal part of row k: none in grace, the whole balance on the last row, else level − interest. */
-function principalPartOf(k: number, count: number, graceMonths: number, balance: bigint, level: bigint, interest: bigint): bigint {
+function principalPartOf(
+  k: number,
+  count: number,
+  graceMonths: number,
+  balance: bigint,
+  level: bigint,
+  interest: bigint,
+): bigint {
   if (k < graceMonths) return 0n;
   if (k === count - 1) return balance;
   return level - interest;
@@ -268,7 +275,11 @@ export function datedAmortisingSchedule(input: DatedScheduleInput): Result<Dated
     const instalment = principalPart + interest;
     const closing = balance - principalPart;
     if (closing < 0n || principalPart < 0n) {
-      return reject('PLAT-02', 'SCHEDULE_NOT_AMORTISING', 'The level instalment does not amortise this balance over these periods');
+      return reject(
+        'PLAT-02',
+        'SCHEDULE_NOT_AMORTISING',
+        'The level instalment does not amortise this balance over these periods',
+      );
     }
     rows.push({
       number: k + 1,

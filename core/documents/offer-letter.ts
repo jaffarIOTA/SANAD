@@ -170,7 +170,9 @@ export function arabicIndic(s: string): string {
 
 /** Arabic-Indic (and extended Arabic-Indic) digits back to Latin, so a digit-run guard sees every script. */
 function latinDigits(s: string): string {
-  return s.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660)).replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
+  return s
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
 }
 
 const CURRENCY_AR: Readonly<Record<CurrencyCode, string>> = { AED: 'درهم إماراتي', SAR: 'ريال سعودي' };
@@ -181,8 +183,34 @@ export function formatMoneyAr(m: Money): string {
   return `${arabicIndic(latin)} ${CURRENCY_AR[m.currency]}`;
 }
 
-const MONTHS_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] as const;
-const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'] as const;
+const MONTHS_EN = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const;
+const MONTHS_AR = [
+  'يناير',
+  'فبراير',
+  'مارس',
+  'أبريل',
+  'مايو',
+  'يونيو',
+  'يوليو',
+  'أغسطس',
+  'سبتمبر',
+  'أكتوبر',
+  'نوفمبر',
+  'ديسمبر',
+] as const;
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -245,8 +273,11 @@ export function displayVersion(version: string, groups = 8): string {
 
 // -- Builder ------------------------------------------------------------------
 
-const bad = (reason: string, detail: string, context?: Readonly<Record<string, string | number | boolean>>): Result<never> =>
-  reject('OP-DETERMINACY', reason, detail, context);
+const bad = (
+  reason: string,
+  detail: string,
+  context?: Readonly<Record<string, string | number | boolean>>,
+): Result<never> => reject('OP-DETERMINACY', reason, detail, context);
 
 const nonEmpty = (t: BilingualText): boolean => t.en.trim().length > 0 && t.ar.trim().length > 0;
 
@@ -255,7 +286,9 @@ function rateLabel(family: ProductFamily): BilingualText {
 }
 
 function chargeLabel(family: ProductFamily): BilingualText {
-  return family === 'ISLAMIC' ? { en: 'Total profit', ar: 'إجمالي الربح' } : { en: 'Total interest', ar: 'إجمالي الفائدة' };
+  return family === 'ISLAMIC'
+    ? { en: 'Total profit', ar: 'إجمالي الربح' }
+    : { en: 'Total interest', ar: 'إجمالي الفائدة' };
 }
 
 /** A count of months: English Latin, Arabic in Arabic-Indic digits with the noun the count takes. */
@@ -284,19 +317,33 @@ export function buildOfferLetter(input: OfferLetterInput, hijri?: HijriFormatter
   const currency = input.facilityAmount.currency;
   const calendars = input.jurisdiction.contractualCalendars;
 
-  if (input.applicationReference.trim().length === 0) return bad('FOL_REFERENCE', 'The application reference is required');
-  if (!nonEmpty(input.applicantBusinessName)) return bad('FOL_BORROWER_NAME', 'The business name is required in both languages');
-  if (!nonEmpty(input.productVariantName)) return bad('FOL_PRODUCT_NAME', 'The product variant name is required in both languages');
-  if (!nonEmpty(input.institutionLegalName)) return bad('FOL_LENDER_NAME', 'The institution legal name is required in both languages');
+  if (input.applicationReference.trim().length === 0)
+    return bad('FOL_REFERENCE', 'The application reference is required');
+  if (!nonEmpty(input.applicantBusinessName))
+    return bad('FOL_BORROWER_NAME', 'The business name is required in both languages');
+  if (!nonEmpty(input.productVariantName))
+    return bad('FOL_PRODUCT_NAME', 'The product variant name is required in both languages');
+  if (!nonEmpty(input.institutionLegalName))
+    return bad('FOL_LENDER_NAME', 'The institution legal name is required in both languages');
   if (input.facilityAmount.minorUnits <= 0n) return bad('FOL_AMOUNT', 'The facility amount is positive');
-  for (const [field, m] of [['instalment', input.totals.instalment], ['totalCharge', input.totals.totalCharge], ['totalPayable', input.totals.totalPayable]] as const) {
-    if (m.currency !== currency) return bad('FOL_CURRENCY_MIXED', 'Every amount on the letter is in the facility currency', { field, expected: currency, given: m.currency });
+  for (const [field, m] of [
+    ['instalment', input.totals.instalment],
+    ['totalCharge', input.totals.totalCharge],
+    ['totalPayable', input.totals.totalPayable],
+  ] as const) {
+    if (m.currency !== currency)
+      return bad('FOL_CURRENCY_MIXED', 'Every amount on the letter is in the facility currency', {
+        field,
+        expected: currency,
+        given: m.currency,
+      });
     if (m.minorUnits < 0n) return bad('FOL_TOTAL_NEGATIVE', 'Schedule totals are not negative', { field });
   }
   if (input.totals.totalPayable.minorUnits !== input.facilityAmount.minorUnits + input.totals.totalCharge.minorUnits) {
     return bad('FOL_TOTALS_INCONSISTENT', 'Total payable is the facility amount plus the total charge');
   }
-  if (!Number.isInteger(input.tenorMonths) || input.tenorMonths <= 0) return bad('FOL_TENOR', 'The tenor is a positive whole number of months');
+  if (!Number.isInteger(input.tenorMonths) || input.tenorMonths <= 0)
+    return bad('FOL_TENOR', 'The tenor is a positive whole number of months');
   if (!Number.isInteger(input.graceMonths) || input.graceMonths < 0 || input.graceMonths >= input.tenorMonths) {
     return bad('FOL_GRACE', 'The grace period is a whole number of months shorter than the tenor');
   }
@@ -305,12 +352,15 @@ export function buildOfferLetter(input: OfferLetterInput, hijri?: HijriFormatter
   if (input.equityContributionPerTenThousand < 0n || input.equityContributionPerTenThousand > 10_000n) {
     return bad('FOL_EQUITY', 'The equity contribution is between zero and ten thousand per ten thousand');
   }
-  if (!isValidIsoDate(input.offerDate) || !isValidIsoDate(input.validUntil)) return bad('FOL_DATE', 'Dates are ISO calendar dates (yyyy-mm-dd)');
-  if (input.validUntil <= input.offerDate) return bad('FOL_VALIDITY', 'The offer is valid until a date after the offer date');
+  if (!isValidIsoDate(input.offerDate) || !isValidIsoDate(input.validUntil))
+    return bad('FOL_DATE', 'Dates are ISO calendar dates (yyyy-mm-dd)');
+  if (input.validUntil <= input.offerDate)
+    return bad('FOL_VALIDITY', 'The offer is valid until a date after the offer date');
   if (!input.signatories.some((s) => s.party === 'LENDER') || !input.signatories.some((s) => s.party === 'BORROWER')) {
     return bad('FOL_SIGNATORIES', 'The letter carries at least one signature block for each party');
   }
-  if (!input.signatories.every((s) => nonEmpty(s.role))) return bad('FOL_SIGNATORY_ROLE', 'Each signatory is named by role, in both languages');
+  if (!input.signatories.every((s) => nonEmpty(s.role)))
+    return bad('FOL_SIGNATORY_ROLE', 'Each signatory is named by role, in both languages');
   if (!input.conditions.every(nonEmpty)) return bad('FOL_CONDITION', 'Each condition is stated in both languages');
   if (allTexts(input).some(containsIdentityPattern)) {
     return bad('FOL_IDENTITY_NUMBER', 'An offer letter never carries an identity number');
@@ -318,10 +368,14 @@ export function buildOfferLetter(input: OfferLetterInput, hijri?: HijriFormatter
 
   const needsHijri = calendars.includes('HIJRI');
   if (needsHijri && hijri === undefined) {
-    return bad('FOL_HIJRI_FORMATTER', 'The jurisdiction requires Hijri dates; a Hijri formatter is required', { jurisdiction: input.jurisdiction.code });
+    return bad('FOL_HIJRI_FORMATTER', 'The jurisdiction requires Hijri dates; a Hijri formatter is required', {
+      jurisdiction: input.jurisdiction.code,
+    });
   }
   const letterDate = (iso: string): LetterDate =>
-    needsHijri && hijri !== undefined ? { iso, gregorian: gregorian(iso), hijri: hijri(iso) } : { iso, gregorian: gregorian(iso) };
+    needsHijri && hijri !== undefined
+      ? { iso, gregorian: gregorian(iso), hijri: hijri(iso) }
+      : { iso, gregorian: gregorian(iso) };
 
   const offerDate = letterDate(input.offerDate);
   const validUntil = letterDate(input.validUntil);
@@ -331,21 +385,53 @@ export function buildOfferLetter(input: OfferLetterInput, hijri?: HijriFormatter
 
   const terms: LetterRow[] = [
     { code: 'PRODUCT', label: { en: 'Product', ar: 'المنتج' }, value: input.productVariantName },
-    { code: 'FACILITY_AMOUNT', label: { en: 'Facility amount', ar: 'مبلغ التمويل' }, value: amount(input.facilityAmount) },
+    {
+      code: 'FACILITY_AMOUNT',
+      label: { en: 'Facility amount', ar: 'مبلغ التمويل' },
+      value: amount(input.facilityAmount),
+    },
     { code: 'TENOR', label: { en: 'Tenor', ar: 'مدة التمويل' }, value: months(input.tenorMonths) },
     { code: 'GRACE_PERIOD', label: { en: 'Grace period', ar: 'فترة السماح' }, value: months(input.graceMonths) },
-    { code: 'RATE', label: rateLabel(input.family), value: { en: `${rate} per annum`, ar: `${arabicIndic(rate)} سنويًا` } },
+    {
+      code: 'RATE',
+      label: rateLabel(input.family),
+      value: { en: `${rate} per annum`, ar: `${arabicIndic(rate)} سنويًا` },
+    },
     // The platform's APR, as computed by core/pricing/apr.ts and passed in — shown, never derived here.
-    ...(input.aprBp === undefined ? [] : [{ code: 'APR', label: { en: 'Annual percentage rate (APR)', ar: 'معدل النسبة السنوي' }, value: quantity(formatPerTenThousand(input.aprBp)) }]),
-    { code: 'EQUITY_CONTRIBUTION', label: { en: 'Equity contribution', ar: 'المساهمة الذاتية' }, value: quantity(formatPerTenThousand(input.equityContributionPerTenThousand)) },
+    ...(input.aprBp === undefined
+      ? []
+      : [
+          {
+            code: 'APR',
+            label: { en: 'Annual percentage rate (APR)', ar: 'معدل النسبة السنوي' },
+            value: quantity(formatPerTenThousand(input.aprBp)),
+          },
+        ]),
+    {
+      code: 'EQUITY_CONTRIBUTION',
+      label: { en: 'Equity contribution', ar: 'المساهمة الذاتية' },
+      value: quantity(formatPerTenThousand(input.equityContributionPerTenThousand)),
+    },
   ];
 
   const instalmentCount = input.tenorMonths - input.graceMonths;
   const repayment: LetterRow[] = [
-    { code: 'INSTALMENT_COUNT', label: { en: 'Number of monthly instalments', ar: 'عدد الأقساط الشهرية' }, value: quantity(String(instalmentCount)) },
-    { code: 'INSTALMENT', label: { en: 'Monthly instalment', ar: 'القسط الشهري' }, value: amount(input.totals.instalment) },
+    {
+      code: 'INSTALMENT_COUNT',
+      label: { en: 'Number of monthly instalments', ar: 'عدد الأقساط الشهرية' },
+      value: quantity(String(instalmentCount)),
+    },
+    {
+      code: 'INSTALMENT',
+      label: { en: 'Monthly instalment', ar: 'القسط الشهري' },
+      value: amount(input.totals.instalment),
+    },
     { code: 'TOTAL_CHARGE', label: chargeLabel(input.family), value: amount(input.totals.totalCharge) },
-    { code: 'TOTAL_PAYABLE', label: { en: 'Total amount payable', ar: 'إجمالي المبلغ المستحق' }, value: amount(input.totals.totalPayable) },
+    {
+      code: 'TOTAL_PAYABLE',
+      label: { en: 'Total amount payable', ar: 'إجمالي المبلغ المستحق' },
+      value: amount(input.totals.totalPayable),
+    },
   ];
 
   const standardConditions: BilingualText[] = [
@@ -379,7 +465,11 @@ export function buildOfferLetter(input: OfferLetterInput, hijri?: HijriFormatter
     terms,
     repayment,
     conditions: [...input.conditions, ...standardConditions],
-    signatures: input.signatories.map((s) => ({ party: s.party, partyName: s.party === 'LENDER' ? lender : borrower, role: s.role })),
+    signatures: input.signatories.map((s) => ({
+      party: s.party,
+      partyName: s.party === 'LENDER' ? lender : borrower,
+      role: s.role,
+    })),
     offerDate,
     validUntil,
     validity: {

@@ -139,10 +139,38 @@
         "defaultPoints": 0,
         "defaultReasonCode": "R_LIMITED_ANCHOR_TENURE",
         "bands": [
-          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.monthsTrading" }, "right": { "const": 36 } }, "points": 25 },
-          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.monthsTrading" }, "right": { "const": 24 } }, "points": 20 },
-          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.monthsTrading" }, "right": { "const": 12 } }, "points": 14 },
-          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.monthsTrading" }, "right": { "const": 6 } }, "points": 8 }
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "tradeHistory.withAnchor.monthsTrading" },
+              "right": { "const": 36 }
+            },
+            "points": 25
+          },
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "tradeHistory.withAnchor.monthsTrading" },
+              "right": { "const": 24 }
+            },
+            "points": 20
+          },
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "tradeHistory.withAnchor.monthsTrading" },
+              "right": { "const": 12 }
+            },
+            "points": 14
+          },
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "tradeHistory.withAnchor.monthsTrading" },
+              "right": { "const": 6 }
+            },
+            "points": 8
+          }
         ]
       },
       {
@@ -151,10 +179,38 @@
         "defaultPoints": 0,
         "defaultReasonCode": "R_LIMITED_ANCHOR_VOLUME",
         "bands": [
-          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" }, "right": { "constMoneyMinorUnits": "50000000" } }, "points": 20 },
-          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" }, "right": { "constMoneyMinorUnits": "20000000" } }, "points": 15 },
-          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" }, "right": { "constMoneyMinorUnits": "8000000" } }, "points": 9 },
-          { "when": { "op": "gte", "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" }, "right": { "constMoneyMinorUnits": "3000000" } }, "points": 4 }
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" },
+              "right": { "constMoneyMinorUnits": "50000000" }
+            },
+            "points": 20
+          },
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" },
+              "right": { "constMoneyMinorUnits": "20000000" }
+            },
+            "points": 15
+          },
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" },
+              "right": { "constMoneyMinorUnits": "8000000" }
+            },
+            "points": 9
+          },
+          {
+            "when": {
+              "op": "gte",
+              "left": { "field": "tradeHistory.withAnchor.medianMonthlyValueMinorUnits" },
+              "right": { "constMoneyMinorUnits": "3000000" }
+            },
+            "points": 4
+          }
         ]
       },
       {
@@ -163,9 +219,30 @@
         "defaultPoints": 0,
         "defaultReasonCode": "R_PAYMENT_BEHAVIOUR",
         "bands": [
-          { "when": { "op": "lte", "left": { "field": "tradeHistory.withAnchor.latePaymentPerTenThousand" }, "right": { "const": 500 } }, "points": 20 },
-          { "when": { "op": "lte", "left": { "field": "tradeHistory.withAnchor.latePaymentPerTenThousand" }, "right": { "const": 1500 } }, "points": 14 },
-          { "when": { "op": "lte", "left": { "field": "tradeHistory.withAnchor.latePaymentPerTenThousand" }, "right": { "const": 3000 } }, "points": 7 }
+          {
+            "when": {
+              "op": "lte",
+              "left": { "field": "tradeHistory.withAnchor.latePaymentPerTenThousand" },
+              "right": { "const": 500 }
+            },
+            "points": 20
+          },
+          {
+            "when": {
+              "op": "lte",
+              "left": { "field": "tradeHistory.withAnchor.latePaymentPerTenThousand" },
+              "right": { "const": 1500 }
+            },
+            "points": 14
+          },
+          {
+            "when": {
+              "op": "lte",
+              "left": { "field": "tradeHistory.withAnchor.latePaymentPerTenThousand" },
+              "right": { "const": 3000 }
+            },
+            "points": 7
+          }
         ]
       },
       {
@@ -174,8 +251,22 @@
         "defaultPoints": 0,
         "defaultReasonCode": "R_DISPUTES",
         "bands": [
-          { "when": { "op": "eq", "left": { "field": "tradeHistory.withAnchor.disputeCount" }, "right": { "const": 0 } }, "points": 10 },
-          { "when": { "op": "lte", "left": { "field": "tradeHistory.withAnchor.disputeCount" }, "right": { "const": 2 } }, "points": 6 }
+          {
+            "when": {
+              "op": "eq",
+              "left": { "field": "tradeHistory.withAnchor.disputeCount" },
+              "right": { "const": 0 }
+            },
+            "points": 10
+          },
+          {
+            "when": {
+              "op": "lte",
+              "left": { "field": "tradeHistory.withAnchor.disputeCount" },
+              "right": { "const": 2 }
+            },
+            "points": 6
+          }
         ]
       },
       {
@@ -184,9 +275,26 @@
         "defaultPoints": 0,
         "defaultReasonCode": "R_BUREAU_ARREARS",
         "bands": [
-          { "when": { "op": "eq", "left": { "field": "bureau.worstArrearsDaysLast12Months" }, "right": { "const": 0 } }, "points": 15 },
-          { "when": { "op": "lte", "left": { "field": "bureau.worstArrearsDaysLast12Months" }, "right": { "const": 30 } }, "points": 10 },
-          { "when": { "op": "lte", "left": { "field": "bureau.worstArrearsDaysLast12Months" }, "right": { "const": 60 } }, "points": 4 }
+          {
+            "when": { "op": "eq", "left": { "field": "bureau.worstArrearsDaysLast12Months" }, "right": { "const": 0 } },
+            "points": 15
+          },
+          {
+            "when": {
+              "op": "lte",
+              "left": { "field": "bureau.worstArrearsDaysLast12Months" },
+              "right": { "const": 30 }
+            },
+            "points": 10
+          },
+          {
+            "when": {
+              "op": "lte",
+              "left": { "field": "bureau.worstArrearsDaysLast12Months" },
+              "right": { "const": 60 }
+            },
+            "points": 4
+          }
         ]
       },
       {
@@ -195,8 +303,14 @@
         "defaultPoints": 2,
         "defaultReasonCode": "R_LIMITED_SUBSTANCE",
         "bands": [
-          { "when": { "op": "gte", "left": { "field": "workforce.employeeCount" }, "right": { "const": 10 } }, "points": 10 },
-          { "when": { "op": "gte", "left": { "field": "workforce.employeeCount" }, "right": { "const": 3 } }, "points": 6 }
+          {
+            "when": { "op": "gte", "left": { "field": "workforce.employeeCount" }, "right": { "const": 10 } },
+            "points": 10
+          },
+          {
+            "when": { "op": "gte", "left": { "field": "workforce.employeeCount" }, "right": { "const": 3 } },
+            "points": 6
+          }
         ]
       },
       {
@@ -205,8 +319,22 @@
         "defaultPoints": 2,
         "defaultReasonCode": "R_BUYER_CONCENTRATION",
         "bands": [
-          { "when": { "op": "lte", "left": { "field": "tradeHistory.largestBuyerSharePerTenThousand" }, "right": { "const": 5000 } }, "points": 10 },
-          { "when": { "op": "lte", "left": { "field": "tradeHistory.largestBuyerSharePerTenThousand" }, "right": { "const": 7500 } }, "points": 6 }
+          {
+            "when": {
+              "op": "lte",
+              "left": { "field": "tradeHistory.largestBuyerSharePerTenThousand" },
+              "right": { "const": 5000 }
+            },
+            "points": 10
+          },
+          {
+            "when": {
+              "op": "lte",
+              "left": { "field": "tradeHistory.largestBuyerSharePerTenThousand" },
+              "right": { "const": 7500 }
+            },
+            "points": 6
+          }
         ]
       }
     ]

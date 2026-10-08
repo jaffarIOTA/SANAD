@@ -45,8 +45,7 @@ export const isPositive = (m: Money): boolean => m.minorUnits > 0n;
 
 export const sameCurrency = (a: Money, b: Money): boolean => a.currency === b.currency;
 
-export const equals = (a: Money, b: Money): boolean =>
-  a.currency === b.currency && a.minorUnits === b.minorUnits;
+export const equals = (a: Money, b: Money): boolean => a.currency === b.currency && a.minorUnits === b.minorUnits;
 
 /**
  * Ordering. Comparing across currencies is a programming error, not a domain
@@ -85,10 +84,7 @@ export function sum(amounts: readonly Money[], currency: CurrencyCode = 'SAR'): 
  * reach an executable state (SH-03 — any null in the determinacy set blocks
  * execution).
  */
-export function requireDeterminate(
-  amount: Money | undefined,
-  field: string,
-): Result<Money> {
+export function requireDeterminate(amount: Money | undefined, field: string): Result<Money> {
   if (amount === undefined) {
     return reject('SH-03', 'AMOUNT_INDETERMINATE', `${field} must be determinate before execution`, {
       field,

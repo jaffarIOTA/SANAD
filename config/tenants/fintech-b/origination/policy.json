@@ -32,11 +32,5 @@
     "maxAttempts": 5,
     "backoffSeconds": 60
   },
-  "revalidateOn": [
-    "tradeReference",
-    "requestedAmount",
-    "counterpartyId",
-    "programmeId",
-    "requestedTenorDays"
-  ]
+  "revalidateOn": ["tradeReference", "requestedAmount", "counterpartyId", "programmeId", "requestedTenorDays"]
 }

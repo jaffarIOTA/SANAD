@@ -16,7 +16,10 @@ import { type DevelopmentDelivery, developmentDispatchPorts } from './developmen
 import { postgresOutboxStore } from './postgres-store.ts';
 
 const databaseUrl = process.env['DATABASE_URL'];
-const store = databaseUrl !== undefined && databaseUrl.trim().length > 0 ? postgresOutboxStore({ connectionString: databaseUrl }) : inMemoryOutboxStore();
+const store =
+  databaseUrl !== undefined && databaseUrl.trim().length > 0
+    ? postgresOutboxStore({ connectionString: databaseUrl })
+    : inMemoryOutboxStore();
 const ledger: DevelopmentDelivery[] = [];
 const ports = developmentDispatchPorts(ledger);
 const intervalMs = Number.parseInt(process.env['OUTBOX_POLL_MS'] ?? '5000', 10);
@@ -30,11 +33,23 @@ function policyFor(tenantId: string) {
 
 async function pass(): Promise<void> {
   const now = BigInt(Math.floor(Date.now() / 1000));
-  const results = await runOutboxPass(store, (event, attempt) => dispatchOnce(event, ports, policyFor(event.tenantId), attempt), now);
+  const results = await runOutboxPass(
+    store,
+    (event, attempt) => dispatchOnce(event, ports, policyFor(event.tenantId), attempt),
+    now,
+  );
   // No payload, no reference to a person: kind, outcome and the event id only.
   for (const r of results) process.stdout.write(`outbox ${r.kind} ${r.eventId} ${r.outcome}\n`);
 }
 
-process.stdout.write(`outbox worker: ${databaseUrl ? 'postgresql' : 'in-memory (development only)'} store, polling every ${String(intervalMs)}ms\n`);
-const timer = setInterval(() => { void pass(); }, intervalMs);
-for (const signal of ['SIGTERM', 'SIGINT'] as const) process.on(signal, () => { clearInterval(timer); process.exit(0); });
+process.stdout.write(
+  `outbox worker: ${databaseUrl ? 'postgresql' : 'in-memory (development only)'} store, polling every ${String(intervalMs)}ms\n`,
+);
+const timer = setInterval(() => {
+  void pass();
+}, intervalMs);
+for (const signal of ['SIGTERM', 'SIGINT'] as const)
+  process.on(signal, () => {
+    clearInterval(timer);
+    process.exit(0);
+  });

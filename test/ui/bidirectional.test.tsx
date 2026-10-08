@@ -39,16 +39,12 @@ const COMPONENTS: readonly { name: string; render: (locale: Locale) => string }[
   {
     name: 'DualDate',
     render: (locale) =>
-      renderToStaticMarkup(
-        <DualDate gregorian="22 September 2026" hijri="١٠ ربيع الآخر ١٤٤٨" locale={locale} />,
-      ),
+      renderToStaticMarkup(<DualDate gregorian="22 September 2026" hijri="١٠ ربيع الآخر ١٤٤٨" locale={locale} />),
   },
   {
     name: 'Status',
     render: (locale) =>
-      renderToStaticMarkup(
-        <Status tone="progress" label={locale === 'ar-SA' ? 'قيد المعالجة' : 'In progress'} />,
-      ),
+      renderToStaticMarkup(<Status tone="progress" label={locale === 'ar-SA' ? 'قيد المعالجة' : 'In progress'} />),
   },
   {
     name: 'ControlRejection',
@@ -57,40 +53,28 @@ const COMPONENTS: readonly { name: string; render: (locale: Locale) => string }[
         <ControlRejection
           control="SH-10"
           controlLabel={locale === 'ar-SA' ? 'الضابط' : 'Control'}
-          explanation={
-            locale === 'ar-SA'
-              ? 'سبق تمويل هذه الفاتورة.'
-              : 'This invoice has already been financed.'
-          }
+          explanation={locale === 'ar-SA' ? 'سبق تمويل هذه الفاتورة.' : 'This invoice has already been financed.'}
         />,
       ),
   },
   {
     name: 'Card',
-    render: (locale) =>
-      renderToStaticMarkup(<Card>{locale === 'ar-SA' ? 'محتوى' : 'Content'}</Card>),
+    render: (locale) => renderToStaticMarkup(<Card>{locale === 'ar-SA' ? 'محتوى' : 'Content'}</Card>),
   },
   {
     name: 'PrimaryAction',
     render: (locale) =>
-      renderToStaticMarkup(
-        <PrimaryAction href="/ar">{locale === 'ar-SA' ? 'متابعة' : 'Continue'}</PrimaryAction>,
-      ),
+      renderToStaticMarkup(<PrimaryAction href="/ar">{locale === 'ar-SA' ? 'متابعة' : 'Continue'}</PrimaryAction>),
   },
   {
     name: 'LanguageSwitch',
-    render: (locale) =>
-      renderToStaticMarkup(<LanguageSwitch current={locale === 'ar-SA' ? 'ar' : 'en'} />),
+    render: (locale) => renderToStaticMarkup(<LanguageSwitch current={locale === 'ar-SA' ? 'ar' : 'en'} />),
   },
   {
     name: 'StatTile',
     render: (locale) =>
       renderToStaticMarkup(
-        <StatTile
-          icon="inbox"
-          label={locale === 'ar-SA' ? 'بانتظار المراجعة' : 'Awaiting review'}
-          value="7"
-        />,
+        <StatTile icon="inbox" label={locale === 'ar-SA' ? 'بانتظار المراجعة' : 'Awaiting review'} value="7" />,
       ),
   },
   {

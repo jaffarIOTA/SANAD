@@ -28,7 +28,8 @@ export interface MarketRange {
   readonly referenceId: string;
 }
 
-export type PublisherOutcome<T> = { readonly kind: 'PUBLISHED'; readonly value: T } | { readonly kind: 'UNAVAILABLE'; readonly reason: string };
+export type PublisherOutcome<T> =
+  { readonly kind: 'PUBLISHED'; readonly value: T } | { readonly kind: 'UNAVAILABLE'; readonly reason: string };
 
 export interface RatePublisherPort {
   benchmark(code: string, asOf: TsaInstant): Promise<Result<PublisherOutcome<PublishedBenchmark>>>;

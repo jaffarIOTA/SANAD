@@ -70,11 +70,7 @@ export function reserveLimit(t: TradeValidation, reservationId: string): LimitRe
 
 // -- Legs up to the purchase --------------------------------------------------
 
-export function executeWaad(
-  t: LimitReserved,
-  leg: ContractLeg,
-  ctx: SequencingContext,
-): Result<WaadExecuted> {
+export function executeWaad(t: LimitReserved, leg: ContractLeg, ctx: SequencingContext): Result<WaadExecuted> {
   const legs = appendLeg([], leg);
   if (!legs.ok) return legs;
   const distinct = verifyDistinctParties(ctx.definition, legs.value);
@@ -87,11 +83,7 @@ export function executeWaad(
   });
 }
 
-export function executePurchase(
-  t: WaadExecuted,
-  leg: ContractLeg,
-  ctx: SequencingContext,
-): Result<PurchaseExecuted> {
+export function executePurchase(t: WaadExecuted, leg: ContractLeg, ctx: SequencingContext): Result<PurchaseExecuted> {
   const legs = appendLeg(t.legs, leg);
   if (!legs.ok) return legs;
   const distinct = verifyDistinctParties(ctx.definition, legs.value);
@@ -107,10 +99,7 @@ export function executePurchase(
 // -- The three gates ----------------------------------------------------------
 
 /** GATE 1. Ownership evidence must be valid before the state can advance. */
-export function acquireOwnership(
-  t: PurchaseExecuted,
-  ctx: SequencingContext,
-): Result<OwnershipAcquired> {
+export function acquireOwnership(t: PurchaseExecuted, ctx: SequencingContext): Result<OwnershipAcquired> {
   const evaluation = gateEvaluation(t.core.riskPeriodRequiredSeconds, t.legs, ctx);
   const gate = requireSatisfied(evaluation, 'GATE_1_OWNERSHIP');
   if (!gate.ok) return gate;
@@ -125,10 +114,7 @@ export function acquireOwnership(
 }
 
 /** GATE 2. Possession evidence must be valid before the state can advance. */
-export function confirmPossession(
-  t: OwnershipAcquired,
-  ctx: SequencingContext,
-): Result<PossessionConfirmed> {
+export function confirmPossession(t: OwnershipAcquired, ctx: SequencingContext): Result<PossessionConfirmed> {
   const evaluation = gateEvaluation(t.core.riskPeriodRequiredSeconds, t.legs, ctx);
 
   const ownership = requireSatisfied(evaluation, 'GATE_1_OWNERSHIP');
@@ -200,11 +186,7 @@ export function offerSale(
 
 // -- Acceptance and beyond ----------------------------------------------------
 
-export function acceptOffer(
-  t: SaleOffered,
-  leg: ContractLeg,
-  ctx: SequencingContext,
-): Result<ExecutedState> {
+export function acceptOffer(t: SaleOffered, leg: ContractLeg, ctx: SequencingContext): Result<ExecutedState> {
   if (ctx.observedAt.epochSeconds > t.offerExpiresAtEpochSeconds) {
     return reject('SH-03', 'OFFER_EXPIRED', 'The offer has lapsed and must be reissued', {
       transactionId: t.core.transactionId,
@@ -265,11 +247,7 @@ export function unwind(
   return ok({ state: 'UNWIND', core: t.core, legs: t.legs, goodsDisposition });
 }
 
-export function bookObligation(
-  t: ExecutedState,
-  obligationId: string,
-  bookingRef: string,
-): Active {
+export function bookObligation(t: ExecutedState, obligationId: string, bookingRef: string): Active {
   return { state: 'ACTIVE', core: t.core, legs: t.legs, obligationId, bookingRef };
 }
 

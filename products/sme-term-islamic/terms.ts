@@ -32,7 +32,17 @@ export interface SmeIslamicTerms {
   readonly guarantee?: GuaranteeTerms;
 }
 
-const KEYS = new Set(['currency', 'minAmountMinorUnits', 'brokerRef', 'commodityCode', 'agencyPermitted', 'adminFeeMinorUnits', 'variants', 'credit', 'guarantee']);
+const KEYS = new Set([
+  'currency',
+  'minAmountMinorUnits',
+  'brokerRef',
+  'commodityCode',
+  'agencyPermitted',
+  'adminFeeMinorUnits',
+  'variants',
+  'credit',
+  'guarantee',
+]);
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isIntString = (v: unknown): v is string => typeof v === 'string' && /^\d+$/.test(v);
 const bad = (reason: string, detail: string): Result<never> => reject('OP-DETERMINACY', reason, detail);
@@ -40,15 +50,22 @@ const bad = (reason: string, detail: string): Result<never> => reject('OP-DETERM
 export function parseSmeIslamicTerms(raw: unknown): Result<SmeIslamicTerms> {
   if (!isRecord(raw)) return bad('TERMS_MALFORMED', 'SME Tawarruq terms are an object');
   const unknown = Object.keys(raw).filter((k) => !KEYS.has(k));
-  if (unknown.length > 0) return reject('OP-DETERMINACY', 'TERMS_UNKNOWN_KEY', 'Unknown key in SME Tawarruq terms', { keys: unknown.join(',') });
+  if (unknown.length > 0)
+    return reject('OP-DETERMINACY', 'TERMS_UNKNOWN_KEY', 'Unknown key in SME Tawarruq terms', {
+      keys: unknown.join(','),
+    });
   const currency = parseCurrency(raw['currency']);
   if (!currency.ok) return currency;
   const c = currency.value;
-  if (!isIntString(raw['minAmountMinorUnits']) || BigInt(raw['minAmountMinorUnits']) <= 0n) return bad('TERMS_AMOUNTS', 'minAmountMinorUnits is a positive integer string');
-  if (typeof raw['brokerRef'] !== 'string' || raw['brokerRef'].length === 0) return bad('TERMS_BROKER', 'brokerRef names the board-approved broker');
-  if (typeof raw['commodityCode'] !== 'string' || raw['commodityCode'].length === 0) return bad('TERMS_COMMODITY', 'commodityCode is required');
+  if (!isIntString(raw['minAmountMinorUnits']) || BigInt(raw['minAmountMinorUnits']) <= 0n)
+    return bad('TERMS_AMOUNTS', 'minAmountMinorUnits is a positive integer string');
+  if (typeof raw['brokerRef'] !== 'string' || raw['brokerRef'].length === 0)
+    return bad('TERMS_BROKER', 'brokerRef names the board-approved broker');
+  if (typeof raw['commodityCode'] !== 'string' || raw['commodityCode'].length === 0)
+    return bad('TERMS_COMMODITY', 'commodityCode is required');
   if (typeof raw['agencyPermitted'] !== 'boolean') return bad('TERMS_AGENCY', 'agencyPermitted is a boolean');
-  if (raw['adminFeeMinorUnits'] !== undefined && !isIntString(raw['adminFeeMinorUnits'])) return bad('TERMS_FEE', 'adminFeeMinorUnits is an integer string');
+  if (raw['adminFeeMinorUnits'] !== undefined && !isIntString(raw['adminFeeMinorUnits']))
+    return bad('TERMS_FEE', 'adminFeeMinorUnits is an integer string');
   const minAmount = money(BigInt(raw['minAmountMinorUnits']), c);
   const variants = parseVariants(raw['variants'], c, minAmount);
   if (!variants.ok) return variants;
@@ -59,7 +76,9 @@ export function parseSmeIslamicTerms(raw: unknown): Result<SmeIslamicTerms> {
   return ok({
     currency: c,
     minAmount,
-    brokerRef: raw['brokerRef'], commodityCode: raw['commodityCode'], agencyPermitted: raw['agencyPermitted'],
+    brokerRef: raw['brokerRef'],
+    commodityCode: raw['commodityCode'],
+    agencyPermitted: raw['agencyPermitted'],
     adminFee: money(raw['adminFeeMinorUnits'] === undefined ? 0n : BigInt(raw['adminFeeMinorUnits']), c),
     variants: variants.value,
     credit: credit.value,

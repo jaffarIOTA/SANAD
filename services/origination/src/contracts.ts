@@ -37,15 +37,21 @@ export function contractPath(fileName: string): string {
 export function compileContract(specPath: string): CompiledContract {
   const document = parse(readFileSync(specPath, 'utf8')) as OpenApiDocument;
   const ajv = new Ajv2020({ allErrors: true, removeAdditional: false, useDefaults: false, strict: false });
-  for (const [name, pattern] of Object.entries(FORMATS)) ajv.addFormat(name, { type: 'string', validate: (value: string) => pattern.test(value) });
-  for (const [name, schema] of Object.entries(document.components.schemas)) ajv.addSchema(schema, `#/components/schemas/${name}`);
+  for (const [name, pattern] of Object.entries(FORMATS))
+    ajv.addFormat(name, { type: 'string', validate: (value: string) => pattern.test(value) });
+  for (const [name, schema] of Object.entries(document.components.schemas))
+    ajv.addSchema(schema, `#/components/schemas/${name}`);
 
   const describe = (error: ErrorObject): ValidationFailure => {
     if (error.keyword === 'additionalProperties') {
       const property = String((error.params as { additionalProperty?: string }).additionalProperty);
       return { path: error.instancePath, message: `Unknown property '${property}'.`, unknownProperty: property };
     }
-    if (error.keyword === 'required') return { path: error.instancePath, message: `Missing required property '${String((error.params as { missingProperty?: string }).missingProperty)}'.` };
+    if (error.keyword === 'required')
+      return {
+        path: error.instancePath,
+        message: `Missing required property '${String((error.params as { missingProperty?: string }).missingProperty)}'.`,
+      };
     return { path: error.instancePath, message: error.message ?? 'is invalid' };
   };
 

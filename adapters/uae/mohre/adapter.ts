@@ -25,13 +25,15 @@ export const MOHRE_DEVIATIONS: readonly KnownDeviation[] = [
   {
     id: 'MOHRE-DEV-001',
     summary: 'WPS reports salary actually paid, month by month; the port has one registered salary.',
-    containment: 'The registered salary is the most recent WPS month’s paid amount, in AED minor units, stored with the report reference. The monthly history does not cross the port; a month that cannot be read refuses the whole report rather than being skipped.',
+    containment:
+      'The registered salary is the most recent WPS month’s paid amount, in AED minor units, stored with the report reference. The monthly history does not cross the port; a month that cannot be read refuses the whole report rather than being skipped.',
     verificationRef: 'UAE-RAIL-MOHRE-01',
   },
   {
     id: 'MOHRE-DEV-002',
     summary: 'The report names the employer establishment and its labour card details.',
-    containment: 'Only an opaque establishment reference is mapped; the labour card and person number are dropped at this boundary.',
+    containment:
+      'Only an opaque establishment reference is mapped; the labour card and person number are dropped at this boundary.',
     verificationRef: 'UAE-RAIL-MOHRE-01',
   },
 ];
@@ -47,12 +49,28 @@ export class MohreAdapter extends RailAdapter implements EmploymentVerificationP
     super(config, credentials, transport);
   }
 
-  async employment(p: { readonly tenantId: string; readonly applicantRef: string; readonly consentId: string; readonly correlationId: string }) {
-    const consent = this.requireConsent(p.consentId); if (!consent.ok) return consent;
-    const r = await this.invoke('employment.wps', { method: 'POST', path: '/v1/wps/salary-reports', body: { applicantRef: p.applicantRef, consentRef: p.consentId } }, p.correlationId);
+  async employment(p: {
+    readonly tenantId: string;
+    readonly applicantRef: string;
+    readonly consentId: string;
+    readonly correlationId: string;
+  }) {
+    const consent = this.requireConsent(p.consentId);
+    if (!consent.ok) return consent;
+    const r = await this.invoke(
+      'employment.wps',
+      {
+        method: 'POST',
+        path: '/v1/wps/salary-reports',
+        body: { applicantRef: p.applicantRef, consentRef: p.consentId },
+      },
+      p.correlationId,
+    );
     if (r.kind !== 'ANSWERED') return ok(r);
     const v = r.value;
-    const employed = bool(v['employed']); const at = epoch(v['asOf']); const referenceId = str(v['reportId']);
+    const employed = bool(v['employed']);
+    const at = epoch(v['asOf']);
+    const referenceId = str(v['reportId']);
     if (employed === undefined || at === undefined || referenceId === undefined) return ok(malformed());
 
     // The most recent month wins; months are "YYYY-MM", which order as strings.
@@ -60,12 +78,24 @@ export class MohreAdapter extends RailAdapter implements EmploymentVerificationP
     if (Array.isArray(v['salaryMonths'])) {
       for (const m of v['salaryMonths'] as unknown[]) {
         const rec = (typeof m === 'object' && m !== null ? m : {}) as Record<string, unknown>;
-        const month = str(rec['month']); const paid = aed(rec['paidAmount'], rec['currency']);
+        const month = str(rec['month']);
+        const paid = aed(rec['paidAmount'], rec['currency']);
         if (month === undefined || !MONTH.test(month) || paid === undefined) return ok(malformed());
         if (latest === undefined || month > latest.month) latest = { month, paid };
       }
     }
-    const employer = str(v['establishmentRef']); const since = epoch(v['employedSince']);
-    return ok({ kind: 'ANSWERED' as const, value: { employed, retrievedAtEpochSeconds: at, referenceId, ...(employer === undefined ? {} : { employerRef: employer }), ...(latest === undefined ? {} : { registeredSalary: latest.paid }), ...(since === undefined ? {} : { employedSinceEpochSeconds: since }) } });
+    const employer = str(v['establishmentRef']);
+    const since = epoch(v['employedSince']);
+    return ok({
+      kind: 'ANSWERED' as const,
+      value: {
+        employed,
+        retrievedAtEpochSeconds: at,
+        referenceId,
+        ...(employer === undefined ? {} : { employerRef: employer }),
+        ...(latest === undefined ? {} : { registeredSalary: latest.paid }),
+        ...(since === undefined ? {} : { employedSinceEpochSeconds: since }),
+      },
+    });
   }
 }

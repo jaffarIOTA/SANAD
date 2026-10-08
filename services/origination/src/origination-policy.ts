@@ -17,7 +17,10 @@ export interface ResolvedOriginationPolicy {
   readonly revisionSummary?: string;
 }
 
-export async function resolveOriginationPolicy(tenant: TenantCode, asOfEpochSeconds: bigint): Promise<ResolvedOriginationPolicy> {
+export async function resolveOriginationPolicy(
+  tenant: TenantCode,
+  asOfEpochSeconds: bigint,
+): Promise<ResolvedOriginationPolicy> {
   const url = databaseUrlFromEnvironment();
   if (url === undefined) return { policy: loadOriginationPolicy(tenant), source: 'FILE' };
   const pool = sharedPool(url);
@@ -28,5 +31,10 @@ export async function resolveOriginationPolicy(tenant: TenantCode, asOfEpochSeco
   );
   const row = r.rows[0];
   if (row === undefined) return { policy: loadOriginationPolicy(tenant), source: 'FILE' };
-  return { policy: parseOriginationPolicy(row.payload), source: 'REVISION', revisionId: row.id, revisionSummary: row.summary };
+  return {
+    policy: parseOriginationPolicy(row.payload),
+    source: 'REVISION',
+    revisionId: row.id,
+    revisionSummary: row.summary,
+  };
 }

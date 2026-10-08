@@ -52,19 +52,34 @@ export interface SmeConventionalQuote extends Quote {
  * instalment (or over its whole life, if shorter). Grace instalments are
  * lower, so this is the year after grace — the conservative figure.
  */
-export const firstYearService = (instalment: Money, months: number): Money => money(instalment.minorUnits * BigInt(Math.min(12, months)), instalment.currency);
+export const firstYearService = (instalment: Money, months: number): Money =>
+  money(instalment.minorUnits * BigInt(Math.min(12, months)), instalment.currency);
 
 /** The dated schedule's flows, plus each upfront fee as a repayment at tenor zero. */
 export const flowsWithFees = (s: DatedSchedule, fees: readonly Fee[]): readonly CashFlow[] => [
   ...s.cashFlows,
-  ...fees.filter((f) => f.when === 'UPFRONT' && f.amount.minorUnits > 0n).map((f) => ({ at: { months: 0, days: 0 }, amount: f.amount, direction: 'REPAYMENT' as const })),
+  ...fees
+    .filter((f) => f.when === 'UPFRONT' && f.amount.minorUnits > 0n)
+    .map((f) => ({ at: { months: 0, days: 0 }, amount: f.amount, direction: 'REPAYMENT' as const })),
 ];
 
 export function quoteSmeConventional(terms: SmeConventionalTerms, request: QuoteRequest): Result<SmeConventionalQuote> {
-  if (request.pricing.rate === undefined) return reject('PLAT-03', 'RATE_REQUIRED', 'SME term finance is priced from a sourced rate');
+  if (request.pricing.rate === undefined)
+    return reject('PLAT-03', 'RATE_REQUIRED', 'SME term finance is priced from a sourced rate');
   const definition = request.regulatory?.smeDefinition;
-  if (definition === undefined) return reject('OP-DETERMINACY', 'SME_DEFINITION_MISSING', 'The regulator’s SME definition was not supplied to the quote');
-  if (request.requestedAmount.currency === terms.currency && request.requestedAmount.minorUnits < terms.minAmount.minorUnits) return reject('OP-LIMIT', 'AMOUNT_BELOW_PRODUCT', 'Below the product minimum', { min: String(terms.minAmount.minorUnits) });
+  if (definition === undefined)
+    return reject(
+      'OP-DETERMINACY',
+      'SME_DEFINITION_MISSING',
+      'The regulator’s SME definition was not supplied to the quote',
+    );
+  if (
+    request.requestedAmount.currency === terms.currency &&
+    request.requestedAmount.minorUnits < terms.minAmount.minorUnits
+  )
+    return reject('OP-LIMIT', 'AMOUNT_BELOW_PRODUCT', 'Below the product minimum', {
+      min: String(terms.minAmount.minorUnits),
+    });
   const chosen = chooseVariant(terms.variants, terms.currency, request);
   if (!chosen.ok) return chosen;
   const c = chosen.value;
@@ -81,10 +96,27 @@ export function quoteSmeConventional(terms: SmeConventionalTerms, request: Quote
   if (!schedule.ok) return schedule;
   const s = schedule.value;
 
-  const afford = checkBusinessAffordability(terms.credit, definition, request.affordability?.business, request.requestedAmount, firstYearService(s.levelInstalment, c.months));
+  const afford = checkBusinessAffordability(
+    terms.credit,
+    definition,
+    request.affordability?.business,
+    request.requestedAmount,
+    firstYearService(s.levelInstalment, c.months),
+  );
   if (!afford.ok) return afford;
 
-  const fees: Fee[] = terms.adminFee.minorUnits > 0n ? [{ code: 'ADMIN', labelEn: 'Administration fee', labelAr: 'رسوم إدارية', amount: terms.adminFee, when: 'UPFRONT' }] : [];
+  const fees: Fee[] =
+    terms.adminFee.minorUnits > 0n
+      ? [
+          {
+            code: 'ADMIN',
+            labelEn: 'Administration fee',
+            labelAr: 'رسوم إدارية',
+            amount: terms.adminFee,
+            when: 'UPFRONT',
+          },
+        ]
+      : [];
   const g = terms.guarantee;
   const currency = terms.currency;
   return ok({
@@ -112,6 +144,14 @@ export function quoteSmeConventional(terms: SmeConventionalTerms, request: Quote
     size: afford.value.classification,
     debtServiceCoverPerTenThousand: afford.value.debtServiceCoverPerTenThousand,
     creditPolicyRef: terms.credit.policyRef,
-    ...(g === undefined ? {} : { guaranteedPortion: { programme: g.programme, programmeRef: g.programmeRef, amount: money((request.requestedAmount.minorUnits * BigInt(g.coveragePerTenThousand)) / 10_000n, currency) } }),
+    ...(g === undefined
+      ? {}
+      : {
+          guaranteedPortion: {
+            programme: g.programme,
+            programmeRef: g.programmeRef,
+            amount: money((request.requestedAmount.minorUnits * BigInt(g.coveragePerTenThousand)) / 10_000n, currency),
+          },
+        }),
   });
 }

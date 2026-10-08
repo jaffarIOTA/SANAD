@@ -45,10 +45,7 @@ export const REASON_BELOW_REQUESTED = 'R_ELIGIBLE_BELOW_REQUESTED_AMOUNT';
 /** A decision identifier that no real decision can carry. */
 const PRE_CHECK_DECISION_ID = 'pre-check';
 
-export function preCheck(
-  versions: readonly CreditPolicy[],
-  query: EligibilityQuery,
-): Result<EligibilityOutcome> {
+export function preCheck(versions: readonly CreditPolicy[], query: EligibilityQuery): Result<EligibilityOutcome> {
   if (query.requestedAmount.minorUnits <= 0n) {
     return reject('OP-DETERMINACY', 'REQUESTED_AMOUNT_NOT_POSITIVE', 'The requested amount must be positive');
   }

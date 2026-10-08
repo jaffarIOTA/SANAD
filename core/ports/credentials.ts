@@ -131,5 +131,4 @@ export class BoundedCredentialCache {
   }
 }
 
-const key = (ref: CredentialRef): string =>
-  `${ref.tenantId}/${ref.provider}/${ref.environment}/${ref.keyName}`;
+const key = (ref: CredentialRef): string => `${ref.tenantId}/${ref.provider}/${ref.environment}/${ref.keyName}`;

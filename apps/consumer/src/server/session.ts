@@ -10,13 +10,23 @@
 
 import { cookies } from 'next/headers';
 
-import { type ConsumerSession, type SessionKey, deriveSessionKey, ephemeralMasterSecret, issueSession, openSession, sealSession } from './session-token.ts';
+import {
+  type ConsumerSession,
+  type SessionKey,
+  deriveSessionKey,
+  ephemeralMasterSecret,
+  issueSession,
+  openSession,
+  sealSession,
+} from './session-token.ts';
 
 export type { ConsumerSession } from './session-token.ts';
 
 const COOKIE = 'sanad_consumer';
 
-interface KeyState { key?: SessionKey }
+interface KeyState {
+  key?: SessionKey;
+}
 const keyState: KeyState = ((globalThis as { __sanadConsumerKey?: KeyState }).__sanadConsumerKey ??= {});
 
 function masterSecretFromEnvironment(): Uint8Array | undefined {
@@ -48,7 +58,12 @@ export async function currentSession(): Promise<ConsumerSession | undefined> {
 }
 
 /** Called by the identity step only, with the rail's confirmed assertion. */
-export async function startSession(p: { readonly applicantRef: string; readonly identityAssertionId: string; readonly identityRef: string; readonly authenticatedAtEpochSeconds: bigint }): Promise<ConsumerSession> {
+export async function startSession(p: {
+  readonly applicantRef: string;
+  readonly identityAssertionId: string;
+  readonly identityRef: string;
+  readonly authenticatedAtEpochSeconds: bigint;
+}): Promise<ConsumerSession> {
   const session = issueSession(p);
   const jar = await cookies();
   const maxAge = Number(session.expiresAtEpochSeconds - now());

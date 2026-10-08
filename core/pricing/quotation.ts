@@ -27,20 +27,40 @@ export function resolvePricingInputs(rule: PricingRule, ctx: QuotationContext): 
     case 'FIXED_PROFIT_AMOUNT':
       return ok({ profitAmount: money(BigInt(rule.profitMinorUnits), ctx.principal.currency) });
     case 'CATALOGUE_RATE': {
-      const snap: RateSnapshot = { rate: rate(BigInt(rule.bp), rule.basis), source: 'TENANT_CATALOGUE', sourceRef: rule.catalogueRef, snapshottedAtEpochSeconds: ctx.asOfEpochSeconds };
+      const snap: RateSnapshot = {
+        rate: rate(BigInt(rule.bp), rule.basis),
+        source: 'TENANT_CATALOGUE',
+        sourceRef: rule.catalogueRef,
+        snapshottedAtEpochSeconds: ctx.asOfEpochSeconds,
+      };
       return withProfit(snap, ctx);
     }
     case 'BENCHMARK_PLUS_MARGIN': {
       if (ctx.benchmark === undefined || ctx.benchmark.code !== rule.benchmarkCode) {
-        return reject('PLAT-03', 'BENCHMARK_UNAVAILABLE', 'The benchmark this product is priced from is not available; quotation refused', { benchmarkCode: rule.benchmarkCode });
+        return reject(
+          'PLAT-03',
+          'BENCHMARK_UNAVAILABLE',
+          'The benchmark this product is priced from is not available; quotation refused',
+          { benchmarkCode: rule.benchmarkCode },
+        );
       }
       let r = addBp({ ...ctx.benchmark.rate, basis: rule.basis }, BigInt(rule.marginBp));
       if (rule.boundByMarketRange === true) {
-        if (ctx.marketRange === undefined) return reject('PLAT-03', 'MARKET_RANGE_UNAVAILABLE', 'The market range this product is bounded by is not available; quotation refused');
+        if (ctx.marketRange === undefined)
+          return reject(
+            'PLAT-03',
+            'MARKET_RANGE_UNAVAILABLE',
+            'The market range this product is bounded by is not available; quotation refused',
+          );
         if (r.bp > ctx.marketRange.highBp) r = { ...r, bp: ctx.marketRange.highBp };
         if (r.bp < ctx.marketRange.lowBp) r = { ...r, bp: ctx.marketRange.lowBp };
       }
-      const snap: RateSnapshot = { rate: r, source: 'RATE_PUBLISHER', sourceRef: ctx.benchmark.referenceId, snapshottedAtEpochSeconds: ctx.asOfEpochSeconds };
+      const snap: RateSnapshot = {
+        rate: r,
+        source: 'RATE_PUBLISHER',
+        sourceRef: ctx.benchmark.referenceId,
+        snapshottedAtEpochSeconds: ctx.asOfEpochSeconds,
+      };
       return withProfit(snap, ctx);
     }
   }

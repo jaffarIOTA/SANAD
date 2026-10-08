@@ -33,13 +33,15 @@ export function issueViewerToken(claims: ViewerTokenClaims, privateKeyPem: strin
   if (claims.documentId.trim().length === 0) throw new RangeError('viewer token names one document');
   if (claims.permissions.length === 0) throw new RangeError('viewer token carries at least one permission');
   const header = b64u(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const payload = b64u(JSON.stringify({
-    document_id: claims.documentId,
-    permissions: [...claims.permissions],
-    ...(claims.layer === undefined ? {} : { layer: claims.layer }),
-    iat: Number(claims.nowEpochSeconds),
-    exp: Number(claims.nowEpochSeconds + ttl),
-  }));
+  const payload = b64u(
+    JSON.stringify({
+      document_id: claims.documentId,
+      permissions: [...claims.permissions],
+      ...(claims.layer === undefined ? {} : { layer: claims.layer }),
+      iat: Number(claims.nowEpochSeconds),
+      exp: Number(claims.nowEpochSeconds + ttl),
+    }),
+  );
   const signer = createSign('RSA-SHA256');
   signer.update(`${header}.${payload}`);
   return `${header}.${payload}.${b64u(signer.sign(privateKeyPem))}`;

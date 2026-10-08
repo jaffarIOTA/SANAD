@@ -92,42 +92,49 @@ export function previewOfferNotifications(
   const fullVersion = displayVersion(letter.version);
   const shortVersion = displayVersion(letter.version, 2);
   const validEn = letter.validUntil.gregorian.en;
-  const validAr = letter.validUntil.hijri === undefined
-    ? letter.validUntil.gregorian.ar
-    : `${letter.validUntil.gregorian.ar} (${letter.validUntil.hijri})`;
+  const validAr =
+    letter.validUntil.hijri === undefined
+      ? letter.validUntil.gregorian.ar
+      : `${letter.validUntil.gregorian.ar} (${letter.validUntil.hijri})`;
 
-  const email: OfferEmail | undefined = recipient.emailMasked === undefined ? undefined : {
-    channel: 'EMAIL',
-    to: recipient.emailMasked,
-    subject: `${letter.title.en} ${letter.reference} — ${letter.parties.lender.en} | ${letter.title.ar}`,
-    body: [
-      `Dear ${letter.parties.borrower.en},`,
-      '',
-      `${letter.parties.lender.en} is pleased to offer your business the following facility (${letter.productVariant.en}):`,
-      `- Facility amount: ${amount}`,
-      `- Tenor: ${tenor?.value.en ?? ''}`,
-      `- ${rate?.label.en ?? ''}: ${rate?.value.en ?? ''}`,
-      `- Monthly instalment: ${instalment}`,
-      '',
-      `This offer is valid until ${validEn}. Please review and sign the offer letter here: ${SIGNING_LINK_PLACEHOLDER}`,
-      `Offer letter reference ${letter.reference}, version ${fullVersion}.`,
-      '',
-      '— ملخص بالعربية —',
-      `السادة ${letter.parties.borrower.ar}،`,
-      `يسر ${letter.parties.lender.ar} أن تعرض على منشأتكم تمويل ${letter.productVariant.ar} بمبلغ ${amountAr} لمدة ${tenor?.value.ar ?? ''}، ${rate?.label.ar ?? ''} ${rate?.value.ar ?? ''}.`,
-      `العرض ساري حتى ${validAr}. للاطلاع والتوقيع: ${SIGNING_LINK_PLACEHOLDER}`,
-      `مرجع الخطاب ${letter.reference}، الإصدار ${fullVersion}.`,
-    ].join('\n'),
-  };
+  const email: OfferEmail | undefined =
+    recipient.emailMasked === undefined
+      ? undefined
+      : {
+          channel: 'EMAIL',
+          to: recipient.emailMasked,
+          subject: `${letter.title.en} ${letter.reference} — ${letter.parties.lender.en} | ${letter.title.ar}`,
+          body: [
+            `Dear ${letter.parties.borrower.en},`,
+            '',
+            `${letter.parties.lender.en} is pleased to offer your business the following facility (${letter.productVariant.en}):`,
+            `- Facility amount: ${amount}`,
+            `- Tenor: ${tenor?.value.en ?? ''}`,
+            `- ${rate?.label.en ?? ''}: ${rate?.value.en ?? ''}`,
+            `- Monthly instalment: ${instalment}`,
+            '',
+            `This offer is valid until ${validEn}. Please review and sign the offer letter here: ${SIGNING_LINK_PLACEHOLDER}`,
+            `Offer letter reference ${letter.reference}, version ${fullVersion}.`,
+            '',
+            '— ملخص بالعربية —',
+            `السادة ${letter.parties.borrower.ar}،`,
+            `يسر ${letter.parties.lender.ar} أن تعرض على منشأتكم تمويل ${letter.productVariant.ar} بمبلغ ${amountAr} لمدة ${tenor?.value.ar ?? ''}، ${rate?.label.ar ?? ''} ${rate?.value.ar ?? ''}.`,
+            `العرض ساري حتى ${validAr}. للاطلاع والتوقيع: ${SIGNING_LINK_PLACEHOLDER}`,
+            `مرجع الخطاب ${letter.reference}، الإصدار ${fullVersion}.`,
+          ].join('\n'),
+        };
 
-  const sms: OfferSms | undefined = recipient.mobileMasked === undefined ? undefined : {
-    channel: 'SMS',
-    to: recipient.mobileMasked,
-    body: [
-      `${letter.parties.lender.ar}: عرض تمويل بمبلغ ${amountAr} جاهز للتوقيع حتى ${validAr}. ${SIGNING_LINK_PLACEHOLDER} (مرجع ${letter.reference}، إصدار ${shortVersion})`,
-      `${letter.parties.lender.en}: your facility offer of ${amount} is ready to sign until ${validEn}. ${SIGNING_LINK_PLACEHOLDER} (Ref ${letter.reference}, v ${shortVersion})`,
-    ].join('\n'),
-  };
+  const sms: OfferSms | undefined =
+    recipient.mobileMasked === undefined
+      ? undefined
+      : {
+          channel: 'SMS',
+          to: recipient.mobileMasked,
+          body: [
+            `${letter.parties.lender.ar}: عرض تمويل بمبلغ ${amountAr} جاهز للتوقيع حتى ${validAr}. ${SIGNING_LINK_PLACEHOLDER} (مرجع ${letter.reference}، إصدار ${shortVersion})`,
+            `${letter.parties.lender.en}: your facility offer of ${amount} is ready to sign until ${validEn}. ${SIGNING_LINK_PLACEHOLDER} (Ref ${letter.reference}, v ${shortVersion})`,
+          ].join('\n'),
+        };
 
   const texts = [email?.subject, email?.body, sms?.body].filter((t): t is string => t !== undefined);
   if (texts.some(containsIdentityPattern)) {

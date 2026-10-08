@@ -17,7 +17,8 @@ describe('reducing-balance monthly schedule', () => {
   });
   it('a zero rate is a straight split', () => {
     const s = expectOk(reducingBalanceMonthly(money(1_000n), rate(0n, 'REDUCING'), 3));
-    expect(s.instalments.map((x) => x.amount.minorUnits)).toEqual([333n, 333n, 334n]); expect(s.totalProfit.minorUnits).toBe(0n);
+    expect(s.instalments.map((x) => x.amount.minorUnits)).toEqual([333n, 333n, 334n]);
+    expect(s.totalProfit.minorUnits).toBe(0n);
   });
   it('refuses the wrong rate shape', () => {
     expect(reducingBalanceMonthly(money(1_000n), rate(100n, 'FLAT'), 3).ok).toBe(false);

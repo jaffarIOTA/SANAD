@@ -46,16 +46,28 @@ import fundAeChecklistExpansion from './tenants/sme-fund-ae/documents/sme-ae-exp
 import fundAeChecklistFounders from './tenants/sme-fund-ae/documents/sme-ae-first-time-founders.json' with { type: 'json' };
 import fundAeChecklistAdvancedTech from './tenants/sme-fund-ae/documents/sme-ae-advanced-tech.json' with { type: 'json' };
 
-import {
-  type StructureDefinition,
-  parseStructureDefinition,
-} from '../products/murabaha-scf/structures/definition.ts';
+import { type StructureDefinition, parseStructureDefinition } from '../products/murabaha-scf/structures/definition.ts';
 import { type CreditPolicy, parseCreditPolicy } from '../core/decisioning/policy.ts';
-import { type AdapterCatalogue, type RailsConfiguration, parseRailsConfiguration, restrictCatalogue } from '../core/config/rails.ts';
-import { type DeploymentProfile, type StaffIdentityConfiguration, parseStaffIdentity } from '../core/config/staff-identity.ts';
+import {
+  type AdapterCatalogue,
+  type RailsConfiguration,
+  parseRailsConfiguration,
+  restrictCatalogue,
+} from '../core/config/rails.ts';
+import {
+  type DeploymentProfile,
+  type StaffIdentityConfiguration,
+  parseStaffIdentity,
+} from '../core/config/staff-identity.ts';
 import { type OriginationPolicy, parseOriginationPolicy } from '../core/origination/policy.ts';
 import { type SmeDefinition, parseSmeDefinition } from '../core/applicant/sme-size.ts';
-import { type JurisdictionCode, type JurisdictionProfile, type TenantOnboarding, parseJurisdictionProfile, parseTenantOnboarding } from '../core/jurisdiction/profile.ts';
+import {
+  type JurisdictionCode,
+  type JurisdictionProfile,
+  type TenantOnboarding,
+  parseJurisdictionProfile,
+  parseTenantOnboarding,
+} from '../core/jurisdiction/profile.ts';
 import { type DocumentChecklist, parseDocumentChecklist } from '../core/documents/checklist.ts';
 import { type SmeAssessmentPolicy, parseSmeAssessmentPolicy } from '../core/decisioning/sme-assessment.ts';
 import { type Result, ok, reject } from '../core/kernel/result.ts';
@@ -76,12 +88,18 @@ export function loadJurisdictionProfile(code: JurisdictionCode): Result<Jurisdic
 
 /** Both profiles, parsed; a malformed profile refuses to activate anything. */
 export function loadJurisdictionProfiles(): Result<Readonly<Record<JurisdictionCode, JurisdictionProfile>>> {
-  const sa = loadJurisdictionProfile('SA'); if (!sa.ok) return sa;
-  const ae = loadJurisdictionProfile('AE'); if (!ae.ok) return ae;
+  const sa = loadJurisdictionProfile('SA');
+  if (!sa.ok) return sa;
+  const ae = loadJurisdictionProfile('AE');
+  if (!ae.ok) return ae;
   return ok({ SA: sa.value, AE: ae.value });
 }
 
-const ONBOARDING: Readonly<Record<TenantCode, unknown>> = { 'bank-a': bankATenant, 'fintech-b': fintechBTenant, 'sme-fund-ae': fundAeTenant };
+const ONBOARDING: Readonly<Record<TenantCode, unknown>> = {
+  'bank-a': bankATenant,
+  'fintech-b': fintechBTenant,
+  'sme-fund-ae': fundAeTenant,
+};
 
 /**
  * What the institution was onboarded as — its jurisdiction, licence and base
@@ -93,7 +111,10 @@ export function loadTenantOnboarding(tenant: TenantCode): Result<TenantOnboardin
   const profiles = loadJurisdictionProfiles();
   if (!profiles.ok) return profiles;
   const parsed = parseTenantOnboarding(ONBOARDING[tenant], profiles.value);
-  if (parsed.ok && parsed.value.tenantCode !== tenant) return reject('OP-DETERMINACY', 'ONBOARDING_TENANT_MISMATCH', 'The onboarding record is for a different tenant', { tenant });
+  if (parsed.ok && parsed.value.tenantCode !== tenant)
+    return reject('OP-DETERMINACY', 'ONBOARDING_TENANT_MISMATCH', 'The onboarding record is for a different tenant', {
+      tenant,
+    });
   return parsed;
 }
 
@@ -181,7 +202,14 @@ const CHECKLISTS: Readonly<Record<TenantCode, readonly unknown[]>> = {
   // One checklist per SME product variant, keyed by the variant's documentChecklistRef
   // (config/tenants/sme-fund-ae/products/catalogue.json): sme-ae-small-loan, sme-ae-working-capital,
   // sme-ae-fixed-assets, sme-ae-expansion, sme-ae-first-time-founders, sme-ae-advanced-tech.
-  'sme-fund-ae': [fundAeChecklistSmallLoan, fundAeChecklistWorkingCapital, fundAeChecklistFixedAssets, fundAeChecklistExpansion, fundAeChecklistFounders, fundAeChecklistAdvancedTech],
+  'sme-fund-ae': [
+    fundAeChecklistSmallLoan,
+    fundAeChecklistWorkingCapital,
+    fundAeChecklistFixedAssets,
+    fundAeChecklistExpansion,
+    fundAeChecklistFounders,
+    fundAeChecklistAdvancedTech,
+  ],
 };
 
 /** The documents a programme requires of this tenant's counterparties. */
@@ -191,7 +219,12 @@ export function loadDocumentChecklist(tenant: TenantCode, programmeId: string): 
     if (!parsed.ok) return parsed;
     if (parsed.value.programmeId === programmeId) return parsed;
   }
-  return reject('OP-DETERMINACY', 'DOCUMENT_CHECKLIST_NOT_FOUND', 'No document checklist is configured for that programme', { tenant, programmeId });
+  return reject(
+    'OP-DETERMINACY',
+    'DOCUMENT_CHECKLIST_NOT_FOUND',
+    'No document checklist is configured for that programme',
+    { tenant, programmeId },
+  );
 }
 
 const SME_DEFINITIONS: Readonly<Record<JurisdictionCode, unknown>> = { SA: saSmeDefinition, AE: aeSmeDefinition };
@@ -209,14 +242,22 @@ export function loadSmeDefinition(jurisdiction: JurisdictionCode = 'SA'): Result
 /** Tenants that offer the Murabaha supply-chain product (have structure definitions). Not every tenant does. */
 export const MURABAHA_TENANT_CODES: readonly TenantCode[] = TENANT_CODES.filter((t) => STRUCTURES[t].length > 0);
 /** Tenants with a Wasl-style programme document checklist. */
-export const CHECKLIST_TENANT_CODES: readonly TenantCode[] = TENANT_CODES.filter((t) => loadDocumentChecklist(t, 'prg-0001').ok);
+export const CHECKLIST_TENANT_CODES: readonly TenantCode[] = TENANT_CODES.filter(
+  (t) => loadDocumentChecklist(t, 'prg-0001').ok,
+);
 
 /** The SME credit assessment policy (knock-outs, scorecard, risk bands, route) for a tenant that has one. */
 const SME_ASSESSMENT_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = { 'sme-fund-ae': fundAeSmeAssessment };
 
 export function loadSmeAssessmentPolicy(tenant: TenantCode): Result<SmeAssessmentPolicy> {
   const raw = SME_ASSESSMENT_POLICIES[tenant];
-  if (raw === undefined) return reject('OP-DETERMINACY', 'SME_ASSESSMENT_POLICY_NOT_FOUND', 'No SME assessment policy is configured for this tenant', { tenant });
+  if (raw === undefined)
+    return reject(
+      'OP-DETERMINACY',
+      'SME_ASSESSMENT_POLICY_NOT_FOUND',
+      'No SME assessment policy is configured for this tenant',
+      { tenant },
+    );
   return parseSmeAssessmentPolicy(raw);
 }
 
@@ -224,10 +265,7 @@ export function isTenantCode(value: string): value is TenantCode {
   return (TENANT_CODES as readonly string[]).includes(value);
 }
 
-export function loadStructureDefinition(
-  tenant: TenantCode,
-  definitionId: string,
-): Result<StructureDefinition> {
+export function loadStructureDefinition(tenant: TenantCode, definitionId: string): Result<StructureDefinition> {
   for (const candidate of STRUCTURES[tenant]) {
     const parsed = parseStructureDefinition(candidate);
     if (!parsed.ok) return parsed;
@@ -242,10 +280,7 @@ export function loadStructureDefinition(
 }
 
 /** All versions of a policy, for effective-date resolution and for replay. */
-export function loadCreditPolicyVersions(
-  tenant: TenantCode,
-  policyId: string,
-): Result<readonly CreditPolicy[]> {
+export function loadCreditPolicyVersions(tenant: TenantCode, policyId: string): Result<readonly CreditPolicy[]> {
   const versions: CreditPolicy[] = [];
   for (const candidate of CREDIT_POLICIES[tenant]) {
     const parsed = parseCreditPolicy(candidate);
@@ -296,6 +331,9 @@ const OFFER_DATE_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = { 's
 /** The bounds and defaults for the dates on a business offer, for a tenant that configures them. */
 export function loadOfferDatePolicy(tenant: TenantCode): Result<OfferDatePolicy> {
   const raw = OFFER_DATE_POLICIES[tenant];
-  if (raw === undefined) return reject('OP-DETERMINACY', 'OFFER_POLICY_NOT_FOUND', 'No offer date policy is configured for this tenant', { tenant });
+  if (raw === undefined)
+    return reject('OP-DETERMINACY', 'OFFER_POLICY_NOT_FOUND', 'No offer date policy is configured for this tenant', {
+      tenant,
+    });
   return parseOfferDatePolicy(raw);
 }

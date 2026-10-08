@@ -28,9 +28,13 @@ const MIN_MASTER_BYTES = 32;
 
 /** `purpose` separates keys: a consumer session key never opens an admin session, even from one master. */
 export function deriveSealKey(masterSecret: Uint8Array, purpose: string): SealKey {
-  if (masterSecret.byteLength < MIN_MASTER_BYTES) throw new Error(`seal master secret must be at least ${String(MIN_MASTER_BYTES)} bytes`);
+  if (masterSecret.byteLength < MIN_MASTER_BYTES)
+    throw new Error(`seal master secret must be at least ${String(MIN_MASTER_BYTES)} bytes`);
   if (purpose.trim().length === 0) throw new Error('seal purpose is required');
-  return { bytes: new Uint8Array(hkdfSync('sha256', masterSecret, new Uint8Array(0), `sanad-seal-${purpose}`, KEY_BYTES)), brand: 'SealKey' };
+  return {
+    bytes: new Uint8Array(hkdfSync('sha256', masterSecret, new Uint8Array(0), `sanad-seal-${purpose}`, KEY_BYTES)),
+    brand: 'SealKey',
+  };
 }
 
 export function ephemeralMasterSecret(): Uint8Array {
@@ -41,11 +45,19 @@ const b64u = (b: Uint8Array): string => Buffer.from(b).toString('base64url');
 const unb64u = (s: string): Uint8Array => new Uint8Array(Buffer.from(s, 'base64url'));
 
 export function seal<T extends SealedPayload>(value: Sealed<T>, key: SealKey, version = 'v1'): string {
-  if (value.expiresAtEpochSeconds <= value.issuedAtEpochSeconds) throw new Error('a sealed token expires after it is issued');
+  if (value.expiresAtEpochSeconds <= value.issuedAtEpochSeconds)
+    throw new Error('a sealed token expires after it is issued');
   const iv = randomBytes(IV_BYTES);
   const cipher = createCipheriv('aes-256-gcm', key.bytes, iv, { authTagLength: 16 });
   cipher.setAAD(Buffer.from(version, 'utf8'));
-  const plain = Buffer.from(JSON.stringify({ p: value.payload, t: value.issuedAtEpochSeconds.toString(), e: value.expiresAtEpochSeconds.toString() }), 'utf8');
+  const plain = Buffer.from(
+    JSON.stringify({
+      p: value.payload,
+      t: value.issuedAtEpochSeconds.toString(),
+      e: value.expiresAtEpochSeconds.toString(),
+    }),
+    'utf8',
+  );
   const body = Buffer.concat([cipher.update(plain), cipher.final()]);
   return `${version}.${b64u(iv)}.${b64u(body)}.${b64u(cipher.getAuthTag())}`;
 }
@@ -84,7 +96,11 @@ export function open<T extends SealedPayload>(
     return INVALID;
   }
   let parsed: unknown;
-  try { parsed = JSON.parse(plain.toString('utf8')); } catch { return INVALID; }
+  try {
+    parsed = JSON.parse(plain.toString('utf8'));
+  } catch {
+    return INVALID;
+  }
   if (typeof parsed !== 'object' || parsed === null) return INVALID;
   const o = parsed as Record<string, unknown>;
   const p = o['p'];

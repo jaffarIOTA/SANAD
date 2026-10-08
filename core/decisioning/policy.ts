@@ -357,9 +357,7 @@ export function resolveEffectivePolicy(
     );
   }
   if (inForce.length > 1) {
-    const tied = inForce.filter(
-      (v) => v.effectiveFromEpochSeconds === latest.effectiveFromEpochSeconds,
-    );
+    const tied = inForce.filter((v) => v.effectiveFromEpochSeconds === latest.effectiveFromEpochSeconds);
     if (tied.length > 1) {
       return reject(
         'OP-DETERMINACY',

@@ -16,23 +16,47 @@ export interface BnplQuote extends Quote {
 }
 
 export function quoteBnpl(terms: BnplTerms, request: QuoteRequest): Result<BnplQuote> {
-  if (request.requestedAmount.minorUnits <= 0n) return reject('OP-DETERMINACY', 'REQUESTED_AMOUNT_NOT_POSITIVE', 'A basket has a positive amount');
+  if (request.requestedAmount.minorUnits <= 0n)
+    return reject('OP-DETERMINACY', 'REQUESTED_AMOUNT_NOT_POSITIVE', 'A basket has a positive amount');
   if (request.requestedAmount.currency !== 'SAR') {
-    return reject('OP-DETERMINACY', 'BNPL_CURRENCY_NOT_SAR', 'Goods and services are purchased in Saudi riyals; another currency needs a SAMA non-objection the tenant does not hold', { currency: request.requestedAmount.currency, citation: `${BNPL_RULES}, Art. 20(5)` });
+    return reject(
+      'OP-DETERMINACY',
+      'BNPL_CURRENCY_NOT_SAR',
+      'Goods and services are purchased in Saudi riyals; another currency needs a SAMA non-objection the tenant does not hold',
+      { currency: request.requestedAmount.currency, citation: `${BNPL_RULES}, Art. 20(5)` },
+    );
   }
   if (request.pricing.profitAmount !== undefined && request.pricing.profitAmount.minorUnits !== 0n) {
-    return reject('OP-DETERMINACY', 'BNPL_CONSUMER_COST_REFUSED', 'The consumer pays the basket price and nothing more (B-1)', { citation: `${BNPL_RULES}, Art. 1 (definition of BNPL activity), Art. 20(1)` });
+    return reject(
+      'OP-DETERMINACY',
+      'BNPL_CONSUMER_COST_REFUSED',
+      'The consumer pays the basket price and nothing more (B-1)',
+      { citation: `${BNPL_RULES}, Art. 1 (definition of BNPL activity), Art. 20(1)` },
+    );
   }
   const outstanding = request.affordability?.outstandingSameClass ?? money(0n);
   if (add(outstanding, request.requestedAmount).minorUnits > terms.consumerLimit.minorUnits) {
-    return reject('OP-LIMIT', 'BNPL_CONSUMER_LIMIT_EXCEEDED', 'This basket would take the consumer over the limit the tenant applies', {
-      limit: String(terms.consumerLimit.minorUnits), outstanding: String(outstanding.minorUnits), citation: terms.citation,
-    });
+    return reject(
+      'OP-LIMIT',
+      'BNPL_CONSUMER_LIMIT_EXCEEDED',
+      'This basket would take the consumer over the limit the tenant applies',
+      {
+        limit: String(terms.consumerLimit.minorUnits),
+        outstanding: String(outstanding.minorUnits),
+        citation: terms.citation,
+      },
+    );
   }
   const schedule = flatInstalments(request.requestedAmount, money(0n), terms.numberOfInstalments, terms.intervalDays);
   if (!schedule.ok) return schedule;
   const s = schedule.value;
-  const merchantFee: Fee = { code: 'MERCHANT_DISCOUNT', labelEn: 'Merchant discount', labelAr: 'خصم التاجر', amount: money(roundDiv(request.requestedAmount.minorUnits * BigInt(terms.merchantDiscountPerTenThousand), 10_000n)), when: 'UPFRONT' };
+  const merchantFee: Fee = {
+    code: 'MERCHANT_DISCOUNT',
+    labelEn: 'Merchant discount',
+    labelAr: 'خصم التاجر',
+    amount: money(roundDiv(request.requestedAmount.minorUnits * BigInt(terms.merchantDiscountPerTenThousand), 10_000n)),
+    when: 'UPFRONT',
+  };
   return ok({
     productCode: 'bnpl',
     financingAmount: request.requestedAmount,
@@ -53,7 +77,9 @@ export function discloseBnpl(q: BnplQuote): Disclosure {
     financingAmount: q.basket,
     tenorDays: q.tenorDays,
     countOfInstalments: q.schedule_.instalments.length,
-    ...(q.schedule_.instalments.every((i) => i.amount.minorUnits === q.instalmentAmount.minorUnits) ? { instalmentAmount: q.instalmentAmount } : {}),
+    ...(q.schedule_.instalments.every((i) => i.amount.minorUnits === q.instalmentAmount.minorUnits)
+      ? { instalmentAmount: q.instalmentAmount }
+      : {}),
     totalCostOfCredit: q.totalCostOfCredit,
     totalPayable: q.totalPayable,
     fees: [],

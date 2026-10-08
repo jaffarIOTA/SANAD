@@ -21,7 +21,10 @@ export interface ResolvedCatalogue {
   readonly revisionSummary?: string;
 }
 
-export async function resolveProductCatalogue(tenant: TenantCode, asOfEpochSeconds: bigint): Promise<ResolvedCatalogue> {
+export async function resolveProductCatalogue(
+  tenant: TenantCode,
+  asOfEpochSeconds: bigint,
+): Promise<ResolvedCatalogue> {
   const url = databaseUrlFromEnvironment();
   if (url === undefined) return { catalogue: loadProductCatalogue(tenant), source: 'FILE' };
   const pool = sharedPool(url);
@@ -32,5 +35,10 @@ export async function resolveProductCatalogue(tenant: TenantCode, asOfEpochSecon
   );
   const row = r.rows[0];
   if (row === undefined) return { catalogue: loadProductCatalogue(tenant), source: 'FILE' };
-  return { catalogue: parseProductCatalogue(row.payload, ISLAMIC_PRODUCT_CODES), source: 'REVISION', revisionId: row.id, revisionSummary: row.summary };
+  return {
+    catalogue: parseProductCatalogue(row.payload, ISLAMIC_PRODUCT_CODES),
+    source: 'REVISION',
+    revisionId: row.id,
+    revisionSummary: row.summary,
+  };
 }

@@ -12,5 +12,21 @@ import type { Result } from '../kernel/result.ts';
 import type { RailOutcome } from './rail.ts';
 
 export interface EmploymentVerificationPort {
-  employment(params: { readonly tenantId: string; readonly applicantRef: string; readonly consentId: string; readonly correlationId: string }): Promise<Result<RailOutcome<{ readonly employed: boolean; readonly employerRef?: string; readonly registeredSalary?: Money; readonly employedSinceEpochSeconds?: bigint; readonly retrievedAtEpochSeconds: bigint; readonly referenceId: string }>>>;
+  employment(params: {
+    readonly tenantId: string;
+    readonly applicantRef: string;
+    readonly consentId: string;
+    readonly correlationId: string;
+  }): Promise<
+    Result<
+      RailOutcome<{
+        readonly employed: boolean;
+        readonly employerRef?: string;
+        readonly registeredSalary?: Money;
+        readonly employedSinceEpochSeconds?: bigint;
+        readonly retrievedAtEpochSeconds: bigint;
+        readonly referenceId: string;
+      }>
+    >
+  >;
 }

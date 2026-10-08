@@ -98,10 +98,7 @@ export interface DocumentRenderingProvider {
   render(request: DocumentRenderRequest): Promise<Result<RenderedDocument>>;
 
   /** Compare an executed document against the version it claims (BR-F07). */
-  compareToTemplate(
-    documentId: string,
-    templateVersionId: string,
-  ): Promise<Result<DriftReport>>;
+  compareToTemplate(documentId: string, templateVersionId: string): Promise<Result<DriftReport>>;
 
   /** Long-term preservation format with validation material embedded (BR-G10). */
   archive(documentId: string, retentionYears: number): Promise<Result<{ readonly archiveUri: string }>>;

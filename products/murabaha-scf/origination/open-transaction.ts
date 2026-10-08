@@ -27,10 +27,7 @@ import type { Draft, TransactionCore } from '../sequencing/state.ts';
  * parameter that says "skip to". A checker's signature authorises opening a
  * file, not executing a sale.
  */
-export function openTransaction(
-  request: Approved,
-  core: TransactionCore,
-): Result<Draft> {
+export function openTransaction(request: Approved, core: TransactionCore): Result<Draft> {
   if (core.tenantId !== request.core.tenantId) {
     return reject(
       'OP-DETERMINACY',

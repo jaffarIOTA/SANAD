@@ -16,18 +16,11 @@ import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import {
-  BASE_PATH,
-  createService,
-  developmentTimestamps,
-} from '../../services/origination/src/server.ts';
+import { BASE_PATH, createService, developmentTimestamps } from '../../services/origination/src/server.ts';
 import { inMemoryIdempotencyStore } from '../../services/origination/src/idempotency.ts';
 import { inMemoryRequestRepository } from '../../services/origination/src/repository.ts';
 import { createHealthService } from '../../services/origination/src/health.ts';
-import type {
-  CredentialRegistry,
-  PartnerPrincipal,
-} from '../../services/origination/src/principal.ts';
+import type { CredentialRegistry, PartnerPrincipal } from '../../services/origination/src/principal.ts';
 import { createHash } from 'node:crypto';
 
 // -- Fixtures -----------------------------------------------------------------
@@ -109,7 +102,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await new Promise<void>((resolve) => server.close(() => { resolve(); }));
+  await new Promise<void>((resolve) =>
+    server.close(() => {
+      resolve();
+    }),
+  );
 });
 
 function validBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -545,7 +542,7 @@ describe('health and readiness', () => {
     const body = await probe.text();
 
     expect(body.trim()).toBe('ok');
-    expect(body).not.toMatch(/\d+\.\d+\.\d+/);           // no version
+    expect(body).not.toMatch(/\d+\.\d+\.\d+/); // no version
     expect(probe.headers.get('content-type')).toContain('text/plain');
   });
 
@@ -576,7 +573,11 @@ describe('health and readiness', () => {
     // ...while liveness stays up, so the pod is drained and not restarted.
     expect((await fetch(`${base}/healthz`)).status).toBe(200);
 
-    await new Promise<void>((resolve) => drainable.close(() => { resolve(); }));
+    await new Promise<void>((resolve) =>
+      drainable.close(() => {
+        resolve();
+      }),
+    );
   });
 });
 
@@ -653,9 +654,7 @@ describe('listing', () => {
     });
 
     const listed = await call('GET', '/requests', { idempotencyKey: null });
-    const references = listed.body.items.map(
-      (i: { partnerReference?: string }) => i.partnerReference,
-    );
+    const references = listed.body.items.map((i: { partnerReference?: string }) => i.partnerReference);
     expect(references).not.toContain('theirs');
   });
 

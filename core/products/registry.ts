@@ -11,7 +11,11 @@
 import { type Result, ok, reject } from '../kernel/result.ts';
 import type { AnyProductModule } from './module.ts';
 
-export const ISLAMIC_PRODUCT_CODES: ReadonlySet<string> = new Set(['murabaha-scf', 'tawarruq-personal', 'sme-term-islamic']);
+export const ISLAMIC_PRODUCT_CODES: ReadonlySet<string> = new Set([
+  'murabaha-scf',
+  'tawarruq-personal',
+  'sme-term-islamic',
+]);
 
 /**
  * Products booked as account postings rather than under a core banking
@@ -28,10 +32,10 @@ export class ProductRegistry {
   register(module: AnyProductModule): this {
     const code = module.descriptor.code;
     if (this.#modules.has(code)) throw new Error(`product module registered twice: ${code}`);
-    if (module.descriptor.family === 'ISLAMIC' !== ISLAMIC_PRODUCT_CODES.has(code)) {
+    if ((module.descriptor.family === 'ISLAMIC') !== ISLAMIC_PRODUCT_CODES.has(code)) {
       throw new Error(`product ${code}: family and the Islamic product list disagree`);
     }
-    if (module.descriptor.bookingShape === 'ACCOUNT_POSTINGS' !== ACCOUNT_POSTED_PRODUCT_CODES.has(code)) {
+    if ((module.descriptor.bookingShape === 'ACCOUNT_POSTINGS') !== ACCOUNT_POSTED_PRODUCT_CODES.has(code)) {
       throw new Error(`product ${code}: booking shape and the account-posted product list disagree`);
     }
     this.#modules.set(code, module);
@@ -40,7 +44,11 @@ export class ProductRegistry {
 
   find(code: string): Result<AnyProductModule> {
     const m = this.#modules.get(code);
-    return m === undefined ? reject('OP-DETERMINACY', 'PRODUCT_MODULE_UNKNOWN', 'No product module of that code is registered', { productCode: code }) : ok(m);
+    return m === undefined
+      ? reject('OP-DETERMINACY', 'PRODUCT_MODULE_UNKNOWN', 'No product module of that code is registered', {
+          productCode: code,
+        })
+      : ok(m);
   }
 
   codes(): readonly string[] {

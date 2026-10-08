@@ -62,9 +62,7 @@ describe('formatMinorUnits — no floating point', () => {
 
 describe('<Money> discloses cost, profit and total together (SH-15)', () => {
   it('renders all three amounts in English', () => {
-    const html = renderToStaticMarkup(
-      <Money pricing={pricing(100_000n, 2_500n)} locale="en-SA" labels={LABELS_EN} />,
-    );
+    const html = renderToStaticMarkup(<Money pricing={pricing(100_000n, 2_500n)} locale="en-SA" labels={LABELS_EN} />);
     expect(html).toContain('1,000.00');
     expect(html).toContain('25.00');
     expect(html).toContain('1,025.00');
@@ -74,9 +72,7 @@ describe('<Money> discloses cost, profit and total together (SH-15)', () => {
   });
 
   it('renders all three amounts in Arabic', () => {
-    const html = renderToStaticMarkup(
-      <Money pricing={pricing(100_000n, 2_500n)} locale="ar-SA" labels={LABELS_AR} />,
-    );
+    const html = renderToStaticMarkup(<Money pricing={pricing(100_000n, 2_500n)} locale="ar-SA" labels={LABELS_AR} />);
     expect(html).toContain('التكلفة');
     expect(html).toContain('الربح');
     // Arabic-Indic, not Latin digits.
@@ -85,27 +81,21 @@ describe('<Money> discloses cost, profit and total together (SH-15)', () => {
   });
 
   it('isolates each amount so Arabic text cannot reorder it', () => {
-    const html = renderToStaticMarkup(
-      <Money pricing={pricing(100_000n, 2_500n)} locale="ar-SA" labels={LABELS_AR} />,
-    );
+    const html = renderToStaticMarkup(<Money pricing={pricing(100_000n, 2_500n)} locale="ar-SA" labels={LABELS_AR} />);
     // Three amounts, three <bdi> elements. Without them a Latin currency code
     // beside an Arabic paragraph reorders on screen.
     expect(html.match(/<bdi>/g)).toHaveLength(3);
   });
 
   it('shows the total as the sum it is, never as a separate figure', () => {
-    const html = renderToStaticMarkup(
-      <Money pricing={pricing(4_999_999n, 1n)} locale="en-SA" labels={LABELS_EN} />,
-    );
+    const html = renderToStaticMarkup(<Money pricing={pricing(4_999_999n, 1n)} locale="en-SA" labels={LABELS_EN} />);
     expect(html).toContain('49,999.99');
     expect(html).toContain('0.01');
     expect(html).toContain('50,000.00');
   });
 
   it('names an explicit currency beside every amount', () => {
-    const html = renderToStaticMarkup(
-      <Money pricing={pricing(100_000n, 2_500n)} locale="en-SA" labels={LABELS_EN} />,
-    );
+    const html = renderToStaticMarkup(<Money pricing={pricing(100_000n, 2_500n)} locale="en-SA" labels={LABELS_EN} />);
     expect(html.match(/SAR/g)).toHaveLength(3);
   });
 });

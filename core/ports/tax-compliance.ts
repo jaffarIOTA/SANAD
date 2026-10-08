@@ -11,5 +11,18 @@ import type { Result } from '../kernel/result.ts';
 import type { RailOutcome } from './rail.ts';
 
 export interface TaxCompliancePort {
-  certificateStatus(params: { readonly tenantId: string; readonly crNumber: string; readonly correlationId: string }): Promise<Result<RailOutcome<{ readonly status: 'VALID' | 'EXPIRED' | 'NOT_FOUND' | 'SUSPENDED'; readonly certificateRef?: string; readonly validUntilEpochSeconds?: bigint; readonly retrievedAtEpochSeconds: bigint }>>>;
+  certificateStatus(params: {
+    readonly tenantId: string;
+    readonly crNumber: string;
+    readonly correlationId: string;
+  }): Promise<
+    Result<
+      RailOutcome<{
+        readonly status: 'VALID' | 'EXPIRED' | 'NOT_FOUND' | 'SUSPENDED';
+        readonly certificateRef?: string;
+        readonly validUntilEpochSeconds?: bigint;
+        readonly retrievedAtEpochSeconds: bigint;
+      }>
+    >
+  >;
 }
