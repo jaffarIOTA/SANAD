@@ -19,6 +19,9 @@ for. It does make the questions a great deal sharper.
 
 ### Finding 1 — the Loan module derives and persists a rate. This is blocking.
 
+**Confirmed in the sandbox on 2026-10-08** (see "Steps A.2–A.5" below): `interestRate 25`,
+`apr 27.91` and an interest-by-days schedule on an offer that supplied no rate.
+
 **Upgraded from "likely blocking" on review of the API cookbooks.** The platform does not
 merely accept a rate; supply none and it computes one, and writes it onto the contract.
 
@@ -400,13 +403,75 @@ interest fields) is what settles finding 1, and it writes test offers and contra
 this shared sandbox. The raw response is kept under `verification/findings/` and not
 committed.
 
+## Steps A.2–A.5 — 2026-10-08
+
+Run from `adapters/tuum/verification/offer-run.sh` against `TAWRROUQ`, the riyal product
+whose configuration is closest to a personal-finance shape (`GET /api/v2/loan-products/TAWRROUQ`:
+amount 500–50,000 SAR, period 2–40 months, `ANNUITY`, `FIX`, ACT/365, `priceRuleCode FIXED`,
+`applicationReviewRequired true`, one pricing component `INT` with price-list value **25**).
+A synthetic person, a servicing account and an offer were written into the shared sandbox
+under tenant `MB`; the raw responses are under `verification/findings/`, not committed.
+
+**What it took to get an offer accepted.** Each refusal is a property of this sandbox's
+product set-up, recorded because a Sanad booking would hit the same wall:
+
+| Attempt | Sandbox answer | What it means |
+|---|---|---|
+| `loanPeriod` and `numberOfPayments` together | `err.loanPeriodAndNumberOfPaymentsNotAllowedTogether` | Send one or the other. |
+| Monthly instalments (any `paymentDay`, with or without `invoiceDay`) | `err.invoiceTermDaysTooLong` on `TAWRROUQ`; `err.minBillingPeriodDaysViolation` on `RETAIL FINANCE SAR` and `SME FINANCE SAR RAG` | All four riyal products carry `invoiceTermDays` / `minBillingPeriodDays` of 30 (28 on the Ragworks two), which a calendar month can be shorter than. **No riyal product in this sandbox accepts a monthly schedule as configured.** A BNPL product needs its own product set-up on the tenant. |
+| `paymentFrequency 2, MONTH` | accepted | The workaround used for the run; it is not a shape Sanad would sell. |
+| Offer with an explicit `paymentInstructions[]` to an IBAN, no servicing account | `err.paymentInstructionBeneficiaryAccountIdMissing` | Disbursement is to a Tuum account: `servicingAccountId` is required in practice. |
+| `POST account-api /api/v4/persons/{personId}/accounts` with type and currency only | `err.accountCustomerGroupInvalid`, then `err.accountPricelistTypeCodeInvalid` | An account needs a `customerGroupCode` (`GET /api/v1/accounts/customer-group-codes`) and a `priceListTypeCode` valid for that group (`GET /api/v1/price-lists-with-prices`). `P_RESIDENT` + `RETAIL_CURR_PRICE_LIST` opened an `ACTIVE` currency account. |
+
+**The answer to A.4 — yes, it derives and persists a rate.** The offer supplied no
+`interestRate`, no `apr`, no `interestTypeCode`, and `repaymentMoney` of 5,250 against
+10,000 financed (a fixed 500 of profit). The sandbox returned:
+
+| Where | `interestRate` | `apr` | `interestTypeCode` | `scheduleTypeCode` |
+|---|---|---|---|---|
+| `POST …/offers` (status `PREPARING`) | 25 | 27.91 | `FIX` | `ANNUITY` |
+| `POST …/offers/{id}/accept` (status `ACCEPTED`) | 25 | 27.91 | `FIX` | `ANNUITY` |
+| `GET /api/v1/versions/{firstVersionId}` (status `ACTIVE`) | 25 | 27.91 | — | `ANNUITY` |
+| `GET /api/v2/versions/{id}/components` | `INT` component: `rate 25`, `rateTypeCode FIX`, ACT/365; `PRI` initial 10,000; `ALIM` | | | |
+
+The 25 is the product price list's `INT` value, applied because none was supplied. The
+schedule it produced is interest on the reducing balance by days, not the fixed profit we
+sent:
+
+| Payment date | Principal | Interest | Days |
+|---|---|---|---|
+| 2026-11-08 | 5,023.97 | 226.03 | 33 |
+| 2027-01-08 | 4,976.03 | 207.90 | 61 |
+
+Total payable 10,433.93, not 10,500. `repaymentMoney` shaped the first instalment (5,250)
+and the second is whatever the balance came to. The interest for 33 days on 10,000 at 25%
+ACT/365 is exactly 226.03, so the figure is computed from the rate, and `apr 27.91` is
+Tuum's own effective-rate computation over those flows. `GET /api/v1/contracts/{headerId}/interests`
+was still empty (no day change was forced; part B was not run). `applicationReviewRequired`
+did not stop acceptance through the API.
+
+**What this settles.** Finding 1 is now confirmed in the sandbox, not only in the
+documentation: the Loan module prices by rate and days, re-derives the cost from the rate,
+and persists `interestRate` and `apr` on the offer, the acceptance and the contract
+version. A Murabaha deferred price cannot be booked under it as a fixed amount; that is the
+case for `products/murabaha-scf/` keeping the schedule and the profit in Sanad, with Tuum
+holding accounts, postings and payments (R-01, answered: Tuum is the system of record for
+the booked facility, so for Murabaha the booking must be account-shaped, not loan-shaped).
+For rate-priced products (Tawarruq personal, BNPL, conventional term) the Loan module is
+usable, with two conditions: Sanad passes the rate it priced explicitly and verifies the
+echoed `interestRate` against it, and the APR Sanad discloses is the one from
+`core/pricing/apr.ts`, reconciled against Tuum's `apr` but never replaced by it.
+
+**Not yet tested, next on the sandbox list:** whether an `interestRate` supplied on the
+offer overrides the price-list value; part B (forced day change and `accrued-interest`);
+part C (top-up refusal, `REMINDER_FEE` removal); and a product configured for monthly
+instalments, which needs Tuum to set one up on the tenant.
+
 ## What this does not settle
 
-**OI-02 remains open.** Knowing how to authenticate says nothing about
-whether Tuum should be the system of record for the contract, the schedule and
-the profit amount. Tuum's own published example for accepting an offer returns
-proportion-shaped fields on the created contract, and under SH-18 the Board
-audits the servicing platform's records. See ClaudeRecommendations.md R-01,
-and E-19 for a second, independent argument reaching the same recommendation.
-
-Authentication is needed either way, which is why it was worth building now.
+The commercial and configuration questions above, and the shape of a BNPL product on
+Tuum: the four riyal products are another partner's test products, and a Sanad tenant will
+need its own. Under SH-18 the Board audits the servicing platform's records, so for
+Murabaha the records Tuum holds must be account postings that carry no rate. See
+ClaudeRecommendations.md R-01, and E-19 for a second, independent argument reaching the
+same recommendation.

@@ -699,7 +699,28 @@ Ans:
 
 # B. Decisions I need from you
 
-## R-01 — Tuum: what is the system of record for the contract? · **Blocking**
+## R-01 — Tuum: what is the system of record for the contract? · **Blocking** · ✅ **Answered 2026-10-08**
+
+Ans: **Tuum is the system of record** for the contract, the schedule and the profit
+amount after booking (product owner, 2026-10-08). Sanad remains the system of record for
+the origination: the application, the decision, the offer as disclosed and the
+acceptance. Consequences: every booked facility stores Tuum's contract reference; the
+adapter's reconciliation check (README, finding 2) becomes a standing control rather than
+a sandbox exercise; and the sandbox run's question — whether Tuum derives and displays a
+rate on a Murabaha or Tawarruq contract — is now a question about the Board's own system
+of record, so it is run before any Islamic product is booked through the Loan module. The
+Loan module's use for the Islamic products stays open (product owner, same date).
+
+**Sandbox result, same day (README, "Steps A.2–A.5").** An offer under the sandbox's
+`TAWRROUQ` product with no rate supplied came back with `interestRate 25` and `apr 27.91`
+on the offer, the acceptance and the contract version, and a schedule of interest by days
+on the reducing balance (total 10,433.93 against the fixed 10,500 sent). The Loan module
+prices by rate; a fixed Murabaha price cannot be booked under it as fixed. So the answer
+splits by product: Murabaha SCF books as account postings on Tuum with the schedule and
+profit held in Sanad; rate-priced products (Tawarruq personal, BNPL, conventional term)
+can use the Loan module with Sanad passing its own rate and reconciling the echo. Still
+open: whether a supplied rate overrides the product price list, and a product configured
+for monthly instalments, which the shared sandbox does not have.
 
 The largest open architectural question, recorded as OI-02.
 

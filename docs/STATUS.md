@@ -148,10 +148,15 @@ Ordered by what it costs to guess wrong.
   day with no usage. Everything is built and validated; **nothing can be
   published until this clears.** Ticket text is in
   [gateway/ibm/INSTANCE.md](../gateway/ibm/INSTANCE.md).
-- **Tuum sandbox credentials** are unverified. The authentication client is
-  built and tested and there is a curl runbook; the likely cause of the
-  earlier failure was the host (`sandbox-partners`, not `sandbox`) and the
-  endpoint (employee, not person).
+- **Tuum sandbox: verified 2026-10-08.** Authentication from vault credentials,
+  the product list (76 products, four in riyals, all another partner's), and
+  steps A.2–A.5 of OI-02 have all run. The sandbox derived `interestRate 25`
+  and `apr 27.91` on an offer that supplied no rate and re-derived the cost by
+  days, so finding 1 is confirmed against the live platform. No riyal product
+  in the sandbox accepts a monthly schedule as configured; a Sanad tenant
+  needs its own product set-up from Tuum before BNPL or Tawarruq personal can
+  be booked through the Loan module. Record in
+  [adapters/tuum/README.md](../adapters/tuum/README.md).
 
 ### Buildable now, nothing blocking
 
@@ -325,10 +330,13 @@ Worth stating plainly, because a green test suite can flatter.
 - **There is no timestamping authority.** A development substitute produces
   attestations, clearly named so it is obvious in a diff. Nothing it produces
   may feed a gate in a deployed environment.
-- **No adapter has ever made a live call.** Tuum and the document platform are
-  ports with fixture implementations. The HTTP transport is unwritten — and
-  when it is written, it must honour the bank's forward proxy, which Node's
-  `fetch` does not do by default (E-18).
+- **One adapter has made live calls, from a shell runbook, not from the
+  adapter.** Tuum's sandbox has been authenticated, listed and booked against
+  (above) through `adapters/tuum/verification/*.sh`; the TypeScript HTTP
+  transport for Tuum is still unwritten, and the document platform's live
+  transport has only been exercised in evaluation mode. When the transports
+  are written they must honour the bank's forward proxy, which Node's `fetch`
+  does not do by default (E-18).
 - **Nothing is deployed anywhere.**
 - **3 of 40 modules are live.** 31 are specified and unbuilt, 5 blocked on
   answers above, 1 excluded by the specification. The operator navigation
