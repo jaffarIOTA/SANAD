@@ -37,7 +37,8 @@ import {
   wholeDays,
 } from '../../server/business-dashboard.ts';
 import { developmentAttestation } from '../../server/store.ts';
-import { workbenchJurisdiction } from '../../server/jurisdiction.ts';
+import { staffJurisdiction } from '../../server/jurisdiction.ts';
+import { pageStaff } from '../../server/session.ts';
 import { Chip, type Formatters, Id, TH, TH_END, formatters, stageTitle } from './business/ui.tsx';
 
 /** Which of an application's screens a card opens. */
@@ -55,7 +56,9 @@ export async function PipelineDashboard({
   readonly segment: string;
   readonly arabic: boolean;
 }): Promise<ReactElement> {
-  const j = await workbenchJurisdiction();
+  // The signed-in person's own institution, and only if the deployment has it active.
+  const staff = await pageStaff(segment);
+  const j = await staffJurisdiction(staff.tenantId);
   const f = formatters(arabic, j.currency);
   const { t } = f;
   if (j.tenant === undefined) {

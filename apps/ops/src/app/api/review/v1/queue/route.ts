@@ -26,7 +26,8 @@ export async function GET(request: Request): Promise<Response> {
   await syncStore();
   // Oldest first: a work queue, not a feed. Nothing starves.
   const items = listRequests()
-    .filter((r) => states.includes(r.state))
+    // The caller's own institution only (SEC-TM08).
+    .filter((r) => r.tenantId === staff.tenantId && states.includes(r.state))
     .sort((a, b) => (a.raisedAtEpochSeconds < b.raisedAtEpochSeconds ? -1 : 1))
     .map(toWire);
   return json(200, { items }, correlationId);

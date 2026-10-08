@@ -40,7 +40,6 @@ import {
   withdrawApplicationAction,
 } from '../../../../server/business-actions.ts';
 import {
-  BUSINESS_ROLES,
   type BusinessDocument,
   checklistStatus,
   figureReadiness,
@@ -49,7 +48,9 @@ import {
   syncBusiness,
 } from '../../../../server/business.ts';
 import { type DocumentGroup, documentGroup, formatFact, formatPercent } from '../../../../server/business-dashboard.ts';
-import { workbenchJurisdiction } from '../../../../server/jurisdiction.ts';
+import { staffJurisdiction } from '../../../../server/jurisdiction.ts';
+import { pageStaff } from '../../../../server/session.ts';
+import { Gate } from '../../Gate.tsx';
 import {
   ApplicationShell,
   BTN_PRIMARY,
@@ -165,7 +166,9 @@ export default async function LoanApplicationPage({
   const locale = localeFromSegment(segment);
   if (locale === undefined) notFound();
   const applicationId = decodeURIComponent(rawId);
-  const j = await workbenchJurisdiction(query.tenant);
+  // The signed-in person's own institution, and only if the deployment has it active.
+  const staff = await pageStaff(segment);
+  const j = await staffJurisdiction(staff.tenantId);
   if (j.tenant === undefined) notFound();
   await syncBusiness(j.tenant);
   const view = await getApplication(j.tenant, applicationId);
@@ -322,14 +325,13 @@ export default async function LoanApplicationPage({
         note={
           f.arabic ? (
             <>
-              لا يُستخدم الرقم إلا بعد التحقق منه. يتحقق الموظف (<Id>{BUSINESS_ROLES.officer}</Id>) من الأرقام المقروءة،
-              ويتحقق المراجِع (<Id>{BUSINESS_ROLES.checker}</Id>) من الرقم المُدخل يدوياً — لا من أدخله.
+              لا يُستخدم الرقم إلا بعد التحقق منه. يتحقق منه مراجِع — شخص غير من أدخله (مبدأ العيون الأربع). أنت (
+              <Id>{staff.principalId}</Id>).
             </>
           ) : (
             <>
-              Each figure is used only once verified. Read figures are verified by the officer (
-              <Id>{BUSINESS_ROLES.officer}</Id>); a keyed figure by the checker (<Id>{BUSINESS_ROLES.checker}</Id>) —
-              never by whoever keyed it.
+              Each figure is used only once verified, by a checker — never by whoever keyed it (four eyes). You are
+              signed in as <Id>{staff.principalId}</Id>.
             </>
           )
         }
@@ -400,32 +402,39 @@ export default async function LoanApplicationPage({
                           <Id className="text-[11px] text-ink-quiet">{verified.verifiedBy}</Id>
                         </span>
                       ) : open ? (
-                        <form action={verifyFigureAction} className="flex flex-wrap items-center gap-2">
-                          <FormContext segment={segment} applicationId={a.applicationId} />
-                          <input type="hidden" name="figureId" value={figureId} />
-                          <label className="min-w-0 flex-1 basis-[120px]">
-                            <span className="sr-only">
-                              {t('Corrected amount (optional)', 'المبلغ المصحح (اختياري)')}
-                            </span>
-                            <input
-                              name="correctedAmount"
-                              inputMode="decimal"
-                              placeholder={t('Correct (optional)', 'تصحيح (اختياري)')}
-                              className={INPUT}
-                            />
-                          </label>
-                          <button type="submit" className={BTN_SMALL}>
-                            {figure.sourceKind === 'OFFICER_ENTRY'
-                              ? t('Verify as checker', 'تحقق كمراجِع')
-                              : t('Verify', 'تحقق')}
-                          </button>
-                          {figure.sourceKind === 'OFFICER_ENTRY' ? (
-                            <span className="w-full text-[11px] text-ink-quiet">
-                              {t('Keyed by', 'أدخله')} <Id>{figure.enteredBy ?? '—'}</Id>
-                              {t('; four eyes', '؛ مبدأ العيون الأربع')}
-                            </span>
-                          ) : null}
-                        </form>
+                        <Gate
+                          staff={staff}
+                          act="BUSINESS_VERIFY"
+                          arabic={f.arabic}
+                          ownWork={figure.enteredBy === staff.principalId}
+                        >
+                          <form action={verifyFigureAction} className="flex flex-wrap items-center gap-2">
+                            <FormContext segment={segment} applicationId={a.applicationId} />
+                            <input type="hidden" name="figureId" value={figureId} />
+                            <label className="min-w-0 flex-1 basis-[120px]">
+                              <span className="sr-only">
+                                {t('Corrected amount (optional)', 'المبلغ المصحح (اختياري)')}
+                              </span>
+                              <input
+                                name="correctedAmount"
+                                inputMode="decimal"
+                                placeholder={t('Correct (optional)', 'تصحيح (اختياري)')}
+                                className={INPUT}
+                              />
+                            </label>
+                            <button type="submit" className={BTN_SMALL}>
+                              {figure.sourceKind === 'OFFICER_ENTRY'
+                                ? t('Verify as checker', 'تحقق كمراجِع')
+                                : t('Verify', 'تحقق')}
+                            </button>
+                            {figure.sourceKind === 'OFFICER_ENTRY' ? (
+                              <span className="w-full text-[11px] text-ink-quiet">
+                                {t('Keyed by', 'أدخله')} <Id>{figure.enteredBy ?? '—'}</Id>
+                                {t('; four eyes', '؛ مبدأ العيون الأربع')}
+                              </span>
+                            ) : null}
+                          </form>
+                        </Gate>
                       ) : (
                         <Chip tone="neutral">{t('Not verified', 'لم يُتحقق منه')}</Chip>
                       )}
@@ -449,40 +458,42 @@ export default async function LoanApplicationPage({
             <summary className="cursor-pointer text-[13px] font-semibold text-brand">
               {t('Key or replace a figure', 'إدخال رقم أو استبداله')}
             </summary>
-            <form action={proposeFigureAction} className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <FormContext segment={segment} applicationId={a.applicationId} />
-              <label className="text-[12px] text-ink-quiet">
-                {t('Figure', 'البند')}
-                <select name="metric" className={`${INPUT} mt-1`}>
-                  {Object.keys(METRIC_LABELS).map((m) => (
-                    <option key={m} value={m}>
-                      {label(METRIC_LABELS, m, f)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-[12px] text-ink-quiet">
-                {t('Period', 'الفترة')}
-                <input name="periodLabel" required placeholder="FY2025" className={`${INPUT} mt-1`} />
-              </label>
-              <label className="text-[12px] text-ink-quiet">
-                {t(`Amount (${f.cur})`, `المبلغ (${f.cur})`)}
-                <input name="amount" required inputMode="decimal" placeholder="0.00" className={`${INPUT} mt-1`} />
-              </label>
-              <label className="text-[12px] text-ink-quiet">
-                {t('Source document or rail reference', 'مرجع المستند أو الربط')}
-                <input name="sourceRef" required className={`${INPUT} mt-1`} />
-              </label>
-              <div className="flex items-end gap-3">
-                <label className="flex items-center gap-1.5 pb-2 text-[12px] text-ink-quiet">
-                  <input type="checkbox" name="negative" value="true" />
-                  {t('Loss', 'خسارة')}
+            <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+              <form action={proposeFigureAction} className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <FormContext segment={segment} applicationId={a.applicationId} />
+                <label className="text-[12px] text-ink-quiet">
+                  {t('Figure', 'البند')}
+                  <select name="metric" className={`${INPUT} mt-1`}>
+                    {Object.keys(METRIC_LABELS).map((m) => (
+                      <option key={m} value={m}>
+                        {label(METRIC_LABELS, m, f)}
+                      </option>
+                    ))}
+                  </select>
                 </label>
-                <button type="submit" className={BTN_SMALL}>
-                  {t('Record', 'تسجيل')}
-                </button>
-              </div>
-            </form>
+                <label className="text-[12px] text-ink-quiet">
+                  {t('Period', 'الفترة')}
+                  <input name="periodLabel" required placeholder="FY2025" className={`${INPUT} mt-1`} />
+                </label>
+                <label className="text-[12px] text-ink-quiet">
+                  {t(`Amount (${f.cur})`, `المبلغ (${f.cur})`)}
+                  <input name="amount" required inputMode="decimal" placeholder="0.00" className={`${INPUT} mt-1`} />
+                </label>
+                <label className="text-[12px] text-ink-quiet">
+                  {t('Source document or rail reference', 'مرجع المستند أو الربط')}
+                  <input name="sourceRef" required className={`${INPUT} mt-1`} />
+                </label>
+                <div className="flex items-end gap-3">
+                  <label className="flex items-center gap-1.5 pb-2 text-[12px] text-ink-quiet">
+                    <input type="checkbox" name="negative" value="true" />
+                    {t('Loss', 'خسارة')}
+                  </label>
+                  <button type="submit" className={BTN_SMALL}>
+                    {t('Record', 'تسجيل')}
+                  </button>
+                </div>
+              </form>
+            </Gate>
             <p className="mt-2 text-[11px] text-ink-quiet">
               {t(
                 'A keyed figure supersedes the current one for that line and is verified by the checker.',
@@ -638,49 +649,58 @@ export default async function LoanApplicationPage({
                             <DocumentProvenance held={held} f={f} />
                           </span>
                           {open && r.status === 'PENDING' && held !== undefined ? (
-                            <form
-                              action={validateDocumentAction}
-                              className="flex w-full flex-wrap items-center gap-2 sm:w-auto"
-                              data-document-validation
+                            <Gate
+                              staff={staff}
+                              act="BUSINESS_VERIFY"
+                              arabic={f.arabic}
+                              ownWork={held.presentedBy === staff.principalId}
                             >
-                              <FormContext segment={segment} applicationId={a.applicationId} />
-                              <input type="hidden" name="documentRef" value={held.documentRef} />
-                              <span className="text-[11px] text-ink-quiet">
-                                {t('As the checker', 'بصفة المراجِع')} <Id>{BUSINESS_ROLES.checker}</Id>
-                              </span>
-                              <button type="submit" name="decision" value="VALID" className={BTN_SMALL}>
-                                {t('Valid', 'صالح')}
-                              </button>
-                              <button
-                                type="submit"
-                                name="decision"
-                                value="INVALID"
-                                className="press inline-flex h-8 items-center justify-center gap-1 rounded-tile border border-blocked/50 bg-surface px-3 text-[13px] font-semibold text-blocked hover:bg-blocked-wash"
+                              <form
+                                action={validateDocumentAction}
+                                className="flex w-full flex-wrap items-center gap-2 sm:w-auto"
+                                data-document-validation
                               >
-                                {t('Invalid', 'غير صالح')}
-                              </button>
-                            </form>
+                                <FormContext segment={segment} applicationId={a.applicationId} />
+                                <input type="hidden" name="documentRef" value={held.documentRef} />
+                                <span className="text-[11px] text-ink-quiet">
+                                  {t('As the checker', 'بصفة المراجِع')} <Id>{staff.principalId}</Id>
+                                </span>
+                                <button type="submit" name="decision" value="VALID" className={BTN_SMALL}>
+                                  {t('Valid', 'صالح')}
+                                </button>
+                                <button
+                                  type="submit"
+                                  name="decision"
+                                  value="INVALID"
+                                  className="press inline-flex h-8 items-center justify-center gap-1 rounded-tile border border-blocked/50 bg-surface px-3 text-[13px] font-semibold text-blocked hover:bg-blocked-wash"
+                                >
+                                  {t('Invalid', 'غير صالح')}
+                                </button>
+                              </form>
+                            </Gate>
                           ) : null}
                           {open && r.status !== 'PRESENT' && r.status !== 'PENDING' ? (
-                            <form
-                              action={presentDocumentAction}
-                              className="flex w-full flex-wrap items-center gap-2 sm:w-auto"
-                            >
-                              <FormContext segment={segment} applicationId={a.applicationId} />
-                              <input type="hidden" name="documentType" value={r.item.documentType} />
-                              <label className="min-w-0 flex-1 sm:w-[220px] sm:flex-none">
-                                <span className="sr-only">{t('Document reference', 'مرجع المستند')}</span>
-                                <input
-                                  name="documentRef"
-                                  required
-                                  placeholder={t('Document reference', 'مرجع المستند')}
-                                  className={INPUT}
-                                />
-                              </label>
-                              <button type="submit" className={BTN_SMALL}>
-                                {t('Attach', 'إرفاق')}
-                              </button>
-                            </form>
+                            <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+                              <form
+                                action={presentDocumentAction}
+                                className="flex w-full flex-wrap items-center gap-2 sm:w-auto"
+                              >
+                                <FormContext segment={segment} applicationId={a.applicationId} />
+                                <input type="hidden" name="documentType" value={r.item.documentType} />
+                                <label className="min-w-0 flex-1 sm:w-[220px] sm:flex-none">
+                                  <span className="sr-only">{t('Document reference', 'مرجع المستند')}</span>
+                                  <input
+                                    name="documentRef"
+                                    required
+                                    placeholder={t('Document reference', 'مرجع المستند')}
+                                    className={INPUT}
+                                  />
+                                </label>
+                                <button type="submit" className={BTN_SMALL}>
+                                  {t('Attach', 'إرفاق')}
+                                </button>
+                              </form>
+                            </Gate>
                           ) : null}
                         </li>
                       );
@@ -702,7 +722,8 @@ export default async function LoanApplicationPage({
           <p className="mt-0.5 text-[13px] text-ink-quiet">
             {open ? (
               <>
-                {t('Acting as the officer', 'بصفة الموظف')} (<Id>{BUSINESS_ROLES.officer}</Id>).{' '}
+                {t('Submitted by the officer who is signed in', 'يحيله الموظف الذي سجّل الدخول')} (
+                <Id>{staff.principalId}</Id>).{' '}
                 {t(
                   'Scoring runs on the verified figures and the bureau snapshot.',
                   'يجري التقييم على الأرقام المتحقق منها ونتيجة المكتب الائتماني.',
@@ -723,12 +744,14 @@ export default async function LoanApplicationPage({
         </div>
         {open ? (
           ready ? (
-            <form action={submitForAssessmentAction}>
-              <FormContext segment={segment} applicationId={a.applicationId} screen="assessment" />
-              <button type="submit" className={BTN_PRIMARY}>
-                {t('Submit to Credit Assessment', 'إحالة إلى التقييم الائتماني')}
-              </button>
-            </form>
+            <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+              <form action={submitForAssessmentAction}>
+                <FormContext segment={segment} applicationId={a.applicationId} screen="assessment" />
+                <button type="submit" className={BTN_PRIMARY}>
+                  {t('Submit to Credit Assessment', 'إحالة إلى التقييم الائتماني')}
+                </button>
+              </form>
+            </Gate>
           ) : (
             <DisabledAction
               label={t('Submit to Credit Assessment', 'إحالة إلى التقييم الائتماني')}
@@ -768,19 +791,21 @@ export default async function LoanApplicationPage({
           <summary className="cursor-pointer text-[13px] font-semibold text-ink-quiet">
             {t('Withdraw this application', 'سحب هذا الطلب')}
           </summary>
-          <form action={withdrawApplicationAction} className="mt-3 flex flex-wrap items-end gap-2">
-            <FormContext segment={segment} applicationId={a.applicationId} />
-            <label className="min-w-0 flex-1 text-[12px] text-ink-quiet">
-              {t('Reason', 'السبب')}
-              <input name="reason" required minLength={3} className={`${INPUT} mt-1`} />
-            </label>
-            <button
-              type="submit"
-              className="press inline-flex h-9 items-center rounded-tile border border-blocked/50 px-3 text-[13px] font-semibold text-blocked hover:bg-blocked-wash"
-            >
-              {t('Withdraw', 'سحب')}
-            </button>
-          </form>
+          <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+            <form action={withdrawApplicationAction} className="mt-3 flex flex-wrap items-end gap-2">
+              <FormContext segment={segment} applicationId={a.applicationId} />
+              <label className="min-w-0 flex-1 text-[12px] text-ink-quiet">
+                {t('Reason', 'السبب')}
+                <input name="reason" required minLength={3} className={`${INPUT} mt-1`} />
+              </label>
+              <button
+                type="submit"
+                className="press inline-flex h-9 items-center rounded-tile border border-blocked/50 px-3 text-[13px] font-semibold text-blocked hover:bg-blocked-wash"
+              >
+                {t('Withdraw', 'سحب')}
+              </button>
+            </form>
+          </Gate>
         </details>
       ) : null}
     </ApplicationShell>

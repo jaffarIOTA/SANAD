@@ -13,8 +13,15 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { CHECKER, MAKER, actingPrincipal, canReview } from '../../apps/ops/src/server/session.ts';
+import type { Principal } from '@sanad/core/origination/request.ts';
+
+import { canReview } from '../../apps/ops/src/server/session.ts';
+import { developmentStaffFor } from '../../apps/ops/src/server/staff.ts';
 import { approveRequest, listRequests, type RequestRow } from '../../apps/ops/src/server/store.ts';
+
+// Fictional people, as the seeded book knows them (one sign-in each in development).
+const MAKER: Principal = { principalId: 'stf-maker-01', tenantId: 'bank-a' };
+const CHECKER: Principal = { principalId: 'stf-checker-01', tenantId: 'bank-a', authority: 'CHECKER' };
 
 describe('four eyes — the screen agrees with the domain', () => {
   it('refuses a reviewer their own work', () => {
@@ -34,9 +41,14 @@ describe('four eyes — the screen agrees with the domain', () => {
     expect(canReview(CHECKER, undefined).allowed).toBe(true);
   });
 
-  it('resolves principals on the server, never from input', () => {
-    expect(actingPrincipal('MAKER')).toEqual(MAKER);
-    expect(actingPrincipal('CHECKER')).toEqual(CHECKER);
+  it('resolves principals on the server from a credential, one token one person', () => {
+    const env = {
+      NODE_ENV: 'test',
+      STAFF_DEV_TOKEN_MAKER: 'tok-maker-queue',
+      STAFF_DEV_TOKEN_CHECKER: 'tok-checker-queue',
+    };
+    expect(developmentStaffFor('tok-maker-queue', env)?.principalId).toBe(MAKER.principalId);
+    expect(developmentStaffFor('tok-checker-queue', env)?.principalId).toBe(CHECKER.principalId);
     expect(MAKER.principalId).not.toBe(CHECKER.principalId);
   });
 

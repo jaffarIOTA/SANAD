@@ -5,10 +5,18 @@
  *  #15 the pipeline CSV neutralises formula-injection cells (OWASP)
  *  #7 #12 the module map is truthful about what is manual and what is a fixture
  */
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+
+// The export is for a signed-in member of staff, of their own institution: the session cookie stands in here.
+const jar = vi.hoisted(() => new Map<string, string>());
+vi.mock('next/headers', () => ({
+  cookies: () =>
+    Promise.resolve({ get: (name: string) => (jar.has(name) ? { name, value: jar.get(name) } : undefined) }),
+}));
 
 import { handOver, resetBusinessStore } from '../../apps/ops/src/server/business.ts';
 import { MODULE_GROUPS } from '../../apps/ops/src/server/modules.ts';
+import { STAFF_SESSION_COOKIE, epochNow, issueStaffSession } from '../../apps/ops/src/server/staff-session.ts';
 
 const DATABASE = process.env['SANAD_DATABASE_URL'];
 
@@ -48,6 +56,17 @@ describe.skipIf(DATABASE !== undefined)('#15 the pipeline CSV export', () => {
       expect(r.ok).toBe(true);
     }
     const { GET } = await import('../../apps/ops/src/app/[locale]/business/export/route.ts');
+    // Signed out: no export.
+    jar.clear();
+    expect((await GET()).status).toBe(401);
+    jar.set(
+      STAFF_SESSION_COOKIE,
+      issueStaffSession(
+        { principalId: 'stf-ae-officer-01', tenantId: 'sme-fund-ae', authorities: ['MAKER'] },
+        600n,
+        epochNow(),
+      ).token,
+    );
     const csv = await (await GET()).text();
     const businessCells = csv
       .split('\r\n')

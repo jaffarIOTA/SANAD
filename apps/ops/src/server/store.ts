@@ -65,7 +65,6 @@ import {
   saveDocuments,
   saveRequests,
 } from './persistence.ts';
-import { MAKER } from './session.ts';
 
 /**
  * The tenant's intake policy. The checked-in file loads once at start-up (a
@@ -225,6 +224,8 @@ export interface KeyRequestInput {
 /** Display shape. The screens never reach into the domain union directly. */
 export interface RequestRow {
   readonly requestId: string;
+  /** The institution the request belongs to; screens show a signed-in person only their own institution's requests. */
+  readonly tenantId?: string;
   readonly state: OriginationRequest['state'];
   readonly channel: OriginationChannel;
   readonly counterpartyId: string;
@@ -264,6 +265,7 @@ export function toRow(requestId: string, request: OriginationRequest): RequestRo
   const core = request.core;
   return {
     requestId,
+    tenantId: core.tenantId,
     state: request.state,
     channel: core.channel,
     counterpartyId: core.counterpartyId,
@@ -584,13 +586,14 @@ export function presentedDocuments(requestId: string): readonly PresentedDocumen
   return state.documents.get(requestId) ?? [];
 }
 
-export function attachDocument(requestId: string, documentType: string): void {
+/** `presentedBy` is the signed-in principal who recorded the document; it is written to the evidence row. */
+export function attachDocument(requestId: string, documentType: string, presentedBy: string): void {
   const list = state.documents.get(requestId) ?? [];
   const document: PresentedDocument = { documentType, capturedAt: developmentAttestation(), validationStatus: 'VALID' };
   state.documents.set(requestId, [...list, document]);
   // Appended to the evidence store on the next flush, at the position it was presented in.
   state.unsavedDocuments ??= [];
-  state.unsavedDocuments.push({ requestId, position: list.length, document });
+  state.unsavedDocuments.push({ requestId, position: list.length, document, presentedBy });
 }
 
 export function checklistFor(
@@ -814,7 +817,8 @@ export async function flushStore(): Promise<void> {
   // Documents after requests: a document row refers to its request's row.
   const documents = state.unsavedDocuments ?? [];
   if (documents.length > 0) {
-    await saveDocuments(pool, TENANT_CODE, documents, MAKER.principalId);
+    // Each document carries who presented it; the fallback names the workbench itself, never a person.
+    await saveDocuments(pool, TENANT_CODE, documents, 'system:workbench');
     const saved = new Set(documents);
     state.unsavedDocuments = (state.unsavedDocuments ?? []).filter((d) => !saved.has(d));
   }

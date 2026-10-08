@@ -17,7 +17,8 @@ import {
   syncBusiness,
 } from '../../../server/business.ts';
 import { statusChip } from '../../../server/business-dashboard.ts';
-import { workbenchJurisdiction } from '../../../server/jurisdiction.ts';
+import { staffJurisdiction } from '../../../server/jurisdiction.ts';
+import { pageStaff } from '../../../server/session.ts';
 import { developmentAttestation } from '../../../server/store.ts';
 import { screenHref } from '../PipelineDashboard.tsx';
 import { Chip, type Formatters, Id, TH, TH_END, formatters, stageRange, stageTitle } from './ui.tsx';
@@ -60,7 +61,9 @@ export default async function BusinessListPage({
   const sp = await searchParams;
   const locale = localeFromSegment(segment);
   if (locale === undefined) notFound();
-  const j = await workbenchJurisdiction(typeof sp['tenant'] === 'string' ? sp['tenant'] : undefined);
+  // The signed-in person's own institution; a `tenant` query parameter is not read.
+  const staff = await pageStaff(segment);
+  const j = await staffJurisdiction(staff.tenantId);
   const f = formatters(locale === 'ar-SA', j.currency);
   const { t } = f;
   if (j.tenant === undefined)

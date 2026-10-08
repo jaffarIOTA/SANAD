@@ -28,9 +28,6 @@
  * a browser at 1440 in both directions.
  */
 
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { STAGE_OF } from '@sanad/core/origination/business-application.ts';
@@ -60,11 +57,11 @@ import {
 } from '../../apps/ops/src/server/business-dashboard.ts';
 import { MODULE_GROUPS } from '../../apps/ops/src/server/modules.ts';
 import { activeItemId, latinSuffix, navigationFor, tallyOf } from '../../apps/ops/src/app/[locale]/navigation.ts';
+import { source as repoSource } from './source.ts';
 
 const LATIN_DIGIT = /[0-9]/;
 const ARABIC_LETTER = /[\u0600-\u06FF]/;
-const source = (path: string): string =>
-  readFileSync(fileURLToPath(new URL(`../../apps/ops/src/app/[locale]/${path}`, import.meta.url)), 'utf8');
+const source = (path: string): string => repoSource(`apps/ops/src/app/[locale]/${path}`);
 
 const UI = source('business/ui.tsx');
 const APPLICATION = source('business/[applicationId]/page.tsx');
@@ -203,7 +200,7 @@ describe('no raw codes on screen', () => {
 
 describe('identifiers inside text', () => {
   it('isolates every identifier left to right through one component', () => {
-    expect(UI).toContain('return <bdi dir="ltr" className={`identifier ${className ?? \'\'}`}>{children}</bdi>;');
+    expect(UI).toContain('return (<bdi dir="ltr" className={`identifier ${className ?? \'\'}`}>{children}</bdi>);');
   });
 
   it('puts the checklist version, the policy version and the principals through it', () => {

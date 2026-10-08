@@ -54,7 +54,8 @@ export interface StageClock {
   readonly state: 'ON_TRACK' | 'NEAR' | 'BREACHED' | 'ONGOING';
 }
 
-const ordered = (v: BusinessApplicationView): BusinessApplicationView['events'] => [...v.events].sort((a, b) => a.sequence - b.sequence);
+const ordered = (v: BusinessApplicationView): BusinessApplicationView['events'] =>
+  [...v.events].sort((a, b) => a.sequence - b.sequence);
 
 /** When the application entered the stage it shows at: the last event that moved it to a different stage. */
 export function stageEnteredAt(v: BusinessApplicationView): bigint {
@@ -76,8 +77,21 @@ export function stageClock(v: BusinessApplicationView, nowEpochSeconds: bigint):
   const day = Number(elapsedSeconds / DAY) + 1;
   const target = PIPELINE_STAGES.find((s) => s.stage === stage)?.targetSeconds;
   if (target === undefined) return { stage, enteredAtEpochSeconds, elapsedSeconds, day, state: 'ONGOING' };
-  const state = elapsedSeconds > target ? 'BREACHED' : elapsedSeconds * 10_000n >= target * NEAR_SLA_PER_TEN_THOUSAND ? 'NEAR' : 'ON_TRACK';
-  return { stage, enteredAtEpochSeconds, elapsedSeconds, targetSeconds: target, day, targetDays: Number(target / DAY), state };
+  const state =
+    elapsedSeconds > target
+      ? 'BREACHED'
+      : elapsedSeconds * 10_000n >= target * NEAR_SLA_PER_TEN_THOUSAND
+        ? 'NEAR'
+        : 'ON_TRACK';
+  return {
+    stage,
+    enteredAtEpochSeconds,
+    elapsedSeconds,
+    targetSeconds: target,
+    day,
+    targetDays: Number(target / DAY),
+    state,
+  };
 }
 
 // =============================================================================
@@ -103,16 +117,39 @@ export function statusChip(v: BusinessApplicationView, nowEpochSeconds: bigint):
   const a = v.application;
   if (a.status === 'WITHDRAWN') return { code: 'WITHDRAWN', en: 'Withdrawn', ar: 'مسحوب', tone: 'neutral' };
   if (a.status === 'DECLINED') return { code: 'DECLINED', en: 'Declined', ar: 'مرفوض', tone: 'bad' };
-  if (v.displayStage === 9 && v.portfolio !== undefined) return { code: 'DPD', en: `DPD ${String(v.portfolio.daysPastDue)}`, ar: `متأخر ${String(v.portfolio.daysPastDue)} يوماً`, tone: 'bad' };
+  if (v.displayStage === 9 && v.portfolio !== undefined)
+    return {
+      code: 'DPD',
+      en: `DPD ${String(v.portfolio.daysPastDue)}`,
+      ar: `متأخر ${String(v.portfolio.daysPastDue)} يوماً`,
+      tone: 'bad',
+    };
   if (a.status === 'DISBURSED') return { code: 'ON_TRACK', en: 'On track', ar: 'منتظم', tone: 'good' };
 
   const clock = stageClock(v, nowEpochSeconds);
   const ofTarget = (en: string, ar: string): StatusChip => {
     const day = String(clock.day);
     const target = String(clock.targetDays ?? 0);
-    if (clock.state === 'BREACHED') return { code: 'SLA_BREACHED', en: `${en} · Day ${day} of ${target} — SLA breached`, ar: `${ar} · اليوم ${day} من ${target} — تجاوز المدة`, tone: 'bad' };
-    if (clock.state === 'NEAR') return { code: 'SLA_NEAR', en: `Day ${day} of ${target} ⚠ SLA`, ar: `اليوم ${day} من ${target} ⚠ المدة`, tone: 'warn' };
-    return { code: 'IN_STAGE', en: `${en} · Day ${day} of ${target}`, ar: `${ar} · اليوم ${day} من ${target}`, tone: 'brand' };
+    if (clock.state === 'BREACHED')
+      return {
+        code: 'SLA_BREACHED',
+        en: `${en} · Day ${day} of ${target} — SLA breached`,
+        ar: `${ar} · اليوم ${day} من ${target} — تجاوز المدة`,
+        tone: 'bad',
+      };
+    if (clock.state === 'NEAR')
+      return {
+        code: 'SLA_NEAR',
+        en: `Day ${day} of ${target} ⚠ SLA`,
+        ar: `اليوم ${day} من ${target} ⚠ المدة`,
+        tone: 'warn',
+      };
+    return {
+      code: 'IN_STAGE',
+      en: `${en} · Day ${day} of ${target}`,
+      ar: `${ar} · اليوم ${day} من ${target}`,
+      tone: 'brand',
+    };
   };
 
   switch (a.status) {
@@ -121,13 +158,25 @@ export function statusChip(v: BusinessApplicationView, nowEpochSeconds: bigint):
     case 'SPREADING': {
       const unverified = v.figures.filter((f) => f.figure.status !== 'VERIFIED').length;
       return unverified > 0 && clock.state === 'ON_TRACK'
-        ? { code: 'FIGURES_TO_VERIFY', en: `${String(unverified)} figures to verify · Day ${String(clock.day)} of ${String(clock.targetDays ?? 0)}`, ar: `${String(unverified)} أرقام للتحقق · اليوم ${String(clock.day)} من ${String(clock.targetDays ?? 0)}`, tone: 'brand' }
+        ? {
+            code: 'FIGURES_TO_VERIFY',
+            en: `${String(unverified)} figures to verify · Day ${String(clock.day)} of ${String(clock.targetDays ?? 0)}`,
+            ar: `${String(unverified)} أرقام للتحقق · اليوم ${String(clock.day)} من ${String(clock.targetDays ?? 0)}`,
+            tone: 'brand',
+          }
         : ofTarget('Analysis', 'التحليل');
     }
     case 'SUBMITTED':
-      return clock.state === 'ON_TRACK' ? { code: 'AWAITING_SCORING', en: 'Awaiting scoring', ar: 'بانتظار التقييم', tone: 'brand' } : ofTarget('Awaiting scoring', 'بانتظار التقييم');
+      return clock.state === 'ON_TRACK'
+        ? { code: 'AWAITING_SCORING', en: 'Awaiting scoring', ar: 'بانتظار التقييم', tone: 'brand' }
+        : ofTarget('Awaiting scoring', 'بانتظار التقييم');
     case 'ASSESSED':
-      return { code: 'SCORING_COMPLETE', en: 'Scoring complete · awaiting checker', ar: 'اكتمل التقييم · بانتظار المراجِع', tone: 'good' };
+      return {
+        code: 'SCORING_COMPLETE',
+        en: 'Scoring complete · awaiting checker',
+        ar: 'اكتمل التقييم · بانتظار المراجِع',
+        tone: 'good',
+      };
     case 'IN_COMMITTEE':
       return ofTarget('With committee', 'لدى اللجنة');
     case 'APPROVED':
@@ -135,7 +184,12 @@ export function statusChip(v: BusinessApplicationView, nowEpochSeconds: bigint):
     case 'OFFER_SENT': {
       const sent = a.offer?.sentAtEpochSeconds ?? lastEventAt(v, 'OFFER_SENT') ?? clock.enteredAtEpochSeconds;
       const day = Number((nowEpochSeconds > sent ? nowEpochSeconds - sent : 0n) / DAY) + 1;
-      return { code: 'OFFER_SENT', en: `Offer sent day ${String(day)}`, ar: `أُرسل العرض · اليوم ${String(day)}`, tone: clock.state === 'BREACHED' ? 'bad' : clock.state === 'NEAR' ? 'warn' : 'brand' };
+      return {
+        code: 'OFFER_SENT',
+        en: `Offer sent day ${String(day)}`,
+        ar: `أُرسل العرض · اليوم ${String(day)}`,
+        tone: clock.state === 'BREACHED' ? 'bad' : clock.state === 'NEAR' ? 'warn' : 'brand',
+      };
     }
     case 'SIGNED':
       return { code: 'SIGNED', en: 'Signed · awaiting disbursement', ar: 'موقّع · بانتظار الصرف', tone: 'good' };
@@ -153,7 +207,8 @@ export function closedAt(v: BusinessApplicationView): bigint | undefined {
   const a = v.application;
   if (a.disbursement !== undefined) return a.disbursement.atEpochSeconds;
   if (a.withdrawal !== undefined) return a.withdrawal.atEpochSeconds;
-  if (a.status === 'DECLINED') return a.committee?.atEpochSeconds ?? lastEventAt(v, 'ASSESSED') ?? lastEventAt(v, 'COMMITTEE_DECLINED');
+  if (a.status === 'DECLINED')
+    return a.committee?.atEpochSeconds ?? lastEventAt(v, 'ASSESSED') ?? lastEventAt(v, 'COMMITTEE_DECLINED');
   return undefined;
 }
 
@@ -195,7 +250,11 @@ export interface PipelineSummary {
   readonly byStage: Readonly<Record<DisplayStage, readonly BusinessApplicationView[]>>;
 }
 
-export function summarisePipeline(views: readonly BusinessApplicationView[], nowEpochSeconds: bigint, offsetSeconds: bigint = UAE_OFFSET_SECONDS): PipelineSummary {
+export function summarisePipeline(
+  views: readonly BusinessApplicationView[],
+  nowEpochSeconds: bigint,
+  offsetSeconds: bigint = UAE_OFFSET_SECONDS,
+): PipelineSummary {
   const open = views.filter((v) => !CLOSED.has(v.application.status));
   const thisMonth = monthKey(nowEpochSeconds, offsetSeconds);
   const inMonth = (at: bigint | undefined): boolean => at !== undefined && monthKey(at, offsetSeconds) === thisMonth;
@@ -203,7 +262,9 @@ export function summarisePipeline(views: readonly BusinessApplicationView[], now
   const stage5 = open.filter((v) => v.displayStage === 5);
   const clocks = stage5.map((v) => stageClock(v, nowEpochSeconds));
 
-  const approvedThisMonth = views.filter((v) => inMonth(lastEventAt(v, 'APPROVED_STRAIGHT_THROUGH') ?? lastEventAt(v, 'COMMITTEE_APPROVED')));
+  const approvedThisMonth = views.filter((v) =>
+    inMonth(lastEventAt(v, 'APPROVED_STRAIGHT_THROUGH') ?? lastEventAt(v, 'COMMITTEE_APPROVED')),
+  );
   const disbursedThisMonth = views.filter((v) => inMonth(v.application.disbursement?.atEpochSeconds));
 
   const completed = views.filter((v) => v.application.disbursement !== undefined);
@@ -232,8 +293,12 @@ export function summarisePipeline(views: readonly BusinessApplicationView[], now
 }
 
 /** The most recently touched applications first: the dashboard's activity table. */
-export function recentActivity(views: readonly BusinessApplicationView[], limit = 8): readonly BusinessApplicationView[] {
-  const last = (v: BusinessApplicationView): bigint => ordered(v).at(-1)?.atEpochSeconds ?? v.application.receivedAtEpochSeconds;
+export function recentActivity(
+  views: readonly BusinessApplicationView[],
+  limit = 8,
+): readonly BusinessApplicationView[] {
+  const last = (v: BusinessApplicationView): bigint =>
+    ordered(v).at(-1)?.atEpochSeconds ?? v.application.receivedAtEpochSeconds;
   return [...views].sort((a, b) => (last(a) > last(b) ? -1 : last(a) < last(b) ? 1 : 0)).slice(0, limit);
 }
 
@@ -251,7 +316,11 @@ export interface ScheduleExcerpt<T> {
 /** The first `headCount` and last `tailCount` rows, or every row when that is no shorter. */
 export function scheduleExcerpt<T>(rows: readonly T[], headCount = 5, tailCount = 3): ScheduleExcerpt<T> {
   if (rows.length <= headCount + tailCount + 1) return { head: [...rows], omitted: 0, tail: [] };
-  return { head: rows.slice(0, headCount), omitted: rows.length - headCount - tailCount, tail: rows.slice(rows.length - tailCount) };
+  return {
+    head: rows.slice(0, headCount),
+    omitted: rows.length - headCount - tailCount,
+    tail: rows.slice(rows.length - tailCount),
+  };
 }
 
 // =============================================================================
@@ -320,12 +389,15 @@ const asBigint = (v: FactValue | number | string): bigint | undefined => {
 /** A policy fact for display, by its name: ratios as ×, shares as %, the risk-analysis score out of 10, flags as yes/no. */
 export function formatFact(fact: string, value: FactValue | number | string | undefined, arabic: boolean): string {
   if (value === undefined) return '—';
-  if (typeof value === 'boolean') return value ? (arabic ? 'نعم' : 'Yes') : (arabic ? 'لا' : 'No');
+  if (typeof value === 'boolean') return value ? (arabic ? 'نعم' : 'Yes') : arabic ? 'لا' : 'No';
   if (fact === 'sectorPriority' && value === 'PRIORITY') return arabic ? 'ذو أولوية' : 'Priority';
   if (fact === 'sectorPriority' && value === 'NON_PRIORITY') return arabic ? 'غير ذي أولوية' : 'Non-priority';
   const n = asBigint(value);
   if (n === undefined) return String(value);
-  if (fact === 'riskAnalysisScorePerTenThousand') { const [s, v] = sign(n); return `${s}${(v / 1_000n).toString()}.${pad2((v % 1_000n) / 10n)} / 10`; }
+  if (fact === 'riskAnalysisScorePerTenThousand') {
+    const [s, v] = sign(n);
+    return `${s}${(v / 1_000n).toString()}.${pad2((v % 1_000n) / 10n)} / 10`;
+  }
   if (TIMES_FACTS.has(fact)) return formatTimes(n);
   if (fact.endsWith('PerTenThousand')) return formatPercent(n);
   return n.toString();
@@ -354,10 +426,19 @@ export const arabicDigits = (s: string): string =>
 export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar: string }>> = {
   FIGURE_PROPOSED: { en: 'Figure recorded. It is used once verified.', ar: 'سُجّل الرقم، ويُعتمد بعد التحقق منه.' },
   FIGURE_VERIFIED: { en: 'Figure verified.', ar: 'تم التحقق من الرقم.' },
-  FIGURE_CORRECTED: { en: 'Correction recorded. The corrected figure is verified by a second principal.', ar: 'سُجّل التصحيح، ويتحقق من الرقم المصحح شخص آخر.' },
-  DOCUMENT_PRESENTED: { en: 'Document recorded by reference. It counts once the checker validates it.', ar: 'سُجّل المستند بمرجعه، ويُحتسب بعد تحقق المراجِع منه.' },
+  FIGURE_CORRECTED: {
+    en: 'Correction recorded. The corrected figure is verified by a second principal.',
+    ar: 'سُجّل التصحيح، ويتحقق من الرقم المصحح شخص آخر.',
+  },
+  DOCUMENT_PRESENTED: {
+    en: 'Document recorded by reference. It counts once the checker validates it.',
+    ar: 'سُجّل المستند بمرجعه، ويُحتسب بعد تحقق المراجِع منه.',
+  },
   DOCUMENT_VALIDATED: { en: 'Document validated.', ar: 'تم التحقق من المستند واعتماده.' },
-  DOCUMENT_REJECTED: { en: 'Document marked invalid. Present a valid one to complete the checklist.', ar: 'اعتُبر المستند غير صالح. قدّم مستنداً صالحاً لاستكمال القائمة.' },
+  DOCUMENT_REJECTED: {
+    en: 'Document marked invalid. Present a valid one to complete the checklist.',
+    ar: 'اعتُبر المستند غير صالح. قدّم مستنداً صالحاً لاستكمال القائمة.',
+  },
   INPUTS_RECORDED: { en: 'Assessment inputs recorded.', ar: 'سُجّلت مدخلات التقييم.' },
   SUBMITTED: { en: 'Submitted to credit assessment.', ar: 'أُحيل الطلب إلى التقييم الائتماني.' },
   ASSESSED: { en: 'Assessment run and recorded.', ar: 'نُفّذ التقييم وسُجّل.' },
@@ -365,7 +446,10 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
   COMMITTEE_APPROVED: { en: 'Approved by the credit committee.', ar: 'اعتمدته لجنة الائتمان.' },
   COMMITTEE_DECLINED: { en: 'Declined by the credit committee.', ar: 'رفضته لجنة الائتمان.' },
   OFFER_GENERATED: { en: 'Offer letter generated.', ar: 'أُعدّ خطاب العرض.' },
-  OFFER_SENT: { en: 'Offer sent: the notification is queued on the outbox.', ar: 'أُرسل العرض: الإشعار في قائمة الإرسال.' },
+  OFFER_SENT: {
+    en: 'Offer sent: the notification is queued on the outbox.',
+    ar: 'أُرسل العرض: الإشعار في قائمة الإرسال.',
+  },
   SIGNED: { en: 'Signature recorded.', ar: 'سُجّل التوقيع.' },
   DISBURSED: { en: 'Disbursement recorded.', ar: 'سُجّل الصرف.' },
   PORTFOLIO_RECORDED: { en: 'Portfolio status recorded.', ar: 'سُجّلت حالة المحفظة.' },
@@ -380,99 +464,301 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
  * workbench's own refusal panel).
  */
 export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly ar: string }>> = {
-  FIGURES_NOT_VERIFIED: { en: 'Every required figure is verified before the application goes to credit assessment.', ar: 'يجب التحقق من جميع الأرقام المطلوبة قبل الإحالة إلى التقييم.' },
-  DOCUMENTS_MISSING: { en: 'Every mandatory document is presented before the application goes to credit assessment.', ar: 'يجب تقديم جميع المستندات الإلزامية قبل الإحالة إلى التقييم.' },
-  FOUR_EYES_REQUIRED: { en: 'Whoever keyed a figure or presented a document does not verify it; a second principal does (four eyes).', ar: 'من أدخل الرقم أو قدّم المستند لا يتحقق منه؛ يتحقق منه شخص آخر (مبدأ العيون الأربع).' },
-  FOUR_EYES_SELF_APPROVAL: { en: 'The officer who submitted the application may not approve or decide it.', ar: 'لا يجوز للموظف الذي أحال الطلب أن يعتمده أو يبت فيه.' },
-  FOUR_EYES_SELF_ASSESSMENT: { en: 'The officer who submitted the application does not run its assessment; the checker does.', ar: 'لا يُشغّل الموظف الذي أحال الطلب تقييمه؛ يشغّله المراجِع.' },
-  FOUR_EYES_DISBURSEMENT: { en: 'Disbursement is released by the finance principal — neither the approver nor the submitting officer.', ar: 'يُطلق الصرفَ مسؤولُ المالية — لا المعتمِد ولا الموظف الذي أحال الطلب.' },
-  STALE_APPLICATION: { en: 'The application was changed elsewhere since this screen loaded it; nothing was saved. Reload and try again.', ar: 'تغيّر الطلب من جهة أخرى منذ تحميل هذه الشاشة، ولم يُحفظ شيء. أعد التحميل وحاول مرة أخرى.' },
-  PERSISTENCE_FAILED: { en: 'The change could not be saved and nothing of it was written. Reload and try again.', ar: 'تعذّر حفظ التغيير ولم يُكتب منه شيء. أعد التحميل وحاول مرة أخرى.' },
-  FIGURE_SOURCE_PRINCIPAL_INVALID: { en: 'Read figures are recorded only by the statement-reading or rail-ingestion system.', ar: 'لا يُسجّل الأرقام المقروءة إلا نظام قراءة القوائم أو نظام الربط الإلكتروني.' },
-  DISBURSEMENT_BEFORE_PLANNED_DATE: { en: 'The disbursement is recorded on or after the planned disbursement date in the signed offer.', ar: 'يُسجَّل الصرف في تاريخ الصرف المخطط في العرض الموقّع أو بعده.' },
-  DAYS_PAST_DUE_IMPOSSIBLE: { en: 'Days past due cannot exceed the days since the first instalment fell due.', ar: 'لا يجوز أن تتجاوز أيام التأخر الأيام المنقضية منذ استحقاق القسط الأول.' },
-  OFFER_POLICY_MALFORMED: { en: 'The institution’s offer date policy is malformed; the offer cannot be dated.', ar: 'سياسة تواريخ العرض لدى المؤسسة غير سليمة؛ يتعذّر تأريخ العرض.' },
-  ASSESSMENT_INPUTS_LOCKED: { en: 'Assessment inputs are recorded before submission; once submitted they are locked.', ar: 'تُسجَّل مدخلات التقييم قبل الإحالة، وتُقفل بعدها.' },
-  BUREAU_CONSENT_MISSING: { en: 'The bureau result is recorded with the consent id it was obtained under.', ar: 'تُسجَّل نتيجة المكتب الائتماني مع معرّف الموافقة التي صدرت بموجبها.' },
-  BUREAU_CONSENT_NOT_ON_RECORD: { en: 'That consent is not among the verification references handed over at stage 4.', ar: 'هذه الموافقة ليست ضمن مراجع التحقق المستلمة في المرحلة ٤.' },
-  DOCUMENT_NOT_FOUND: { en: 'There is no document with that reference on this application.', ar: 'لا يوجد مستند بهذا المرجع في هذا الطلب.' },
-  DOCUMENT_ALREADY_VALIDATED: { en: 'This document has already been checked; present it again to have it re-checked.', ar: 'سبق التحقق من هذا المستند؛ قدّمه مجدداً لإعادة التحقق منه.' },
+  FIGURES_NOT_VERIFIED: {
+    en: 'Every required figure is verified before the application goes to credit assessment.',
+    ar: 'يجب التحقق من جميع الأرقام المطلوبة قبل الإحالة إلى التقييم.',
+  },
+  DOCUMENTS_MISSING: {
+    en: 'Every mandatory document is presented before the application goes to credit assessment.',
+    ar: 'يجب تقديم جميع المستندات الإلزامية قبل الإحالة إلى التقييم.',
+  },
+  FOUR_EYES_REQUIRED: {
+    en: 'Whoever keyed a figure or presented a document does not verify it; a second principal does (four eyes).',
+    ar: 'من أدخل الرقم أو قدّم المستند لا يتحقق منه؛ يتحقق منه شخص آخر (مبدأ العيون الأربع).',
+  },
+  FOUR_EYES_SELF_APPROVAL: {
+    en: 'The officer who submitted the application may not approve or decide it.',
+    ar: 'لا يجوز للموظف الذي أحال الطلب أن يعتمده أو يبت فيه.',
+  },
+  FOUR_EYES_SELF_ASSESSMENT: {
+    en: 'The officer who submitted the application does not run its assessment; the checker does.',
+    ar: 'لا يُشغّل الموظف الذي أحال الطلب تقييمه؛ يشغّله المراجِع.',
+  },
+  FOUR_EYES_DISBURSEMENT: {
+    en: 'Disbursement is released by the finance principal — neither the approver nor the submitting officer.',
+    ar: 'يُطلق الصرفَ مسؤولُ المالية — لا المعتمِد ولا الموظف الذي أحال الطلب.',
+  },
+  STALE_APPLICATION: {
+    en: 'The application was changed elsewhere since this screen loaded it; nothing was saved. Reload and try again.',
+    ar: 'تغيّر الطلب من جهة أخرى منذ تحميل هذه الشاشة، ولم يُحفظ شيء. أعد التحميل وحاول مرة أخرى.',
+  },
+  PERSISTENCE_FAILED: {
+    en: 'The change could not be saved and nothing of it was written. Reload and try again.',
+    ar: 'تعذّر حفظ التغيير ولم يُكتب منه شيء. أعد التحميل وحاول مرة أخرى.',
+  },
+  FIGURE_SOURCE_PRINCIPAL_INVALID: {
+    en: 'Read figures are recorded only by the statement-reading or rail-ingestion system.',
+    ar: 'لا يُسجّل الأرقام المقروءة إلا نظام قراءة القوائم أو نظام الربط الإلكتروني.',
+  },
+  DISBURSEMENT_BEFORE_PLANNED_DATE: {
+    en: 'The disbursement is recorded on or after the planned disbursement date in the signed offer.',
+    ar: 'يُسجَّل الصرف في تاريخ الصرف المخطط في العرض الموقّع أو بعده.',
+  },
+  DAYS_PAST_DUE_IMPOSSIBLE: {
+    en: 'Days past due cannot exceed the days since the first instalment fell due.',
+    ar: 'لا يجوز أن تتجاوز أيام التأخر الأيام المنقضية منذ استحقاق القسط الأول.',
+  },
+  OFFER_POLICY_MALFORMED: {
+    en: 'The institution’s offer date policy is malformed; the offer cannot be dated.',
+    ar: 'سياسة تواريخ العرض لدى المؤسسة غير سليمة؛ يتعذّر تأريخ العرض.',
+  },
+  ASSESSMENT_INPUTS_LOCKED: {
+    en: 'Assessment inputs are recorded before submission; once submitted they are locked.',
+    ar: 'تُسجَّل مدخلات التقييم قبل الإحالة، وتُقفل بعدها.',
+  },
+  BUREAU_CONSENT_MISSING: {
+    en: 'The bureau result is recorded with the consent id it was obtained under.',
+    ar: 'تُسجَّل نتيجة المكتب الائتماني مع معرّف الموافقة التي صدرت بموجبها.',
+  },
+  BUREAU_CONSENT_NOT_ON_RECORD: {
+    en: 'That consent is not among the verification references handed over at stage 4.',
+    ar: 'هذه الموافقة ليست ضمن مراجع التحقق المستلمة في المرحلة ٤.',
+  },
+  DOCUMENT_NOT_FOUND: {
+    en: 'There is no document with that reference on this application.',
+    ar: 'لا يوجد مستند بهذا المرجع في هذا الطلب.',
+  },
+  DOCUMENT_ALREADY_VALIDATED: {
+    en: 'This document has already been checked; present it again to have it re-checked.',
+    ar: 'سبق التحقق من هذا المستند؛ قدّمه مجدداً لإعادة التحقق منه.',
+  },
   DOCUMENT_DECISION_INVALID: { en: 'A document is marked valid or invalid.', ar: 'يُعتمد المستند صالحاً أو غير صالح.' },
-  DOCUMENT_CHECKLIST_NOT_FOUND: { en: 'No document checklist is configured for this variant.', ar: 'لا توجد قائمة مستندات مُهيّأة لهذه الفئة.' },
+  DOCUMENT_CHECKLIST_NOT_FOUND: {
+    en: 'No document checklist is configured for this variant.',
+    ar: 'لا توجد قائمة مستندات مُهيّأة لهذه الفئة.',
+  },
   OFFER_DATE_MALFORMED: { en: 'Enter the dates as calendar dates.', ar: 'أدخل التواريخ بصيغة تاريخ صحيحة.' },
-  DISBURSEMENT_BEFORE_OFFER: { en: 'The disbursement date is on or after the offer date.', ar: 'يكون تاريخ الصرف في تاريخ العرض أو بعده.' },
-  DISBURSEMENT_TOO_FAR: { en: 'The disbursement date is within 60 days of the offer date (illustrative bound).', ar: 'يقع تاريخ الصرف خلال ٦٠ يوماً من تاريخ العرض (حد توضيحي).' },
-  FIRST_DUE_TOO_SOON: { en: 'The first instalment falls at least 15 days after disbursement (illustrative bound).', ar: 'يستحق القسط الأول بعد ١٥ يوماً من الصرف على الأقل (حد توضيحي).' },
-  FIRST_DUE_TOO_LATE: { en: 'The first instalment falls at most 45 days after disbursement (illustrative bound).', ar: 'يستحق القسط الأول خلال ٤٥ يوماً من الصرف على الأكثر (حد توضيحي).' },
-  LETTER_VERSION_MALFORMED: { en: 'The letter is identified by its content hash.', ar: 'يُعرَّف الخطاب ببصمته الرقمية.' },
-  ASSESSMENT_REF_REQUIRED: { en: 'The assessment run is recorded with its reference.', ar: 'يُسجَّل التقييم مع مرجعه.' },
+  DISBURSEMENT_BEFORE_OFFER: {
+    en: 'The disbursement date is on or after the offer date.',
+    ar: 'يكون تاريخ الصرف في تاريخ العرض أو بعده.',
+  },
+  DISBURSEMENT_TOO_FAR: {
+    en: 'The disbursement date is within 60 days of the offer date (illustrative bound).',
+    ar: 'يقع تاريخ الصرف خلال ٦٠ يوماً من تاريخ العرض (حد توضيحي).',
+  },
+  FIRST_DUE_TOO_SOON: {
+    en: 'The first instalment falls at least 15 days after disbursement (illustrative bound).',
+    ar: 'يستحق القسط الأول بعد ١٥ يوماً من الصرف على الأقل (حد توضيحي).',
+  },
+  FIRST_DUE_TOO_LATE: {
+    en: 'The first instalment falls at most 45 days after disbursement (illustrative bound).',
+    ar: 'يستحق القسط الأول خلال ٤٥ يوماً من الصرف على الأكثر (حد توضيحي).',
+  },
+  LETTER_VERSION_MALFORMED: {
+    en: 'The letter is identified by its content hash.',
+    ar: 'يُعرَّف الخطاب ببصمته الرقمية.',
+  },
+  ASSESSMENT_REF_REQUIRED: {
+    en: 'The assessment run is recorded with its reference.',
+    ar: 'يُسجَّل التقييم مع مرجعه.',
+  },
   SECTOR_PRIORITY_INVALID: { en: 'Choose the sector priority from the list.', ar: 'اختر أولوية القطاع من القائمة.' },
   FIGURES_EMPTY: { en: 'Record at least one figure.', ar: 'سجّل رقماً واحداً على الأقل.' },
-  FIGURE_SOURCE_NOT_READ: { en: 'Only figures read from a statement or a rail enter through ingestion.', ar: 'لا يدخل عبر الاستيراد إلا الرقم المقروء من القوائم أو من الربط الإلكتروني.' },
+  FIGURE_SOURCE_NOT_READ: {
+    en: 'Only figures read from a statement or a rail enter through ingestion.',
+    ar: 'لا يدخل عبر الاستيراد إلا الرقم المقروء من القوائم أو من الربط الإلكتروني.',
+  },
   FIGURE_NOT_VERIFIED: { en: 'A figure is used only once it is verified.', ar: 'لا يُستخدم الرقم إلا بعد التحقق منه.' },
   FIGURE_NEGATIVE: { en: 'This figure cannot be negative.', ar: 'لا يجوز أن يكون هذا الرقم سالباً.' },
   FIGURE_CURRENCY_MISMATCH: { en: 'Every figure is in the institution’s currency.', ar: 'جميع الأرقام بعملة المؤسسة.' },
-  SOURCE_REF_INVALID: { en: 'Give the source document’s or rail’s reference, not its content.', ar: 'أدخل مرجع المستند أو الربط، لا محتواه.' },
+  SOURCE_REF_INVALID: {
+    en: 'Give the source document’s or rail’s reference, not its content.',
+    ar: 'أدخل مرجع المستند أو الربط، لا محتواه.',
+  },
   SOURCE_KIND_UNKNOWN: { en: 'The figure’s source is not one the platform knows.', ar: 'مصدر الرقم غير معروف للمنصة.' },
-  PERIOD_LABEL_INVALID: { en: 'Name the period the figure covers, for example FY2025.', ar: 'حدّد الفترة التي يغطيها الرقم، مثل السنة المالية.' },
-  ENTERED_BY_REQUIRED: { en: 'A keyed figure records which officer keyed it.', ar: 'يُسجَّل مع الرقم المُدخل يدوياً اسم الموظف الذي أدخله.' },
-  ENTERED_BY_UNEXPECTED: { en: 'Only a keyed figure has an entering officer.', ar: 'لا يُنسب إلى موظف إلا الرقم المُدخل يدوياً.' },
+  PERIOD_LABEL_INVALID: {
+    en: 'Name the period the figure covers, for example FY2025.',
+    ar: 'حدّد الفترة التي يغطيها الرقم، مثل السنة المالية.',
+  },
+  ENTERED_BY_REQUIRED: {
+    en: 'A keyed figure records which officer keyed it.',
+    ar: 'يُسجَّل مع الرقم المُدخل يدوياً اسم الموظف الذي أدخله.',
+  },
+  ENTERED_BY_UNEXPECTED: {
+    en: 'Only a keyed figure has an entering officer.',
+    ar: 'لا يُنسب إلى موظف إلا الرقم المُدخل يدوياً.',
+  },
   VERIFIER_REQUIRED: { en: 'A verification records who verified.', ar: 'يُسجَّل مع التحقق من قام به.' },
-  TIMESTAMPS_NOT_MONOTONIC: { en: 'A figure is verified after it is proposed.', ar: 'يُتحقق من الرقم بعد إدخاله لا قبله.' },
-  METRIC_UNKNOWN: { en: 'That figure is not one the financial analysis knows.', ar: 'هذا البند غير معروف في التحليل المالي.' },
-  METRIC_AMBIGUOUS: { en: 'There is more than one verified figure for this line; replace one first.', ar: 'يوجد أكثر من رقم متحقق منه لهذا البند؛ استبدل أحدهما أولاً.' },
-  METRIC_NOT_IN_SPREAD: { en: 'The ratio needs a verified figure that is not there yet.', ar: 'تتطلب النسبة رقماً متحققاً منه غير موجود بعد.' },
-  RATIO_DENOMINATOR_NEGATIVE: { en: 'The ratio cannot be taken: its denominator is negative.', ar: 'تتعذّر النسبة: مقامها سالب.' },
+  TIMESTAMPS_NOT_MONOTONIC: {
+    en: 'A figure is verified after it is proposed.',
+    ar: 'يُتحقق من الرقم بعد إدخاله لا قبله.',
+  },
+  METRIC_UNKNOWN: {
+    en: 'That figure is not one the financial analysis knows.',
+    ar: 'هذا البند غير معروف في التحليل المالي.',
+  },
+  METRIC_AMBIGUOUS: {
+    en: 'There is more than one verified figure for this line; replace one first.',
+    ar: 'يوجد أكثر من رقم متحقق منه لهذا البند؛ استبدل أحدهما أولاً.',
+  },
+  METRIC_NOT_IN_SPREAD: {
+    en: 'The ratio needs a verified figure that is not there yet.',
+    ar: 'تتطلب النسبة رقماً متحققاً منه غير موجود بعد.',
+  },
+  RATIO_DENOMINATOR_NEGATIVE: {
+    en: 'The ratio cannot be taken: its denominator is negative.',
+    ar: 'تتعذّر النسبة: مقامها سالب.',
+  },
   PURPOSE_NOT_ALLOWED: { en: 'This variant does not finance that purpose.', ar: 'لا تموّل هذه الفئة هذا الغرض.' },
-  PRODUCT_NOT_QUOTED_HERE: { en: 'Business applications are quoted through the SME term finance product only.', ar: 'تُسعَّر طلبات المنشآت عبر منتج تمويل المنشآت لأجل فقط.' },
+  PRODUCT_NOT_QUOTED_HERE: {
+    en: 'Business applications are quoted through the SME term finance product only.',
+    ar: 'تُسعَّر طلبات المنشآت عبر منتج تمويل المنشآت لأجل فقط.',
+  },
   VARIANT_UNKNOWN: { en: 'There is no such variant of this product.', ar: 'لا توجد فئة بهذا الرمز لهذا المنتج.' },
-  CURRENCY_NOT_TENANTS: { en: 'Amounts are in the institution’s base currency.', ar: 'المبالغ بالعملة الأساسية للمؤسسة.' },
+  CURRENCY_NOT_TENANTS: {
+    en: 'Amounts are in the institution’s base currency.',
+    ar: 'المبالغ بالعملة الأساسية للمؤسسة.',
+  },
   TENOR_INVALID: { en: 'The tenor is a positive whole number of months.', ar: 'المدة عدد صحيح موجب من الأشهر.' },
-  GRACE_INVALID: { en: 'The grace period is a whole number of months shorter than the tenor.', ar: 'فترة السماح عدد صحيح من الأشهر أقصر من المدة.' },
+  GRACE_INVALID: {
+    en: 'The grace period is a whole number of months shorter than the tenor.',
+    ar: 'فترة السماح عدد صحيح من الأشهر أقصر من المدة.',
+  },
   CONTRIBUTION_INVALID: { en: 'The own contribution is between 0% and 100%.', ar: 'المساهمة الذاتية بين ٠٪ و١٠٠٪.' },
-  APPLICANT_INCOMPLETE: { en: 'The business name and registration reference are required.', ar: 'اسم المنشأة ومرجع التسجيل مطلوبان.' },
+  APPLICANT_INCOMPLETE: {
+    en: 'The business name and registration reference are required.',
+    ar: 'اسم المنشأة ومرجع التسجيل مطلوبان.',
+  },
   APPLICATION_ID_MALFORMED: { en: 'The application id is a prefix and digits.', ar: 'معرّف الطلب بادئة تليها أرقام.' },
-  APPLICATION_ID_TAKEN: { en: 'An application with this id was handed over under a different reference.', ar: 'سبق تسليم طلب بهذا المعرّف تحت مرجع مختلف.' },
+  APPLICATION_ID_TAKEN: {
+    en: 'An application with this id was handed over under a different reference.',
+    ar: 'سبق تسليم طلب بهذا المعرّف تحت مرجع مختلف.',
+  },
   UPSTREAM_REF_REQUIRED: { en: 'The upstream reference is required.', ar: 'المرجع في الأنظمة السابقة مطلوب.' },
-  UPSTREAM_REF_REUSED: { en: 'This upstream reference was used for another application.', ar: 'سبق استخدام هذا المرجع لطلب آخر.' },
-  UPSTREAM_VERIFICATION_MISSING: { en: 'The stage-4 verification references are required.', ar: 'مراجع التحقق في المرحلة ٤ مطلوبة.' },
-  IDENTITY_NUMBER_IN_PAYLOAD: { en: 'An identity number does not belong in the application; send a reference.', ar: 'لا يُرسَل رقم الهوية ضمن الطلب؛ أرسل مرجعاً بدلاً منه.' },
+  UPSTREAM_REF_REUSED: {
+    en: 'This upstream reference was used for another application.',
+    ar: 'سبق استخدام هذا المرجع لطلب آخر.',
+  },
+  UPSTREAM_VERIFICATION_MISSING: {
+    en: 'The stage-4 verification references are required.',
+    ar: 'مراجع التحقق في المرحلة ٤ مطلوبة.',
+  },
+  IDENTITY_NUMBER_IN_PAYLOAD: {
+    en: 'An identity number does not belong in the application; send a reference.',
+    ar: 'لا يُرسَل رقم الهوية ضمن الطلب؛ أرسل مرجعاً بدلاً منه.',
+  },
   CONTACT_PARTY_REF_INVALID: { en: 'The contact is a party reference.', ar: 'جهة الاتصال مرجع طرف.' },
-  CONTACT_EMAIL_NOT_MASKED: { en: 'An email address travels masked only.', ar: 'يُرسل البريد الإلكتروني مُقنّعاً فقط.' },
+  CONTACT_EMAIL_NOT_MASKED: {
+    en: 'An email address travels masked only.',
+    ar: 'يُرسل البريد الإلكتروني مُقنّعاً فقط.',
+  },
   CONTACT_MOBILE_NOT_MASKED: { en: 'A mobile number travels masked only.', ar: 'يُرسل رقم الهاتف مُقنّعاً فقط.' },
-  TRANSITION_NOT_ALLOWED: { en: 'This action is not available at the application’s current stage.', ar: 'هذا الإجراء غير متاح في المرحلة الحالية للطلب.' },
-  AMOUNT_MALFORMED: { en: 'Enter the amount as a number with at most two decimals.', ar: 'أدخل المبلغ رقماً بخانتين عشريتين على الأكثر.' },
+  TRANSITION_NOT_ALLOWED: {
+    en: 'This action is not available at the application’s current stage.',
+    ar: 'هذا الإجراء غير متاح في المرحلة الحالية للطلب.',
+  },
+  AMOUNT_MALFORMED: {
+    en: 'Enter the amount as a number with at most two decimals.',
+    ar: 'أدخل المبلغ رقماً بخانتين عشريتين على الأكثر.',
+  },
   AMOUNT_NOT_POSITIVE: { en: 'The amount must be positive.', ar: 'يجب أن يكون المبلغ موجباً.' },
-  INPUT_MALFORMED: { en: 'Each assessment input is a whole number; the collateral value is an amount.', ar: 'كل مدخل من مدخلات التقييم عدد صحيح، وقيمة الضمان مبلغ.' },
-  INPUT_OUT_OF_RANGE: { en: 'A per-ten-thousand input is between 0 and 100,000.', ar: 'المدخل المعبَّر عنه من عشرة آلاف يقع بين ٠ و١٠٠٬٠٠٠.' },
-  DOCUMENT_REF_INVALID: { en: 'A document is presented by its reference, not its content.', ar: 'يُقدَّم المستند بمرجعه، لا بمحتواه.' },
-  DOCUMENT_TYPE_INVALID: { en: 'The document type is a code from the checklist.', ar: 'نوع المستند رمز من قائمة المستندات.' },
-  ASSESSMENT_INPUTS_MISSING: { en: 'Record the bureau result and the officer’s assessment inputs before scoring.', ar: 'سجّل نتيجة المكتب الائتماني ومدخلات الموظف قبل التقييم.' },
-  COMMITTEE_REASON_REQUIRED: { en: 'A committee decision is recorded with its reason.', ar: 'يُسجَّل قرار اللجنة مع سببه.' },
-  SIGNED_LETTER_NOT_SENT_LETTER: { en: 'The signature is on a different letter from the one sent.', ar: 'التوقيع على خطاب غير الخطاب المرسل.' },
+  INPUT_MALFORMED: {
+    en: 'Each assessment input is a whole number; the collateral value is an amount.',
+    ar: 'كل مدخل من مدخلات التقييم عدد صحيح، وقيمة الضمان مبلغ.',
+  },
+  INPUT_OUT_OF_RANGE: {
+    en: 'A per-ten-thousand input is between 0 and 100,000.',
+    ar: 'المدخل المعبَّر عنه من عشرة آلاف يقع بين ٠ و١٠٠٬٠٠٠.',
+  },
+  DOCUMENT_REF_INVALID: {
+    en: 'A document is presented by its reference, not its content.',
+    ar: 'يُقدَّم المستند بمرجعه، لا بمحتواه.',
+  },
+  DOCUMENT_TYPE_INVALID: {
+    en: 'The document type is a code from the checklist.',
+    ar: 'نوع المستند رمز من قائمة المستندات.',
+  },
+  ASSESSMENT_INPUTS_MISSING: {
+    en: 'Record the bureau result and the officer’s assessment inputs before scoring.',
+    ar: 'سجّل نتيجة المكتب الائتماني ومدخلات الموظف قبل التقييم.',
+  },
+  COMMITTEE_REASON_REQUIRED: {
+    en: 'A committee decision is recorded with its reason.',
+    ar: 'يُسجَّل قرار اللجنة مع سببه.',
+  },
+  SIGNED_LETTER_NOT_SENT_LETTER: {
+    en: 'The signature is on a different letter from the one sent.',
+    ar: 'التوقيع على خطاب غير الخطاب المرسل.',
+  },
   OFFER_NOT_GENERATED: { en: 'Generate the offer letter first.', ar: 'أعدّ خطاب العرض أولاً.' },
-  FIGURE_NOT_FOUND: { en: 'There is no current figure with that id; it may have been replaced.', ar: 'لا يوجد رقم حالي بهذا المعرّف؛ ربما استُبدل.' },
-  FIGURE_ALREADY_VERIFIED: { en: 'A verified figure is replaced by a new one, never verified again.', ar: 'الرقم المتحقق منه يُستبدل برقم جديد، ولا يُعاد التحقق منه.' },
-  BUREAU_REF_INVALID: { en: 'The bureau report is recorded by its reference.', ar: 'يُسجَّل تقرير المكتب الائتماني بمرجعه.' },
-  BUREAU_SCORE_INVALID: { en: 'The bureau score is the bureau’s own whole number.', ar: 'درجة المكتب الائتماني عدد صحيح كما يصدره المكتب.' },
-  EMPLOYEES_INVALID: { en: 'Full-time employees is a whole, non-negative count.', ar: 'عدد الموظفين بدوام كامل عدد صحيح غير سالب.' },
-  EXPERIENCE_INVALID: { en: 'Relevant experience is a whole number of years.', ar: 'الخبرة ذات الصلة عدد صحيح من السنوات.' },
+  FIGURE_NOT_FOUND: {
+    en: 'There is no current figure with that id; it may have been replaced.',
+    ar: 'لا يوجد رقم حالي بهذا المعرّف؛ ربما استُبدل.',
+  },
+  FIGURE_ALREADY_VERIFIED: {
+    en: 'A verified figure is replaced by a new one, never verified again.',
+    ar: 'الرقم المتحقق منه يُستبدل برقم جديد، ولا يُعاد التحقق منه.',
+  },
+  BUREAU_REF_INVALID: {
+    en: 'The bureau report is recorded by its reference.',
+    ar: 'يُسجَّل تقرير المكتب الائتماني بمرجعه.',
+  },
+  BUREAU_SCORE_INVALID: {
+    en: 'The bureau score is the bureau’s own whole number.',
+    ar: 'درجة المكتب الائتماني عدد صحيح كما يصدره المكتب.',
+  },
+  EMPLOYEES_INVALID: {
+    en: 'Full-time employees is a whole, non-negative count.',
+    ar: 'عدد الموظفين بدوام كامل عدد صحيح غير سالب.',
+  },
+  EXPERIENCE_INVALID: {
+    en: 'Relevant experience is a whole number of years.',
+    ar: 'الخبرة ذات الصلة عدد صحيح من السنوات.',
+  },
   COLLATERAL_NEGATIVE: { en: 'The collateral value is not negative.', ar: 'قيمة الضمان ليست سالبة.' },
   DAYS_PAST_DUE_INVALID: { en: 'Days past due is a whole, non-negative count.', ar: 'أيام التأخر عدد صحيح غير سالب.' },
   ARREARS_NEGATIVE: { en: 'Arrears are not negative.', ar: 'المتأخرات ليست سالبة.' },
   WITHDRAWAL_REASON_REQUIRED: { en: 'A withdrawal records why.', ar: 'يُذكر سبب السحب.' },
-  SPREAD_INCOMPLETE: { en: 'Every required figure is verified first.', ar: 'يجب التحقق من جميع الأرقام المطلوبة أولاً.' },
-  NOT_STRAIGHT_THROUGH: { en: 'Only a straight-through assessment is approved without the committee.', ar: 'لا يُعتمد دون اللجنة إلا الطلب المؤهل للاعتماد المباشر.' },
+  SPREAD_INCOMPLETE: {
+    en: 'Every required figure is verified first.',
+    ar: 'يجب التحقق من جميع الأرقام المطلوبة أولاً.',
+  },
+  NOT_STRAIGHT_THROUGH: {
+    en: 'Only a straight-through assessment is approved without the committee.',
+    ar: 'لا يُعتمد دون اللجنة إلا الطلب المؤهل للاعتماد المباشر.',
+  },
   SIGNATURE_REF_REQUIRED: { en: 'The signing service’s reference is required.', ar: 'مرجع خدمة التوقيع مطلوب.' },
   PAYMENT_REF_REQUIRED: { en: 'The payment instruction’s reference is required.', ar: 'مرجع أمر الدفع مطلوب.' },
-  CHANNEL_REQUIRED: { en: 'At least one notification channel is required.', ar: 'يلزم وجود قناة إشعار واحدة على الأقل.' },
-  BUSINESS_APPLICATION_NOT_FOUND: { en: 'There is no business application with that id for this institution.', ar: 'لا يوجد طلب منشأة بهذا المعرّف لدى هذه المؤسسة.' },
-  PRODUCT_NOT_IN_CATALOGUE: { en: 'The product is not enabled in this institution’s catalogue.', ar: 'المنتج غير مفعّل في كتالوج هذه المؤسسة.' },
-  RATIO_DENOMINATOR_ZERO: { en: 'The debt burden before this facility needs a positive annual revenue.', ar: 'يتطلب عبء الدين قبل هذا التمويل إيرادات سنوية موجبة.' },
-  NO_ACTIVE_TENANT: { en: 'No institution is onboarded under the deployment’s jurisdiction.', ar: 'لا توجد مؤسسة مسجلة في الولاية التي يعمل بها التطبيق.' },
+  CHANNEL_REQUIRED: {
+    en: 'At least one notification channel is required.',
+    ar: 'يلزم وجود قناة إشعار واحدة على الأقل.',
+  },
+  BUSINESS_APPLICATION_NOT_FOUND: {
+    en: 'There is no business application with that id for this institution.',
+    ar: 'لا يوجد طلب منشأة بهذا المعرّف لدى هذه المؤسسة.',
+  },
+  PRODUCT_NOT_IN_CATALOGUE: {
+    en: 'The product is not enabled in this institution’s catalogue.',
+    ar: 'المنتج غير مفعّل في كتالوج هذه المؤسسة.',
+  },
+  RATIO_DENOMINATOR_ZERO: {
+    en: 'The debt burden before this facility needs a positive annual revenue.',
+    ar: 'يتطلب عبء الدين قبل هذا التمويل إيرادات سنوية موجبة.',
+  },
+  NO_ACTIVE_TENANT: {
+    en: 'No institution is onboarded under the deployment’s jurisdiction.',
+    ar: 'لا توجد مؤسسة مسجلة في الولاية التي يعمل بها التطبيق.',
+  },
+  AUTHORITY_REQUIRED: {
+    en: 'Your sign-in does not hold the authority this step needs. Nothing was changed; a colleague who holds it performs the step.',
+    ar: 'لا تحمل جلستك الصلاحية التي تتطلبها هذه الخطوة. لم يتغير شيء؛ يؤديها زميل يحمل هذه الصلاحية.',
+  },
 };
 
-const GENERIC_REFUSAL = { en: 'The action could not be completed. See the control code below.', ar: 'تعذّر تنفيذ الإجراء. راجع رمز الضابط أدناه.' } as const;
+const GENERIC_REFUSAL = {
+  en: 'The action could not be completed. See the control code below.',
+  ar: 'تعذّر تنفيذ الإجراء. راجع رمز الضابط أدناه.',
+} as const;
 
 /**
  * A refusal's explanation in the screen's language, from its reason code
@@ -487,7 +773,8 @@ export function refusalText(reason: string | undefined, arabic: boolean): string
 }
 
 /** A control code or reason code from the query string, shown only when it has the shape of one (e.g. OP-DETERMINACY, FIGURES_NOT_VERIFIED). */
-export const isControlCode = (s: string | undefined): s is string => s !== undefined && /^[A-Z]{2,8}-[A-Z0-9-]{2,40}$/.test(s);
+export const isControlCode = (s: string | undefined): s is string =>
+  s !== undefined && /^[A-Z]{2,8}-[A-Z0-9-]{2,40}$/.test(s);
 export const isReasonCode = (s: string | undefined): s is string => s !== undefined && /^[A-Z][A-Z0-9_]{2,60}$/.test(s);
 
 /**
@@ -502,10 +789,16 @@ export interface ShellQuery {
 }
 
 /** The refusal panel's content from a redirect's query, or undefined when there is none — words from the reason map only. */
-export function refusalFromQuery(query: ShellQuery, arabic: boolean): { readonly control: string; readonly explanation: string } | undefined {
+export function refusalFromQuery(
+  query: ShellQuery,
+  arabic: boolean,
+): { readonly control: string; readonly explanation: string } | undefined {
   if (!isControlCode(query.control)) return undefined;
   const reason = isReasonCode(query.reason) ? query.reason : undefined;
-  return { control: reason === undefined ? query.control : `${query.control} · ${reason}`, explanation: refusalText(reason, arabic) };
+  return {
+    control: reason === undefined ? query.control : `${query.control} · ${reason}`,
+    explanation: refusalText(reason, arabic),
+  };
 }
 
 // =============================================================================
@@ -516,7 +809,11 @@ type Words = { readonly en: string; readonly ar: string };
 
 /** 'STRAIGHT_THROUGH' → 'Straight through'. The English last resort for a code no map knows yet. */
 export function humanise(code: string): string {
-  const words = code.toLowerCase().split('_').filter((w) => w !== '').join(' ');
+  const words = code
+    .toLowerCase()
+    .split('_')
+    .filter((w) => w !== '')
+    .join(' ');
   return words === '' ? code : `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
 }
 
@@ -561,7 +858,11 @@ export const ROUTE_LABELS: Readonly<Record<string, Words>> = {
 };
 
 /** A risk level's words: the policy's band label for it if given, else the static map. */
-export function riskLevelWords(level: string, arabic: boolean, bands?: readonly { readonly level: string; readonly label: Words }[]): string {
+export function riskLevelWords(
+  level: string,
+  arabic: boolean,
+  bands?: readonly { readonly level: string; readonly label: Words }[],
+): string {
   const band = bands?.find((b) => b.level === level);
   if (band !== undefined) return arabic ? band.label.ar : band.label.en;
   return codeWords(RISK_LEVEL_LABELS, level, arabic);
@@ -591,7 +892,13 @@ export function splitOfferEmail(body: string): { readonly english: string; reado
   const lines = body.split('\n');
   const at = lines.findIndex((l) => l.trim() === ARABIC_SUMMARY_MARKER);
   if (at < 0) return { english: body };
-  return { english: lines.slice(0, at).join('\n').trimEnd(), arabic: lines.slice(at + 1).join('\n').trim() };
+  return {
+    english: lines.slice(0, at).join('\n').trimEnd(),
+    arabic: lines
+      .slice(at + 1)
+      .join('\n')
+      .trim(),
+  };
 }
 
 /** The Confirm & Send button's words: the channels it really sends on, and no document that does not exist yet. */

@@ -27,15 +27,12 @@ import {
   recordSignedAction,
   sendOfferAction,
 } from '../../../../../server/business-actions.ts';
-import {
-  BUSINESS_ROLES,
-  getApplication,
-  previewNotifications,
-  productVariants,
-  syncBusiness,
-} from '../../../../../server/business.ts';
+import { getApplication, previewNotifications, productVariants, syncBusiness } from '../../../../../server/business.ts';
 import { formatPercent, scheduleExcerpt } from '../../../../../server/business-dashboard.ts';
-import { workbenchJurisdiction } from '../../../../../server/jurisdiction.ts';
+import { staffJurisdiction } from '../../../../../server/jurisdiction.ts';
+import { pageStaff } from '../../../../../server/session.ts';
+import type { StaffPrincipal } from '../../../../../server/staff.ts';
+import { Gate } from '../../../Gate.tsx';
 import {
   ApplicationShell,
   BTN_PRIMARY,
@@ -76,7 +73,9 @@ export default async function OfferPage({
   const locale = localeFromSegment(segment);
   if (locale === undefined) notFound();
   const applicationId = decodeURIComponent(rawId);
-  const j = await workbenchJurisdiction(query.tenant);
+  // The signed-in person's own institution, and only if the deployment has it active.
+  const staff = await pageStaff(segment);
+  const j = await staffJurisdiction(staff.tenantId);
   if (j.tenant === undefined) notFound();
   await syncBusiness(j.tenant);
   const view = await getApplication(j.tenant, applicationId);
@@ -99,18 +98,20 @@ export default async function OfferPage({
       >
         <SectionCard title={t('No offer yet', 'لا يوجد عرض بعد')}>
           {a.status === 'APPROVED' ? (
-            <form action={generateOfferAction} className="flex flex-wrap items-center justify-between gap-3">
-              <FormContext segment={segment} applicationId={a.applicationId} screen="offer" />
-              <p className="text-[13px] text-ink-quiet">
-                {t(
-                  'Approved. The offer is quoted through the product module on the dated schedule.',
-                  'معتمد. يُسعَّر العرض عبر وحدة المنتج على الجدول المؤرخ.',
-                )}
-              </p>
-              <button type="submit" className={BTN_PRIMARY}>
-                {t('Generate offer', 'إعداد العرض')}
-              </button>
-            </form>
+            <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+              <form action={generateOfferAction} className="flex flex-wrap items-center justify-between gap-3">
+                <FormContext segment={segment} applicationId={a.applicationId} screen="offer" />
+                <p className="text-[13px] text-ink-quiet">
+                  {t(
+                    'Approved. The offer is quoted through the product module on the dated schedule.',
+                    'معتمد. يُسعَّر العرض عبر وحدة المنتج على الجدول المؤرخ.',
+                  )}
+                </p>
+                <button type="submit" className={BTN_PRIMARY}>
+                  {t('Generate offer', 'إعداد العرض')}
+                </button>
+              </form>
+            </Gate>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-[13px] text-ink-quiet">
@@ -384,14 +385,14 @@ export default async function OfferPage({
           <p className="mt-4 rounded-tile bg-sunken px-3 py-2.5 text-[12px] text-ink-quiet">
             {f.arabic ? (
               <>
-                التسلسل: يوقّع العميل ← يُطلق مسؤول المالية (<Id>{BUSINESS_ROLES.finance}</Id>) أمر الدفع — لا المعتمِد
-                ولا الموظف الذي أحال الطلب ← يدفع البنك الشريك ← يقيّد نظام القروض التمويل (المرحلة {f.n(8)}).
+                التسلسل: يوقّع العميل ← يُطلق موظف يحمل صلاحية المالية أمر الدفع — لا المعتمِد ولا الموظف الذي أحال
+                الطلب ← يدفع البنك الشريك ← يقيّد نظام القروض التمويل (المرحلة {f.n(8)}).
               </>
             ) : (
               <>
-                Flow: the applicant signs → the finance principal (<Id>{BUSINESS_ROLES.finance}</Id>) — neither the
-                approver nor the submitting officer — releases the payment instruction → the partner bank pays → the
-                loan system books the facility (stage 8).
+                Flow: the applicant signs → a member of staff holding the finance authority — neither the approver nor
+                the submitting officer — releases the payment instruction → the partner bank pays → the loan system
+                books the facility (stage 8).
               </>
             )}
           </p>
@@ -481,6 +482,7 @@ export default async function OfferPage({
             view={view}
             letterVersion={a.offer?.letterVersion}
             latestVersion={offer.letter.version}
+            staff={staff}
             f={f}
           />
         </div>
@@ -744,12 +746,14 @@ function NextStep({
   view,
   letterVersion,
   latestVersion,
+  staff,
   f,
 }: {
   readonly segment: string;
   readonly view: NonNullable<Awaited<ReturnType<typeof getApplication>>>;
   readonly letterVersion: string | undefined;
   readonly latestVersion: string | undefined;
+  readonly staff: StaffPrincipal;
   readonly f: Formatters;
 }): ReactElement {
   const { t } = f;
@@ -758,103 +762,114 @@ function NextStep({
   switch (a.status) {
     case 'APPROVED':
       return (
-        <form action={sendOfferAction} className="flex flex-wrap items-center justify-between gap-3">
-          {ctx}
-          <p className="text-[13px] text-ink-quiet">
-            {t('Sent by the officer', 'يرسله الموظف')} (<Id>{BUSINESS_ROLES.officer}</Id>).{' '}
-            {t(
-              'The applicant receives the letter to sign through UAE Pass. The letter goes by reference; the PDF arrives when the document platform is licensed.',
-              'يستلم العميل الخطاب للتوقيع عبر الهوية الرقمية. يُرسل الخطاب بمرجعه؛ ويصل ملف PDF عند ترخيص منصة المستندات.',
-            )}
-          </p>
-          <button type="submit" className={BTN_PRIMARY}>
-            {t(SEND_LABEL.en, SEND_LABEL.ar)}
-          </button>
-        </form>
+        <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+          <form action={sendOfferAction} className="flex flex-wrap items-center justify-between gap-3">
+            {ctx}
+            <p className="text-[13px] text-ink-quiet">
+              {t('Sent by the officer who is signed in', 'يرسله الموظف الذي سجّل الدخول')} (<Id>{staff.principalId}</Id>
+              ).{' '}
+              {t(
+                'The applicant receives the letter to sign through UAE Pass. The letter goes by reference; the PDF arrives when the document platform is licensed.',
+                'يستلم العميل الخطاب للتوقيع عبر الهوية الرقمية. يُرسل الخطاب بمرجعه؛ ويصل ملف PDF عند ترخيص منصة المستندات.',
+              )}
+            </p>
+            <button type="submit" className={BTN_PRIMARY}>
+              {t(SEND_LABEL.en, SEND_LABEL.ar)}
+            </button>
+          </form>
+        </Gate>
       );
     case 'OFFER_SENT': {
       // A sent version is sent once; a resend needs a new version. A newer, unsent version is offered for sending here.
       const unsent = latestVersion !== undefined && latestVersion !== letterVersion;
       return (
         <div className="flex flex-col gap-4">
-          <form action={recordSignedAction} className="flex flex-wrap items-center justify-between gap-3">
-            {ctx}
-            <input type="hidden" name="letterVersion" value={letterVersion ?? ''} />
-            <p className="text-[13px] text-ink-quiet">
-              {t(
-                'Waiting for the applicant’s signature. This records the UAE Pass signing callback (fixture) on the letter version that was sent — and no other.',
-                'بانتظار توقيع العميل. يسجّل هذا إشعار التوقيع من الهوية الرقمية (تجريبي) على إصدار الخطاب المرسل — ولا غيره.',
-              )}
-            </p>
-            <button type="submit" className={BTN_PRIMARY}>
-              {t('Record signature', 'تسجيل التوقيع')}
-            </button>
-          </form>
-          {unsent ? (
-            <form
-              action={sendOfferAction}
-              className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4"
-              data-send-new-version
-            >
+          <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+            <form action={recordSignedAction} className="flex flex-wrap items-center justify-between gap-3">
               {ctx}
+              <input type="hidden" name="letterVersion" value={letterVersion ?? ''} />
               <p className="text-[13px] text-ink-quiet">
                 {t(
-                  'A newer letter version has been generated and not sent. Sending it replaces the sent version as the one to sign.',
-                  'أُعدّ إصدار أحدث من الخطاب ولم يُرسل بعد. إرساله يجعله الإصدار المعتمد للتوقيع بدلاً من الإصدار المرسل.',
+                  'Waiting for the applicant’s signature. This records the UAE Pass signing callback (fixture) on the letter version that was sent — and no other.',
+                  'بانتظار توقيع العميل. يسجّل هذا إشعار التوقيع من الهوية الرقمية (تجريبي) على إصدار الخطاب المرسل — ولا غيره.',
                 )}
               </p>
-              <button type="submit" className={BTN_SECONDARY}>
-                {t('Send the new version', 'إرسال الإصدار الجديد')}
+              <button type="submit" className={BTN_PRIMARY}>
+                {t('Record signature', 'تسجيل التوقيع')}
               </button>
             </form>
+          </Gate>
+          {unsent ? (
+            <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+              <form
+                action={sendOfferAction}
+                className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4"
+                data-send-new-version
+              >
+                {ctx}
+                <p className="text-[13px] text-ink-quiet">
+                  {t(
+                    'A newer letter version has been generated and not sent. Sending it replaces the sent version as the one to sign.',
+                    'أُعدّ إصدار أحدث من الخطاب ولم يُرسل بعد. إرساله يجعله الإصدار المعتمد للتوقيع بدلاً من الإصدار المرسل.',
+                  )}
+                </p>
+                <button type="submit" className={BTN_SECONDARY}>
+                  {t('Send the new version', 'إرسال الإصدار الجديد')}
+                </button>
+              </form>
+            </Gate>
           ) : (
-            <form
-              action={generateOfferAction}
-              className="flex flex-wrap items-end gap-3 border-t border-line pt-4"
-              data-generate-new-version
-            >
-              {ctx}
-              <p className="w-full text-[13px] text-ink-quiet">
-                {t(
-                  'Sending the same version again sends nothing: to resend the offer, generate a new version, then send it. The letter is re-quoted as of today; a letter identical to the sent one is the same version, so change a date if nothing else has changed.',
-                  'إعادة إرسال الإصدار نفسه لا ترسل شيئاً: لإعادة إرسال العرض أعدّ إصداراً جديداً ثم أرسله. يُعاد تسعير الخطاب بتاريخ اليوم؛ والخطاب المطابق للمرسل هو الإصدار نفسه، فغيّر تاريخاً إن لم يتغير شيء آخر.',
-                )}
-              </p>
-              <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
-                {t('Disbursement date', 'تاريخ الصرف')}
-                <input type="date" name="disbursementDate" className={INPUT} />
-              </label>
-              <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
-                {t('First due date', 'تاريخ أول قسط')}
-                <input type="date" name="firstDueDate" className={INPUT} />
-              </label>
-              <button type="submit" className={BTN_SECONDARY}>
-                {t('Generate a new version', 'إعداد إصدار جديد')}
-              </button>
-            </form>
+            <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+              <form
+                action={generateOfferAction}
+                className="flex flex-wrap items-end gap-3 border-t border-line pt-4"
+                data-generate-new-version
+              >
+                {ctx}
+                <p className="w-full text-[13px] text-ink-quiet">
+                  {t(
+                    'Sending the same version again sends nothing: to resend the offer, generate a new version, then send it. The letter is re-quoted as of today; a letter identical to the sent one is the same version, so change a date if nothing else has changed.',
+                    'إعادة إرسال الإصدار نفسه لا ترسل شيئاً: لإعادة إرسال العرض أعدّ إصداراً جديداً ثم أرسله. يُعاد تسعير الخطاب بتاريخ اليوم؛ والخطاب المطابق للمرسل هو الإصدار نفسه، فغيّر تاريخاً إن لم يتغير شيء آخر.',
+                  )}
+                </p>
+                <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
+                  {t('Disbursement date', 'تاريخ الصرف')}
+                  <input type="date" name="disbursementDate" className={INPUT} />
+                </label>
+                <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
+                  {t('First due date', 'تاريخ أول قسط')}
+                  <input type="date" name="firstDueDate" className={INPUT} />
+                </label>
+                <button type="submit" className={BTN_SECONDARY}>
+                  {t('Generate a new version', 'إعداد إصدار جديد')}
+                </button>
+              </form>
+            </Gate>
           )}
         </div>
       );
     }
     case 'SIGNED':
       return (
-        <form action={recordDisbursedAction} className="flex flex-wrap items-center justify-between gap-3">
-          {ctx}
-          <p className="text-[13px] text-ink-quiet" data-releases-disbursement>
-            {t(
-              `Signed${a.signature === undefined ? '' : ` on ${f.epochDate(a.signature.atEpochSeconds)}`}. The finance principal`,
-              `وُقّع${a.signature === undefined ? '' : ` بتاريخ ${f.epochDate(a.signature.atEpochSeconds)}`}. يُطلق مسؤول المالية`,
-            )}{' '}
-            (<Id>{BUSINESS_ROLES.finance}</Id>){' '}
-            {t(
-              'releases the payment — not the approver and not the submitting officer; the partner bank’s confirmation is a fixture reference.',
-              'الدفعة — لا المعتمِد ولا الموظف الذي أحال الطلب؛ تأكيد البنك الشريك مرجع تجريبي.',
-            )}
-          </p>
-          <button type="submit" className={BTN_PRIMARY}>
-            {t('Release disbursement as finance', 'إطلاق الصرف بصفة المالية')}
-          </button>
-        </form>
+        <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic} ownWork={a.submittedBy === staff.principalId}>
+          <form action={recordDisbursedAction} className="flex flex-wrap items-center justify-between gap-3">
+            {ctx}
+            <p className="text-[13px] text-ink-quiet" data-releases-disbursement>
+              {t(
+                `Signed${a.signature === undefined ? '' : ` on ${f.epochDate(a.signature.atEpochSeconds)}`}. A finance user — you are`,
+                `وُقّع${a.signature === undefined ? '' : ` بتاريخ ${f.epochDate(a.signature.atEpochSeconds)}`}. يُطلق موظف المالية — وأنت`,
+              )}{' '}
+              <Id>{staff.principalId}</Id> —{' '}
+              {t(
+                'releases the payment — not the approver and not the submitting officer; the partner bank’s confirmation is a fixture reference.',
+                'الدفعة — لا المعتمِد ولا الموظف الذي أحال الطلب؛ تأكيد البنك الشريك مرجع تجريبي.',
+              )}
+            </p>
+            <button type="submit" className={BTN_PRIMARY}>
+              {t('Release disbursement as finance', 'إطلاق الصرف بصفة المالية')}
+            </button>
+          </form>
+        </Gate>
       );
     case 'DISBURSED':
       return (
@@ -882,26 +897,28 @@ function NextStep({
               )}
             </p>
           )}
-          <form action={recordPortfolioStatusAction} className="flex flex-wrap items-end gap-3">
-            {ctx}
-            <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
-              {t('Days past due', 'أيام التأخر')}
-              <input
-                name="daysPastDue"
-                required
-                inputMode="numeric"
-                defaultValue={view.portfolio?.daysPastDue ?? 0}
-                className={`${INPUT} w-[120px]`}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
-              {t(`Arrears (${f.cur})`, `المتأخرات (${f.cur})`)}
-              <input name="arrears" inputMode="decimal" placeholder="0.00" className={`${INPUT} w-[160px]`} />
-            </label>
-            <button type="submit" className={BTN_SECONDARY}>
-              {t('Record loan-system status', 'تسجيل حالة نظام القروض')}
-            </button>
-          </form>
+          <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+            <form action={recordPortfolioStatusAction} className="flex flex-wrap items-end gap-3">
+              {ctx}
+              <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
+                {t('Days past due', 'أيام التأخر')}
+                <input
+                  name="daysPastDue"
+                  required
+                  inputMode="numeric"
+                  defaultValue={view.portfolio?.daysPastDue ?? 0}
+                  className={`${INPUT} w-[120px]`}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
+                {t(`Arrears (${f.cur})`, `المتأخرات (${f.cur})`)}
+                <input name="arrears" inputMode="decimal" placeholder="0.00" className={`${INPUT} w-[160px]`} />
+              </label>
+              <button type="submit" className={BTN_SECONDARY}>
+                {t('Record loan-system status', 'تسجيل حالة نظام القروض')}
+              </button>
+            </form>
+          </Gate>
         </div>
       );
     default:

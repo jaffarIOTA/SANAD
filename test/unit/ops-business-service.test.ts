@@ -18,7 +18,7 @@ import { type OfferDatePolicy, parseOfferDatePolicy } from '@sanad/core/originat
 
 import * as businessModule from '../../apps/ops/src/server/business.ts';
 import {
-  BUSINESS_ROLES,
+  SEED_PRINCIPALS,
   type HandoverRequest,
   READ_FIGURE_SOURCES,
   approveStraightThrough,
@@ -53,7 +53,7 @@ import {
 
 const TENANT = 'sme-fund-ae' as const;
 const ID = 'FR-00009001';
-const { officer, checker, committee, finance } = BUSINESS_ROLES;
+const { officer, checker, committee, finance } = SEED_PRINCIPALS;
 
 const handover = (over: Partial<HandoverRequest> = {}): HandoverRequest => ({
   applicationId: ID,

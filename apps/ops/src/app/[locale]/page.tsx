@@ -38,6 +38,7 @@ import { resolveRailsConfiguration } from '@sanad/origination/rails.ts';
 
 import { type AttentionItem, railStatuses, summarise } from '../../server/dashboard.ts';
 import { workbenchJurisdiction } from '../../server/jurisdiction.ts';
+import { pageStaff } from '../../server/session.ts';
 import { developmentAttestation, listRequests, type RequestRow } from '../../server/store.ts';
 import { PipelineDashboard } from './PipelineDashboard.tsx';
 
@@ -106,7 +107,9 @@ export default async function DashboardPage({
   const policy = policyResolved.policy.ok ? policyResolved.policy.value : undefined;
   const rails = railsResolved.rails.ok ? railStatuses(railsResolved.rails.value.rails) : [];
 
-  const all = listRequests();
+  // Only the signed-in person's own institution's requests (SEC-TM08).
+  const staff = await pageStaff(segment);
+  const all = listRequests().filter((r) => r.tenantId === staff.tenantId);
   const summary = summarise(all, policy, observed);
   const attentionIds = new Map(summary.attention.map((a) => [a.requestId, a] as const));
 

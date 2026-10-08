@@ -37,7 +37,16 @@ import { randomUUID } from 'node:crypto';
 
 import type { Pool } from 'pg';
 
-import { type TenantCode, loadDocumentChecklist, loadJurisdictionProfile, loadOfferDatePolicy, loadProductCatalogue, loadSmeAssessmentPolicy, loadSmeDefinition, loadTenantOnboarding } from '@sanad/config/loader.ts';
+import {
+  type TenantCode,
+  loadDocumentChecklist,
+  loadJurisdictionProfile,
+  loadOfferDatePolicy,
+  loadProductCatalogue,
+  loadSmeAssessmentPolicy,
+  loadSmeDefinition,
+  loadTenantOnboarding,
+} from '@sanad/config/loader.ts';
 import {
   type FigureSourceKind,
   type FinancialFigure,
@@ -56,12 +65,26 @@ import {
   verifyFigure as verifyFigureCore,
 } from '@sanad/core/applicant/financials.ts';
 import { type SmeAssessment, type SmeAssessmentFacts, assessSme } from '@sanad/core/decisioning/sme-assessment.ts';
-import { type DocumentChecklist, type ItemReport, type PresentedDocument, blockingItems, checklistReport, isChecklistComplete } from '@sanad/core/documents/checklist.ts';
+import {
+  type DocumentChecklist,
+  type ItemReport,
+  type PresentedDocument,
+  blockingItems,
+  checklistReport,
+  isChecklistComplete,
+} from '@sanad/core/documents/checklist.ts';
 import { type OfferLetter, buildOfferLetter } from '@sanad/core/documents/offer-letter.ts';
 import type { JurisdictionProfile } from '@sanad/core/jurisdiction/profile.ts';
 import { type CurrencyCode, type Money, money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
-import { type OfferNotificationRecipient, type OfferNotifications, buildOfferNotifications, isMaskedEmail, isMaskedMobile, previewOfferNotifications } from '@sanad/core/notifications/offer-notification.ts';
+import {
+  type OfferNotificationRecipient,
+  type OfferNotifications,
+  buildOfferNotifications,
+  isMaskedEmail,
+  isMaskedMobile,
+  previewOfferNotifications,
+} from '@sanad/core/notifications/offer-notification.ts';
 import {
   type BusinessApplicant,
   type BusinessApplication,
@@ -95,9 +118,17 @@ import { smeTermConventional } from '@sanad/products/sme-term-conventional/index
 import type { SmeVariant } from '@sanad/products/sme-term-conventional/variants.ts';
 
 import { postgresOutboxStore } from '../../../../services/outbox/src/postgres-store.ts';
-import { type ApplicationEvent, type ApplicationVersion, type FigureRow, type PersistedAssessment, type PersistedOffer, illustrativeSeedPermitted, loadBusinessBook, saveBusinessChanges } from './business-persistence.ts';
+import {
+  type ApplicationEvent,
+  type ApplicationVersion,
+  type FigureRow,
+  type PersistedAssessment,
+  type PersistedOffer,
+  illustrativeSeedPermitted,
+  loadBusinessBook,
+  saveBusinessChanges,
+} from './business-persistence.ts';
 import { persistencePool, persistenceUrl } from './persistence.ts';
-import { CHECKER, MAKER } from './session.ts';
 import { developmentAttestation } from './store.ts';
 
 export type { ApplicationEvent, FigureRow } from './business-persistence.ts';
@@ -108,18 +139,22 @@ export type { SmeVariant } from '@sanad/products/sme-term-conventional/variants.
 // =============================================================================
 
 /**
- * The development principals the business screens act as. Distinct people, so
- * four eyes is exercised rather than asserted: the officer keys figures,
- * presents documents, records the assessment inputs and submits; the checker
- * verifies keyed figures, validates documents, runs the assessment and
- * approves straight-through cases; the committee member decides referred
- * cases; the finance principal releases disbursement — never the approver.
+ * The fictional people the **illustrative seed** walks its applications
+ * through, and nothing else: the screens and their actions act as the
+ * signed-in principal (session.ts), whose authorities decide what they may do.
+ * Distinct people, so the seeded history shows four eyes: the officer keys
+ * figures, presents documents, records the assessment inputs and submits; the
+ * checker verifies, validates, runs the assessment and approves
+ * straight-through cases; the committee member decides referred cases; the
+ * finance user releases disbursement — never the approver. They are the UAE
+ * fund's development staff identities (staff.ts), so the seeded history reads
+ * as the same people who sign in.
  */
-export const BUSINESS_ROLES = {
-  officer: MAKER.principalId,
-  checker: CHECKER.principalId,
-  committee: 'stf-committee-01',
-  finance: 'stf-finance-01',
+export const SEED_PRINCIPALS = {
+  officer: 'stf-ae-officer-01',
+  checker: 'stf-ae-checker-01',
+  committee: 'stf-ae-committee-01',
+  finance: 'stf-ae-finance-01',
 } as const;
 
 /**
@@ -151,14 +186,77 @@ const DAY = 86_400n;
  * service standards replace these before any real use.
  */
 export const PIPELINE_STAGES: readonly PipelineStage[] = [
-  { stage: 1, titleEn: 'Application', titleAr: 'الطلب', owner: 'UPSTREAM', targetSeconds: 10n * MINUTE, targetEn: '~10 minutes', targetAr: 'نحو 10 دقائق' },
-  { stage: 2, titleEn: 'Needs assessment', titleAr: 'تقييم الاحتياجات', owner: 'UPSTREAM', targetSeconds: 10n * MINUTE, targetEn: '~10 minutes', targetAr: 'نحو 10 دقائق' },
-  { stage: 3, titleEn: 'Product application', titleAr: 'طلب المنتج', owner: 'UPSTREAM', targetSeconds: 20n * MINUTE, targetEn: '~20 minutes', targetAr: 'نحو 20 دقيقة' },
-  { stage: 4, titleEn: 'Verification', titleAr: 'التحقق', owner: 'UPSTREAM', targetSeconds: 48n * HOUR, targetEn: 'up to 48 hours', targetAr: 'حتى 48 ساعة' },
-  { stage: 5, titleEn: 'Credit assessment', titleAr: 'التقييم الائتماني', owner: 'SANAD', targetSeconds: 5n * DAY, targetEn: 'up to 5 days', targetAr: 'حتى 5 أيام' },
-  { stage: 6, titleEn: 'Decisioning (credit committee)', titleAr: 'القرار (لجنة الائتمان)', owner: 'SANAD', targetSeconds: 10n * DAY, targetEn: 'up to 10 days', targetAr: 'حتى 10 أيام' },
-  { stage: 7, titleEn: 'Contract & disbursement', titleAr: 'العقد والصرف', owner: 'SANAD', targetSeconds: 5n * DAY, targetEn: 'up to 5 days', targetAr: 'حتى 5 أيام' },
-  { stage: 8, titleEn: 'Portfolio management', titleAr: 'إدارة المحفظة', owner: 'SANAD', targetEn: 'ongoing', targetAr: 'مستمر' },
+  {
+    stage: 1,
+    titleEn: 'Application',
+    titleAr: 'الطلب',
+    owner: 'UPSTREAM',
+    targetSeconds: 10n * MINUTE,
+    targetEn: '~10 minutes',
+    targetAr: 'نحو 10 دقائق',
+  },
+  {
+    stage: 2,
+    titleEn: 'Needs assessment',
+    titleAr: 'تقييم الاحتياجات',
+    owner: 'UPSTREAM',
+    targetSeconds: 10n * MINUTE,
+    targetEn: '~10 minutes',
+    targetAr: 'نحو 10 دقائق',
+  },
+  {
+    stage: 3,
+    titleEn: 'Product application',
+    titleAr: 'طلب المنتج',
+    owner: 'UPSTREAM',
+    targetSeconds: 20n * MINUTE,
+    targetEn: '~20 minutes',
+    targetAr: 'نحو 20 دقيقة',
+  },
+  {
+    stage: 4,
+    titleEn: 'Verification',
+    titleAr: 'التحقق',
+    owner: 'UPSTREAM',
+    targetSeconds: 48n * HOUR,
+    targetEn: 'up to 48 hours',
+    targetAr: 'حتى 48 ساعة',
+  },
+  {
+    stage: 5,
+    titleEn: 'Credit assessment',
+    titleAr: 'التقييم الائتماني',
+    owner: 'SANAD',
+    targetSeconds: 5n * DAY,
+    targetEn: 'up to 5 days',
+    targetAr: 'حتى 5 أيام',
+  },
+  {
+    stage: 6,
+    titleEn: 'Decisioning (credit committee)',
+    titleAr: 'القرار (لجنة الائتمان)',
+    owner: 'SANAD',
+    targetSeconds: 10n * DAY,
+    targetEn: 'up to 10 days',
+    targetAr: 'حتى 10 أيام',
+  },
+  {
+    stage: 7,
+    titleEn: 'Contract & disbursement',
+    titleAr: 'العقد والصرف',
+    owner: 'SANAD',
+    targetSeconds: 5n * DAY,
+    targetEn: 'up to 5 days',
+    targetAr: 'حتى 5 أيام',
+  },
+  {
+    stage: 8,
+    titleEn: 'Portfolio management',
+    titleAr: 'إدارة المحفظة',
+    owner: 'SANAD',
+    targetEn: 'ongoing',
+    targetAr: 'مستمر',
+  },
   { stage: 9, titleEn: 'Collections', titleAr: 'التحصيل', owner: 'SANAD', targetEn: 'ongoing', targetAr: 'مستمر' },
 ];
 
@@ -194,7 +292,12 @@ export interface BusinessDocument {
  * (adapters/uae/aecb/README.md); until then `source` says AECB_FIXTURE.
  */
 export interface AssessmentInputs {
-  readonly bureau: { readonly reportRef: string; readonly consentId: string; readonly score: bigint; readonly source: 'AECB_FIXTURE' };
+  readonly bureau: {
+    readonly reportRef: string;
+    readonly consentId: string;
+    readonly score: bigint;
+    readonly source: 'AECB_FIXTURE';
+  };
   /** A count of people, for the SME size classification. */
   readonly fullTimeEmployees: number;
   readonly relevantExperienceYears: bigint;
@@ -211,7 +314,10 @@ export interface AssessmentInputs {
   readonly recordedAtEpochSeconds: bigint;
 }
 
-export type AssessmentInputsEntry = Omit<AssessmentInputs, 'recordedBy' | 'recordedAtEpochSeconds' | 'collateralValue' | 'bureau'> & {
+export type AssessmentInputsEntry = Omit<
+  AssessmentInputs,
+  'recordedBy' | 'recordedAtEpochSeconds' | 'collateralValue' | 'bureau'
+> & {
   readonly bureau: { readonly reportRef: string; readonly consentId: string; readonly score: bigint };
   readonly collateralValueMinorUnits: bigint;
 };
@@ -398,9 +504,24 @@ interface BusinessState {
 /** On globalThis for the same reason as the request book (store.ts): one copy per process across module graphs. */
 const KEY = Symbol.for('sanad.ops.businessStore');
 const scope = globalThis as unknown as Record<symbol, BusinessState | undefined>;
-const state: BusinessState = (scope[KEY] ??= { books: new Map(), outbox: emptyOutbox(), outboxStore: inMemoryOutboxStore(), outboxOnDatabase: false });
+const state: BusinessState = (scope[KEY] ??= {
+  books: new Map(),
+  outbox: emptyOutbox(),
+  outboxStore: inMemoryOutboxStore(),
+  outboxOnDatabase: false,
+});
 
-const freshBook = (seeded: boolean): TenantBook => ({ records: new Map(), hydrated: false, seeded, dirty: new Set(), unsavedFigures: [], unsavedAssessments: [], unsavedOffers: [], unsavedEvents: [], unsavedOutbox: [] });
+const freshBook = (seeded: boolean): TenantBook => ({
+  records: new Map(),
+  hydrated: false,
+  seeded,
+  dirty: new Set(),
+  unsavedFigures: [],
+  unsavedAssessments: [],
+  unsavedOffers: [],
+  unsavedEvents: [],
+  unsavedOutbox: [],
+});
 
 function bookOf(tenant: TenantCode): TenantBook {
   let book = state.books.get(tenant);
@@ -435,7 +556,9 @@ async function withTenantLock<T>(tenant: string, fn: () => Promise<T>): Promise<
   if (held?.has(tenant) === true) return fn();
   const previous = lockTails.get(tenant) ?? Promise.resolve();
   let release: () => void = () => undefined;
-  const mine = new Promise<void>((resolve) => { release = resolve; });
+  const mine = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   const tail = previous.then(() => mine);
   lockTails.set(tenant, tail);
   await previous;
@@ -454,14 +577,19 @@ const poolOf = (): Pool | undefined => state.pool ?? persistencePool();
 const seeding = new AsyncLocalStorage<string>();
 
 /** Where the business book lives: the database when one is configured, this process's memory otherwise. */
-export const businessBacking = (): 'POSTGRESQL' | 'MEMORY' => (persistenceUrl() === undefined ? 'MEMORY' : 'POSTGRESQL');
+export const businessBacking = (): 'POSTGRESQL' | 'MEMORY' =>
+  persistenceUrl() === undefined ? 'MEMORY' : 'POSTGRESQL';
 
 // =============================================================================
 // Small helpers
 // =============================================================================
 
-const fail = (reason: string, detail: string, context?: Readonly<Record<string, string>>): Result<never> => reject('OP-DETERMINACY', reason, detail, context);
-const notFound = (applicationId: string): Result<never> => fail('BUSINESS_APPLICATION_NOT_FOUND', 'No business application with that id for this institution', { applicationId });
+const fail = (reason: string, detail: string, context?: Readonly<Record<string, string>>): Result<never> =>
+  reject('OP-DETERMINACY', reason, detail, context);
+const notFound = (applicationId: string): Result<never> =>
+  fail('BUSINESS_APPLICATION_NOT_FOUND', 'No business application with that id for this institution', {
+    applicationId,
+  });
 
 const REF_SHAPE = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,127}$/;
 
@@ -473,7 +601,12 @@ const REF_SHAPE = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,127}$/;
  */
 function identityNumberIn(fields: Readonly<Record<string, string>>): Result<never> | undefined {
   for (const [field, value] of Object.entries(fields)) {
-    if (containsIdentityNumber(value)) return fail('IDENTITY_NUMBER_IN_PAYLOAD', 'An identity number does not belong in the application record; send a reference', { field });
+    if (containsIdentityNumber(value))
+      return fail(
+        'IDENTITY_NUMBER_IN_PAYLOAD',
+        'An identity number does not belong in the application record; send a reference',
+        { field },
+      );
   }
   return undefined;
 }
@@ -490,7 +623,12 @@ function tenantContext(tenant: TenantCode): Result<TenantContext> {
   if (!onboarding.ok) return onboarding;
   const profile = loadJurisdictionProfile(onboarding.value.jurisdiction);
   if (!profile.ok) return profile;
-  return ok({ currency: onboarding.value.baseCurrency, profile: profile.value, legalNameEn: onboarding.value.legalNameEn, legalNameAr: onboarding.value.legalNameAr });
+  return ok({
+    currency: onboarding.value.baseCurrency,
+    profile: profile.value,
+    legalNameEn: onboarding.value.legalNameEn,
+    legalNameAr: onboarding.value.legalNameAr,
+  });
 }
 
 /** The tenant's catalogue: the approved revision in force when a database is configured, the checked-in file otherwise. */
@@ -511,12 +649,25 @@ interface ProductContext {
  * the fund's catalogue until its board ruling is recorded (a hand-over for it
  * is refused, not quietly priced as conventional).
  */
-async function productFor(tenant: TenantCode, productCode: string, variantCode: string, at: TsaInstant): Promise<Result<ProductContext>> {
+async function productFor(
+  tenant: TenantCode,
+  productCode: string,
+  variantCode: string,
+  at: TsaInstant,
+): Promise<Result<ProductContext>> {
   const catalogue = await catalogueFor(tenant, at);
   if (!catalogue.ok) return catalogue;
   const entry = catalogue.value.entries.find((e) => e.productCode === productCode);
-  if (entry === undefined || !entry.enabled) return fail('PRODUCT_NOT_IN_CATALOGUE', 'The product is not enabled in this institution’s catalogue', { productCode });
-  if (productCode !== smeTermConventional.descriptor.code) return fail('PRODUCT_NOT_QUOTED_HERE', 'Business applications are quoted through the conventional SME module only', { productCode });
+  if (entry === undefined || !entry.enabled)
+    return fail('PRODUCT_NOT_IN_CATALOGUE', 'The product is not enabled in this institution’s catalogue', {
+      productCode,
+    });
+  if (productCode !== smeTermConventional.descriptor.code)
+    return fail(
+      'PRODUCT_NOT_QUOTED_HERE',
+      'Business applications are quoted through the conventional SME module only',
+      { productCode },
+    );
   const terms = smeTermConventional.validateTerms(entry.terms);
   if (!terms.ok) return terms;
   const variant = terms.value.variants.find((v) => v.code === variantCode);
@@ -549,7 +700,10 @@ function daysFromCivil(yIn: bigint, m: bigint, d: bigint): bigint {
 }
 
 const pad = (n: bigint, w: number): string => n.toString().padStart(w, '0');
-const isoOfDays = (days: bigint): string => { const c = civilFromDays(days); return `${pad(c.y, 4)}-${pad(c.m, 2)}-${pad(c.d, 2)}`; };
+const isoOfDays = (days: bigint): string => {
+  const c = civilFromDays(days);
+  return `${pad(c.y, 4)}-${pad(c.m, 2)}-${pad(c.d, 2)}`;
+};
 function daysOfIso(iso: string): bigint | undefined {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   return m === null ? undefined : daysFromCivil(BigInt(m[1] ?? '0'), BigInt(m[2] ?? '0'), BigInt(m[3] ?? '0'));
@@ -565,10 +719,21 @@ function localDate(at: bigint, profile: JurisdictionProfile): string {
 function defaultFirstDue(disbursement: string, minGapDays: bigint): string {
   const days = daysOfIso(disbursement) ?? 0n;
   const c = civilFromDays(days);
-  let y = c.y; let m = c.m + 1n;
-  if (m > 12n) { m = 1n; y += 1n; }
+  let y = c.y;
+  let m = c.m + 1n;
+  if (m > 12n) {
+    m = 1n;
+    y += 1n;
+  }
   let candidate = daysFromCivil(y, m, 1n);
-  while (candidate - days < minGapDays) { m += 1n; if (m > 12n) { m = 1n; y += 1n; } candidate = daysFromCivil(y, m, 1n); }
+  while (candidate - days < minGapDays) {
+    m += 1n;
+    if (m > 12n) {
+      m = 1n;
+      y += 1n;
+    }
+    candidate = daysFromCivil(y, m, 1n);
+  }
   return isoOfDays(candidate);
 }
 
@@ -579,18 +744,48 @@ function defaultFirstDue(disbursement: string, minGapDays: bigint): string {
  * disbursement on or after the offer date and within the policy's window;
  * the first instalment within the policy's window after disbursement.
  */
-export function checkOfferDates(policy: OfferDatePolicy, offerDate: string, disbursementDate: string, firstDueDate: string): Result<true> {
+export function checkOfferDates(
+  policy: OfferDatePolicy,
+  offerDate: string,
+  disbursementDate: string,
+  firstDueDate: string,
+): Result<true> {
   const offer = daysOfIso(offerDate);
   const disbursement = daysOfIso(disbursementDate);
   const firstDue = daysOfIso(firstDueDate);
-  if (offer === undefined || disbursement === undefined || firstDue === undefined || isoOfDays(disbursement) !== disbursementDate || isoOfDays(firstDue) !== firstDueDate) {
+  if (
+    offer === undefined ||
+    disbursement === undefined ||
+    firstDue === undefined ||
+    isoOfDays(disbursement) !== disbursementDate ||
+    isoOfDays(firstDue) !== firstDueDate
+  ) {
     return fail('OFFER_DATE_MALFORMED', 'Dates are calendar dates as YYYY-MM-DD', { disbursementDate, firstDueDate });
   }
   const cite = { policyId: policy.policyId, policyVersion: policy.version };
-  if (disbursement < offer) return fail('DISBURSEMENT_BEFORE_OFFER', 'The disbursement date is on or after the offer date', { offerDate, disbursementDate });
-  if (disbursement - offer > policy.maxDisbursementAfterOfferDays) return fail('DISBURSEMENT_TOO_FAR', `The disbursement date is within ${policy.maxDisbursementAfterOfferDays} days of the offer date`, { offerDate, disbursementDate, ...cite });
-  if (firstDue - disbursement < policy.minFirstDueAfterDisbursementDays) return fail('FIRST_DUE_TOO_SOON', `The first instalment falls at least ${policy.minFirstDueAfterDisbursementDays} days after disbursement`, { disbursementDate, firstDueDate, ...cite });
-  if (firstDue - disbursement > policy.maxFirstDueAfterDisbursementDays) return fail('FIRST_DUE_TOO_LATE', `The first instalment falls at most ${policy.maxFirstDueAfterDisbursementDays} days after disbursement`, { disbursementDate, firstDueDate, ...cite });
+  if (disbursement < offer)
+    return fail('DISBURSEMENT_BEFORE_OFFER', 'The disbursement date is on or after the offer date', {
+      offerDate,
+      disbursementDate,
+    });
+  if (disbursement - offer > policy.maxDisbursementAfterOfferDays)
+    return fail(
+      'DISBURSEMENT_TOO_FAR',
+      `The disbursement date is within ${policy.maxDisbursementAfterOfferDays} days of the offer date`,
+      { offerDate, disbursementDate, ...cite },
+    );
+  if (firstDue - disbursement < policy.minFirstDueAfterDisbursementDays)
+    return fail(
+      'FIRST_DUE_TOO_SOON',
+      `The first instalment falls at least ${policy.minFirstDueAfterDisbursementDays} days after disbursement`,
+      { disbursementDate, firstDueDate, ...cite },
+    );
+  if (firstDue - disbursement > policy.maxFirstDueAfterDisbursementDays)
+    return fail(
+      'FIRST_DUE_TOO_LATE',
+      `The first instalment falls at most ${policy.maxFirstDueAfterDisbursementDays} days after disbursement`,
+      { disbursementDate, firstDueDate, ...cite },
+    );
   return ok(true);
 }
 
@@ -605,7 +800,11 @@ function nextSequence(record: BusinessRecord): number {
 /** Closed applications are never updated again (0016's guard trigger); their later events are recorded without touching the row. */
 const CLOSED = new Set(['DECLINED', 'DISBURSED', 'WITHDRAWN']);
 
-function recordEvent(book: TenantBook, record: BusinessRecord, e: Omit<ApplicationEvent, 'eventId' | 'sequence'>): ApplicationEvent {
+function recordEvent(
+  book: TenantBook,
+  record: BusinessRecord,
+  e: Omit<ApplicationEvent, 'eventId' | 'sequence'>,
+): ApplicationEvent {
   const event: ApplicationEvent = { ...e, eventId: randomUUID(), sequence: nextSequence(record) };
   record.events.push(event);
   book.unsavedEvents.push({ ...event, applicationId: record.application.applicationId });
@@ -618,7 +817,14 @@ function apply(book: TenantBook, record: BusinessRecord, t: Transition): void {
   record.application = t.application;
   book.dirty.add(t.application.applicationId);
   const s: StageEvent = t.event;
-  recordEvent(book, record, { eventType: s.eventType, fromStage: s.fromStage, toStage: s.toStage, actor: s.actor, atEpochSeconds: s.atEpochSeconds, detail: s.detail });
+  recordEvent(book, record, {
+    eventType: s.eventType,
+    fromStage: s.fromStage,
+    toStage: s.toStage,
+    actor: s.actor,
+    atEpochSeconds: s.atEpochSeconds,
+    detail: s.detail,
+  });
 }
 
 function currentFigures(record: BusinessRecord): FigureRow[] {
@@ -634,13 +840,18 @@ function addFigureRow(book: TenantBook, record: BusinessRecord, row: FigureRow):
 function view(record: BusinessRecord, currency: CurrencyCode): BusinessApplicationView {
   const latestAssessment = record.assessments[record.assessments.length - 1];
   const latestOffer = record.offers[record.offers.length - 1];
-  const inCollections = record.application.status === 'DISBURSED' && record.portfolio !== undefined && record.portfolio.daysPastDue > 0;
+  const inCollections =
+    record.application.status === 'DISBURSED' && record.portfolio !== undefined && record.portfolio.daysPastDue > 0;
   return {
     application: record.application,
     displayStage: inCollections ? 9 : record.application.stage,
     currency,
     contact: record.contact,
-    figures: currentFigures(record).map((f) => ({ figureId: f.rowId, figure: f.figure, ...(f.supersedes === undefined ? {} : { supersedes: f.supersedes }) })),
+    figures: currentFigures(record).map((f) => ({
+      figureId: f.rowId,
+      figure: f.figure,
+      ...(f.supersedes === undefined ? {} : { supersedes: f.supersedes }),
+    })),
     documents: [...record.documents],
     ...(record.inputs === undefined ? {} : { assessmentInputs: record.inputs }),
     assessments: [...record.assessments],
@@ -678,7 +889,12 @@ async function hydrate(tenant: TenantCode): Promise<TenantBook> {
 async function loadInto(tenant: TenantCode, book: TenantBook): Promise<void> {
   const pool = poolOf();
   if (pool !== undefined) restoreBook(book, await loadBusinessBook(pool, tenant));
-  if (book.records.size === 0 && !book.seeded && tenant === SEED_TENANT && (pool === undefined || await illustrativeSeedPermitted(pool))) {
+  if (
+    book.records.size === 0 &&
+    !book.seeded &&
+    tenant === SEED_TENANT &&
+    (pool === undefined || (await illustrativeSeedPermitted(pool)))
+  ) {
     book.seeded = true;
     await seeding.run(tenant, () => seedIllustrativeBook(tenant));
   }
@@ -690,23 +906,63 @@ function restoreBook(book: TenantBook, persisted: Awaited<ReturnType<typeof load
   for (const application of persisted.applications) {
     const firstOwner = application.applicant.owners[0]?.ref ?? application.applicationId;
     const stored = persisted.versions.get(application.applicationId);
-    book.records.set(application.applicationId, { application, contact: { partyRef: firstOwner }, figures: [], documents: [], assessments: [], offers: [], events: [], ...(stored === undefined ? {} : { stored }) });
+    book.records.set(application.applicationId, {
+      application,
+      contact: { partyRef: firstOwner },
+      figures: [],
+      documents: [],
+      assessments: [],
+      offers: [],
+      events: [],
+      ...(stored === undefined ? {} : { stored }),
+    });
   }
   for (const f of persisted.figures) {
     const r = book.records.get(f.applicationId);
-    if (r !== undefined) r.figures.push({ rowId: f.rowId, figure: f.figure, createdBy: f.createdBy, ...(f.supersedes === undefined ? {} : { supersedes: f.supersedes }) });
+    if (r !== undefined)
+      r.figures.push({
+        rowId: f.rowId,
+        figure: f.figure,
+        createdBy: f.createdBy,
+        ...(f.supersedes === undefined ? {} : { supersedes: f.supersedes }),
+      });
   }
   for (const a of persisted.assessments) {
     const r = book.records.get(a.applicationId);
     const trace = a.trace as Omit<AssessmentRun, 'assessmentId' | 'assessedBy' | 'assessedAtEpochSeconds'>;
-    if (r !== undefined) r.assessments.push({ ...trace, assessmentId: a.assessmentId, assessedBy: a.assessedBy, assessedAtEpochSeconds: a.assessedAtEpochSeconds });
+    if (r !== undefined)
+      r.assessments.push({
+        ...trace,
+        assessmentId: a.assessmentId,
+        assessedBy: a.assessedBy,
+        assessedAtEpochSeconds: a.assessedAtEpochSeconds,
+      });
   }
   for (const o of persisted.offers) {
     const r = book.records.get(o.applicationId);
-    const held = o.letter as { readonly letter: OfferLetter; readonly terms: OfferTerms; readonly createdAtEpochSeconds: bigint };
-    if (r !== undefined) r.offers.push({ offerId: o.offerId, letter: held.letter, terms: held.terms, schedule: o.schedule as DatedSchedule, createdBy: o.createdBy, createdAtEpochSeconds: held.createdAtEpochSeconds });
+    const held = o.letter as {
+      readonly letter: OfferLetter;
+      readonly terms: OfferTerms;
+      readonly createdAtEpochSeconds: bigint;
+    };
+    if (r !== undefined)
+      r.offers.push({
+        offerId: o.offerId,
+        letter: held.letter,
+        terms: held.terms,
+        schedule: o.schedule as DatedSchedule,
+        createdBy: o.createdBy,
+        createdAtEpochSeconds: held.createdAtEpochSeconds,
+      });
   }
-  for (const r of book.records.values()) r.offers.sort((a, b) => (a.createdAtEpochSeconds < b.createdAtEpochSeconds ? -1 : a.createdAtEpochSeconds > b.createdAtEpochSeconds ? 1 : 0));
+  for (const r of book.records.values())
+    r.offers.sort((a, b) =>
+      a.createdAtEpochSeconds < b.createdAtEpochSeconds
+        ? -1
+        : a.createdAtEpochSeconds > b.createdAtEpochSeconds
+          ? 1
+          : 0,
+    );
   for (const e of persisted.events) {
     const r = book.records.get(e.applicationId);
     if (r === undefined) continue;
@@ -721,23 +977,42 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
   const d = e.detail;
   switch (e.eventType) {
     case 'CONTACT_RECORDED':
-      r.contact = { partyRef: d['partyRef'] ?? r.contact.partyRef, ...(d['emailMasked'] === undefined ? {} : { emailMasked: d['emailMasked'] }), ...(d['mobileMasked'] === undefined ? {} : { mobileMasked: d['mobileMasked'] }) };
+      r.contact = {
+        partyRef: d['partyRef'] ?? r.contact.partyRef,
+        ...(d['emailMasked'] === undefined ? {} : { emailMasked: d['emailMasked'] }),
+        ...(d['mobileMasked'] === undefined ? {} : { mobileMasked: d['mobileMasked'] }),
+      };
       return;
     case 'DOCUMENT_PRESENTED':
       r.documents.push({
         documentType: d['documentType'] ?? '',
         documentRef: d['documentRef'] ?? '',
         validationStatus: (d['validationStatus'] ?? 'PENDING') as BusinessDocument['validationStatus'],
-        capturedAt: tsaInstant({ verified: true, genTimeEpochSeconds: BigInt(d['capturedAtEpoch'] ?? '0'), tokenDigest: d['capturedTokenDigest'] ?? '', authorityId: d['capturedAuthority'] ?? '' }),
+        capturedAt: tsaInstant({
+          verified: true,
+          genTimeEpochSeconds: BigInt(d['capturedAtEpoch'] ?? '0'),
+          tokenDigest: d['capturedTokenDigest'] ?? '',
+          authorityId: d['capturedAuthority'] ?? '',
+        }),
         presentedBy: e.actor,
       });
       return;
     case 'DOCUMENT_VALIDATED':
-      markValidated(r, d['documentRef'] ?? '', (d['validationStatus'] ?? 'PENDING') as BusinessDocument['validationStatus'], e.actor);
+      markValidated(
+        r,
+        d['documentRef'] ?? '',
+        (d['validationStatus'] ?? 'PENDING') as BusinessDocument['validationStatus'],
+        e.actor,
+      );
       return;
     case 'ASSESSMENT_INPUTS_RECORDED':
       r.inputs = {
-        bureau: { reportRef: d['bureauReportRef'] ?? '', consentId: d['bureauConsentId'] ?? '', score: BigInt(d['bureauScore'] ?? '0'), source: 'AECB_FIXTURE' },
+        bureau: {
+          reportRef: d['bureauReportRef'] ?? '',
+          consentId: d['bureauConsentId'] ?? '',
+          score: BigInt(d['bureauScore'] ?? '0'),
+          source: 'AECB_FIXTURE',
+        },
         fullTimeEmployees: Number.parseInt(d['fullTimeEmployees'] ?? '0', 10),
         relevantExperienceYears: BigInt(d['relevantExperienceYears'] ?? '0'),
         sectorPriority: d['sectorPriority'] ?? '',
@@ -752,7 +1027,12 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
       };
       return;
     case 'PORTFOLIO_STATUS_RECORDED':
-      r.portfolio = { daysPastDue: Number.parseInt(d['daysPastDue'] ?? '0', 10), arrears: money(BigInt(d['arrearsMinorUnits'] ?? '0'), r.application.requested.currency), recordedBy: e.actor, asOfEpochSeconds: e.atEpochSeconds };
+      r.portfolio = {
+        daysPastDue: Number.parseInt(d['daysPastDue'] ?? '0', 10),
+        arrears: money(BigInt(d['arrearsMinorUnits'] ?? '0'), r.application.requested.currency),
+        recordedBy: e.actor,
+        asOfEpochSeconds: e.atEpochSeconds,
+      };
       return;
     default:
       return;
@@ -760,7 +1040,12 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
 }
 
 /** The most recent presentation of a document reference takes the checker's status. */
-function markValidated(r: BusinessRecord, documentRef: string, status: BusinessDocument['validationStatus'], validator: string): void {
+function markValidated(
+  r: BusinessRecord,
+  documentRef: string,
+  status: BusinessDocument['validationStatus'],
+  validator: string,
+): void {
   for (let i = r.documents.length - 1; i >= 0; i -= 1) {
     const doc = r.documents[i];
     if (doc !== undefined && doc.documentRef === documentRef) {
@@ -770,7 +1055,9 @@ function markValidated(r: BusinessRecord, documentRef: string, status: BusinessD
   }
 }
 
-function isUuid(s: string): boolean { return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s); }
+function isUuid(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+}
 
 /**
  * The store the dispatcher reads: the database's when one is configured. The
@@ -787,7 +1074,8 @@ function useDatabaseOutbox(): void {
     ...durable,
     async append(events) {
       const mapped: OutboxEvent[] = [];
-      for (const e of events) mapped.push(isUuid(e.tenantId) ? e : { ...e, tenantId: await tenantUuidByCode(pool, e.tenantId) });
+      for (const e of events)
+        mapped.push(isUuid(e.tenantId) ? e : { ...e, tenantId: await tenantUuidByCode(pool, e.tenantId) });
       await durable.append(mapped);
     },
   };
@@ -798,7 +1086,8 @@ function useDatabaseOutbox(): void {
 export const SETTLE_FAILURE_REASONS: ReadonlySet<string> = new Set(['STALE_APPLICATION', 'PERSISTENCE_FAILED']);
 
 /** Whether a refusal came from saving the change (nothing written; retry may succeed) rather than from the domain. */
-export const isSettleFailure = (error: { readonly reason: string }): boolean => SETTLE_FAILURE_REASONS.has(error.reason);
+export const isSettleFailure = (error: { readonly reason: string }): boolean =>
+  SETTLE_FAILURE_REASONS.has(error.reason);
 
 /**
  * Drops the tenant's working set: the next read reloads it from the database.
@@ -823,8 +1112,14 @@ function discardBook(tenant: string, book: TenantBook): void {
 async function flushTenant(tenant: string, pool: Pool): Promise<Result<true>> {
   const book = state.books.get(tenant);
   if (book === undefined) return ok(true);
-  const dirty = [...book.dirty].flatMap((id) => { const r = book.records.get(id); return r === undefined ? [] : [r]; });
-  const applications = dirty.map((r) => ({ application: r.application, ...(r.stored === undefined ? {} : { expected: r.stored }) }));
+  const dirty = [...book.dirty].flatMap((id) => {
+    const r = book.records.get(id);
+    return r === undefined ? [] : [r];
+  });
+  const applications = dirty.map((r) => ({
+    application: r.application,
+    ...(r.stored === undefined ? {} : { expected: r.stored }),
+  }));
   const figures = [...book.unsavedFigures];
   const assessments = [...book.unsavedAssessments];
   const offers = [...book.unsavedOffers];
@@ -836,11 +1131,18 @@ async function flushTenant(tenant: string, pool: Pool): Promise<Result<true>> {
   } catch {
     // The database's message may quote a value; it is not carried into the refusal.
     discardBook(tenant, book);
-    return fail('PERSISTENCE_FAILED', 'The change could not be saved and nothing of it was written. Reload and try again');
+    return fail(
+      'PERSISTENCE_FAILED',
+      'The change could not be saved and nothing of it was written. Reload and try again',
+    );
   }
   if (saved.kind === 'STALE') {
     discardBook(tenant, book);
-    return fail('STALE_APPLICATION', 'The application was changed elsewhere since this screen loaded it; nothing was saved. Reload and try again', { applicationId: saved.applicationId });
+    return fail(
+      'STALE_APPLICATION',
+      'The application was changed elsewhere since this screen loaded it; nothing was saved. Reload and try again',
+      { applicationId: saved.applicationId },
+    );
   }
   for (const r of dirty) {
     book.dirty.delete(r.application.applicationId);
@@ -860,7 +1162,12 @@ async function flushTenantInMemory(tenant: string): Promise<Result<true>> {
   const book = state.books.get(tenant);
   if (book === undefined) return ok(true);
   const outbox = book.unsavedOutbox;
-  book.dirty.clear(); book.unsavedFigures = []; book.unsavedAssessments = []; book.unsavedOffers = []; book.unsavedEvents = []; book.unsavedOutbox = [];
+  book.dirty.clear();
+  book.unsavedFigures = [];
+  book.unsavedAssessments = [];
+  book.unsavedOffers = [];
+  book.unsavedEvents = [];
+  book.unsavedOutbox = [];
   if (outbox.length > 0) await state.outboxStore.append(outbox);
   return ok(true);
 }
@@ -951,10 +1258,19 @@ export async function listApplications(tenant: TenantCode): Promise<readonly Bus
   if (!ctx.ok) return [];
   return [...book.records.values()]
     .map((r) => view(r, ctx.value.currency))
-    .sort((a, b) => (a.application.receivedAtEpochSeconds > b.application.receivedAtEpochSeconds ? -1 : a.application.receivedAtEpochSeconds < b.application.receivedAtEpochSeconds ? 1 : 0));
+    .sort((a, b) =>
+      a.application.receivedAtEpochSeconds > b.application.receivedAtEpochSeconds
+        ? -1
+        : a.application.receivedAtEpochSeconds < b.application.receivedAtEpochSeconds
+          ? 1
+          : 0,
+    );
 }
 
-export async function getApplication(tenant: TenantCode, applicationId: string): Promise<BusinessApplicationView | undefined> {
+export async function getApplication(
+  tenant: TenantCode,
+  applicationId: string,
+): Promise<BusinessApplicationView | undefined> {
   const book = await hydrate(tenant);
   const ctx = tenantContext(tenant);
   const r = book.records.get(applicationId);
@@ -965,8 +1281,14 @@ function readinessOf(record: BusinessRecord, currency: CurrencyCode): FigureRead
   const current = currentFigures(record);
   const present = new Set(current.map((f) => f.figure.metric));
   const missingFigures = FULL_SPREAD_METRICS.filter((m) => !present.has(m));
-  const unverifiedFigures = FULL_SPREAD_METRICS.filter((m) => present.has(m) && !current.some((f) => f.figure.metric === m && isVerified(f.figure)));
-  const spread = completeSpread(current.map((f) => f.figure), FULL_SPREAD_METRICS, currency);
+  const unverifiedFigures = FULL_SPREAD_METRICS.filter(
+    (m) => present.has(m) && !current.some((f) => f.figure.metric === m && isVerified(f.figure)),
+  );
+  const spread = completeSpread(
+    current.map((f) => f.figure),
+    FULL_SPREAD_METRICS,
+    currency,
+  );
   return {
     requiredMetrics: FULL_SPREAD_METRICS,
     missingFigures,
@@ -980,20 +1302,34 @@ function readinessOf(record: BusinessRecord, currency: CurrencyCode): FigureRead
 /** Which required figures are missing or unverified, and the ratios once the spread is complete. */
 export async function figureReadiness(tenant: TenantCode, applicationId: string): Promise<Result<FigureReadiness>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
   return ok(readinessOf(r, ctx.value.currency));
 }
 
-async function checklistOf(tenant: TenantCode, record: BusinessRecord, at: TsaInstant): Promise<Result<ChecklistStatus>> {
+async function checklistOf(
+  tenant: TenantCode,
+  record: BusinessRecord,
+  at: TsaInstant,
+): Promise<Result<ChecklistStatus>> {
   const product = await productFor(tenant, record.application.productCode, record.application.variantCode, at);
   if (!product.ok) return product;
   const ref = product.value.variant.documentChecklistRef;
-  if (ref === undefined) return fail('DOCUMENT_CHECKLIST_NOT_FOUND', 'The variant names no document checklist', { variantCode: record.application.variantCode });
+  if (ref === undefined)
+    return fail('DOCUMENT_CHECKLIST_NOT_FOUND', 'The variant names no document checklist', {
+      variantCode: record.application.variantCode,
+    });
   const checklist = loadDocumentChecklist(tenant, ref);
   if (!checklist.ok) return checklist;
   const report = checklistReport(checklist.value, record.documents, at);
-  return ok({ checklist: checklist.value, report, complete: isChecklistComplete(report), missing: blockingItems(report).map((i) => i.item.documentType) });
+  return ok({
+    checklist: checklist.value,
+    report,
+    complete: isChecklistComplete(report),
+    missing: blockingItems(report).map((i) => i.item.documentType),
+  });
 }
 
 /**
@@ -1013,7 +1349,8 @@ export async function productVariants(tenant: TenantCode): Promise<ReadonlyMap<s
 /** The variant's document checklist against the documents presented, at the current attested instant. */
 export async function checklistStatus(tenant: TenantCode, applicationId: string): Promise<Result<ChecklistStatus>> {
   const book = await hydrate(tenant);
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
   return checklistOf(tenant, r, developmentAttestation());
 }
 
@@ -1021,54 +1358,101 @@ export async function checklistStatus(tenant: TenantCode, applicationId: string)
 // Stage 5: hand-over, figures, documents, inputs, submission
 // =============================================================================
 
-async function handOverAt(tenant: TenantCode, request: HandoverRequest, actor: string, at: TsaInstant): Promise<Result<{ readonly view: BusinessApplicationView; readonly created: boolean }>> {
+async function handOverAt(
+  tenant: TenantCode,
+  request: HandoverRequest,
+  actor: string,
+  at: TsaInstant,
+): Promise<Result<{ readonly view: BusinessApplicationView; readonly created: boolean }>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
   const currency = ctx.value.currency;
 
   // No identity number anywhere in what was handed over — the contact and the upstream reference as much as the applicant.
-  if (containsIdentityNumber(request)) return fail('IDENTITY_NUMBER_IN_PAYLOAD', 'An identity number does not belong in the application record; send a reference');
+  if (containsIdentityNumber(request))
+    return fail(
+      'IDENTITY_NUMBER_IN_PAYLOAD',
+      'An identity number does not belong in the application record; send a reference',
+    );
 
   // Idempotent on the upstream reference: the same hand-over twice is the same application.
   const existing = [...book.records.values()].find((r) => r.application.upstreamRef === request.upstreamRef);
   if (existing !== undefined) {
-    if (existing.application.applicationId !== request.applicationId) return fail('UPSTREAM_REF_REUSED', 'This upstream reference already handed over a different application', { upstreamRef: request.upstreamRef });
+    if (existing.application.applicationId !== request.applicationId)
+      return fail('UPSTREAM_REF_REUSED', 'This upstream reference already handed over a different application', {
+        upstreamRef: request.upstreamRef,
+      });
     return ok({ view: view(existing, currency), created: false });
   }
-  if (book.records.has(request.applicationId)) return fail('APPLICATION_ID_TAKEN', 'An application with this id was handed over under a different upstream reference', { applicationId: request.applicationId });
+  if (book.records.has(request.applicationId))
+    return fail(
+      'APPLICATION_ID_TAKEN',
+      'An application with this id was handed over under a different upstream reference',
+      { applicationId: request.applicationId },
+    );
 
   const product = await productFor(tenant, request.productCode, request.variantCode, at);
   if (!product.ok) return product;
-  if (!product.value.variant.purposes.some((p) => p.code === request.purpose)) return reject('OP-LIMIT', 'PURPOSE_NOT_ALLOWED', 'This variant does not finance that purpose', { variantCode: request.variantCode, purpose: request.purpose });
+  if (!product.value.variant.purposes.some((p) => p.code === request.purpose))
+    return reject('OP-LIMIT', 'PURPOSE_NOT_ALLOWED', 'This variant does not finance that purpose', {
+      variantCode: request.variantCode,
+      purpose: request.purpose,
+    });
 
-  const contact: OfferNotificationRecipient = request.contact ?? { partyRef: request.applicant.owners[0]?.ref ?? request.applicationId };
+  const contact: OfferNotificationRecipient = request.contact ?? {
+    partyRef: request.applicant.owners[0]?.ref ?? request.applicationId,
+  };
   if (!REF_SHAPE.test(contact.partyRef)) return fail('CONTACT_PARTY_REF_INVALID', 'The contact is a party reference');
-  if (contact.emailMasked !== undefined && !isMaskedEmail(contact.emailMasked)) return fail('CONTACT_EMAIL_NOT_MASKED', 'An email address is carried masked only');
-  if (contact.mobileMasked !== undefined && !isMaskedMobile(contact.mobileMasked)) return fail('CONTACT_MOBILE_NOT_MASKED', 'A mobile number is carried masked only');
+  if (contact.emailMasked !== undefined && !isMaskedEmail(contact.emailMasked))
+    return fail('CONTACT_EMAIL_NOT_MASKED', 'An email address is carried masked only');
+  if (contact.mobileMasked !== undefined && !isMaskedMobile(contact.mobileMasked))
+    return fail('CONTACT_MOBILE_NOT_MASKED', 'A mobile number is carried masked only');
 
   // The amount is in the tenant's currency. A stated currency is checked by the domain, never adopted.
   const stated = request.currency ?? currency;
-  const t = receiveHandover({
-    applicationId: request.applicationId,
-    upstreamRef: request.upstreamRef,
-    tenantId: tenant,
-    applicant: request.applicant,
-    productCode: request.productCode,
-    variantCode: request.variantCode,
-    purpose: request.purpose,
-    requested: { minorUnits: request.requestedMinorUnits, currency: stated as CurrencyCode },
-    tenorMonths: request.tenorMonths,
-    graceMonths: request.graceMonths,
-    contributionPerTenThousand: request.contributionPerTenThousand,
-  }, currency, actor, at.epochSeconds);
+  const t = receiveHandover(
+    {
+      applicationId: request.applicationId,
+      upstreamRef: request.upstreamRef,
+      tenantId: tenant,
+      applicant: request.applicant,
+      productCode: request.productCode,
+      variantCode: request.variantCode,
+      purpose: request.purpose,
+      requested: { minorUnits: request.requestedMinorUnits, currency: stated as CurrencyCode },
+      tenorMonths: request.tenorMonths,
+      graceMonths: request.graceMonths,
+      contributionPerTenThousand: request.contributionPerTenThousand,
+    },
+    currency,
+    actor,
+    at.epochSeconds,
+  );
   if (!t.ok) return t;
 
-  const record: BusinessRecord = { application: t.value.application, contact, figures: [], documents: [], assessments: [], offers: [], events: [] };
+  const record: BusinessRecord = {
+    application: t.value.application,
+    contact,
+    figures: [],
+    documents: [],
+    assessments: [],
+    offers: [],
+    events: [],
+  };
   book.records.set(request.applicationId, record);
   apply(book, record, t.value);
   recordEvent(book, record, {
-    eventType: 'CONTACT_RECORDED', fromStage: null, toStage: null, actor, atEpochSeconds: at.epochSeconds,
-    detail: { partyRef: contact.partyRef, ...(contact.emailMasked === undefined ? {} : { emailMasked: contact.emailMasked }), ...(contact.mobileMasked === undefined ? {} : { mobileMasked: contact.mobileMasked }) },
+    eventType: 'CONTACT_RECORDED',
+    fromStage: null,
+    toStage: null,
+    actor,
+    atEpochSeconds: at.epochSeconds,
+    detail: {
+      partyRef: contact.partyRef,
+      ...(contact.emailMasked === undefined ? {} : { emailMasked: contact.emailMasked }),
+      ...(contact.mobileMasked === undefined ? {} : { mobileMasked: contact.mobileMasked }),
+    },
   });
   return ok({ view: view(record, currency), created: true });
 }
@@ -1077,7 +1461,11 @@ async function handOverAt(tenant: TenantCode, request: HandoverRequest, actor: s
  * Receive an application from upstream at stage 5. Idempotent on
  * `upstreamRef`: a repeat returns the same application with `created: false`.
  */
-export async function handOver(tenant: TenantCode, request: HandoverRequest, actor: string): Promise<Result<{ readonly view: BusinessApplicationView; readonly created: boolean }>> {
+export async function handOver(
+  tenant: TenantCode,
+  request: HandoverRequest,
+  actor: string,
+): Promise<Result<{ readonly view: BusinessApplicationView; readonly created: boolean }>> {
   return withTenantLock(tenant, () => handOverAt(tenant, request, actor, developmentAttestation()));
 }
 
@@ -1091,11 +1479,22 @@ function startSpreadingIfReceived(book: TenantBook, record: BusinessRecord, acto
 
 const SPREAD_OPEN = new Set(['RECEIVED', 'SPREADING']);
 
-async function proposeFiguresAt(tenant: TenantCode, applicationId: string, entries: readonly FigureProposalEntry[], actor: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+async function proposeFiguresAt(
+  tenant: TenantCode,
+  applicationId: string,
+  entries: readonly FigureProposalEntry[],
+  actor: string,
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
-  if (!SPREAD_OPEN.has(r.application.status)) return fail('TRANSITION_NOT_ALLOWED', 'Figures are proposed only while the application is in credit assessment', { status: r.application.status });
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  if (!SPREAD_OPEN.has(r.application.status))
+    return fail('TRANSITION_NOT_ALLOWED', 'Figures are proposed only while the application is in credit assessment', {
+      status: r.application.status,
+    });
   if (entries.length === 0) return fail('FIGURES_EMPTY', 'Propose at least one figure');
   for (const e of entries) {
     const identity = identityNumberIn({ sourceRef: e.sourceRef, periodLabel: e.periodLabel });
@@ -1105,36 +1504,65 @@ async function proposeFiguresAt(tenant: TenantCode, applicationId: string, entri
   // Validate every proposal before recording any: a batch is recorded whole or not at all.
   const figures: FinancialFigure[] = [];
   for (const e of entries) {
-    const f = proposeFigure({
-      metric: e.metric, periodLabel: e.periodLabel, value: money(e.minorUnits, ctx.value.currency), sourceKind: e.sourceKind, sourceRef: e.sourceRef,
-      ...(e.sourceKind === 'OFFICER_ENTRY' ? { enteredBy: actor } : {}), proposedAtEpochSeconds: at.epochSeconds,
-    }, ctx.value.currency);
+    const f = proposeFigure(
+      {
+        metric: e.metric,
+        periodLabel: e.periodLabel,
+        value: money(e.minorUnits, ctx.value.currency),
+        sourceKind: e.sourceKind,
+        sourceRef: e.sourceRef,
+        ...(e.sourceKind === 'OFFICER_ENTRY' ? { enteredBy: actor } : {}),
+        proposedAtEpochSeconds: at.epochSeconds,
+      },
+      ctx.value.currency,
+    );
     if (!f.ok) return f;
     figures.push(f.value);
   }
   // A double submit of the same proposal is one proposal: an identical pending figure is not superseded by its twin.
   const fresh = figures.filter((figure) => !currentFigures(r).some((f) => isSamePendingProposal(f.figure, figure)));
   if (fresh.length === 0) return ok(view(r, ctx.value.currency));
-  const started = startSpreadingIfReceived(book, r, actor, at.epochSeconds); if (!started.ok) return started;
+  const started = startSpreadingIfReceived(book, r, actor, at.epochSeconds);
+  if (!started.ok) return started;
   for (const figure of fresh) {
     // One current figure per metric: a new proposal supersedes the current one, verified or not.
     const current = currentFigures(r).find((f) => f.figure.metric === figure.metric);
     const rowId = randomUUID();
-    addFigureRow(book, r, { rowId, figure, createdBy: figure.enteredBy ?? `${figure.sourceKind.toLowerCase()}:${figure.sourceRef}`.slice(0, 128), ...(current === undefined ? {} : { supersedes: current.rowId }) });
-    recordEvent(book, r, { eventType: 'FIGURE_PROPOSED', fromStage: null, toStage: null, actor, atEpochSeconds: at.epochSeconds, detail: { figureId: rowId, metric: figure.metric, periodLabel: figure.periodLabel, sourceKind: figure.sourceKind, ...(current === undefined ? {} : { supersedes: current.rowId }) } });
+    addFigureRow(book, r, {
+      rowId,
+      figure,
+      createdBy: figure.enteredBy ?? `${figure.sourceKind.toLowerCase()}:${figure.sourceRef}`.slice(0, 128),
+      ...(current === undefined ? {} : { supersedes: current.rowId }),
+    });
+    recordEvent(book, r, {
+      eventType: 'FIGURE_PROPOSED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at.epochSeconds,
+      detail: {
+        figureId: rowId,
+        metric: figure.metric,
+        periodLabel: figure.periodLabel,
+        sourceKind: figure.sourceKind,
+        ...(current === undefined ? {} : { supersedes: current.rowId }),
+      },
+    });
   }
   return ok(view(r, ctx.value.currency));
 }
 
 function isSamePendingProposal(existing: FinancialFigure, proposed: FinancialFigure): boolean {
-  return existing.status === 'PROPOSED'
-    && existing.metric === proposed.metric
-    && existing.periodLabel === proposed.periodLabel
-    && existing.proposedValue.minorUnits === proposed.proposedValue.minorUnits
-    && existing.proposedValue.currency === proposed.proposedValue.currency
-    && existing.sourceKind === proposed.sourceKind
-    && existing.sourceRef === proposed.sourceRef
-    && existing.enteredBy === proposed.enteredBy;
+  return (
+    existing.status === 'PROPOSED' &&
+    existing.metric === proposed.metric &&
+    existing.periodLabel === proposed.periodLabel &&
+    existing.proposedValue.minorUnits === proposed.proposedValue.minorUnits &&
+    existing.proposedValue.currency === proposed.proposedValue.currency &&
+    existing.sourceKind === proposed.sourceKind &&
+    existing.sourceRef === proposed.sourceRef &&
+    existing.enteredBy === proposed.enteredBy
+  );
 }
 
 /**
@@ -1144,9 +1572,20 @@ function isSamePendingProposal(existing: FinancialFigure, proposed: FinancialFig
  * Not yet usable: each is verified next. A proposal for a metric that already
  * has a figure supersedes it; an identical pending proposal is a no-op.
  */
-export async function proposeFigures(tenant: TenantCode, applicationId: string, entries: readonly OfficerFigureEntry[], actor: string): Promise<Result<BusinessApplicationView>> {
+export async function proposeFigures(
+  tenant: TenantCode,
+  applicationId: string,
+  entries: readonly OfficerFigureEntry[],
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
   // Built field by field: a `sourceKind` smuggled onto an entry never reaches the recorder.
-  const keyed: FigureProposalEntry[] = entries.map((e) => ({ metric: e.metric, periodLabel: e.periodLabel, minorUnits: e.minorUnits, sourceRef: e.sourceRef, sourceKind: 'OFFICER_ENTRY' }));
+  const keyed: FigureProposalEntry[] = entries.map((e) => ({
+    metric: e.metric,
+    periodLabel: e.periodLabel,
+    minorUnits: e.minorUnits,
+    sourceRef: e.sourceRef,
+    sourceKind: 'OFFICER_ENTRY',
+  }));
   return withTenantLock(tenant, () => proposeFiguresAt(tenant, applicationId, keyed, actor, developmentAttestation()));
 }
 
@@ -1155,52 +1594,123 @@ export async function proposeFigures(tenant: TenantCode, applicationId: string, 
  * reachable from a workbench form: the server actions do not import it, and
  * it refuses an OFFICER_ENTRY. `source` is the ingesting system's principal.
  */
-export async function ingestReadFigures(tenant: TenantCode, applicationId: string, entries: readonly ReadFigureEntry[], source: string): Promise<Result<BusinessApplicationView>> {
-  return withTenantLock(tenant, () => ingestReadFiguresAt(tenant, applicationId, entries, source, developmentAttestation()));
+export async function ingestReadFigures(
+  tenant: TenantCode,
+  applicationId: string,
+  entries: readonly ReadFigureEntry[],
+  source: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    ingestReadFiguresAt(tenant, applicationId, entries, source, developmentAttestation()),
+  );
 }
 
 const READ_SOURCE_PRINCIPALS: ReadonlySet<string> = new Set(Object.values(READ_FIGURE_SOURCES));
 
-async function ingestReadFiguresAt(tenant: TenantCode, applicationId: string, entries: readonly ReadFigureEntry[], source: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+async function ingestReadFiguresAt(
+  tenant: TenantCode,
+  applicationId: string,
+  entries: readonly ReadFigureEntry[],
+  source: string,
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
   // Only the system's own ingestion principals record a read figure: an officer (or anyone else) calling this path is refused,
   // so a figure that says it was read can never have been keyed by a person who could then verify it.
-  if (!READ_SOURCE_PRINCIPALS.has(source)) return fail('FIGURE_SOURCE_PRINCIPAL_INVALID', 'Read figures are recorded only by the statement-reading or rail-ingestion system');
+  if (!READ_SOURCE_PRINCIPALS.has(source))
+    return fail(
+      'FIGURE_SOURCE_PRINCIPAL_INVALID',
+      'Read figures are recorded only by the statement-reading or rail-ingestion system',
+    );
   const read: FigureProposalEntry[] = [];
   for (const e of entries) {
-    if (e.sourceKind !== 'OCR' && e.sourceKind !== 'RAIL') return fail('FIGURE_SOURCE_NOT_READ', 'Only figures read from a statement or a rail enter through ingestion', { metric: e.metric });
-    read.push({ metric: e.metric, periodLabel: e.periodLabel, minorUnits: e.minorUnits, sourceRef: e.sourceRef, sourceKind: e.sourceKind });
+    if (e.sourceKind !== 'OCR' && e.sourceKind !== 'RAIL')
+      return fail('FIGURE_SOURCE_NOT_READ', 'Only figures read from a statement or a rail enter through ingestion', {
+        metric: e.metric,
+      });
+    read.push({
+      metric: e.metric,
+      periodLabel: e.periodLabel,
+      minorUnits: e.minorUnits,
+      sourceRef: e.sourceRef,
+      sourceKind: e.sourceKind,
+    });
   }
   return proposeFiguresAt(tenant, applicationId, read, source, at);
 }
 
-async function verifyFigureAt(tenant: TenantCode, applicationId: string, figureId: string, verifier: string, correctedMinorUnits: bigint | undefined, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+async function verifyFigureAt(
+  tenant: TenantCode,
+  applicationId: string,
+  figureId: string,
+  verifier: string,
+  correctedMinorUnits: bigint | undefined,
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
-  if (!SPREAD_OPEN.has(r.application.status)) return fail('TRANSITION_NOT_ALLOWED', 'Figures are verified only while the application is in credit assessment', { status: r.application.status });
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  if (!SPREAD_OPEN.has(r.application.status))
+    return fail('TRANSITION_NOT_ALLOWED', 'Figures are verified only while the application is in credit assessment', {
+      status: r.application.status,
+    });
   const row = currentFigures(r).find((f) => f.rowId === figureId);
-  if (row === undefined) return fail('FIGURE_NOT_FOUND', 'No current figure with that id; it may have been superseded', { figureId });
+  if (row === undefined)
+    return fail('FIGURE_NOT_FOUND', 'No current figure with that id; it may have been superseded', { figureId });
 
   if (correctedMinorUnits !== undefined && correctedMinorUnits !== row.figure.proposedValue.minorUnits) {
     // A correction is not a verification: it is the verifier's own keyed figure, superseding the reading (both rows
     // kept), and like any keyed figure it is verified by a different principal before it is used.
-    if (isVerified(row.figure)) return fail('FIGURE_ALREADY_VERIFIED', 'A verified figure is corrected by proposing a new one', { figureId });
-    const corrected = proposeFigure({
-      metric: row.figure.metric, periodLabel: row.figure.periodLabel, value: money(correctedMinorUnits, ctx.value.currency),
-      sourceKind: 'OFFICER_ENTRY', sourceRef: row.figure.sourceRef, enteredBy: verifier, proposedAtEpochSeconds: at.epochSeconds,
-    }, ctx.value.currency);
+    if (isVerified(row.figure))
+      return fail('FIGURE_ALREADY_VERIFIED', 'A verified figure is corrected by proposing a new one', { figureId });
+    const corrected = proposeFigure(
+      {
+        metric: row.figure.metric,
+        periodLabel: row.figure.periodLabel,
+        value: money(correctedMinorUnits, ctx.value.currency),
+        sourceKind: 'OFFICER_ENTRY',
+        sourceRef: row.figure.sourceRef,
+        enteredBy: verifier,
+        proposedAtEpochSeconds: at.epochSeconds,
+      },
+      ctx.value.currency,
+    );
     if (!corrected.ok) return corrected;
     const rowId = randomUUID();
     addFigureRow(book, r, { rowId, figure: corrected.value, supersedes: row.rowId, createdBy: verifier });
-    recordEvent(book, r, { eventType: 'FIGURE_CORRECTED', fromStage: null, toStage: null, actor: verifier, atEpochSeconds: at.epochSeconds, detail: { figureId: rowId, corrects: row.rowId, metric: row.figure.metric, sourceKind: 'OFFICER_ENTRY' } });
+    recordEvent(book, r, {
+      eventType: 'FIGURE_CORRECTED',
+      fromStage: null,
+      toStage: null,
+      actor: verifier,
+      atEpochSeconds: at.epochSeconds,
+      detail: { figureId: rowId, corrects: row.rowId, metric: row.figure.metric, sourceKind: 'OFFICER_ENTRY' },
+    });
     return ok(view(r, ctx.value.currency));
   }
 
-  const verified = verifyFigureCore(row.figure, { verifiedBy: verifier, verifiedAtEpochSeconds: at.epochSeconds }, ctx.value.currency);
+  const verified = verifyFigureCore(
+    row.figure,
+    { verifiedBy: verifier, verifiedAtEpochSeconds: at.epochSeconds },
+    ctx.value.currency,
+  );
   if (!verified.ok) return verified;
   const rowId = randomUUID();
   addFigureRow(book, r, { rowId, figure: verified.value, supersedes: row.rowId, createdBy: verifier });
-  recordEvent(book, r, { eventType: 'FIGURE_VERIFIED', fromStage: null, toStage: null, actor: verifier, atEpochSeconds: at.epochSeconds, detail: { figureId: rowId, verifies: row.rowId, metric: verified.value.metric, corrected: String(verified.value.verification.correctedFromProposal) } });
+  recordEvent(book, r, {
+    eventType: 'FIGURE_VERIFIED',
+    fromStage: null,
+    toStage: null,
+    actor: verifier,
+    atEpochSeconds: at.epochSeconds,
+    detail: {
+      figureId: rowId,
+      verifies: row.rowId,
+      metric: verified.value.metric,
+      corrected: String(verified.value.verification.correctedFromProposal),
+    },
+  });
   return ok(view(r, ctx.value.currency));
 }
 
@@ -1210,25 +1720,63 @@ async function verifyFigureAt(tenant: TenantCode, applicationId: string, figureI
  * A correction (a different amount) is recorded as the verifier's own keyed
  * proposal, superseding the reading; a different principal then verifies it.
  */
-export async function verifyFigure(tenant: TenantCode, applicationId: string, figureId: string, verifier: string, correctedMinorUnits?: bigint): Promise<Result<BusinessApplicationView>> {
-  return withTenantLock(tenant, () => verifyFigureAt(tenant, applicationId, figureId, verifier, correctedMinorUnits, developmentAttestation()));
+export async function verifyFigure(
+  tenant: TenantCode,
+  applicationId: string,
+  figureId: string,
+  verifier: string,
+  correctedMinorUnits?: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    verifyFigureAt(tenant, applicationId, figureId, verifier, correctedMinorUnits, developmentAttestation()),
+  );
 }
 
-async function presentDocumentAt(tenant: TenantCode, applicationId: string, doc: { readonly documentType: string; readonly documentRef: string }, actor: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+async function presentDocumentAt(
+  tenant: TenantCode,
+  applicationId: string,
+  doc: { readonly documentType: string; readonly documentRef: string },
+  actor: string,
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
-  if (!SPREAD_OPEN.has(r.application.status)) return fail('TRANSITION_NOT_ALLOWED', 'Documents are presented while the application is in credit assessment', { status: r.application.status });
-  if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(doc.documentType)) return fail('DOCUMENT_TYPE_INVALID', 'A document type is a checklist code');
-  if (!REF_SHAPE.test(doc.documentRef)) return fail('DOCUMENT_REF_INVALID', 'A document is presented by its reference, not its content');
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  if (!SPREAD_OPEN.has(r.application.status))
+    return fail('TRANSITION_NOT_ALLOWED', 'Documents are presented while the application is in credit assessment', {
+      status: r.application.status,
+    });
+  if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(doc.documentType))
+    return fail('DOCUMENT_TYPE_INVALID', 'A document type is a checklist code');
+  if (!REF_SHAPE.test(doc.documentRef))
+    return fail('DOCUMENT_REF_INVALID', 'A document is presented by its reference, not its content');
   const identity = identityNumberIn({ documentRef: doc.documentRef });
   if (identity !== undefined) return identity;
   // A typed reference proves nothing about the document: it is PENDING until a different principal validates it.
   const status: BusinessDocument['validationStatus'] = 'PENDING';
-  r.documents.push({ documentType: doc.documentType, documentRef: doc.documentRef, capturedAt: at, validationStatus: status, presentedBy: actor });
+  r.documents.push({
+    documentType: doc.documentType,
+    documentRef: doc.documentRef,
+    capturedAt: at,
+    validationStatus: status,
+    presentedBy: actor,
+  });
   recordEvent(book, r, {
-    eventType: 'DOCUMENT_PRESENTED', fromStage: null, toStage: null, actor, atEpochSeconds: at.epochSeconds,
-    detail: { documentType: doc.documentType, documentRef: doc.documentRef, validationStatus: status, capturedAtEpoch: at.epochSeconds.toString(), capturedTokenDigest: at.tokenDigest, capturedAuthority: at.authorityId },
+    eventType: 'DOCUMENT_PRESENTED',
+    fromStage: null,
+    toStage: null,
+    actor,
+    atEpochSeconds: at.epochSeconds,
+    detail: {
+      documentType: doc.documentType,
+      documentRef: doc.documentRef,
+      validationStatus: status,
+      capturedAtEpoch: at.epochSeconds.toString(),
+      capturedTokenDigest: at.tokenDigest,
+      capturedAuthority: at.authorityId,
+    },
   });
   return ok(view(r, ctx.value.currency));
 }
@@ -1237,24 +1785,58 @@ async function presentDocumentAt(tenant: TenantCode, applicationId: string, doc:
  * Present a document by reference, captured at the current attested instant.
  * It is PENDING — not counted by the checklist — until validated.
  */
-export async function presentDocument(tenant: TenantCode, applicationId: string, doc: { readonly documentType: string; readonly documentRef: string }, actor: string): Promise<Result<BusinessApplicationView>> {
+export async function presentDocument(
+  tenant: TenantCode,
+  applicationId: string,
+  doc: { readonly documentType: string; readonly documentRef: string },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () => presentDocumentAt(tenant, applicationId, doc, actor, developmentAttestation()));
 }
 
-async function validateDocumentAt(tenant: TenantCode, applicationId: string, documentRef: string, decision: 'VALID' | 'INVALID', validator: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+async function validateDocumentAt(
+  tenant: TenantCode,
+  applicationId: string,
+  documentRef: string,
+  decision: 'VALID' | 'INVALID',
+  validator: string,
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
-  if (!SPREAD_OPEN.has(r.application.status)) return fail('TRANSITION_NOT_ALLOWED', 'Documents are validated while the application is in credit assessment', { status: r.application.status });
-  if (decision !== 'VALID' && decision !== 'INVALID') return fail('DOCUMENT_DECISION_INVALID', 'A document is validated as VALID or INVALID');
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  if (!SPREAD_OPEN.has(r.application.status))
+    return fail('TRANSITION_NOT_ALLOWED', 'Documents are validated while the application is in credit assessment', {
+      status: r.application.status,
+    });
+  if (decision !== 'VALID' && decision !== 'INVALID')
+    return fail('DOCUMENT_DECISION_INVALID', 'A document is validated as VALID or INVALID');
   const identity = identityNumberIn({ documentRef });
   if (identity !== undefined) return identity;
-  const doc =[...r.documents].reverse().find((d) => d.documentRef === documentRef);
-  if (doc === undefined) return fail('DOCUMENT_NOT_FOUND', 'No document with that reference on this application', { documentRef });
-  if (doc.validationStatus !== 'PENDING') return fail('DOCUMENT_ALREADY_VALIDATED', 'The document has already been validated; present it again to re-check it', { documentRef });
-  if (doc.presentedBy === validator) return fail('FOUR_EYES_REQUIRED', 'A document is validated by a principal other than the one who presented it', { documentRef });
+  const doc = [...r.documents].reverse().find((d) => d.documentRef === documentRef);
+  if (doc === undefined)
+    return fail('DOCUMENT_NOT_FOUND', 'No document with that reference on this application', { documentRef });
+  if (doc.validationStatus !== 'PENDING')
+    return fail(
+      'DOCUMENT_ALREADY_VALIDATED',
+      'The document has already been validated; present it again to re-check it',
+      { documentRef },
+    );
+  if (doc.presentedBy === validator)
+    return fail('FOUR_EYES_REQUIRED', 'A document is validated by a principal other than the one who presented it', {
+      documentRef,
+    });
   markValidated(r, documentRef, decision, validator);
-  recordEvent(book, r, { eventType: 'DOCUMENT_VALIDATED', fromStage: null, toStage: null, actor: validator, atEpochSeconds: at.epochSeconds, detail: { documentType: doc.documentType, documentRef, validationStatus: decision } });
+  recordEvent(book, r, {
+    eventType: 'DOCUMENT_VALIDATED',
+    fromStage: null,
+    toStage: null,
+    actor: validator,
+    atEpochSeconds: at.epochSeconds,
+    detail: { documentType: doc.documentType, documentRef, validationStatus: decision },
+  });
   return ok(view(r, ctx.value.currency));
 }
 
@@ -1262,34 +1844,78 @@ async function validateDocumentAt(tenant: TenantCode, applicationId: string, doc
  * The checker's check of a presented document: VALID (it now counts toward
  * the checklist) or INVALID. Never by the principal who presented it.
  */
-export async function validateDocument(tenant: TenantCode, applicationId: string, documentRef: string, decision: 'VALID' | 'INVALID', validator: string): Promise<Result<BusinessApplicationView>> {
-  return withTenantLock(tenant, () => validateDocumentAt(tenant, applicationId, documentRef, decision, validator, developmentAttestation()));
+export async function validateDocument(
+  tenant: TenantCode,
+  applicationId: string,
+  documentRef: string,
+  decision: 'VALID' | 'INVALID',
+  validator: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    validateDocumentAt(tenant, applicationId, documentRef, decision, validator, developmentAttestation()),
+  );
 }
 
 const PER_TEN_THOUSAND_MAX = 100_000n;
 
-async function recordAssessmentInputsAt(tenant: TenantCode, applicationId: string, entry: AssessmentInputsEntry, actor: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+async function recordAssessmentInputsAt(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: AssessmentInputsEntry,
+  actor: string,
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
   // Locked at submission: what was scored is what was submitted, and nobody edits it between the two.
-  if (!SPREAD_OPEN.has(r.application.status)) return fail('ASSESSMENT_INPUTS_LOCKED', 'Assessment inputs are recorded only before the application is submitted', { status: r.application.status });
-  if (!REF_SHAPE.test(entry.bureau.reportRef)) return fail('BUREAU_REF_INVALID', 'The bureau report is recorded by its reference');
-  if (!REF_SHAPE.test(entry.bureau.consentId)) return fail('BUREAU_CONSENT_MISSING', 'The bureau result is recorded with the consent id it was obtained under');
-  const identity = identityNumberIn({ bureauReportRef: entry.bureau.reportRef, bureauConsentId: entry.bureau.consentId, sectorPriority: entry.sectorPriority });
+  if (!SPREAD_OPEN.has(r.application.status))
+    return fail('ASSESSMENT_INPUTS_LOCKED', 'Assessment inputs are recorded only before the application is submitted', {
+      status: r.application.status,
+    });
+  if (!REF_SHAPE.test(entry.bureau.reportRef))
+    return fail('BUREAU_REF_INVALID', 'The bureau report is recorded by its reference');
+  if (!REF_SHAPE.test(entry.bureau.consentId))
+    return fail('BUREAU_CONSENT_MISSING', 'The bureau result is recorded with the consent id it was obtained under');
+  const identity = identityNumberIn({
+    bureauReportRef: entry.bureau.reportRef,
+    bureauConsentId: entry.bureau.consentId,
+    sectorPriority: entry.sectorPriority,
+  });
   if (identity !== undefined) return identity;
   // The consent must be one stage 4 recorded; a consent id typed here and nowhere else is not a consent.
-  if (!r.application.applicant.upstreamVerificationRefs.includes(entry.bureau.consentId)) return fail('BUREAU_CONSENT_NOT_ON_RECORD', 'The bureau consent is not among the stage-4 verification references handed over');
-  if (entry.bureau.score < 0n || entry.bureau.score > 10_000n) return fail('BUREAU_SCORE_INVALID', 'The bureau score is the bureau’s own whole number');
-  if (!Number.isSafeInteger(entry.fullTimeEmployees) || entry.fullTimeEmployees < 0) return fail('EMPLOYEES_INVALID', 'Full-time employees is a whole, non-negative count');
-  if (entry.relevantExperienceYears < 0n || entry.relevantExperienceYears > 80n) return fail('EXPERIENCE_INVALID', 'Relevant experience is a whole number of years');
-  if (!/^[A-Z][A-Z0-9_]{1,31}$/.test(entry.sectorPriority)) return fail('SECTOR_PRIORITY_INVALID', 'Sector priority is a code');
-  for (const [name, v] of [['commitmentRatioPerTenThousand', entry.commitmentRatioPerTenThousand], ['riskAnalysisScorePerTenThousand', entry.riskAnalysisScorePerTenThousand], ['portfolioRepaymentPerTenThousand', entry.portfolioRepaymentPerTenThousand], ['failedFilesRatePerTenThousand', entry.failedFilesRatePerTenThousand]] as const) {
-    if (v < 0n || v > PER_TEN_THOUSAND_MAX) return fail('INPUT_OUT_OF_RANGE', 'A per-ten-thousand input is between 0 and 100000', { input: name });
+  if (!r.application.applicant.upstreamVerificationRefs.includes(entry.bureau.consentId))
+    return fail(
+      'BUREAU_CONSENT_NOT_ON_RECORD',
+      'The bureau consent is not among the stage-4 verification references handed over',
+    );
+  if (entry.bureau.score < 0n || entry.bureau.score > 10_000n)
+    return fail('BUREAU_SCORE_INVALID', 'The bureau score is the bureau’s own whole number');
+  if (!Number.isSafeInteger(entry.fullTimeEmployees) || entry.fullTimeEmployees < 0)
+    return fail('EMPLOYEES_INVALID', 'Full-time employees is a whole, non-negative count');
+  if (entry.relevantExperienceYears < 0n || entry.relevantExperienceYears > 80n)
+    return fail('EXPERIENCE_INVALID', 'Relevant experience is a whole number of years');
+  if (!/^[A-Z][A-Z0-9_]{1,31}$/.test(entry.sectorPriority))
+    return fail('SECTOR_PRIORITY_INVALID', 'Sector priority is a code');
+  for (const [name, v] of [
+    ['commitmentRatioPerTenThousand', entry.commitmentRatioPerTenThousand],
+    ['riskAnalysisScorePerTenThousand', entry.riskAnalysisScorePerTenThousand],
+    ['portfolioRepaymentPerTenThousand', entry.portfolioRepaymentPerTenThousand],
+    ['failedFilesRatePerTenThousand', entry.failedFilesRatePerTenThousand],
+  ] as const) {
+    if (v < 0n || v > PER_TEN_THOUSAND_MAX)
+      return fail('INPUT_OUT_OF_RANGE', 'A per-ten-thousand input is between 0 and 100000', { input: name });
   }
   if (entry.collateralValueMinorUnits < 0n) return fail('COLLATERAL_NEGATIVE', 'The collateral value is not negative');
   const inputs: AssessmentInputs = {
-    bureau: { reportRef: entry.bureau.reportRef, consentId: entry.bureau.consentId, score: entry.bureau.score, source: 'AECB_FIXTURE' },
+    bureau: {
+      reportRef: entry.bureau.reportRef,
+      consentId: entry.bureau.consentId,
+      score: entry.bureau.score,
+      source: 'AECB_FIXTURE',
+    },
     fullTimeEmployees: entry.fullTimeEmployees,
     relevantExperienceYears: entry.relevantExperienceYears,
     sectorPriority: entry.sectorPriority,
@@ -1304,13 +1930,25 @@ async function recordAssessmentInputsAt(tenant: TenantCode, applicationId: strin
   };
   r.inputs = inputs;
   recordEvent(book, r, {
-    eventType: 'ASSESSMENT_INPUTS_RECORDED', fromStage: null, toStage: null, actor, atEpochSeconds: at.epochSeconds,
+    eventType: 'ASSESSMENT_INPUTS_RECORDED',
+    fromStage: null,
+    toStage: null,
+    actor,
+    atEpochSeconds: at.epochSeconds,
     detail: {
-      bureauReportRef: inputs.bureau.reportRef, bureauConsentId: inputs.bureau.consentId, bureauScore: inputs.bureau.score.toString(), bureauSource: inputs.bureau.source,
-      fullTimeEmployees: String(inputs.fullTimeEmployees), relevantExperienceYears: inputs.relevantExperienceYears.toString(), sectorPriority: inputs.sectorPriority,
-      auditedFinancialsAvailable: String(inputs.auditedFinancialsAvailable), commitmentRatioPerTenThousand: inputs.commitmentRatioPerTenThousand.toString(),
-      riskAnalysisScorePerTenThousand: inputs.riskAnalysisScorePerTenThousand.toString(), portfolioRepaymentPerTenThousand: inputs.portfolioRepaymentPerTenThousand.toString(),
-      failedFilesRatePerTenThousand: inputs.failedFilesRatePerTenThousand.toString(), collateralValueMinorUnits: inputs.collateralValue.minorUnits.toString(),
+      bureauReportRef: inputs.bureau.reportRef,
+      bureauConsentId: inputs.bureau.consentId,
+      bureauScore: inputs.bureau.score.toString(),
+      bureauSource: inputs.bureau.source,
+      fullTimeEmployees: String(inputs.fullTimeEmployees),
+      relevantExperienceYears: inputs.relevantExperienceYears.toString(),
+      sectorPriority: inputs.sectorPriority,
+      auditedFinancialsAvailable: String(inputs.auditedFinancialsAvailable),
+      commitmentRatioPerTenThousand: inputs.commitmentRatioPerTenThousand.toString(),
+      riskAnalysisScorePerTenThousand: inputs.riskAnalysisScorePerTenThousand.toString(),
+      portfolioRepaymentPerTenThousand: inputs.portfolioRepaymentPerTenThousand.toString(),
+      failedFilesRatePerTenThousand: inputs.failedFilesRatePerTenThousand.toString(),
+      collateralValueMinorUnits: inputs.collateralValue.minorUnits.toString(),
     },
   });
   return ok(view(r, ctx.value.currency));
@@ -1322,33 +1960,60 @@ async function recordAssessmentInputsAt(tenant: TenantCode, applicationId: strin
  * consent id — there is no live AECB call yet), officer assessments,
  * collateral. Refused once the application is submitted.
  */
-export async function recordAssessmentInputs(tenant: TenantCode, applicationId: string, entry: AssessmentInputsEntry, actor: string): Promise<Result<BusinessApplicationView>> {
-  return withTenantLock(tenant, () => recordAssessmentInputsAt(tenant, applicationId, entry, actor, developmentAttestation()));
+export async function recordAssessmentInputs(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: AssessmentInputsEntry,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    recordAssessmentInputsAt(tenant, applicationId, entry, actor, developmentAttestation()),
+  );
 }
 
-async function submitAt(tenant: TenantCode, applicationId: string, actor: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+async function submitAt(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
   const readiness = readinessOf(r, ctx.value.currency);
   const checklist = await checklistOf(tenant, r, at);
   if (!checklist.ok) return checklist;
-  const t = submitForAssessmentCore(r.application, {
-    spreadComplete: readiness.spreadComplete,
-    missingFigures: [...readiness.missingFigures, ...readiness.unverifiedFigures],
-    checklistComplete: checklist.value.complete,
-    missingDocuments: checklist.value.missing,
-  }, actor, at.epochSeconds);
+  const t = submitForAssessmentCore(
+    r.application,
+    {
+      spreadComplete: readiness.spreadComplete,
+      missingFigures: [...readiness.missingFigures, ...readiness.unverifiedFigures],
+      checklistComplete: checklist.value.complete,
+      missingDocuments: checklist.value.missing,
+    },
+    actor,
+    at.epochSeconds,
+  );
   if (!t.ok) return t;
   // After the figure and document gates: the inputs lock at submission and scoring needs them,
   // so a case submitted without them could never be assessed.
-  if (r.inputs === undefined) return fail('ASSESSMENT_INPUTS_MISSING', 'Record the bureau result and the officer’s assessment inputs before submitting');
+  if (r.inputs === undefined)
+    return fail(
+      'ASSESSMENT_INPUTS_MISSING',
+      'Record the bureau result and the officer’s assessment inputs before submitting',
+    );
   apply(book, r, t.value);
   return ok(view(r, ctx.value.currency));
 }
 
 /** Submit for scoring: every required figure verified and every mandatory document present, or refused naming which. */
-export async function submitForAssessment(tenant: TenantCode, applicationId: string, actor: string): Promise<Result<BusinessApplicationView>> {
+export async function submitForAssessment(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () => submitAt(tenant, applicationId, actor, developmentAttestation()));
 }
 
@@ -1362,12 +2027,15 @@ export async function submitForAssessment(tenant: TenantCode, applicationId: str
  * until the fund's Credit function states its own.
  */
 export const FACT_SOURCES: Readonly<Record<string, string>> = {
-  bureauScore: 'AECB commercial report snapshot, keyed MANUALLY from the stage-4 report with its reference and consent id (no live AECB call until that rail is verified)',
+  bureauScore:
+    'AECB commercial report snapshot, keyed MANUALLY from the stage-4 report with its reference and consent id (no live AECB call until that rail is verified)',
   dscrPerTenThousand: 'DEBT_SERVICE_COVER — verified NET_PROFIT ÷ TOTAL_DEBT_SERVICE, rounded down',
   currentRatioPerTenThousand: 'CURRENT_RATIO — verified CURRENT_ASSETS ÷ CURRENT_LIABILITIES, rounded down',
-  salesGrowthPerTenThousand: 'SALES_GROWTH — verified (ANNUAL_REVENUE − PRIOR_YEAR_REVENUE) ÷ PRIOR_YEAR_REVENUE, rounded down',
+  salesGrowthPerTenThousand:
+    'SALES_GROWTH — verified (ANNUAL_REVENUE − PRIOR_YEAR_REVENUE) ÷ PRIOR_YEAR_REVENUE, rounded down',
   ownerDbrPerTenThousand: 'OWNER_DEBT_BURDEN — verified MONTHLY_DEBT_OBLIGATIONS ÷ MONTHLY_GROSS_SALARY, rounded up',
-  dbrBeforeLoanPerTenThousand: 'ILLUSTRATIVE derivation — verified TOTAL_DEBT_SERVICE ÷ ANNUAL_REVENUE, rounded up (the business’s debt burden before this facility)',
+  dbrBeforeLoanPerTenThousand:
+    'ILLUSTRATIVE derivation — verified TOTAL_DEBT_SERVICE ÷ ANNUAL_REVENUE, rounded up (the business’s debt burden before this facility)',
   relevantExperienceYears: 'Officer assessment',
   equityContributionPerTenThousand: 'The applicant’s contribution on the application',
   sectorPriority: 'Officer assessment against the fund’s sector priority list',
@@ -1381,10 +2049,21 @@ export const FACT_SOURCES: Readonly<Record<string, string>> = {
   collateralCoveragePerTenThousand: 'Collateral value ÷ requested amount, rounded down',
 };
 
-function factsFor(record: BusinessRecord, currency: CurrencyCode): Result<{ readonly facts: SmeAssessmentFacts; readonly ratios: readonly FinancialRatio[] }> {
+function factsFor(
+  record: BusinessRecord,
+  currency: CurrencyCode,
+): Result<{ readonly facts: SmeAssessmentFacts; readonly ratios: readonly FinancialRatio[] }> {
   const inputs = record.inputs;
-  if (inputs === undefined) return fail('ASSESSMENT_INPUTS_MISSING', 'Record the bureau snapshot and the officer’s assessment inputs before scoring');
-  const spread = completeSpread(currentFigures(record).map((f) => f.figure), FULL_SPREAD_METRICS, currency);
+  if (inputs === undefined)
+    return fail(
+      'ASSESSMENT_INPUTS_MISSING',
+      'Record the bureau snapshot and the officer’s assessment inputs before scoring',
+    );
+  const spread = completeSpread(
+    currentFigures(record).map((f) => f.figure),
+    FULL_SPREAD_METRICS,
+    currency,
+  );
   if (!spread.ok) return spread;
   const all = computeRatios(spread.value);
   const ratios: FinancialRatio[] = [];
@@ -1393,10 +2072,14 @@ function factsFor(record: BusinessRecord, currency: CurrencyCode): Result<{ read
     if (!r.ok) return r;
     ratios.push(r.value);
   }
-  const ratio = (code: FinancialRatioCode): bigint => (ratios.find((x) => x.code === code) as FinancialRatio).perTenThousand;
+  const ratio = (code: FinancialRatioCode): bigint =>
+    (ratios.find((x) => x.code === code) as FinancialRatio).perTenThousand;
   const value = (m: FinancialMetric): bigint => spread.value.figures[m]?.verification.value.minorUnits ?? 0n;
   const revenue = value('ANNUAL_REVENUE');
-  if (revenue <= 0n) return fail('RATIO_DENOMINATOR_ZERO', 'The debt burden before this facility needs a positive annual revenue', { ratio: 'DBR_BEFORE_LOAN' });
+  if (revenue <= 0n)
+    return fail('RATIO_DENOMINATOR_ZERO', 'The debt burden before this facility needs a positive annual revenue', {
+      ratio: 'DBR_BEFORE_LOAN',
+    });
   const requested = record.application.requested.minorUnits;
   const facts: SmeAssessmentFacts = {
     bureauScore: inputs.bureau.score,
@@ -1420,40 +2103,76 @@ function factsFor(record: BusinessRecord, currency: CurrencyCode): Result<{ read
   return ok({ facts, ratios });
 }
 
-async function runAssessmentAt(tenant: TenantCode, applicationId: string, actor: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+async function runAssessmentAt(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
-  if (r.application.status !== 'SUBMITTED') return fail('TRANSITION_NOT_ALLOWED', `Run the assessment is not possible from ${r.application.status}`, { status: r.application.status, action: 'Run the assessment' });
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  if (r.application.status !== 'SUBMITTED')
+    return fail('TRANSITION_NOT_ALLOWED', `Run the assessment is not possible from ${r.application.status}`, {
+      status: r.application.status,
+      action: 'Run the assessment',
+    });
   // The officer who keyed and submitted the case does not also score it: the checker (or the system) runs it.
-  if (actor === r.application.submittedBy) return reject('OP-DETERMINACY', 'FOUR_EYES_SELF_ASSESSMENT', 'The officer who submitted the application does not run its assessment');
+  if (actor === r.application.submittedBy)
+    return reject(
+      'OP-DETERMINACY',
+      'FOUR_EYES_SELF_ASSESSMENT',
+      'The officer who submitted the application does not run its assessment',
+    );
   const policy = loadSmeAssessmentPolicy(tenant);
   if (!policy.ok) return policy;
   const derived = factsFor(r, ctx.value.currency);
   if (!derived.ok) return derived;
   // Exactly the facts the policy reads: nothing it does not declare enters the trace.
   const facts: Record<string, SmeAssessmentFacts[string]> = {};
-  for (const name of Object.keys(policy.value.facts)) { const v = derived.value.facts[name]; if (v !== undefined) facts[name] = v; }
+  for (const name of Object.keys(policy.value.facts)) {
+    const v = derived.value.facts[name];
+    if (v !== undefined) facts[name] = v;
+  }
   const assessment = assessSme(policy.value, facts, r.application.requested);
   if (!assessment.ok) return assessment;
   const assessmentId = randomUUID();
   const cumulative = assessment.value.scorecard?.cumulativeScorePerTenThousand;
-  const t = recordAssessment(r.application, {
-    outcome: assessment.value.outcome,
-    assessmentRef: assessmentId,
-    ...(assessment.value.riskLevel === undefined ? {} : { riskLevel: assessment.value.riskLevel }),
-    ...(cumulative === undefined ? {} : { cumulativeScore: Number(cumulative) }),
-  }, actor, at.epochSeconds);
+  const t = recordAssessment(
+    r.application,
+    {
+      outcome: assessment.value.outcome,
+      assessmentRef: assessmentId,
+      ...(assessment.value.riskLevel === undefined ? {} : { riskLevel: assessment.value.riskLevel }),
+      ...(cumulative === undefined ? {} : { cumulativeScore: Number(cumulative) }),
+    },
+    actor,
+    at.epochSeconds,
+  );
   if (!t.ok) return t;
   const factSources: Record<string, string> = {};
   for (const name of Object.keys(facts)) factSources[name] = FACT_SOURCES[name] ?? 'Not mapped';
-  const run: AssessmentRun = { assessmentId, assessment: assessment.value, facts, factSources, ratios: derived.value.ratios, assessedBy: actor, assessedAtEpochSeconds: at.epochSeconds };
+  const run: AssessmentRun = {
+    assessmentId,
+    assessment: assessment.value,
+    facts,
+    factSources,
+    ratios: derived.value.ratios,
+    assessedBy: actor,
+    assessedAtEpochSeconds: at.epochSeconds,
+  };
   r.assessments.push(run);
   book.unsavedAssessments.push({
-    assessmentId, applicationId, outcome: assessment.value.outcome,
+    assessmentId,
+    applicationId,
+    outcome: assessment.value.outcome,
     ...(assessment.value.riskLevel === undefined ? {} : { riskLevel: assessment.value.riskLevel }),
     ...(cumulative === undefined ? {} : { cumulativeScore: Number(cumulative) }),
-    policyRef: assessment.value.policyRef, assessedAtEpochSeconds: at.epochSeconds, assessedBy: actor,
+    policyRef: assessment.value.policyRef,
+    assessedAtEpochSeconds: at.epochSeconds,
+    assessedBy: actor,
     trace: { assessment: run.assessment, facts: run.facts, factSources: run.factSources, ratios: run.ratios },
   });
   apply(book, r, t.value);
@@ -1467,14 +2186,25 @@ async function runAssessmentAt(tenant: TenantCode, applicationId: string, actor:
  * Routes to straight-through, the committee, or a decline. Run by the
  * checker or the system, never by the officer who submitted it.
  */
-export async function runAssessment(tenant: TenantCode, applicationId: string, actor: string): Promise<Result<BusinessApplicationView>> {
+export async function runAssessment(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () => runAssessmentAt(tenant, applicationId, actor, developmentAttestation()));
 }
 
-async function approveAt(tenant: TenantCode, applicationId: string, approver: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+async function approveAt(
+  tenant: TenantCode,
+  applicationId: string,
+  approver: string,
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
   const t = approveStraightThroughCore(r.application, approver, at.epochSeconds);
   if (!t.ok) return t;
   apply(book, r, t.value);
@@ -1482,14 +2212,25 @@ async function approveAt(tenant: TenantCode, applicationId: string, approver: st
 }
 
 /** A straight-through case approved by a checker who is not the submitting officer. */
-export async function approveStraightThrough(tenant: TenantCode, applicationId: string, approver: string): Promise<Result<BusinessApplicationView>> {
+export async function approveStraightThrough(
+  tenant: TenantCode,
+  applicationId: string,
+  approver: string,
+): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () => approveAt(tenant, applicationId, approver, developmentAttestation()));
 }
 
-async function decideAt(tenant: TenantCode, applicationId: string, decision: { readonly decidedBy: string; readonly approved: boolean; readonly reason: string }, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+async function decideAt(
+  tenant: TenantCode,
+  applicationId: string,
+  decision: { readonly decidedBy: string; readonly approved: boolean; readonly reason: string },
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
   const t = decideInCommitteeCore(r.application, decision, at.epochSeconds);
   if (!t.ok) return t;
   apply(book, r, t.value);
@@ -1497,7 +2238,11 @@ async function decideAt(tenant: TenantCode, applicationId: string, decision: { r
 }
 
 /** The credit committee's decision, by a member who is not the submitting officer, with its reason. */
-export async function decideInCommittee(tenant: TenantCode, applicationId: string, decision: { readonly decidedBy: string; readonly approved: boolean; readonly reason: string }): Promise<Result<BusinessApplicationView>> {
+export async function decideInCommittee(
+  tenant: TenantCode,
+  applicationId: string,
+  decision: { readonly decidedBy: string; readonly approved: boolean; readonly reason: string },
+): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () => decideAt(tenant, applicationId, decision, developmentAttestation()));
 }
 
@@ -1512,22 +2257,46 @@ export interface OfferOptions {
   readonly paymentDay?: number;
 }
 
-async function generateOfferAt(tenant: TenantCode, applicationId: string, actor: string, options: OfferOptions, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+async function generateOfferAt(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+  options: OfferOptions,
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
   const app = r.application;
   // Once sent, a new letter version may still be generated (a resend needs one); signed and later, no.
-  if (app.status !== 'APPROVED' && app.status !== 'OFFER_SENT') return fail('TRANSITION_NOT_ALLOWED', `Generate the offer is not possible from ${app.status}`, { status: app.status, action: 'Generate the offer' });
-  if (app.requested.currency !== ctx.value.currency) return fail('CURRENCY_NOT_TENANTS', 'The application is not in the tenant’s base currency');
+  if (app.status !== 'APPROVED' && app.status !== 'OFFER_SENT')
+    return fail('TRANSITION_NOT_ALLOWED', `Generate the offer is not possible from ${app.status}`, {
+      status: app.status,
+      action: 'Generate the offer',
+    });
+  if (app.requested.currency !== ctx.value.currency)
+    return fail('CURRENCY_NOT_TENANTS', 'The application is not in the tenant’s base currency');
 
   const product = await productFor(tenant, app.productCode, app.variantCode, at);
   if (!product.ok) return product;
-  const spread = completeSpread(currentFigures(r).map((f) => f.figure), FULL_SPREAD_METRICS, ctx.value.currency);
+  const spread = completeSpread(
+    currentFigures(r).map((f) => f.figure),
+    FULL_SPREAD_METRICS,
+    ctx.value.currency,
+  );
   if (!spread.ok) return spread;
   const inputs = r.inputs;
-  if (inputs === undefined) return fail('ASSESSMENT_INPUTS_MISSING', 'The size classification needs the employee count from the assessment inputs');
-  const business = toBusinessFacts(spread.value, { fullTimeEmployees: inputs.fullTimeEmployees, sector: app.applicant.sector });
+  if (inputs === undefined)
+    return fail(
+      'ASSESSMENT_INPUTS_MISSING',
+      'The size classification needs the employee count from the assessment inputs',
+    );
+  const business = toBusinessFacts(spread.value, {
+    fullTimeEmployees: inputs.fullTimeEmployees,
+    sector: app.applicant.sector,
+  });
   if (!business.ok) return business;
   const definition = loadSmeDefinition(ctx.value.profile.code);
   if (!definition.ok) return definition;
@@ -1536,15 +2305,21 @@ async function generateOfferAt(tenant: TenantCode, applicationId: string, actor:
   if (!datePolicy.ok) return datePolicy;
   const offerDate = localDate(at.epochSeconds, ctx.value.profile);
   const offerDays = daysOfIso(offerDate) ?? 0n;
-  const disbursementDate = options.disbursementDate ?? isoOfDays(offerDays + datePolicy.value.defaultDisbursementAfterOfferDays);
-  const firstDueDate = options.firstDueDate ?? defaultFirstDue(disbursementDate, datePolicy.value.minFirstDueAfterDisbursementDays);
+  const disbursementDate =
+    options.disbursementDate ?? isoOfDays(offerDays + datePolicy.value.defaultDisbursementAfterOfferDays);
+  const firstDueDate =
+    options.firstDueDate ?? defaultFirstDue(disbursementDate, datePolicy.value.minFirstDueAfterDisbursementDays);
   const paymentDay = options.paymentDay ?? Number(firstDueDate.slice(8, 10));
   const validUntil = isoOfDays(offerDays + datePolicy.value.offerValidityDays);
   const dates = checkOfferDates(datePolicy.value, offerDate, disbursementDate, firstDueDate);
   if (!dates.ok) return dates;
   const tenorDays = app.tenorMonths * 30;
 
-  const pricing = resolvePricingInputs(product.value.entry.pricingRule, { principal: app.requested, tenorDays, asOfEpochSeconds: at.epochSeconds });
+  const pricing = resolvePricingInputs(product.value.entry.pricingRule, {
+    principal: app.requested,
+    tenorDays,
+    asOfEpochSeconds: at.epochSeconds,
+  });
   if (!pricing.ok) return pricing;
   const quote = smeTermConventional.quote(product.value.terms, {
     tenantId: tenant,
@@ -1576,7 +2351,10 @@ async function generateOfferAt(tenant: TenantCode, applicationId: string, actor:
   const letter = buildOfferLetter({
     jurisdiction: { code: ctx.value.profile.code, contractualCalendars: ctx.value.profile.contractualCalendars },
     applicationReference: app.applicationId,
-    applicantBusinessName: { en: app.applicant.businessNameEn, ar: app.applicant.businessNameAr ?? app.applicant.businessNameEn },
+    applicantBusinessName: {
+      en: app.applicant.businessNameEn,
+      ar: app.applicant.businessNameAr ?? app.applicant.businessNameEn,
+    },
     productVariantName: { en: q.variantNameEn, ar: q.variantNameAr },
     family: smeTermConventional.descriptor.family,
     facilityAmount: app.requested,
@@ -1588,7 +2366,11 @@ async function generateOfferAt(tenant: TenantCode, applicationId: string, actor:
     equityContributionPerTenThousand: BigInt(q.contributionPerTenThousand),
     offerDate,
     validUntil,
-    totals: { instalment: q.monthlyInstalment, totalCharge, totalPayable: money(app.requested.minorUnits + totalCharge.minorUnits, app.requested.currency) },
+    totals: {
+      instalment: q.monthlyInstalment,
+      totalCharge,
+      totalPayable: money(app.requested.minorUnits + totalCharge.minorUnits, app.requested.currency),
+    },
     institutionLegalName: { en: ctx.value.legalNameEn, ar: ctx.value.legalNameAr },
     signatories: [
       { party: 'LENDER', role: { en: 'Authorised Signatory', ar: 'المفوّض بالتوقيع' } },
@@ -1599,19 +2381,56 @@ async function generateOfferAt(tenant: TenantCode, applicationId: string, actor:
   if (!letter.ok) return letter;
 
   const terms: OfferTerms = {
-    productCode: app.productCode, variantCode: app.variantCode, months: q.months, graceMonths: q.graceMonths, facilityAmount: app.requested,
-    monthlyInstalment: q.monthlyInstalment, totalInterest: q.interestAmount, totalPayable: money(app.requested.minorUnits + totalCharge.minorUnits, app.requested.currency),
-    rateBp: q.rateSnapshot.rate.bp, rateBasis: q.rateSnapshot.rate.basis, ratePeriod: q.rateSnapshot.rate.period, rateSourceRef: q.rateSnapshot.sourceRef, aprBp: offer.value.apr.bp,
-    disbursementDate, firstDueDate, paymentDay, offerDate, validUntil,
+    productCode: app.productCode,
+    variantCode: app.variantCode,
+    months: q.months,
+    graceMonths: q.graceMonths,
+    facilityAmount: app.requested,
+    monthlyInstalment: q.monthlyInstalment,
+    totalInterest: q.interestAmount,
+    totalPayable: money(app.requested.minorUnits + totalCharge.minorUnits, app.requested.currency),
+    rateBp: q.rateSnapshot.rate.bp,
+    rateBasis: q.rateSnapshot.rate.basis,
+    ratePeriod: q.rateSnapshot.rate.period,
+    rateSourceRef: q.rateSnapshot.sourceRef,
+    aprBp: offer.value.apr.bp,
+    disbursementDate,
+    firstDueDate,
+    paymentDay,
+    offerDate,
+    validUntil,
   };
   // The same letter twice is one version: the hash is the identity.
   const already = r.offers.find((o) => o.letter.version === letter.value.version);
   if (already === undefined) {
     const offerId = randomUUID();
-    const run: OfferRun = { offerId, letter: letter.value, terms, schedule: q.datedSchedule, createdBy: actor, createdAtEpochSeconds: at.epochSeconds };
+    const run: OfferRun = {
+      offerId,
+      letter: letter.value,
+      terms,
+      schedule: q.datedSchedule,
+      createdBy: actor,
+      createdAtEpochSeconds: at.epochSeconds,
+    };
     r.offers.push(run);
-    book.unsavedOffers.push({ offerId, applicationId, letterVersion: letter.value.version, currency: app.requested.currency, facilityMinorUnits: app.requested.minorUnits, createdBy: actor, letter: { letter: run.letter, terms: run.terms, createdAtEpochSeconds: run.createdAtEpochSeconds }, schedule: run.schedule });
-    recordEvent(book, r, { eventType: 'OFFER_GENERATED', fromStage: null, toStage: null, actor, atEpochSeconds: at.epochSeconds, detail: { letterVersion: letter.value.version, offerId } });
+    book.unsavedOffers.push({
+      offerId,
+      applicationId,
+      letterVersion: letter.value.version,
+      currency: app.requested.currency,
+      facilityMinorUnits: app.requested.minorUnits,
+      createdBy: actor,
+      letter: { letter: run.letter, terms: run.terms, createdAtEpochSeconds: run.createdAtEpochSeconds },
+      schedule: run.schedule,
+    });
+    recordEvent(book, r, {
+      eventType: 'OFFER_GENERATED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at.epochSeconds,
+      detail: { letterVersion: letter.value.version, offerId },
+    });
   }
   return ok(view(r, ctx.value.currency));
 }
@@ -1621,7 +2440,12 @@ async function generateOfferAt(tenant: TenantCode, applicationId: string, actor:
  * the tenant's catalogue entry and the dated ACT/365 schedule, and build the
  * bilingual Facility Offer Letter. Its content hash is its version.
  */
-export async function generateOffer(tenant: TenantCode, applicationId: string, actor: string, options: OfferOptions = {}): Promise<Result<BusinessApplicationView>> {
+export async function generateOffer(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+  options: OfferOptions = {},
+): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () => generateOfferAt(tenant, applicationId, actor, options, developmentAttestation()));
 }
 
@@ -1631,32 +2455,63 @@ function latestOfferOf(r: BusinessRecord): Result<OfferRun> {
 }
 
 /** Exactly what `sendOffer` would send: the email and SMS for the latest letter, to masked recipients. */
-export async function previewNotifications(tenant: TenantCode, applicationId: string): Promise<Result<OfferNotifications>> {
+export async function previewNotifications(
+  tenant: TenantCode,
+  applicationId: string,
+): Promise<Result<OfferNotifications>> {
   const book = await hydrate(tenant);
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
-  const latest = latestOfferOf(r); if (!latest.ok) return latest;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  const latest = latestOfferOf(r);
+  if (!latest.ok) return latest;
   return previewOfferNotifications(latest.value.letter, r.contact);
 }
 
-async function sendOfferAt(tenant: TenantCode, applicationId: string, actor: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+async function sendOfferAt(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
-  const latest = latestOfferOf(r); if (!latest.ok) return latest;
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  const latest = latestOfferOf(r);
+  if (!latest.ok) return latest;
   const letter = latest.value.letter;
   // The same letter version, already sent: a second 'Confirm & Send' is a no-op, never a second notification.
-  if (r.application.status === 'OFFER_SENT' && r.application.offer?.letterVersion === letter.version) return ok(view(r, ctx.value.currency));
+  if (r.application.status === 'OFFER_SENT' && r.application.offer?.letterVersion === letter.version)
+    return ok(view(r, ctx.value.currency));
   const notices = buildOfferNotifications(letter, r.contact);
   if (!notices.ok) return notices;
-  const channels = [...(notices.value.email === undefined ? [] : ['EMAIL']), ...(notices.value.sms === undefined ? [] : ['SMS'])];
+  const channels = [
+    ...(notices.value.email === undefined ? [] : ['EMAIL']),
+    ...(notices.value.sms === undefined ? [] : ['SMS']),
+  ];
   const t = recordOfferSent(r.application, { letterVersion: letter.version, channels }, actor, at.epochSeconds);
   if (!t.ok) return t;
 
   // The send is an external side effect: queued on the outbox, keyed on the letter version so one version is sent once.
-  const queued = queueSideEffects([{
-    eventId: randomUUID(), tenantId: tenant, kind: 'NOTIFICATION', subjectRef: applicationId, idempotencyKey: `${applicationId}:offer:${letter.version}`, correlationId: applicationId,
-    payload: { recipientKind: 'COUNTERPARTY', recipientRef: r.contact.partyRef, event: 'OFFER_ISSUED', channels: channels.join(','), letterReference: letter.reference, letterVersion: letter.version },
-  }]);
+  const queued = queueSideEffects([
+    {
+      eventId: randomUUID(),
+      tenantId: tenant,
+      kind: 'NOTIFICATION',
+      subjectRef: applicationId,
+      idempotencyKey: `${applicationId}:offer:${letter.version}`,
+      correlationId: applicationId,
+      payload: {
+        recipientKind: 'COUNTERPARTY',
+        recipientRef: r.contact.partyRef,
+        event: 'OFFER_ISSUED',
+        channels: channels.join(','),
+        letterReference: letter.reference,
+        letterVersion: letter.version,
+      },
+    },
+  ]);
   if (!queued.ok) return queued;
   commitSideEffects(book, queued.value);
   apply(book, r, t.value);
@@ -1693,17 +2548,34 @@ function commitSideEffects(book: TenantBook, outbox: Outbox): void {
  * destination from the party reference. Sending the same letter version again
  * is a no-op; a resend needs a new letter version.
  */
-export async function sendOffer(tenant: TenantCode, applicationId: string, actor: string): Promise<Result<BusinessApplicationView>> {
+export async function sendOffer(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () => sendOfferAt(tenant, applicationId, actor, developmentAttestation()));
 }
 
-async function signAt(tenant: TenantCode, applicationId: string, signature: { readonly letterVersion: string; readonly signatureRef?: string }, actor: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+async function signAt(
+  tenant: TenantCode,
+  applicationId: string,
+  signature: { readonly letterVersion: string; readonly signatureRef?: string },
+  actor: string,
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
   // Fixture: the UAE Pass signing intent's reference until that adapter is verified (adapters/uae/uae-pass/README.md).
   const signatureRef = signature.signatureRef ?? `uaepass-fixture:sign:${applicationId}`;
-  const t = recordSignedCore(r.application, { signatureRef, letterVersion: signature.letterVersion }, actor, at.epochSeconds);
+  const t = recordSignedCore(
+    r.application,
+    { signatureRef, letterVersion: signature.letterVersion },
+    actor,
+    at.epochSeconds,
+  );
   if (!t.ok) return t;
   apply(book, r, t.value);
   return ok(view(r, ctx.value.currency));
@@ -1714,18 +2586,38 @@ async function signAt(tenant: TenantCode, applicationId: string, signature: { re
  * no other. The signature reference is a UAE Pass fixture reference until
  * that rail is verified.
  */
-export async function recordSigned(tenant: TenantCode, applicationId: string, signature: { readonly letterVersion: string; readonly signatureRef?: string }, actor: string): Promise<Result<BusinessApplicationView>> {
+export async function recordSigned(
+  tenant: TenantCode,
+  applicationId: string,
+  signature: { readonly letterVersion: string; readonly signatureRef?: string },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () => signAt(tenant, applicationId, signature, actor, developmentAttestation()));
 }
 
-async function disburseAt(tenant: TenantCode, applicationId: string, actor: string, paymentRef: string | undefined, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+async function disburseAt(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+  paymentRef: string | undefined,
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
   const app = r.application;
   // Four eyes on money out: whoever approved the facility (or submitted it) does not also release the payment.
-  const approver = r.events.find((e) => e.eventType === 'APPROVED_STRAIGHT_THROUGH' || e.eventType === 'COMMITTEE_APPROVED')?.actor;
-  if (actor === approver || actor === app.submittedBy) return reject('OP-DETERMINACY', 'FOUR_EYES_DISBURSEMENT', 'Disbursement is released by a principal other than the approver and the submitting officer');
+  const approver = r.events.find(
+    (e) => e.eventType === 'APPROVED_STRAIGHT_THROUGH' || e.eventType === 'COMMITTEE_APPROVED',
+  )?.actor;
+  if (actor === approver || actor === app.submittedBy)
+    return reject(
+      'OP-DETERMINACY',
+      'FOUR_EYES_DISBURSEMENT',
+      'Disbursement is released by a principal other than the approver and the submitting officer',
+    );
   // Fixture: the partner bank's payment instruction reference until that adapter is verified (adapters/uae/partner-bank/README.md).
   const reference = paymentRef ?? `partner-bank-fixture:pay:${applicationId}`;
   const t = recordDisbursedCore(app, reference, actor, at.epochSeconds);
@@ -1735,7 +2627,11 @@ async function disburseAt(tenant: TenantCode, applicationId: string, actor: stri
   // Money goes out on or after the date the borrower signed for: the schedule (and its first due date) is built from it.
   const actualDate = localDate(at.epochSeconds, ctx.value.profile);
   if (actualDate < signed.terms.disbursementDate) {
-    return fail('DISBURSEMENT_BEFORE_PLANNED_DATE', 'The disbursement is recorded on or after the planned disbursement date in the signed offer', { plannedDate: signed.terms.disbursementDate, actualDate });
+    return fail(
+      'DISBURSEMENT_BEFORE_PLANNED_DATE',
+      'The disbursement is recorded on or after the planned disbursement date in the signed offer',
+      { plannedDate: signed.terms.disbursementDate, actualDate },
+    );
   }
 
   // The payment instruction to the partner bank and the bureau's facility-opened report, as products/sme-term-conventional/execution.ts
@@ -1743,8 +2639,30 @@ async function disburseAt(tenant: TenantCode, applicationId: string, actor: stri
   const key = `business:${applicationId}`;
   const base = { tenantId: tenant, subjectRef: applicationId, correlationId: applicationId };
   const queued = queueSideEffects([
-    { ...base, eventId: `${key}:disburse`, kind: 'PAYMENT_DISBURSE', idempotencyKey: `${key}:disburse`, payload: { rail: 'PARTNER_BANK', beneficiaryRef: applicationId, paymentRef: reference, minorUnits: String(signed.terms.facilityAmount.minorUnits), currency: signed.terms.facilityAmount.currency } },
-    { ...base, eventId: `${key}:bureau`, kind: 'BUREAU_REPORT', idempotencyKey: `${key}:bureau`, payload: { facilityRef: applicationId, event: 'OPENED', minorUnits: String(signed.terms.totalPayable.minorUnits) } },
+    {
+      ...base,
+      eventId: `${key}:disburse`,
+      kind: 'PAYMENT_DISBURSE',
+      idempotencyKey: `${key}:disburse`,
+      payload: {
+        rail: 'PARTNER_BANK',
+        beneficiaryRef: applicationId,
+        paymentRef: reference,
+        minorUnits: String(signed.terms.facilityAmount.minorUnits),
+        currency: signed.terms.facilityAmount.currency,
+      },
+    },
+    {
+      ...base,
+      eventId: `${key}:bureau`,
+      kind: 'BUREAU_REPORT',
+      idempotencyKey: `${key}:bureau`,
+      payload: {
+        facilityRef: applicationId,
+        event: 'OPENED',
+        minorUnits: String(signed.terms.totalPayable.minorUnits),
+      },
+    },
   ]);
   if (!queued.ok) return queued;
   commitSideEffects(book, queued.value);
@@ -1758,7 +2676,12 @@ async function disburseAt(tenant: TenantCode, applicationId: string, actor: stri
  * distinct from the approver; queues the payment instruction and the bureau's
  * facility-opened report on the outbox in the same transaction.
  */
-export async function recordDisbursed(tenant: TenantCode, applicationId: string, actor: string, paymentRef?: string): Promise<Result<BusinessApplicationView>> {
+export async function recordDisbursed(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+  paymentRef?: string,
+): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () => disburseAt(tenant, applicationId, actor, paymentRef, developmentAttestation()));
 }
 
@@ -1766,24 +2689,47 @@ export async function recordDisbursed(tenant: TenantCode, applicationId: string,
 // Stages 8–9, withdrawal
 // =============================================================================
 
-async function portfolioAt(tenant: TenantCode, applicationId: string, status: { readonly daysPastDue: number; readonly arrearsMinorUnits: bigint }, actor: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+async function portfolioAt(
+  tenant: TenantCode,
+  applicationId: string,
+  status: { readonly daysPastDue: number; readonly arrearsMinorUnits: bigint },
+  actor: string,
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
-  if (r.application.status !== 'DISBURSED') return fail('TRANSITION_NOT_ALLOWED', 'Portfolio status is recorded for a disbursed facility', { status: r.application.status });
-  if (!Number.isSafeInteger(status.daysPastDue) || status.daysPastDue < 0) return fail('DAYS_PAST_DUE_INVALID', 'Days past due is a whole, non-negative count');
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  if (r.application.status !== 'DISBURSED')
+    return fail('TRANSITION_NOT_ALLOWED', 'Portfolio status is recorded for a disbursed facility', {
+      status: r.application.status,
+    });
+  if (!Number.isSafeInteger(status.daysPastDue) || status.daysPastDue < 0)
+    return fail('DAYS_PAST_DUE_INVALID', 'Days past due is a whole, non-negative count');
   if (status.arrearsMinorUnits < 0n) return fail('ARREARS_NEGATIVE', 'Arrears are not negative');
   // Days past due accrue from the first due date of the signed offer: more of them than days since then is not a status, it is an error.
   const signed = r.offers.find((o) => o.letter.version === r.application.offer?.letterVersion);
   const firstDue = signed === undefined ? undefined : daysOfIso(signed.terms.firstDueDate);
   const observed = daysOfIso(localDate(at.epochSeconds, ctx.value.profile)) ?? 0n;
   if (status.daysPastDue > 0 && (firstDue === undefined || BigInt(status.daysPastDue) > observed - firstDue)) {
-    return fail('DAYS_PAST_DUE_IMPOSSIBLE', 'Days past due cannot exceed the days since the first instalment fell due', { firstDueDate: signed?.terms.firstDueDate ?? '' });
+    return fail(
+      'DAYS_PAST_DUE_IMPOSSIBLE',
+      'Days past due cannot exceed the days since the first instalment fell due',
+      { firstDueDate: signed?.terms.firstDueDate ?? '' },
+    );
   }
   const arrears = money(status.arrearsMinorUnits, ctx.value.currency);
   r.portfolio = { daysPastDue: status.daysPastDue, arrears, recordedBy: actor, asOfEpochSeconds: at.epochSeconds };
   const stage = status.daysPastDue > 0 ? 9 : 8;
-  recordEvent(book, r, { eventType: 'PORTFOLIO_STATUS_RECORDED', fromStage: r.application.stage, toStage: stage, actor, atEpochSeconds: at.epochSeconds, detail: { daysPastDue: String(status.daysPastDue), arrearsMinorUnits: arrears.minorUnits.toString() } });
+  recordEvent(book, r, {
+    eventType: 'PORTFOLIO_STATUS_RECORDED',
+    fromStage: r.application.stage,
+    toStage: stage,
+    actor,
+    atEpochSeconds: at.epochSeconds,
+    detail: { daysPastDue: String(status.daysPastDue), arrearsMinorUnits: arrears.minorUnits.toString() },
+  });
   return ok(view(r, ctx.value.currency));
 }
 
@@ -1792,14 +2738,27 @@ async function portfolioAt(tenant: TenantCode, applicationId: string, status: { 
  * arrears. Above zero days the application shows at stage 9 (collections).
  * Recorded as an event: the application row is closed once disbursed.
  */
-export async function recordPortfolioStatus(tenant: TenantCode, applicationId: string, status: { readonly daysPastDue: number; readonly arrearsMinorUnits: bigint }, actor: string): Promise<Result<BusinessApplicationView>> {
+export async function recordPortfolioStatus(
+  tenant: TenantCode,
+  applicationId: string,
+  status: { readonly daysPastDue: number; readonly arrearsMinorUnits: bigint },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () => portfolioAt(tenant, applicationId, status, actor, developmentAttestation()));
 }
 
-async function withdrawAt(tenant: TenantCode, applicationId: string, reason: string, actor: string, at: TsaInstant): Promise<Result<BusinessApplicationView>> {
+async function withdrawAt(
+  tenant: TenantCode,
+  applicationId: string,
+  reason: string,
+  actor: string,
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
-  const ctx = tenantContext(tenant); if (!ctx.ok) return ctx;
-  const r = book.records.get(applicationId); if (r === undefined) return notFound(applicationId);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
   const t = withdraw(r.application, reason, actor, at.epochSeconds);
   if (!t.ok) return t;
   apply(book, r, t.value);
@@ -1807,7 +2766,12 @@ async function withdrawAt(tenant: TenantCode, applicationId: string, reason: str
 }
 
 /** Withdraw an open application, saying why. The reason is free text and carries no identity number. */
-export async function withdrawApplication(tenant: TenantCode, applicationId: string, reason: string, actor: string): Promise<Result<BusinessApplicationView>> {
+export async function withdrawApplication(
+  tenant: TenantCode,
+  applicationId: string,
+  reason: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () => withdrawAt(tenant, applicationId, reason, actor, developmentAttestation()));
 }
 
@@ -1842,7 +2806,16 @@ interface SeedSpec {
   readonly contribution: number;
   readonly receivedDaysAgo: bigint;
   /** Dirhams. */
-  readonly figures: { readonly revenue: bigint; readonly prior: bigint; readonly profit: bigint; readonly debtService: bigint; readonly assets: bigint; readonly liabilities: bigint; readonly salary: bigint; readonly obligations: bigint };
+  readonly figures: {
+    readonly revenue: bigint;
+    readonly prior: bigint;
+    readonly profit: bigint;
+    readonly debtService: bigint;
+    readonly assets: bigint;
+    readonly liabilities: bigint;
+    readonly salary: bigint;
+    readonly obligations: bigint;
+  };
   readonly bureauScore: bigint;
   readonly employees: number;
   readonly experience: bigint;
@@ -1859,30 +2832,270 @@ interface SeedSpec {
 }
 
 const SEEDS: readonly SeedSpec[] = [
-  { applicationId: 'FR-00005101', nameEn: 'Qamar Lantern Crafts LLC', nameAr: 'قمر لصناعة الفوانيس ذ.م.م', sector: 'MANUFACTURING', years: 3, owner: 'Hessa R. Example', variant: 'SMALL_LOAN', purpose: 'EQUIPMENT', requestedAed: 250_000n, tenorMonths: 24, graceMonths: 0, contribution: 2_000, receivedDaysAgo: 1n,
-    figures: { revenue: 1_800_000n, prior: 1_650_000n, profit: 320_000n, debtService: 40_000n, assets: 600_000n, liabilities: 380_000n, salary: 35_000n, obligations: 6_000n }, bureauScore: 742n, employees: 14, experience: 5n, sectorPriority: 'PRIORITY', collateralAed: 300_000n, reach: 'PROPOSED' },
-  { applicationId: 'FR-00005102', nameEn: 'Sandglass Analytics FZ-LLC', nameAr: 'ساندغلاس للتحليلات م.م.ح', sector: 'SERVICES', years: 4, owner: 'Omar K. Example', variant: 'ADVANCED_TECH_AI', purpose: 'TECHNOLOGY_DEVELOPMENT', requestedAed: 600_000n, tenorMonths: 48, graceMonths: 6, contribution: 2_500, receivedDaysAgo: 3n,
-    figures: { revenue: 3_200_000n, prior: 2_700_000n, profit: 640_000n, debtService: 70_000n, assets: 1_100_000n, liabilities: 700_000n, salary: 48_000n, obligations: 9_500n }, bureauScore: 768n, employees: 22, experience: 6n, sectorPriority: 'PRIORITY', collateralAed: 750_000n, reach: 'PARTLY_VERIFIED' },
-  { applicationId: 'FR-00005103', nameEn: 'Twelve Palms Bakery LLC', nameAr: 'مخبز النخلات الاثنتي عشرة ذ.م.م', sector: 'TRADING', years: 6, owner: 'Mariam S. Example', variant: 'WORKING_CAPITAL', purpose: 'INVENTORY', requestedAed: 300_000n, tenorMonths: 12, graceMonths: 0, contribution: 2_000, receivedDaysAgo: 4n,
-    figures: { revenue: 4_500_000n, prior: 4_100_000n, profit: 760_000n, debtService: 90_000n, assets: 1_300_000n, liabilities: 820_000n, salary: 40_000n, obligations: 7_000n }, bureauScore: 731n, employees: 30, experience: 8n, sectorPriority: 'NON_PRIORITY', collateralAed: 380_000n, reach: 'SUBMITTED' },
-  { applicationId: 'FR-00005104', nameEn: 'Blue Dhow Logistics LLC', nameAr: 'الداو الأزرق للخدمات اللوجستية ذ.م.م', sector: 'SERVICES', years: 7, owner: 'Khalid A. Example', variant: 'EXPANSION', purpose: 'BUSINESS_EXPANSION', requestedAed: 1_200_000n, tenorMonths: 60, graceMonths: 6, contribution: 2_500, receivedDaysAgo: 9n,
-    figures: { revenue: 7_400_000n, prior: 6_800_000n, profit: 980_000n, debtService: 120_000n, assets: 2_600_000n, liabilities: 1_700_000n, salary: 52_000n, obligations: 12_000n }, bureauScore: 756n, employees: 41, experience: 9n, sectorPriority: 'NON_PRIORITY', collateralAed: 1_500_000n, reach: 'ASSESSED' },
-  { applicationId: 'FR-00005105', nameEn: 'Saltmarsh Fit-Out Works LLC', nameAr: 'سولت مارش لأعمال التجهيز ذ.م.م', sector: 'SERVICES', years: 5, owner: 'Noura M. Example', variant: 'FIXED_ASSETS', purpose: 'PREMISES_FIT_OUT', requestedAed: 450_000n, tenorMonths: 36, graceMonths: 3, contribution: 2_500, receivedDaysAgo: 6n,
-    figures: { revenue: 3_900_000n, prior: 3_500_000n, profit: 720_000n, debtService: 55_000n, assets: 1_250_000n, liabilities: 760_000n, salary: 45_000n, obligations: 5_500n }, bureauScore: 781n, employees: 26, experience: 7n, sectorPriority: 'PRIORITY', collateralAed: 600_000n, reach: 'ASSESSED' },
-  { applicationId: 'FR-00005106', nameEn: 'Lumen Date Farms LLC', nameAr: 'لومن لمزارع التمور ذ.م.م', sector: 'TRADING', years: 8, owner: 'Saeed H. Example', variant: 'SMALL_LOAN', purpose: 'WORKING_CAPITAL', requestedAed: 400_000n, tenorMonths: 36, graceMonths: 0, contribution: 2_000, receivedDaysAgo: 14n,
-    figures: { revenue: 5_200_000n, prior: 4_800_000n, profit: 820_000n, debtService: 60_000n, assets: 1_600_000n, liabilities: 950_000n, salary: 42_000n, obligations: 6_500n }, bureauScore: 774n, employees: 33, experience: 10n, sectorPriority: 'PRIORITY', collateralAed: 520_000n, reach: 'OFFER_SENT' },
-  { applicationId: 'FR-00005107', nameEn: 'Ibex Robotics Lab FZ-LLC', nameAr: 'آيبكس لمختبرات الروبوتات م.م.ح', sector: 'SERVICES', years: 4, owner: 'Layla F. Example', variant: 'ADVANCED_TECH_AI', purpose: 'EQUIPMENT', requestedAed: 480_000n, tenorMonths: 36, graceMonths: 3, contribution: 2_000, receivedDaysAgo: 40n,
-    figures: { revenue: 3_600_000n, prior: 3_100_000n, profit: 700_000n, debtService: 50_000n, assets: 1_200_000n, liabilities: 700_000n, salary: 50_000n, obligations: 8_000n }, bureauScore: 790n, employees: 19, experience: 6n, sectorPriority: 'PRIORITY', collateralAed: 620_000n, reach: 'DISBURSED' },
-  { applicationId: 'FR-00005108', nameEn: 'Mangrove Thread Textiles LLC', nameAr: 'خيوط المانغروف للمنسوجات ذ.م.م', sector: 'MANUFACTURING', years: 9, owner: 'Rashid T. Example', variant: 'FIXED_ASSETS', purpose: 'EQUIPMENT', requestedAed: 420_000n, tenorMonths: 48, graceMonths: 0, contribution: 2_000, receivedDaysAgo: 120n,
-    figures: { revenue: 4_800_000n, prior: 4_400_000n, profit: 760_000n, debtService: 65_000n, assets: 1_500_000n, liabilities: 900_000n, salary: 38_000n, obligations: 6_000n }, bureauScore: 752n, employees: 48, experience: 11n, sectorPriority: 'NON_PRIORITY', collateralAed: 560_000n, reach: 'DISBURSED', daysPastDue: 34, walkEndsDaysAgo: 40n },
+  {
+    applicationId: 'FR-00005101',
+    nameEn: 'Qamar Lantern Crafts LLC',
+    nameAr: 'قمر لصناعة الفوانيس ذ.م.م',
+    sector: 'MANUFACTURING',
+    years: 3,
+    owner: 'Hessa R. Example',
+    variant: 'SMALL_LOAN',
+    purpose: 'EQUIPMENT',
+    requestedAed: 250_000n,
+    tenorMonths: 24,
+    graceMonths: 0,
+    contribution: 2_000,
+    receivedDaysAgo: 1n,
+    figures: {
+      revenue: 1_800_000n,
+      prior: 1_650_000n,
+      profit: 320_000n,
+      debtService: 40_000n,
+      assets: 600_000n,
+      liabilities: 380_000n,
+      salary: 35_000n,
+      obligations: 6_000n,
+    },
+    bureauScore: 742n,
+    employees: 14,
+    experience: 5n,
+    sectorPriority: 'PRIORITY',
+    collateralAed: 300_000n,
+    reach: 'PROPOSED',
+  },
+  {
+    applicationId: 'FR-00005102',
+    nameEn: 'Sandglass Analytics FZ-LLC',
+    nameAr: 'ساندغلاس للتحليلات م.م.ح',
+    sector: 'SERVICES',
+    years: 4,
+    owner: 'Omar K. Example',
+    variant: 'ADVANCED_TECH_AI',
+    purpose: 'TECHNOLOGY_DEVELOPMENT',
+    requestedAed: 600_000n,
+    tenorMonths: 48,
+    graceMonths: 6,
+    contribution: 2_500,
+    receivedDaysAgo: 3n,
+    figures: {
+      revenue: 3_200_000n,
+      prior: 2_700_000n,
+      profit: 640_000n,
+      debtService: 70_000n,
+      assets: 1_100_000n,
+      liabilities: 700_000n,
+      salary: 48_000n,
+      obligations: 9_500n,
+    },
+    bureauScore: 768n,
+    employees: 22,
+    experience: 6n,
+    sectorPriority: 'PRIORITY',
+    collateralAed: 750_000n,
+    reach: 'PARTLY_VERIFIED',
+  },
+  {
+    applicationId: 'FR-00005103',
+    nameEn: 'Twelve Palms Bakery LLC',
+    nameAr: 'مخبز النخلات الاثنتي عشرة ذ.م.م',
+    sector: 'TRADING',
+    years: 6,
+    owner: 'Mariam S. Example',
+    variant: 'WORKING_CAPITAL',
+    purpose: 'INVENTORY',
+    requestedAed: 300_000n,
+    tenorMonths: 12,
+    graceMonths: 0,
+    contribution: 2_000,
+    receivedDaysAgo: 4n,
+    figures: {
+      revenue: 4_500_000n,
+      prior: 4_100_000n,
+      profit: 760_000n,
+      debtService: 90_000n,
+      assets: 1_300_000n,
+      liabilities: 820_000n,
+      salary: 40_000n,
+      obligations: 7_000n,
+    },
+    bureauScore: 731n,
+    employees: 30,
+    experience: 8n,
+    sectorPriority: 'NON_PRIORITY',
+    collateralAed: 380_000n,
+    reach: 'SUBMITTED',
+  },
+  {
+    applicationId: 'FR-00005104',
+    nameEn: 'Blue Dhow Logistics LLC',
+    nameAr: 'الداو الأزرق للخدمات اللوجستية ذ.م.م',
+    sector: 'SERVICES',
+    years: 7,
+    owner: 'Khalid A. Example',
+    variant: 'EXPANSION',
+    purpose: 'BUSINESS_EXPANSION',
+    requestedAed: 1_200_000n,
+    tenorMonths: 60,
+    graceMonths: 6,
+    contribution: 2_500,
+    receivedDaysAgo: 9n,
+    figures: {
+      revenue: 7_400_000n,
+      prior: 6_800_000n,
+      profit: 980_000n,
+      debtService: 120_000n,
+      assets: 2_600_000n,
+      liabilities: 1_700_000n,
+      salary: 52_000n,
+      obligations: 12_000n,
+    },
+    bureauScore: 756n,
+    employees: 41,
+    experience: 9n,
+    sectorPriority: 'NON_PRIORITY',
+    collateralAed: 1_500_000n,
+    reach: 'ASSESSED',
+  },
+  {
+    applicationId: 'FR-00005105',
+    nameEn: 'Saltmarsh Fit-Out Works LLC',
+    nameAr: 'سولت مارش لأعمال التجهيز ذ.م.م',
+    sector: 'SERVICES',
+    years: 5,
+    owner: 'Noura M. Example',
+    variant: 'FIXED_ASSETS',
+    purpose: 'PREMISES_FIT_OUT',
+    requestedAed: 450_000n,
+    tenorMonths: 36,
+    graceMonths: 3,
+    contribution: 2_500,
+    receivedDaysAgo: 6n,
+    figures: {
+      revenue: 3_900_000n,
+      prior: 3_500_000n,
+      profit: 720_000n,
+      debtService: 55_000n,
+      assets: 1_250_000n,
+      liabilities: 760_000n,
+      salary: 45_000n,
+      obligations: 5_500n,
+    },
+    bureauScore: 781n,
+    employees: 26,
+    experience: 7n,
+    sectorPriority: 'PRIORITY',
+    collateralAed: 600_000n,
+    reach: 'ASSESSED',
+  },
+  {
+    applicationId: 'FR-00005106',
+    nameEn: 'Lumen Date Farms LLC',
+    nameAr: 'لومن لمزارع التمور ذ.م.م',
+    sector: 'TRADING',
+    years: 8,
+    owner: 'Saeed H. Example',
+    variant: 'SMALL_LOAN',
+    purpose: 'WORKING_CAPITAL',
+    requestedAed: 400_000n,
+    tenorMonths: 36,
+    graceMonths: 0,
+    contribution: 2_000,
+    receivedDaysAgo: 14n,
+    figures: {
+      revenue: 5_200_000n,
+      prior: 4_800_000n,
+      profit: 820_000n,
+      debtService: 60_000n,
+      assets: 1_600_000n,
+      liabilities: 950_000n,
+      salary: 42_000n,
+      obligations: 6_500n,
+    },
+    bureauScore: 774n,
+    employees: 33,
+    experience: 10n,
+    sectorPriority: 'PRIORITY',
+    collateralAed: 520_000n,
+    reach: 'OFFER_SENT',
+  },
+  {
+    applicationId: 'FR-00005107',
+    nameEn: 'Ibex Robotics Lab FZ-LLC',
+    nameAr: 'آيبكس لمختبرات الروبوتات م.م.ح',
+    sector: 'SERVICES',
+    years: 4,
+    owner: 'Layla F. Example',
+    variant: 'ADVANCED_TECH_AI',
+    purpose: 'EQUIPMENT',
+    requestedAed: 480_000n,
+    tenorMonths: 36,
+    graceMonths: 3,
+    contribution: 2_000,
+    receivedDaysAgo: 40n,
+    figures: {
+      revenue: 3_600_000n,
+      prior: 3_100_000n,
+      profit: 700_000n,
+      debtService: 50_000n,
+      assets: 1_200_000n,
+      liabilities: 700_000n,
+      salary: 50_000n,
+      obligations: 8_000n,
+    },
+    bureauScore: 790n,
+    employees: 19,
+    experience: 6n,
+    sectorPriority: 'PRIORITY',
+    collateralAed: 620_000n,
+    reach: 'DISBURSED',
+  },
+  {
+    applicationId: 'FR-00005108',
+    nameEn: 'Mangrove Thread Textiles LLC',
+    nameAr: 'خيوط المانغروف للمنسوجات ذ.م.م',
+    sector: 'MANUFACTURING',
+    years: 9,
+    owner: 'Rashid T. Example',
+    variant: 'FIXED_ASSETS',
+    purpose: 'EQUIPMENT',
+    requestedAed: 420_000n,
+    tenorMonths: 48,
+    graceMonths: 0,
+    contribution: 2_000,
+    receivedDaysAgo: 120n,
+    figures: {
+      revenue: 4_800_000n,
+      prior: 4_400_000n,
+      profit: 760_000n,
+      debtService: 65_000n,
+      assets: 1_500_000n,
+      liabilities: 900_000n,
+      salary: 38_000n,
+      obligations: 6_000n,
+    },
+    bureauScore: 752n,
+    employees: 48,
+    experience: 11n,
+    sectorPriority: 'NON_PRIORITY',
+    collateralAed: 560_000n,
+    reach: 'DISBURSED',
+    daysPastDue: 34,
+    walkEndsDaysAgo: 40n,
+  },
 ];
 
-const seedInstant = (epochSeconds: bigint): TsaInstant => tsaInstant({ verified: true, genTimeEpochSeconds: epochSeconds, tokenDigest: 'development-substitute', authorityId: 'development' });
+const seedInstant = (epochSeconds: bigint): TsaInstant =>
+  tsaInstant({
+    verified: true,
+    genTimeEpochSeconds: epochSeconds,
+    tokenDigest: 'development-substitute',
+    authorityId: 'development',
+  });
 
 async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
   const now = developmentAttestation().epochSeconds;
-  const officer = BUSINESS_ROLES.officer;
-  const checker = BUSINESS_ROLES.checker;
+  const officer = SEED_PRINCIPALS.officer;
+  const checker = SEED_PRINCIPALS.checker;
   const ctx = tenantContext(tenant);
   const datePolicy = loadOfferDatePolicy(tenant);
   if (!ctx.ok || !datePolicy.ok) return;
@@ -1892,36 +3105,128 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
     // Steps are spaced between receipt and the walk's end (today unless the seed says otherwise), so every instant is in the past.
     const span = (s.receivedDaysAgo - (s.walkEndsDaysAgo ?? 0n)) * DAY;
     const step = (n: bigint): TsaInstant => seedInstant(t0 + (span * n) / 12n + n * MINUTE);
-    const handed = await handOverAt(tenant, {
-      applicationId: s.applicationId, upstreamRef: `upstream-${s.applicationId}`,
-      applicant: {
-        businessNameEn: s.nameEn, businessNameAr: s.nameAr, registrationRef: `TL-ILLUS-${s.applicationId.slice(-4)}`, sector: s.sector, yearsInOperation: s.years,
-        owners: [{ displayName: s.owner, ref: `owner-ILLUS-${s.applicationId.slice(-4)}` }],
-        upstreamVerificationRefs: [`uaepass:assert-ILLUS-${s.applicationId.slice(-4)}`, `icp:verify-ILLUS-${s.applicationId.slice(-4)}`, `ner:licence-ILLUS-${s.applicationId.slice(-4)}`, `aecb:consent-ILLUS-${s.applicationId.slice(-4)}`],
+    const handed = await handOverAt(
+      tenant,
+      {
+        applicationId: s.applicationId,
+        upstreamRef: `upstream-${s.applicationId}`,
+        applicant: {
+          businessNameEn: s.nameEn,
+          businessNameAr: s.nameAr,
+          registrationRef: `TL-ILLUS-${s.applicationId.slice(-4)}`,
+          sector: s.sector,
+          yearsInOperation: s.years,
+          owners: [{ displayName: s.owner, ref: `owner-ILLUS-${s.applicationId.slice(-4)}` }],
+          upstreamVerificationRefs: [
+            `uaepass:assert-ILLUS-${s.applicationId.slice(-4)}`,
+            `icp:verify-ILLUS-${s.applicationId.slice(-4)}`,
+            `ner:licence-ILLUS-${s.applicationId.slice(-4)}`,
+            `aecb:consent-ILLUS-${s.applicationId.slice(-4)}`,
+          ],
+        },
+        productCode: 'sme-term-conventional',
+        variantCode: s.variant,
+        purpose: s.purpose,
+        requestedMinorUnits: s.requestedAed * 100n,
+        tenorMonths: s.tenorMonths,
+        graceMonths: s.graceMonths,
+        contributionPerTenThousand: s.contribution,
+        contact: {
+          partyRef: `owner-ILLUS-${s.applicationId.slice(-4)}`,
+          emailMasked: 'o***@example.com',
+          mobileMasked: '+971 50 XXX XXXX',
+        },
       },
-      productCode: 'sme-term-conventional', variantCode: s.variant, purpose: s.purpose, requestedMinorUnits: s.requestedAed * 100n,
-      tenorMonths: s.tenorMonths, graceMonths: s.graceMonths, contributionPerTenThousand: s.contribution,
-      contact: { partyRef: `owner-ILLUS-${s.applicationId.slice(-4)}`, emailMasked: 'o***@example.com', mobileMasked: '+971 50 XXX XXXX' },
-    }, 'upstream-record-dev-01', seedInstant(t0));
+      'upstream-record-dev-01',
+      seedInstant(t0),
+    );
     if (!handed.ok) continue;
     const id = s.applicationId;
     const f = s.figures;
     const statement = `doc-ILLUS-${id.slice(-4)}-AUDITED_FINANCIALS_2Y`;
     // Read figures through the system path (statement OCR, rails); the one keyed figure by the officer.
-    const read = await ingestReadFiguresAt(tenant, id, [
-      { metric: 'ANNUAL_REVENUE', periodLabel: 'FY2025', minorUnits: f.revenue * 100n, sourceKind: 'OCR', sourceRef: statement },
-      { metric: 'PRIOR_YEAR_REVENUE', periodLabel: 'FY2024', minorUnits: f.prior * 100n, sourceKind: 'OCR', sourceRef: statement },
-      { metric: 'NET_PROFIT', periodLabel: 'FY2025', minorUnits: f.profit * 100n, sourceKind: 'OCR', sourceRef: statement },
-      { metric: 'TOTAL_DEBT_SERVICE', periodLabel: 'FY2025', minorUnits: f.debtService * 100n, sourceKind: 'RAIL', sourceRef: `aecb:report-ILLUS-${id.slice(-4)}` },
-      { metric: 'CURRENT_ASSETS', periodLabel: 'FY2025', minorUnits: f.assets * 100n, sourceKind: 'OCR', sourceRef: statement },
-      { metric: 'CURRENT_LIABILITIES', periodLabel: 'FY2025', minorUnits: f.liabilities * 100n, sourceKind: 'OCR', sourceRef: statement },
-      { metric: 'MONTHLY_GROSS_SALARY', periodLabel: '2026-09', minorUnits: f.salary * 100n, sourceKind: 'RAIL', sourceRef: `mohre:wps-ILLUS-${id.slice(-4)}` },
-    ], READ_FIGURE_SOURCES.ocr, step(1n));
+    const read = await ingestReadFiguresAt(
+      tenant,
+      id,
+      [
+        {
+          metric: 'ANNUAL_REVENUE',
+          periodLabel: 'FY2025',
+          minorUnits: f.revenue * 100n,
+          sourceKind: 'OCR',
+          sourceRef: statement,
+        },
+        {
+          metric: 'PRIOR_YEAR_REVENUE',
+          periodLabel: 'FY2024',
+          minorUnits: f.prior * 100n,
+          sourceKind: 'OCR',
+          sourceRef: statement,
+        },
+        {
+          metric: 'NET_PROFIT',
+          periodLabel: 'FY2025',
+          minorUnits: f.profit * 100n,
+          sourceKind: 'OCR',
+          sourceRef: statement,
+        },
+        {
+          metric: 'TOTAL_DEBT_SERVICE',
+          periodLabel: 'FY2025',
+          minorUnits: f.debtService * 100n,
+          sourceKind: 'RAIL',
+          sourceRef: `aecb:report-ILLUS-${id.slice(-4)}`,
+        },
+        {
+          metric: 'CURRENT_ASSETS',
+          periodLabel: 'FY2025',
+          minorUnits: f.assets * 100n,
+          sourceKind: 'OCR',
+          sourceRef: statement,
+        },
+        {
+          metric: 'CURRENT_LIABILITIES',
+          periodLabel: 'FY2025',
+          minorUnits: f.liabilities * 100n,
+          sourceKind: 'OCR',
+          sourceRef: statement,
+        },
+        {
+          metric: 'MONTHLY_GROSS_SALARY',
+          periodLabel: '2026-09',
+          minorUnits: f.salary * 100n,
+          sourceKind: 'RAIL',
+          sourceRef: `mohre:wps-ILLUS-${id.slice(-4)}`,
+        },
+      ],
+      READ_FIGURE_SOURCES.ocr,
+      step(1n),
+    );
     const proposed = read.ok
-      ? await proposeFiguresAt(tenant, id, [{ metric: 'MONTHLY_DEBT_OBLIGATIONS', periodLabel: '2026-09', minorUnits: f.obligations * 100n, sourceKind: 'OFFICER_ENTRY', sourceRef: `doc-ILLUS-${id.slice(-4)}-PERSONAL_BUREAU_REPORT` }], officer, step(1n))
+      ? await proposeFiguresAt(
+          tenant,
+          id,
+          [
+            {
+              metric: 'MONTHLY_DEBT_OBLIGATIONS',
+              periodLabel: '2026-09',
+              minorUnits: f.obligations * 100n,
+              sourceKind: 'OFFICER_ENTRY',
+              sourceRef: `doc-ILLUS-${id.slice(-4)}-PERSONAL_BUREAU_REPORT`,
+            },
+          ],
+          officer,
+          step(1n),
+        )
       : read;
     if (!proposed.ok || s.reach === 'PROPOSED') {
-      await presentDocumentAt(tenant, id, { documentType: 'TRADE_LICENCE', documentRef: `doc-ILLUS-${id.slice(-4)}-TRADE_LICENCE` }, officer, step(1n));
+      await presentDocumentAt(
+        tenant,
+        id,
+        { documentType: 'TRADE_LICENCE', documentRef: `doc-ILLUS-${id.slice(-4)}-TRADE_LICENCE` },
+        officer,
+        step(1n),
+      );
       continue;
     }
 
@@ -1936,7 +3241,10 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
     // Documents: every item of the variant's checklist, by reference, presented by the officer and validated by the checker.
     const checklist = await checklistOf(tenant, bookOf(tenant).records.get(id) as BusinessRecord, step(2n));
     if (checklist.ok) {
-      const items = s.reach === 'PARTLY_VERIFIED' ? checklist.value.checklist.items.slice(0, 5) : checklist.value.checklist.items.filter((i) => i.required);
+      const items =
+        s.reach === 'PARTLY_VERIFIED'
+          ? checklist.value.checklist.items.slice(0, 5)
+          : checklist.value.checklist.items.filter((i) => i.required);
       for (const item of items) {
         const documentRef = `doc-ILLUS-${id.slice(-4)}-${item.documentType}`;
         await presentDocumentAt(tenant, id, { documentType: item.documentType, documentRef }, officer, step(2n));
@@ -1945,12 +3253,28 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
     }
     if (s.reach === 'PARTLY_VERIFIED') continue;
 
-    await recordAssessmentInputsAt(tenant, id, {
-      bureau: { reportRef: `aecb:report-ILLUS-${id.slice(-4)}`, consentId: `aecb:consent-ILLUS-${id.slice(-4)}`, score: s.bureauScore },
-      fullTimeEmployees: s.employees, relevantExperienceYears: s.experience, sectorPriority: s.sectorPriority, auditedFinancialsAvailable: true,
-      commitmentRatioPerTenThousand: 10_200n, riskAnalysisScorePerTenThousand: 7_400n, portfolioRepaymentPerTenThousand: 8_600n, failedFilesRatePerTenThousand: 800n,
-      collateralValueMinorUnits: s.collateralAed * 100n,
-    }, officer, step(3n));
+    await recordAssessmentInputsAt(
+      tenant,
+      id,
+      {
+        bureau: {
+          reportRef: `aecb:report-ILLUS-${id.slice(-4)}`,
+          consentId: `aecb:consent-ILLUS-${id.slice(-4)}`,
+          score: s.bureauScore,
+        },
+        fullTimeEmployees: s.employees,
+        relevantExperienceYears: s.experience,
+        sectorPriority: s.sectorPriority,
+        auditedFinancialsAvailable: true,
+        commitmentRatioPerTenThousand: 10_200n,
+        riskAnalysisScorePerTenThousand: 7_400n,
+        portfolioRepaymentPerTenThousand: 8_600n,
+        failedFilesRatePerTenThousand: 800n,
+        collateralValueMinorUnits: s.collateralAed * 100n,
+      },
+      officer,
+      step(3n),
+    );
     const submitted = await submitAt(tenant, id, officer, step(4n));
     if (!submitted.ok || s.reach === 'SUBMITTED') continue;
 
@@ -1958,21 +3282,34 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
     if (!assessed.ok || s.reach === 'ASSESSED') continue;
 
     const status = assessed.value.application.status;
-    const decided = status === 'ASSESSED'
-      ? await approveAt(tenant, id, checker, step(6n))
-      : status === 'IN_COMMITTEE'
-        ? await decideAt(tenant, id, { decidedBy: BUSINESS_ROLES.committee, approved: true, reason: 'ILLUSTRATIVE — within risk-aligned terms; collateral cover adequate' }, step(6n))
-        : undefined;
+    const decided =
+      status === 'ASSESSED'
+        ? await approveAt(tenant, id, checker, step(6n))
+        : status === 'IN_COMMITTEE'
+          ? await decideAt(
+              tenant,
+              id,
+              {
+                decidedBy: SEED_PRINCIPALS.committee,
+                approved: true,
+                reason: 'ILLUSTRATIVE — within risk-aligned terms; collateral cover adequate',
+              },
+              step(6n),
+            )
+          : undefined;
     if (decided === undefined || !decided.ok) continue;
 
     // A facility the seed disburses is offered for disbursement on the day it is paid out — never paid before its planned
     // date. One in arrears falls first due at the policy's earliest, so its days past due accrue from a date in the past.
     const disbursementDays = daysOfIso(localDate(step(10n).epochSeconds, profile)) ?? 0n;
     const firstDueDays = disbursementDays + datePolicy.value.minFirstDueAfterDisbursementDays;
-    const offerOptions: OfferOptions = s.reach !== 'DISBURSED' ? {} : {
-      disbursementDate: isoOfDays(disbursementDays),
-      ...(s.daysPastDue === undefined ? {} : { firstDueDate: isoOfDays(firstDueDays) }),
-    };
+    const offerOptions: OfferOptions =
+      s.reach !== 'DISBURSED'
+        ? {}
+        : {
+            disbursementDate: isoOfDays(disbursementDays),
+            ...(s.daysPastDue === undefined ? {} : { firstDueDate: isoOfDays(firstDueDays) }),
+          };
     const offered = await generateOfferAt(tenant, id, officer, offerOptions, step(7n));
     if (!offered.ok) continue;
     const sent = await sendOfferAt(tenant, id, officer, step(8n));
@@ -1981,17 +3318,24 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
     const version = sent.value.latestOffer?.letter.version ?? '';
     const signed = await signAt(tenant, id, { letterVersion: version }, officer, step(9n));
     if (!signed.ok) continue;
-    const disbursed = await disburseAt(tenant, id, BUSINESS_ROLES.finance, undefined, step(10n));
+    const disbursed = await disburseAt(tenant, id, SEED_PRINCIPALS.finance, undefined, step(10n));
     if (!disbursed.ok) continue;
     if (s.daysPastDue !== undefined) {
       // Observed on the day the arrears reach the seed's days past due, counted from the first due date — never after today.
       const todayDays = daysOfIso(localDate(now, profile)) ?? 0n;
-      const observedDays = firstDueDays + BigInt(s.daysPastDue) < todayDays ? firstDueDays + BigInt(s.daysPastDue) : todayDays;
+      const observedDays =
+        firstDueDays + BigInt(s.daysPastDue) < todayDays ? firstDueDays + BigInt(s.daysPastDue) : todayDays;
       const daysPastDue = Number(observedDays - firstDueDays);
       if (daysPastDue <= 0) continue;
       const observedAt = observedDays * DAY + 12n * HOUR - (OFFSET_SECONDS[profile.timeZone] ?? 0n);
       const instalment = disbursed.value.latestOffer?.terms.monthlyInstalment.minorUnits ?? 0n;
-      await portfolioAt(tenant, id, { daysPastDue, arrearsMinorUnits: instalment }, 'loan-system-fixture', seedInstant(observedAt < now ? observedAt : now));
+      await portfolioAt(
+        tenant,
+        id,
+        { daysPastDue, arrearsMinorUnits: instalment },
+        'loan-system-fixture',
+        seedInstant(observedAt < now ? observedAt : now),
+      );
     }
   }
 }

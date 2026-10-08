@@ -10,6 +10,7 @@
     { "group": "sanad-checkers", "authority": "CHECKER" },
     { "group": "sanad-senior-checkers", "authority": "SENIOR_CHECKER" },
     { "group": "sanad-credit-committee", "authority": "CREDIT_COMMITTEE" },
+    { "group": "sanad-finance", "authority": "FINANCE" },
     { "group": "sanad-platform-admins", "authority": "PLATFORM_ADMIN" }
   ],
   "sessionLifetimeSeconds": 1800,

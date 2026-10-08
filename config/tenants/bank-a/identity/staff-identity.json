@@ -23,6 +23,10 @@
       "authority": "CREDIT_COMMITTEE"
     },
     {
+      "group": "sanad-finance",
+      "authority": "FINANCE"
+    },
+    {
       "group": "sanad-platform-admins",
       "authority": "PLATFORM_ADMIN"
     }

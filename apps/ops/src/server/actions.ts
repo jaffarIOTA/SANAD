@@ -6,9 +6,12 @@
  * Thin. Every one of these parses the form, hands it to the domain, and turns
  * a rejection into something a person can read. None of them contains a rule.
  *
- * The principals come from `session.ts` and are resolved on the server, never
- * taken from the form, because "who is approving this" must not be something
- * the browser can assert (BE-09).
+ * The principal is the signed-in member of staff, read from the sealed session
+ * on the server by `authorise()` — never taken from the form, because "who is
+ * approving this" must not be something the browser can assert (BE-09). With
+ * no session an action sends the browser to sign in; without the authority
+ * the act needs (authority.ts) it is refused with a typed reason. The tenant a
+ * request is keyed under is the principal's own.
  */
 
 import { revalidatePath } from 'next/cache';
@@ -18,7 +21,8 @@ import type { ServicingOutcome } from '@sanad/core/origination/request.ts';
 import type { OriginationChannel } from '@sanad/core/origination/channel.ts';
 import { tsaInstant } from '@sanad/core/time/tsa.ts';
 
-import { CHECKER, MAKER } from './session.ts';
+import { authorise, localeSegmentOf } from './session.ts';
+import { requestPrincipal } from './staff.ts';
 import { findClearedInvoice, unavailableReason } from './invoices.ts';
 import { tsaInstant as attest } from '@sanad/core/time/tsa.ts';
 import {
@@ -44,6 +48,10 @@ import {
 } from './store.ts';
 
 const field = (form: FormData, name: string): string => String(form.get(name) ?? '').trim();
+/** The locale segment, from a fixed list: a form never supplies a path. */
+const localeOf = (form: FormData): string => localeSegmentOf(field(form, 'locale') || 'en');
+const requestPath = (locale: string, requestId: string): string =>
+  `/${locale}/requests/${encodeURIComponent(requestId)}`;
 
 /**
  * Every action that changed the book ends here before it redirects: the
@@ -64,7 +72,6 @@ function failTo(path: string, control: string, message: string): never {
   redirect(`${path}?${query.toString()}`);
 }
 
-
 /**
  * Stand in for the servicing platform answering.
  *
@@ -72,8 +79,9 @@ function failTo(path: string, control: string, message: string): never {
  * so the two-stage flow can be walked.
  */
 export async function servicingRespondAction(form: FormData): Promise<void> {
-  const locale = field(form, 'locale') || 'en';
+  const locale = localeOf(form);
   const requestId = field(form, 'requestId');
+  await authorise(locale, 'SERVICING_STAND_IN', requestPath(locale, requestId));
   const decision = field(form, 'decision') as ServicingOutcome['decision'];
   const reasonCode = field(form, 'reasonCode');
 
@@ -99,15 +107,12 @@ export async function servicingRespondAction(form: FormData): Promise<void> {
 }
 
 export async function approveAction(form: FormData): Promise<void> {
-  const locale = field(form, 'locale') || 'en';
+  const locale = localeOf(form);
   const requestId = field(form, 'requestId');
   const justification = field(form, 'justification');
 
-  const result = approveRequest(
-    requestId,
-    CHECKER,
-    justification === '' ? undefined : justification,
-  );
+  const staff = await authorise(locale, 'REVIEW', requestPath(locale, requestId));
+  const result = approveRequest(requestId, requestPrincipal(staff), justification === '' ? undefined : justification);
   if (!result.ok) {
     failTo(`/${locale}/requests/${requestId}`, result.error.control, result.error.detail);
   }
@@ -117,10 +122,11 @@ export async function approveAction(form: FormData): Promise<void> {
 }
 
 export async function returnAction(form: FormData): Promise<void> {
-  const locale = field(form, 'locale') || 'en';
+  const locale = localeOf(form);
   const requestId = field(form, 'requestId');
 
-  const result = returnRequest(requestId, CHECKER, field(form, 'note'));
+  const staff = await authorise(locale, 'REVIEW', requestPath(locale, requestId));
+  const result = returnRequest(requestId, requestPrincipal(staff), field(form, 'note'));
   if (!result.ok) {
     failTo(`/${locale}/requests/${requestId}`, result.error.control, result.error.detail);
   }
@@ -130,10 +136,11 @@ export async function returnAction(form: FormData): Promise<void> {
 }
 
 export async function rejectAction(form: FormData): Promise<void> {
-  const locale = field(form, 'locale') || 'en';
+  const locale = localeOf(form);
   const requestId = field(form, 'requestId');
 
-  const result = declineRequest(requestId, CHECKER, field(form, 'reasonCode'));
+  const staff = await authorise(locale, 'REVIEW', requestPath(locale, requestId));
+  const result = declineRequest(requestId, requestPrincipal(staff), field(form, 'reasonCode'));
   if (!result.ok) {
     failTo(`/${locale}/requests/${requestId}`, result.error.control, result.error.detail);
   }
@@ -141,7 +148,6 @@ export async function rejectAction(form: FormData): Promise<void> {
   await settle(locale, requestId);
   redirect(`/${locale}/requests/${requestId}`);
 }
-
 
 // -- The origination journey, step by step ------------------------------------
 //
@@ -154,8 +160,9 @@ export async function rejectAction(form: FormData): Promise<void> {
 // the invoice and never keyed (§6).
 
 export async function beginOriginationAction(form: FormData): Promise<void> {
-  const locale = field(form, 'locale') || 'en';
+  const locale = localeOf(form);
   const channel = (field(form, 'channel') || 'MAKER_CHECKER') as OriginationChannel;
+  await authorise(locale, 'ORIGINATE', `/${locale}/originate`);
 
   const draft = startDraft(channel);
   redirect(`/${locale}/originate/${draft.draftId}/trade`);
@@ -163,17 +170,14 @@ export async function beginOriginationAction(form: FormData): Promise<void> {
 
 /** Step 1 — choose the trade. Everything else follows from it. */
 export async function chooseTradeAction(form: FormData): Promise<void> {
-  const locale = field(form, 'locale') || 'en';
+  const locale = localeOf(form);
   const draftId = field(form, 'draftId');
   const invoiceUuid = field(form, 'invoiceUuid');
+  await authorise(locale, 'ORIGINATE', `/${locale}/originate/${encodeURIComponent(draftId)}/trade`);
 
   const invoice = findClearedInvoice(invoiceUuid);
   if (invoice === undefined) {
-    failTo(
-      `/${locale}/originate/${draftId}/trade`,
-      'OP-DETERMINACY',
-      'That invoice is not in the cleared set.',
-    );
+    failTo(`/${locale}/originate/${draftId}/trade`, 'OP-DETERMINACY', 'That invoice is not in the cleared set.');
   }
 
   // Refused here as well as in the domain. The domain is the control; this is
@@ -197,16 +201,13 @@ export async function chooseTradeAction(form: FormData): Promise<void> {
 
 /** Step 2 — the programme and the tenor. */
 export async function chooseTermsAction(form: FormData): Promise<void> {
-  const locale = field(form, 'locale') || 'en';
+  const locale = localeOf(form);
   const draftId = field(form, 'draftId');
+  await authorise(locale, 'ORIGINATE', `/${locale}/originate/${encodeURIComponent(draftId)}/terms`);
 
   const tenorDays = Number.parseInt(field(form, 'tenorDays'), 10);
   if (!Number.isFinite(tenorDays) || tenorDays <= 0) {
-    failTo(
-      `/${locale}/originate/${draftId}/terms`,
-      'SH-03',
-      'A request must name a determinate tenor in days.',
-    );
+    failTo(`/${locale}/originate/${draftId}/terms`, 'SH-03', 'A request must name a determinate tenor in days.');
   }
 
   updateDraft(draftId, {
@@ -214,9 +215,7 @@ export async function chooseTermsAction(form: FormData): Promise<void> {
     tenorDays,
     ...(field(form, 'agentId') === '' ? {} : { agentId: field(form, 'agentId') }),
     ...(field(form, 'branchCode') === '' ? {} : { branchCode: field(form, 'branchCode') }),
-    ...(field(form, 'merchantMandateRef') === ''
-      ? {}
-      : { merchantMandateRef: field(form, 'merchantMandateRef') }),
+    ...(field(form, 'merchantMandateRef') === '' ? {} : { merchantMandateRef: field(form, 'merchantMandateRef') }),
     ...(field(form, 'aggregatorId') === '' ? {} : { aggregatorId: field(form, 'aggregatorId') }),
   });
 
@@ -225,8 +224,11 @@ export async function chooseTermsAction(form: FormData): Promise<void> {
 
 /** Step 3 — review, then submit. This is where the domain gets to refuse. */
 export async function submitDraftAction(form: FormData): Promise<void> {
-  const locale = field(form, 'locale') || 'en';
+  const locale = localeOf(form);
   const draftId = field(form, 'draftId');
+  // The maker is whoever is signed in, and the request is keyed under their tenant.
+  const staff = await authorise(locale, 'ORIGINATE', `/${locale}/originate/${encodeURIComponent(draftId)}/review`);
+  const maker = requestPrincipal(staff);
 
   const draft = findDraft(draftId);
   if (draft?.invoiceUuid === undefined || draft.tenorDays === undefined) {
@@ -239,7 +241,7 @@ export async function submitDraftAction(form: FormData): Promise<void> {
   }
 
   const keyed = keyRequest({
-    tenantId: MAKER.tenantId,
+    tenantId: maker.tenantId,
     programmeId: draft.programmeId ?? 'prg-0001',
     // The counterparty is the invoice's recipient — the party who owes, and
     // who will owe us. Not a separate field somebody could disagree with.
@@ -253,10 +255,8 @@ export async function submitDraftAction(form: FormData): Promise<void> {
     // types this.
     amountMinorUnits: invoice.amount.minorUnits,
     tenorDays: draft.tenorDays,
-    maker: MAKER,
-    ...(draft.merchantMandateRef === undefined
-      ? {}
-      : { merchantMandateRef: draft.merchantMandateRef }),
+    maker,
+    ...(draft.merchantMandateRef === undefined ? {} : { merchantMandateRef: draft.merchantMandateRef }),
     ...(draft.aggregatorId === undefined ? {} : { aggregatorId: draft.aggregatorId }),
     ...(draft.agentId === undefined ? {} : { agentId: draft.agentId }),
     ...(draft.branchCode === undefined ? {} : { branchCode: draft.branchCode }),
@@ -276,7 +276,6 @@ export async function submitDraftAction(form: FormData): Promise<void> {
   redirect(`/${locale}/requests/${keyed.value.requestId}`);
 }
 
-
 /**
  * Expire requests that have waited past the tenant's interval.
  *
@@ -286,7 +285,8 @@ export async function submitDraftAction(form: FormData): Promise<void> {
  * expires nothing.
  */
 export async function expireOverdueAction(form: FormData): Promise<void> {
-  const locale = field(form, 'locale') || 'en';
+  const locale = localeOf(form);
+  await authorise(locale, 'REVIEW', `/${locale}/queue`);
   const expired = expireOverdue(
     attest({
       verified: true,
@@ -299,61 +299,83 @@ export async function expireOverdueAction(form: FormData): Promise<void> {
   redirect(`/${locale}/queue?show=${expired.length > 0 ? 'decided' : 'breached'}&expired=${String(expired.length)}`);
 }
 
-
 // -- Lifecycle actions (BRD §11, §16, §21, MC-008/009, §15) --------------------
 
 const back = (locale: string, requestId: string): string => `/${locale}/requests/${requestId}`;
 
 export async function requestInformationAction(form: FormData): Promise<void> {
-  const locale = field(form, 'locale') || 'en';
+  const locale = localeOf(form);
   const requestId = field(form, 'requestId');
-  const items = field(form, 'items').split('\n').map((i) => i.trim()).filter((i) => i.length > 0);
-  const result = requestInformation(requestId, CHECKER, field(form, 'from') as 'COUNTERPARTY' | 'PARTNER' | 'DOCUMENTS', items);
+  const items = field(form, 'items')
+    .split('\n')
+    .map((i) => i.trim())
+    .filter((i) => i.length > 0);
+  const staff = await authorise(locale, 'REVIEW', requestPath(locale, requestId));
+  const result = requestInformation(
+    requestId,
+    requestPrincipal(staff),
+    field(form, 'from') as 'COUNTERPARTY' | 'PARTNER' | 'DOCUMENTS',
+    items,
+  );
   if (!result.ok) failTo(back(locale, requestId), result.error.control, result.error.detail);
-  await settle(locale, requestId); redirect(back(locale, requestId));
+  await settle(locale, requestId);
+  redirect(back(locale, requestId));
 }
 
 export async function provideInformationAction(form: FormData): Promise<void> {
-  const locale = field(form, 'locale') || 'en';
+  const locale = localeOf(form);
   const requestId = field(form, 'requestId');
+  await authorise(locale, 'ORIGINATE', requestPath(locale, requestId));
   const result = provideInformation(requestId);
   if (!result.ok) failTo(back(locale, requestId), result.error.control, result.error.detail);
-  await settle(locale, requestId); redirect(back(locale, requestId));
+  await settle(locale, requestId);
+  redirect(back(locale, requestId));
 }
 
 /** Development stand-in for the adapter reporting the platform unreachable. */
 export async function failServicingAction(form: FormData): Promise<void> {
-  const locale = field(form, 'locale') || 'en';
+  const locale = localeOf(form);
   const requestId = field(form, 'requestId');
+  await authorise(locale, 'SERVICING_STAND_IN', requestPath(locale, requestId));
   const result = failServicing(requestId, field(form, 'reason') || 'simulated: platform unreachable');
   if (!result.ok) failTo(back(locale, requestId), result.error.control, result.error.detail);
-  await settle(locale, requestId); redirect(back(locale, requestId));
+  await settle(locale, requestId);
+  redirect(back(locale, requestId));
 }
 
 export async function retryServicingAction(form: FormData): Promise<void> {
-  const locale = field(form, 'locale') || 'en';
+  const locale = localeOf(form);
   const requestId = field(form, 'requestId');
   const note = field(form, 'note');
-  const result = retryServicing(requestId, field(form, 'mode') === 'manual' ? { by: CHECKER, note } : undefined);
+  const staff = await authorise(locale, 'REVIEW', requestPath(locale, requestId));
+  const result = retryServicing(
+    requestId,
+    field(form, 'mode') === 'manual' ? { by: requestPrincipal(staff), note } : undefined,
+  );
   if (!result.ok) failTo(back(locale, requestId), result.error.control, result.error.detail);
-  await settle(locale, requestId); redirect(back(locale, requestId));
+  await settle(locale, requestId);
+  redirect(back(locale, requestId));
 }
 
 export async function reviseAction(form: FormData): Promise<void> {
-  const locale = field(form, 'locale') || 'en';
+  const locale = localeOf(form);
   const requestId = field(form, 'requestId');
   const tenor = Number.parseInt(field(form, 'tenorDays'), 10);
+  await authorise(locale, 'ORIGINATE', requestPath(locale, requestId));
   const result = reviseAndResubmit(requestId, {
     ...(field(form, 'programmeId') === '' ? {} : { programmeId: field(form, 'programmeId') }),
     ...(Number.isFinite(tenor) && tenor > 0 ? { tenorDays: tenor } : {}),
   });
   if (!result.ok) failTo(back(locale, requestId), result.error.control, result.error.detail);
-  await settle(locale, requestId); redirect(back(locale, requestId));
+  await settle(locale, requestId);
+  redirect(back(locale, requestId));
 }
 
 export async function attachDocumentAction(form: FormData): Promise<void> {
-  const locale = field(form, 'locale') || 'en';
+  const locale = localeOf(form);
   const requestId = field(form, 'requestId');
-  attachDocument(requestId, field(form, 'documentType'));
-  await settle(locale, requestId); redirect(back(locale, requestId));
+  const staff = await authorise(locale, 'ORIGINATE', requestPath(locale, requestId));
+  attachDocument(requestId, field(form, 'documentType'), staff.principalId);
+  await settle(locale, requestId);
+  redirect(back(locale, requestId));
 }

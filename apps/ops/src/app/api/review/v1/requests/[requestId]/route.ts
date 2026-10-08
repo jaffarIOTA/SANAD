@@ -12,7 +12,9 @@ export async function GET(
   if (staff instanceof Response) return staff;
   const { requestId } = await ctx.params;
   await syncStore();
-  const row = findRequest(requestId);
+  // Another institution's request is not found, not forbidden (SEC-TM08, SEC-TM12).
+  const found = findRequest(requestId);
+  const row = found?.tenantId === staff.tenantId ? found : undefined;
   if (row === undefined)
     return refuse(
       problem({

@@ -99,6 +99,8 @@ export interface PersistedDocument {
   /** Position among the request's documents, in the order presented. */
   readonly position: number;
   readonly document: PresentedDocument;
+  /** Who presented it: the signed-in principal. Absent only for documents recorded before sign-in existed. */
+  readonly presentedBy?: string;
 }
 
 /** Every document presented against the tenant's requests, in the order presented (`evidence.presented_document`, migration 0012). */
@@ -165,7 +167,7 @@ export async function saveDocuments(
           d.document.capturedAt.authorityId,
           d.position,
           d.requestId,
-          presentedBy,
+          d.presentedBy ?? presentedBy,
         ],
       );
     }

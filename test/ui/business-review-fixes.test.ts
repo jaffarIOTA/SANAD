@@ -18,9 +18,6 @@
  * is asserted by reading the source, as in business-screens.test.ts.
  */
 
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-
 import { describe, expect, it } from 'vitest';
 
 import { problem } from '@sanad/origination/problem.ts';
@@ -28,10 +25,11 @@ import { problem } from '@sanad/origination/problem.ts';
 import { NOTICES, REFUSALS } from '../../apps/ops/src/server/business-dashboard.ts';
 import { MODULE_GROUPS, type ModuleGroup } from '../../apps/ops/src/server/modules.ts';
 import { navigationFor } from '../../apps/ops/src/app/[locale]/navigation.ts';
+import { raw, source } from './source.ts';
 
 const ARABIC_LETTER = /[؀-ۿ]/;
 const LATIN_DIGIT = /[0-9]/;
-const repo = (path: string): string => readFileSync(fileURLToPath(new URL(`../../${path}`, import.meta.url)), 'utf8');
+const repo = source;
 const page = (path: string): string => repo(`apps/ops/src/app/[locale]/${path}`);
 
 const APPLICATION = page('business/[applicationId]/page.tsx');
@@ -68,7 +66,10 @@ describe('a presented document can be validated on screen', () => {
     expect(form).toContain('name="documentRef" value={held.documentRef}');
     expect(form).toContain('name="decision" value="VALID"');
     expect(form).toContain('name="decision" value="INVALID"');
-    expect(form).toContain('{BUSINESS_ROLES.checker}');
+    // The checker named is whoever is signed in; the control is gated on CHECKER and on not being the presenter.
+    expect(form).toContain('<Id>{staff.principalId}</Id>');
+    expect(APPLICATION).toContain('act="BUSINESS_VERIFY"');
+    expect(APPLICATION).toContain('ownWork={held.presentedBy === staff.principalId}');
   });
 
   it('shows each document’s status and who presented and validated it', () => {
@@ -101,13 +102,13 @@ describe('the assessment inputs', () => {
     }
     expect(form).toContain('name="bureauConsentId"');
     // The consent is chosen from the stage-4 references: the service accepts no other.
-    expect(form).toContain('consentRefs.map((ref) => <option key={ref} value={ref}>{ref}</option>)');
+    expect(form).toContain('consentRefs.map((ref) => (<option key={ref} value={ref}>{ref}</option>))');
   });
 
   it('are editable only while the application is open, and read-only once it is submitted or later', () => {
     expect(ASSESSMENT).toContain("const inputsOpen = ['RECEIVED', 'SPREADING'].includes(a.status);");
     expect(ASSESSMENT).toContain(
-      '{inputsOpen || inputs !== undefined ? <InputsCard segment={segment} applicationId={a.applicationId} view={view} editable={inputsOpen} f={f} /> : null}',
+      '{inputsOpen || inputs !== undefined ? (<InputsCard segment={segment} applicationId={a.applicationId} view={view} editable={inputsOpen} staff={staff} f={f} />) : null}',
     );
     expect(ASSESSMENT).toContain('{!editable ? null : (');
     expect(ASSESSMENT).toContain('data-inputs-read-only');
@@ -121,24 +122,29 @@ describe('the assessment inputs', () => {
 });
 
 describe('who acts', () => {
-  it('names the checker as the one who runs the assessment', () => {
+  it('names the signed-in checker as the one who runs the assessment, and the action needs CHECKER', () => {
     const run = ASSESSMENT.slice(
       ASSESSMENT.indexOf('data-runs-assessment'),
-      ASSESSMENT.indexOf('<form action={runAssessmentAction}>'),
+      ASSESSMENT.indexOf('action={runAssessmentAction}'),
     );
-    expect(run).toContain('<Id>{BUSINESS_ROLES.checker}</Id>');
-    expect(actionBody('runAssessmentAction')).toContain('BUSINESS_ROLES.checker');
+    expect(run).toContain('<Id>{staff.principalId}</Id>');
+    expect(run).toContain('act="BUSINESS_ASSESS"');
+    expect(actionBody('runAssessmentAction')).toContain("contextOf(form, 'BUSINESS_ASSESS')");
   });
 
-  it('has the finance principal, not the checker, release disbursement', () => {
-    expect(actionBody('recordDisbursedAction')).toContain('BUSINESS_ROLES.finance');
+  it('has a finance user, not the checker, release disbursement', () => {
+    expect(actionBody('recordDisbursedAction')).toContain("contextOf(form, 'BUSINESS_DISBURSE')");
     const signed = OFFER.slice(OFFER.indexOf("case 'SIGNED':"), OFFER.indexOf("case 'DISBURSED':"));
-    expect(signed).toContain('<Id>{BUSINESS_ROLES.finance}</Id>');
-    expect(signed).not.toContain('BUSINESS_ROLES.checker');
+    expect(signed).toContain('act="BUSINESS_DISBURSE"');
     expect(signed).not.toMatch(/The checker|المراجِع/);
     const flow = OFFER.slice(OFFER.indexOf('التسلسل'), OFFER.indexOf('</SectionCard>', OFFER.indexOf('التسلسل')));
-    expect(flow).toContain('BUSINESS_ROLES.finance');
-    expect(flow).not.toContain('BUSINESS_ROLES.checker');
+    expect(flow).toMatch(/finance authority/);
+    expect(flow).not.toMatch(/the checker/);
+  });
+
+  it('no business screen or action names a constant principal any more', () => {
+    for (const src of [APPLICATION, ASSESSMENT, OFFER, ACTIONS])
+      expect(src).not.toMatch(/BUSINESS_ROLES|SEED_PRINCIPALS/);
   });
 });
 
@@ -231,8 +237,11 @@ describe('refusal wording', () => {
 
   it('has words for every notice an action redirects with', () => {
     // finish(ctx, result, 'NOTICE') — or a ternary between two notices as that third argument.
-    const direct = [...ACTIONS.matchAll(/\breturn finish\(ctx, [^\n]*, '([A-Z][A-Z_]+)'\);/g)].map((m) => m[1] ?? '');
-    const ternaries = [...ACTIONS.matchAll(/\? '([A-Z][A-Z_]+)' : '([A-Z][A-Z_]+)'\);/g)].flatMap((m) => [
+    // Whitespace-tolerant: a formatter may break a long call across lines.
+    const direct = [...ACTIONS.matchAll(/\breturn finish\(\s*ctx,[^;]*?,\s*'([A-Z][A-Z_]+)',?\s*\);/g)].map(
+      (m) => m[1] ?? '',
+    );
+    const ternaries = [...ACTIONS.matchAll(/\?\s*'([A-Z][A-Z_]+)'\s*:\s*'([A-Z][A-Z_]+)',?\s*\);/g)].flatMap((m) => [
       m[1] ?? '',
       m[2] ?? '',
     ]);
@@ -248,7 +257,7 @@ describe('refusal wording', () => {
   it('is rendered from the maps only: no page query type carries a message', () => {
     for (const [name, src] of Object.entries({ APPLICATION, ASSESSMENT, OFFER })) {
       expect(src, name).toMatch(
-        /type Query = \{ readonly notice\?: string; readonly control\?: string; readonly reason\?: string; readonly tenant\?: string \};/,
+        /type Query = \{ readonly notice\?: string; readonly control\?: string; readonly reason\?: string; readonly tenant\?: string;? \};/,
       );
       expect(src, name).not.toMatch(/message/);
     }
@@ -274,7 +283,7 @@ describe('STALE_APPLICATION on the hand-over API', () => {
   });
 
   it('is listed on the hand-over’s 409 in the OpenAPI source and in the generated API Connect artefact', () => {
-    const spec = repo('api/openapi/origination.v1.yaml');
+    const spec = raw('api/openapi/origination.v1.yaml');
     const handover = spec.slice(
       spec.indexOf('operationId: handOverBusinessApplication'),
       spec.indexOf('/business-applications/{applicationId}:'),
@@ -283,7 +292,7 @@ describe('STALE_APPLICATION on the hand-over API', () => {
     const conflict = spec.slice(spec.indexOf('    HandoverConflict:'), spec.indexOf('    IdempotencyConflict:'));
     for (const r of ['STALE_APPLICATION', 'IDEMPOTENCY_KEY_REUSED', 'IDEMPOTENCY_KEY_IN_FLIGHT'])
       expect(conflict).toContain(r);
-    const apic = repo('gateway/ibm/origination-api_1.0.0.yaml');
+    const apic = raw('gateway/ibm/origination-api_1.0.0.yaml');
     expect(apic).toContain('HandoverConflict');
     expect(apic).toContain('STALE_APPLICATION');
   });

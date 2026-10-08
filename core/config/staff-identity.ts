@@ -14,8 +14,13 @@
 import { APPROVAL_AUTHORITIES, type ApprovalAuthority } from '../origination/policy.ts';
 import { type Result, ok, reject } from '../kernel/result.ts';
 
-export type StaffAuthority = 'MAKER' | ApprovalAuthority | 'PLATFORM_ADMIN';
-export const STAFF_AUTHORITIES: readonly StaffAuthority[] = ['MAKER', ...APPROVAL_AUTHORITIES, 'PLATFORM_ADMIN'];
+/**
+ * FINANCE releases a disbursement instruction. It is not an approval authority:
+ * a finance user approves nothing, and an approver releases no money (four eyes
+ * between the decision and the payment).
+ */
+export type StaffAuthority = 'MAKER' | ApprovalAuthority | 'FINANCE' | 'PLATFORM_ADMIN';
+export const STAFF_AUTHORITIES: readonly StaffAuthority[] = ['MAKER', ...APPROVAL_AUTHORITIES, 'FINANCE', 'PLATFORM_ADMIN'];
 
 export type IdentityProtocol = 'SAML' | 'OIDC' | 'DEVELOPMENT';
 
@@ -113,4 +118,15 @@ export function authoritiesFor(groups: readonly string[], c: StaffIdentityConfig
   const held = new Set<StaffAuthority>();
   for (const g of groups) { const m = c.mappings.find((x) => x.group === g); if (m !== undefined) held.add(m.authority); }
   return STAFF_AUTHORITIES.filter((a) => held.has(a));
+}
+
+/**
+ * The highest approval tier among the authorities a person holds, for the
+ * request-level approval check; undefined when they hold none (MAKER, FINANCE
+ * and PLATFORM_ADMIN approve nothing).
+ */
+export function highestApprovalAuthority(held: readonly StaffAuthority[]): ApprovalAuthority | undefined {
+  let top: ApprovalAuthority | undefined;
+  for (const a of APPROVAL_AUTHORITIES) if (held.includes(a)) top = a;
+  return top;
 }

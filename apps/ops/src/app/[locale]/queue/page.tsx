@@ -18,31 +18,53 @@ import { Card, PILL_OUTLINE, Pagination, Status, Tabs } from '@sanad/design/prim
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 import { isExpired, slaStatus } from '@sanad/core/origination/policy.ts';
 
-import { CHECKER, canReview } from '../../../server/session.ts';
+import { canReview, pageStaff } from '../../../server/session.ts';
+import { Gate, authorityRefusal } from '../Gate.tsx';
 import { expireOverdueAction } from '../../../server/actions.ts';
 import { listRequests, originationPolicy, type RequestRow } from '../../../server/store.ts';
 
 type View = 'review' | 'servicing' | 'maker' | 'information' | 'failures' | 'breached' | 'decided';
 const VIEWS: readonly View[] = ['review', 'servicing', 'maker', 'information', 'failures', 'breached', 'decided'];
-const WAITING: readonly RequestRow['state'][] = ['AWAITING_SERVICING_RESPONSE', 'AWAITING_REVIEW', 'RETURNED_TO_MAKER', 'PENDING_INFORMATION', 'SERVICING_UNAVAILABLE'];
+const WAITING: readonly RequestRow['state'][] = [
+  'AWAITING_SERVICING_RESPONSE',
+  'AWAITING_REVIEW',
+  'RETURNED_TO_MAKER',
+  'PENDING_INFORMATION',
+  'SERVICING_UNAVAILABLE',
+];
 const VIEW_STATES: Readonly<Record<View, readonly RequestRow['state'][]>> = {
-  review: ['AWAITING_REVIEW'], servicing: ['AWAITING_SERVICING_RESPONSE'], maker: ['RETURNED_TO_MAKER', 'KEYING'], information: ['PENDING_INFORMATION'],
-  failures: ['SERVICING_UNAVAILABLE'], breached: WAITING, decided: ['APPROVED', 'REJECTED', 'WITHDRAWN', 'EXPIRED'],
+  review: ['AWAITING_REVIEW'],
+  servicing: ['AWAITING_SERVICING_RESPONSE'],
+  maker: ['RETURNED_TO_MAKER', 'KEYING'],
+  information: ['PENDING_INFORMATION'],
+  failures: ['SERVICING_UNAVAILABLE'],
+  breached: WAITING,
+  decided: ['APPROVED', 'REJECTED', 'WITHDRAWN', 'EXPIRED'],
 };
 const VIEW_LABEL: Readonly<Record<View, { en: string; ar: string }>> = {
-  review: { en: 'Needs your decision', ar: 'بانتظار قرارك' }, servicing: { en: 'With the servicing platform', ar: 'لدى نظام الخدمة' }, maker: { en: 'With the maker', ar: 'لدى المُدخِل' },
-  information: { en: 'Awaiting information', ar: 'بانتظار معلومات' }, failures: { en: 'Integration failures', ar: 'أعطال التكامل' }, breached: { en: 'Past SLA', ar: 'تجاوزت المهلة' }, decided: { en: 'Decided', ar: 'تم البت فيها' },
+  review: { en: 'Needs your decision', ar: 'بانتظار قرارك' },
+  servicing: { en: 'With the servicing platform', ar: 'لدى نظام الخدمة' },
+  maker: { en: 'With the maker', ar: 'لدى المُدخِل' },
+  information: { en: 'Awaiting information', ar: 'بانتظار معلومات' },
+  failures: { en: 'Integration failures', ar: 'أعطال التكامل' },
+  breached: { en: 'Past SLA', ar: 'تجاوزت المهلة' },
+  decided: { en: 'Decided', ar: 'تم البت فيها' },
 };
 const VIEW_EMPTY: Readonly<Record<View, { en: string; ar: string }>> = {
-  review: { en: 'Nothing is waiting on you.', ar: 'لا يوجد ما ينتظر قرارك.' }, servicing: { en: 'Nothing is with the servicing platform.', ar: 'لا يوجد لدى نظام الخدمة شيء.' },
-  maker: { en: 'Nothing has been returned.', ar: 'لم يُعَد أي طلب.' }, information: { en: 'Nothing is waiting on outside information.', ar: 'لا يوجد طلب بانتظار معلومات خارجية.' },
-  failures: { en: 'The servicing platform is reachable for everything.', ar: 'نظام الخدمة متاح لكل الطلبات.' }, breached: { en: 'Nothing is past its SLA.', ar: 'لا يوجد طلب تجاوز مهلته.' }, decided: { en: 'Nothing has been decided yet.', ar: 'لم يتم البت في أي طلب بعد.' },
+  review: { en: 'Nothing is waiting on you.', ar: 'لا يوجد ما ينتظر قرارك.' },
+  servicing: { en: 'Nothing is with the servicing platform.', ar: 'لا يوجد لدى نظام الخدمة شيء.' },
+  maker: { en: 'Nothing has been returned.', ar: 'لم يُعَد أي طلب.' },
+  information: { en: 'Nothing is waiting on outside information.', ar: 'لا يوجد طلب بانتظار معلومات خارجية.' },
+  failures: { en: 'The servicing platform is reachable for everything.', ar: 'نظام الخدمة متاح لكل الطلبات.' },
+  breached: { en: 'Nothing is past its SLA.', ar: 'لا يوجد طلب تجاوز مهلته.' },
+  decided: { en: 'Nothing has been decided yet.', ar: 'لم يتم البت في أي طلب بعد.' },
 };
 const PAGE_SIZE = 8;
 const WEEK_EN = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const WEEK_AR = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
 
-const isView = (value: string | undefined): value is View => value !== undefined && (VIEWS as readonly string[]).includes(value);
+const isView = (value: string | undefined): value is View =>
+  value !== undefined && (VIEWS as readonly string[]).includes(value);
 const waitingSince = (row: RequestRow): bigint => row.submittedAtEpochSeconds ?? row.raisedAtEpochSeconds;
 function age(sinceEpochSeconds: bigint, nowEpochSeconds: bigint, locale: string): string {
   const seconds = Number(nowEpochSeconds - sinceEpochSeconds);
@@ -53,10 +75,19 @@ function age(sinceEpochSeconds: bigint, nowEpochSeconds: bigint, locale: string)
   return format.format(-Math.floor(seconds / 86_400), 'day');
 }
 
-export default async function QueuePage({ params, searchParams }: { readonly params: Promise<{ readonly locale: string }>; readonly searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+export default async function QueuePage({
+  params,
+  searchParams,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { locale: segment } = await params;
   const query = await searchParams;
-  const one = (k: string) => { const v = query[k]; return Array.isArray(v) ? v[0] : v; };
+  const one = (k: string) => {
+    const v = query[k];
+    return Array.isArray(v) ? v[0] : v;
+  };
   const view: View = isView(one('show')) ? (one('show') as View) : 'review';
   const locale = localeFromSegment(segment);
   if (locale === undefined) notFound();
@@ -68,24 +99,37 @@ export default async function QueuePage({ params, searchParams }: { readonly par
 
   // Read once, so every row on the page is aged against the same instant.
   const nowEpochSeconds = BigInt(Math.floor(Date.now() / 1000));
-  const all = listRequests();
+  // Only the signed-in person's own institution's requests (SEC-TM08).
+  const staff = await pageStaff(segment);
+  const all = listRequests().filter((r) => r.tenantId === staff.tenantId);
   const policy = originationPolicy();
-  const breached = (r: RequestRow): boolean => slaStatus(policy, r.state, waitingSince(r), nowEpochSeconds) === 'BREACHED';
+  const breached = (r: RequestRow): boolean =>
+    slaStatus(policy, r.state, waitingSince(r), nowEpochSeconds) === 'BREACHED';
   const overdue = (r: RequestRow): boolean => isExpired(policy, r.state, waitingSince(r), nowEpochSeconds);
-  const inView = (v: View, r: RequestRow): boolean => VIEW_STATES[v].includes(r.state) && (v !== 'breached' || breached(r));
-  const counts = Object.fromEntries(VIEWS.map((v) => [v, all.filter((r) => inView(v, r)).length])) as Record<View, number>;
+  const inView = (v: View, r: RequestRow): boolean =>
+    VIEW_STATES[v].includes(r.state) && (v !== 'breached' || breached(r));
+  const counts = Object.fromEntries(VIEWS.map((v) => [v, all.filter((r) => inView(v, r)).length])) as Record<
+    View,
+    number
+  >;
   const expirable = all.filter((r) => WAITING.includes(r.state) && overdue(r)).length;
   const justExpired = Number.parseInt(one('expired') ?? '0', 10) || 0;
 
-  const rows = all.filter((r) => inView(view, r)).sort((a, b) => {
-    const direction = view === 'decided' ? -1 : 1;
-    const byTime = Number(waitingSince(a) - waitingSince(b));
-    return byTime !== 0 ? direction * byTime : direction * a.requestId.localeCompare(b.requestId);
-  });
+  const rows = all
+    .filter((r) => inView(view, r))
+    .sort((a, b) => {
+      const direction = view === 'decided' ? -1 : 1;
+      const byTime = Number(waitingSince(a) - waitingSince(b));
+      return byTime !== 0 ? direction * byTime : direction * a.requestId.localeCompare(b.requestId);
+    });
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const page = Math.min(pages, Math.max(1, Number.parseInt(one('page') ?? '1', 10) || 1));
   const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const blockedCount = all.filter((r) => r.state === 'AWAITING_REVIEW' && !canReview(CHECKER, r.makerPrincipalId).allowed).length;
+  // Four eyes is evaluated against who is actually signed in (`staff`, above).
+  const refusal = authorityRefusal(one('reason'), one('needs'), arabic);
+  const blockedCount = all.filter(
+    (r) => r.state === 'AWAITING_REVIEW' && !canReview(staff, r.makerPrincipalId).allowed,
+  ).length;
 
   // The summary cards: what needs you, and what is past its SLA — the oldest of each.
   const needsYou = all.filter((r) => inView('review', r)).sort((a, b) => Number(waitingSince(a) - waitingSince(b)));
@@ -110,83 +154,244 @@ export default async function QueuePage({ params, searchParams }: { readonly par
 
   return (
     <div className="flex flex-col gap-8">
+      {refusal === undefined ? null : (
+        <p
+          role="alert"
+          className="rounded-card border border-blocked/30 bg-blocked-wash px-4 py-3 text-[14px] text-blocked"
+        >
+          {refusal}
+        </p>
+      )}
       {/* -- Summary: two cards and the week ------------------------------------ */}
       <section className="grid gap-[30px] lg:grid-cols-2 2xl:grid-cols-3">
         <div className="card-lift flex h-[225px] flex-col justify-between overflow-hidden rounded-card bg-[linear-gradient(107deg,#4c49ed_0%,#0a06f4_100%)] text-white">
           <div className="flex items-start justify-between px-[26px] pt-6">
-            <div><p className="text-xs text-white/70">{t('Needs your decision', 'بانتظار قرارك')}</p><p className="mt-1 text-[28px] font-semibold tabular-nums leading-none">{counts.review}</p></div>
-            <span aria-hidden className="inline-flex size-[35px] items-center justify-center rounded-[6px] bg-white/20"><Icon name="queue" size={18} /></span>
+            <div>
+              <p className="text-xs text-white/70">{t('Needs your decision', 'بانتظار قرارك')}</p>
+              <p className="mt-1 text-[28px] font-semibold tabular-nums leading-none">{counts.review}</p>
+            </div>
+            <span aria-hidden className="inline-flex size-[35px] items-center justify-center rounded-[6px] bg-white/20">
+              <Icon name="queue" size={18} />
+            </span>
           </div>
-          <div className="px-[26px] text-xs text-white/70">{oldest !== undefined ? <>{t('Oldest waiting ', 'الأقدم ينتظر ')}<bdi>{age(waitingSince(oldest), nowEpochSeconds, locale)}</bdi> · <span className="identifier text-white">{oldest.requestId}</span></> : t('Nothing is waiting on you.', 'لا يوجد ما ينتظر قرارك.')}</div>
+          <div className="px-[26px] text-xs text-white/70">
+            {oldest !== undefined ? (
+              <>
+                {t('Oldest waiting ', 'الأقدم ينتظر ')}
+                <bdi>{age(waitingSince(oldest), nowEpochSeconds, locale)}</bdi> ·{' '}
+                <span className="identifier text-white">{oldest.requestId}</span>
+              </>
+            ) : (
+              t('Nothing is waiting on you.', 'لا يوجد ما ينتظر قرارك.')
+            )}
+          </div>
           <div className="flex min-h-[70px] flex-wrap items-center justify-between gap-x-4 gap-y-1 bg-[linear-gradient(180deg,rgba(255,255,255,0.15)_0%,rgba(255,255,255,0)_100%)] px-[26px] py-3">
-            <span className="whitespace-nowrap text-[15px] font-semibold">{t('Four eyes', 'أربع أعين')} · <span className="identifier">{CHECKER.principalId}</span></span>
-            {blockedCount > 0 ? <span className="text-xs text-white/80">{blockedCount} {t('your own work', 'من إدخالك')}</span> : null}
+            <span className="whitespace-nowrap text-[15px] font-semibold">
+              {t('Four eyes', 'أربع أعين')} · <span className="identifier">{staff.principalId}</span>
+            </span>
+            {blockedCount > 0 ? (
+              <span className="text-xs text-white/80">
+                {blockedCount} {t('your own work', 'من إدخالك')}
+              </span>
+            ) : null}
           </div>
         </div>
         <div className="card-lift flex h-[225px] flex-col justify-between overflow-hidden rounded-card border border-line-strong bg-surface">
           <div className="flex items-start justify-between px-[26px] pt-6">
-            <div><p className="text-xs text-ink-quiet">{t('Past SLA', 'تجاوزت المهلة')}</p><p className={`mt-1 text-[28px] font-semibold tabular-nums leading-none ${pastSla.length > 0 ? 'text-blocked' : 'text-heading'}`}>{pastSla.length}</p></div>
-            <span aria-hidden className="inline-flex size-[35px] items-center justify-center rounded-[6px] bg-blocked-wash text-blocked"><Icon name="clock" size={18} /></span>
+            <div>
+              <p className="text-xs text-ink-quiet">{t('Past SLA', 'تجاوزت المهلة')}</p>
+              <p
+                className={`mt-1 text-[28px] font-semibold tabular-nums leading-none ${pastSla.length > 0 ? 'text-blocked' : 'text-heading'}`}
+              >
+                {pastSla.length}
+              </p>
+            </div>
+            <span
+              aria-hidden
+              className="inline-flex size-[35px] items-center justify-center rounded-[6px] bg-blocked-wash text-blocked"
+            >
+              <Icon name="clock" size={18} />
+            </span>
           </div>
-          <div className="px-[26px] text-xs text-ink-quiet">{oldestBreached !== undefined ? <>{t('Longest breach ', 'أطول تجاوز ')}<bdi>{age(waitingSince(oldestBreached), nowEpochSeconds, locale)}</bdi> · <span className="identifier text-ink">{oldestBreached.requestId}</span></> : t('Every request is inside its SLA.', 'كل الطلبات ضمن مهلتها.')}</div>
+          <div className="px-[26px] text-xs text-ink-quiet">
+            {oldestBreached !== undefined ? (
+              <>
+                {t('Longest breach ', 'أطول تجاوز ')}
+                <bdi>{age(waitingSince(oldestBreached), nowEpochSeconds, locale)}</bdi> ·{' '}
+                <span className="identifier text-ink">{oldestBreached.requestId}</span>
+              </>
+            ) : (
+              t('Every request is inside its SLA.', 'كل الطلبات ضمن مهلتها.')
+            )}
+          </div>
           <div className="flex min-h-[70px] flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-line-strong px-[26px] py-3">
-            <span className="text-[15px] font-semibold text-heading">{expirable} {t('expirable', 'قابلة للانتهاء')}</span>
-            <form action={expireOverdueAction}><input type="hidden" name="locale" value={segment} /><button type="submit" disabled={expirable === 0} className={`${PILL_OUTLINE} disabled:opacity-40`}>{t('Expire overdue', 'إنهاء المتأخر')}</button></form>
+            <span className="text-[15px] font-semibold text-heading">
+              {expirable} {t('expirable', 'قابلة للانتهاء')}
+            </span>
+            <Gate staff={staff} act="REVIEW" arabic={arabic}>
+              <form action={expireOverdueAction}>
+                <input type="hidden" name="locale" value={segment} />
+                <button type="submit" disabled={expirable === 0} className={`${PILL_OUTLINE} disabled:opacity-40`}>
+                  {t('Expire overdue', 'إنهاء المتأخر')}
+                </button>
+              </form>
+            </Gate>
           </div>
         </div>
         <Card className="lg:col-span-2 2xl:col-span-1">
-          <WeekBars title={t('Decided this week', 'قرارات هذا الأسبوع')} series={[t('Approved', 'معتمد'), t('Declined', 'مرفوض')]} bars={bars} emptyLabel={t('No decisions in the last seven days.', 'لا قرارات خلال الأيام السبعة الأخيرة.')} />
+          <WeekBars
+            title={t('Decided this week', 'قرارات هذا الأسبوع')}
+            series={[t('Approved', 'معتمد'), t('Declined', 'مرفوض')]}
+            bars={bars}
+            emptyLabel={t('No decisions in the last seven days.', 'لا قرارات خلال الأيام السبعة الأخيرة.')}
+          />
         </Card>
       </section>
 
-      {justExpired > 0 ? <p className="rounded-tile bg-brand-wash px-4 py-3 text-sm text-brand-deep">{justExpired} {t('request(s) expired against the tenant policy.', 'طلب(ات) انتهت وفق سياسة المؤسسة.')}</p> : null}
+      {justExpired > 0 ? (
+        <p className="rounded-tile bg-brand-wash px-4 py-3 text-sm text-brand-deep">
+          {justExpired} {t('request(s) expired against the tenant policy.', 'طلب(ات) انتهت وفق سياسة المؤسسة.')}
+        </p>
+      ) : null}
 
       {/* -- Views -------------------------------------------------------------- */}
       <div>
         <h2 className="mb-4 text-h2 font-semibold text-heading">{t('Review queue', 'قائمة المراجعة')}</h2>
-        <Tabs ariaLabel={t('Queue views', 'عروض القائمة')} current={view} items={VIEWS.map((v) => ({ id: v, label: text(VIEW_LABEL[v]), href: `/${segment}/queue?show=${v}`, count: counts[v] }))} />
+        <Tabs
+          ariaLabel={t('Queue views', 'عروض القائمة')}
+          current={view}
+          items={VIEWS.map((v) => ({
+            id: v,
+            label: text(VIEW_LABEL[v]),
+            href: `/${segment}/queue?show=${v}`,
+            count: counts[v],
+          }))}
+        />
       </div>
 
       {/* -- The queue ---------------------------------------------------------- */}
       <Card>
-        {pageRows.length === 0 ? <p className="text-[15px] text-ink-quiet">{text(VIEW_EMPTY[view])}</p> : (
+        {pageRows.length === 0 ? (
+          <p className="text-[15px] text-ink-quiet">{text(VIEW_EMPTY[view])}</p>
+        ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-[16px]">
-              <caption className="sr-only">{text(VIEW_LABEL[view])} — {rows.length}</caption>
+              <caption className="sr-only">
+                {text(VIEW_LABEL[view])} — {rows.length}
+              </caption>
               <thead>
                 <tr className="border-b border-line text-[16px] text-ink-quiet">
-                  <th scope="col" className="py-3 pe-3 text-start font-normal">{t('Waiting', 'منذ')}</th>
-                  <th scope="col" className="py-3 pe-3 text-start font-normal">{t('Counterparty', 'العميل')}</th>
-                  <th scope="col" className="hidden py-3 pe-3 text-start font-normal 2xl:table-cell">{t('Invoice', 'الفاتورة')}</th>
-                  <th scope="col" className="py-3 pe-3 text-end font-normal">{t('Amount', 'المبلغ')}</th>
-                  <th scope="col" className="hidden py-3 pe-3 text-start font-normal xl:table-cell">{t('Channel', 'القناة')}</th>
-                  <th scope="col" className="py-3 pe-3 text-start font-normal">{t('Servicing', 'نظام الخدمة')}</th>
-                  <th scope="col" className="py-3 text-end font-normal">{t('Action', 'إجراء')}</th>
+                  <th scope="col" className="py-3 pe-3 text-start font-normal">
+                    {t('Waiting', 'منذ')}
+                  </th>
+                  <th scope="col" className="py-3 pe-3 text-start font-normal">
+                    {t('Counterparty', 'العميل')}
+                  </th>
+                  <th scope="col" className="hidden py-3 pe-3 text-start font-normal 2xl:table-cell">
+                    {t('Invoice', 'الفاتورة')}
+                  </th>
+                  <th scope="col" className="py-3 pe-3 text-end font-normal">
+                    {t('Amount', 'المبلغ')}
+                  </th>
+                  <th scope="col" className="hidden py-3 pe-3 text-start font-normal xl:table-cell">
+                    {t('Channel', 'القناة')}
+                  </th>
+                  <th scope="col" className="py-3 pe-3 text-start font-normal">
+                    {t('Servicing', 'نظام الخدمة')}
+                  </th>
+                  <th scope="col" className="py-3 text-end font-normal">
+                    {t('Action', 'إجراء')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {pageRows.map((row) => {
-                  const review = canReview(CHECKER, row.makerPrincipalId);
+                  const review = canReview(staff, row.makerPrincipalId);
                   const ownWork = view === 'review' && !review.allowed;
                   const declined = row.servicing?.decision === 'DECLINED';
                   return (
                     <tr key={row.requestId} className="border-b border-line last:border-b-0">
-                      <td className="py-4 pe-3 text-ink-quiet"><span className="flex flex-col gap-1"><span className="whitespace-nowrap"><bdi>{age(waitingSince(row), nowEpochSeconds, locale)}</bdi></span>{breached(row) ? <Status tone="blocked" label={t('past SLA', 'تجاوز المهلة')} /> : null}</span></td>
-                      <td className="py-4 pe-3"><span className="flex items-center gap-3"><span aria-hidden className={`inline-flex size-[30px] shrink-0 items-center justify-center rounded-full border ${row.state === 'APPROVED' ? 'border-positive text-positive' : row.state === 'REJECTED' ? 'border-blocked text-blocked' : 'border-line-strong text-ink-quiet'}`}><Icon name={row.state === 'APPROVED' ? 'check-circle' : 'document'} size={14} /></span><span className="flex min-w-0 flex-col"><span className="font-medium leading-snug text-ink">{row.counterpartyId}</span><span className="identifier text-xs text-ink-quiet">{row.requestId}</span></span></span></td>
-                      <td className="hidden whitespace-nowrap py-4 pe-3 2xl:table-cell"><span className="identifier text-ink-quiet">{row.invoiceNumber}</span></td>
-                      <td className="whitespace-nowrap py-4 pe-3 text-end tabular-nums"><bdi className={row.state === 'REJECTED' ? 'text-blocked' : row.state === 'APPROVED' ? 'text-positive' : 'text-ink'}>{sar(row.amountMinorUnits)}</bdi><span className="ms-1 text-xs text-ink-quiet">SAR</span></td>
-                      <td className="hidden whitespace-nowrap py-4 pe-3 text-ink-quiet xl:table-cell">{row.channel.replaceAll('_', ' ').toLowerCase()}</td>
+                      <td className="py-4 pe-3 text-ink-quiet">
+                        <span className="flex flex-col gap-1">
+                          <span className="whitespace-nowrap">
+                            <bdi>{age(waitingSince(row), nowEpochSeconds, locale)}</bdi>
+                          </span>
+                          {breached(row) ? <Status tone="blocked" label={t('past SLA', 'تجاوز المهلة')} /> : null}
+                        </span>
+                      </td>
                       <td className="py-4 pe-3">
-                        {row.servicing === undefined ? <span className="text-ink-quiet">{row.state === 'AWAITING_SERVICING_RESPONSE' ? t('awaiting', 'بانتظار الرد') : '—'}</span> : (
-                          <span className="flex flex-col gap-1"><Status tone={row.servicing.decision === 'APPROVED' ? 'settled' : row.servicing.decision === 'DECLINED' ? 'blocked' : 'progress'} label={row.servicing.decision.toLowerCase()} />{declined ? <span className="max-w-[11rem] text-xs leading-snug text-attention">{t('approval needs a written justification', 'الاعتماد يتطلب تسبيباً مكتوباً')}</span> : null}</span>
+                        <span className="flex items-center gap-3">
+                          <span
+                            aria-hidden
+                            className={`inline-flex size-[30px] shrink-0 items-center justify-center rounded-full border ${row.state === 'APPROVED' ? 'border-positive text-positive' : row.state === 'REJECTED' ? 'border-blocked text-blocked' : 'border-line-strong text-ink-quiet'}`}
+                          >
+                            <Icon name={row.state === 'APPROVED' ? 'check-circle' : 'document'} size={14} />
+                          </span>
+                          <span className="flex min-w-0 flex-col">
+                            <span className="font-medium leading-snug text-ink">{row.counterpartyId}</span>
+                            <span className="identifier text-xs text-ink-quiet">{row.requestId}</span>
+                          </span>
+                        </span>
+                      </td>
+                      <td className="hidden whitespace-nowrap py-4 pe-3 2xl:table-cell">
+                        <span className="identifier text-ink-quiet">{row.invoiceNumber}</span>
+                      </td>
+                      <td className="whitespace-nowrap py-4 pe-3 text-end tabular-nums">
+                        <bdi
+                          className={
+                            row.state === 'REJECTED'
+                              ? 'text-blocked'
+                              : row.state === 'APPROVED'
+                                ? 'text-positive'
+                                : 'text-ink'
+                          }
+                        >
+                          {sar(row.amountMinorUnits)}
+                        </bdi>
+                        <span className="ms-1 text-xs text-ink-quiet">SAR</span>
+                      </td>
+                      <td className="hidden whitespace-nowrap py-4 pe-3 text-ink-quiet xl:table-cell">
+                        {row.channel.replaceAll('_', ' ').toLowerCase()}
+                      </td>
+                      <td className="py-4 pe-3">
+                        {row.servicing === undefined ? (
+                          <span className="text-ink-quiet">
+                            {row.state === 'AWAITING_SERVICING_RESPONSE' ? t('awaiting', 'بانتظار الرد') : '—'}
+                          </span>
+                        ) : (
+                          <span className="flex flex-col gap-1">
+                            <Status
+                              tone={
+                                row.servicing.decision === 'APPROVED'
+                                  ? 'settled'
+                                  : row.servicing.decision === 'DECLINED'
+                                    ? 'blocked'
+                                    : 'progress'
+                              }
+                              label={row.servicing.decision.toLowerCase()}
+                            />
+                            {declined ? (
+                              <span className="max-w-[11rem] text-xs leading-snug text-attention">
+                                {t('approval needs a written justification', 'الاعتماد يتطلب تسبيباً مكتوباً')}
+                              </span>
+                            ) : null}
+                          </span>
                         )}
                       </td>
                       <td className="whitespace-nowrap py-4 text-end">
                         {ownWork ? (
                           // Shown, not hidden, and not actionable. The domain refuses this transition too.
-                          <span className="inline-flex flex-col items-end text-xs text-ink-quiet" title={t('The principal who raised a request cannot approve it', 'المُدخِل لا يعتمد عمله')}><span className="font-medium text-attention">{t('your own work', 'من إدخالك')}</span><span>{t('needs another reviewer', 'يلزم مراجع آخر')}</span></span>
+                          <span
+                            className="inline-flex flex-col items-end text-xs text-ink-quiet"
+                            title={t('The principal who raised a request cannot approve it', 'المُدخِل لا يعتمد عمله')}
+                          >
+                            <span className="font-medium text-attention">{t('your own work', 'من إدخالك')}</span>
+                            <span>{t('needs another reviewer', 'يلزم مراجع آخر')}</span>
+                          </span>
                         ) : (
-                          <a href={`/${segment}/requests/${row.requestId}`} className={PILL_OUTLINE}>{view === 'review' ? t('Review', 'مراجعة') : t('Open', 'فتح')}</a>
+                          <a href={`/${segment}/requests/${row.requestId}`} className={PILL_OUTLINE}>
+                            {view === 'review' ? t('Review', 'مراجعة') : t('Open', 'فتح')}
+                          </a>
                         )}
                       </td>
                     </tr>
@@ -196,9 +401,19 @@ export default async function QueuePage({ params, searchParams }: { readonly par
             </table>
           </div>
         )}
-        <p className="mt-4 border-t border-line pt-3 text-xs text-ink-quiet">{t('There is no bulk approve. Reviewing means looking at the trade, and a checkbox column is a way of not looking at it.', 'لا يوجد اعتماد جماعي. المراجعة تعني النظر في الصفقة، وخانة الاختيار وسيلة لعدم النظر فيها.')}</p>
+        <p className="mt-4 border-t border-line pt-3 text-xs text-ink-quiet">
+          {t(
+            'There is no bulk approve. Reviewing means looking at the trade, and a checkbox column is a way of not looking at it.',
+            'لا يوجد اعتماد جماعي. المراجعة تعني النظر في الصفقة، وخانة الاختيار وسيلة لعدم النظر فيها.',
+          )}
+        </p>
       </Card>
-      <Pagination page={page} pages={pages} hrefFor={hrefFor} labels={{ previous: t('Previous', 'السابق'), next: t('Next', 'التالي') }} />
+      <Pagination
+        page={page}
+        pages={pages}
+        hrefFor={hrefFor}
+        labels={{ previous: t('Previous', 'السابق'), next: t('Next', 'التالي') }}
+      />
     </div>
   );
 }

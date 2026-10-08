@@ -12,7 +12,8 @@ export async function PUT(
   if (staff instanceof Response) return staff;
   const { requestId } = await ctx.params;
   await syncStore();
-  if (findRequest(requestId) === undefined)
+  // Another institution's request is not found, not forbidden (SEC-TM08, SEC-TM12).
+  if (findRequest(requestId)?.tenantId !== staff.tenantId)
     return refuse(
       problem({
         status: 404,

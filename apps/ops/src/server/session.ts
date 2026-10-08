@@ -1,45 +1,105 @@
 /**
- * Who the workbench is acting as.
+ * Who the workbench is acting as: the signed-in member of staff.
  *
- * Development identities, standing in for the authenticated principal until
- * enterprise SSO arrives (SDD §4.7). They live here rather than in
- * `actions.ts` for two reasons: a `'use server'` module may only export async
- * functions, and the review screens need to *read* the acting principal to
- * decide what a person is allowed to do.
+ * The principal is read from the sealed session cookie on the server — never
+ * from a form, a header or a query string, because "who is approving this"
+ * must not be something a browser can assert (BE-09). Every server action asks
+ * `authorise()` for the principal it acts as; without a session it is sent to
+ * sign in, and without the authority the act needs it is refused with a typed
+ * reason. The tenant is the principal's own, and it must be one the deployment
+ * jurisdiction has active.
  *
- * The important property is that these are resolved **on the server**. A
- * principal is never taken from a form, a header or a query string, because
- * "who is approving this" must not be something a browser can assert (BE-09).
- * When SSO arrives, `actingPrincipal()` reads the session and nothing that
- * calls it changes.
- *
- * Note that this build holds the maker and the checker at once. That is a
- * development convenience and a four-eyes violation, so the header says so
- * rather than presenting a tidy single user that does not exist yet.
+ * Four eyes is between people: the domain compares the principal ids of who
+ * keyed and who checks, and each id is now one person's sign-in.
  */
 
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+
+import type { TenantCode } from '@sanad/config/loader.ts';
 import type { Principal } from '@sanad/core/origination/request.ts';
+import { LOCALE_SEGMENTS, type LocaleSegment } from '@sanad/i18n/strings.ts';
+import { deploymentJurisdiction } from '@sanad/origination/jurisdiction.ts';
 
-export const MAKER: Principal = { principalId: 'stf-maker-01', tenantId: 'bank-a' };
+import { type WorkbenchAct, permits } from './authority.ts';
+import type { StaffPrincipal } from './staff.ts';
+import { STAFF_SESSION_COOKIE, epochNow, issueStaffSession, openStaffSession } from './staff-session.ts';
+
+export type { StaffPrincipal } from './staff.ts';
+
+/** A locale segment from untrusted input, or the default. Never a path a form supplies. */
+export const localeSegmentOf = (raw: string | undefined): LocaleSegment =>
+  (LOCALE_SEGMENTS as readonly string[]).includes(raw ?? '') ? (raw as LocaleSegment) : 'ar';
+
+export type SignInReason =
+  'SIGNED_OUT' | 'SESSION_REQUIRED' | 'SIGN_IN_REFUSED' | 'TENANT_NOT_ACTIVE' | 'DEVELOPMENT_SIGN_IN_REFUSED';
+export const signInPath = (locale: string, reason?: SignInReason): string =>
+  `/${localeSegmentOf(locale)}/sign-in${reason === undefined ? '' : `?reason=${reason}`}`;
+
+/** The signed-in principal, or undefined. A forged, tampered or expired cookie is no session. */
+export async function currentStaff(): Promise<StaffPrincipal | undefined> {
+  const jar = await cookies();
+  const opened = openStaffSession(jar.get(STAFF_SESSION_COOKIE)?.value, epochNow());
+  return opened.kind === 'VALID' ? opened.principal : undefined;
+}
+
+/** `lifetimeSeconds` is the tenant's staff identity configuration in force; it is bounded by the session layer regardless. */
+export async function startStaffSession(principal: StaffPrincipal, lifetimeSeconds: bigint | undefined): Promise<void> {
+  const issued = issueStaffSession(principal, lifetimeSeconds, epochNow());
+  const jar = await cookies();
+  jar.set(STAFF_SESSION_COOKIE, issued.token, {
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: process.env['NODE_ENV'] === 'production',
+    path: '/',
+    maxAge: Number(issued.lifetimeSeconds),
+  });
+}
+
+export async function endStaffSession(): Promise<void> {
+  const jar = await cookies();
+  jar.delete(STAFF_SESSION_COOKIE);
+}
+
+/** Is this tenant one the deployment jurisdiction has active (ADR 0005)? */
+export async function tenantActive(tenant: TenantCode): Promise<boolean> {
+  const d = await deploymentJurisdiction();
+  return d.activeTenants.includes(tenant);
+}
+
 /**
- * Holds the lowest authority on purpose. The tenant's approval tiers then
- * refuse this checker anything above the first tier, so the control is
- * exercised in the workbench rather than only asserted in a test.
+ * The principal an act is performed as. No session: sent to sign in (the
+ * locale kept). A session whose tenant the deployment no longer has active:
+ * sent to sign in with that reason, and nothing is done.
  */
-export const CHECKER: Principal = { principalId: 'stf-checker-01', tenantId: 'bank-a', authority: 'CHECKER' };
-
-export type WorkbenchRole = 'MAKER' | 'CHECKER';
+export async function actingPrincipal(locale: string): Promise<StaffPrincipal> {
+  const staff = await currentStaff();
+  if (staff === undefined) redirect(signInPath(locale, 'SESSION_REQUIRED'));
+  if (!(await tenantActive(staff.tenantId))) redirect(signInPath(locale, 'TENANT_NOT_ACTIVE'));
+  return staff;
+}
 
 /**
- * The principal a given act is performed as.
- *
- * Separate from the *display* identity in the header: a screen asks for the
- * principal that would perform the act it is about to offer, so the four-eyes
- * check can be evaluated before the button is drawn rather than after it is
- * pressed.
+ * The principal, if it may perform `act`; otherwise the browser goes back to
+ * `back` with the control and the typed reason (and the authorities needed, as
+ * codes), which the screen words in both languages. `back` is a path the
+ * action built from fixed segments, never one from the form.
  */
-export function actingPrincipal(role: WorkbenchRole): Principal {
-  return role === 'MAKER' ? MAKER : CHECKER;
+export async function authorise(locale: string, act: WorkbenchAct, back: string): Promise<StaffPrincipal> {
+  const staff = await actingPrincipal(locale);
+  const p = permits(staff, act);
+  if (!p.allowed) {
+    const query = new URLSearchParams({ control: 'OP-DETERMINACY', reason: p.reason, needs: p.needs.join(',') });
+    redirect(`${back}${back.includes('?') ? '&' : '?'}${query.toString()}`);
+  }
+  return staff;
+}
+
+/** For a page: the signed-in principal, or off to sign in. The middleware does this first; this is the second line. */
+export async function pageStaff(locale: string): Promise<StaffPrincipal> {
+  const staff = await currentStaff();
+  if (staff === undefined) redirect(signInPath(locale, 'SESSION_REQUIRED'));
+  return staff;
 }
 
 /**
@@ -52,7 +112,7 @@ export function actingPrincipal(role: WorkbenchRole): Principal {
  * justification and then be refused.
  */
 export function canReview(
-  reviewer: Principal,
+  reviewer: Pick<Principal, 'principalId'>,
   makerPrincipalId: string | undefined,
 ): { readonly allowed: boolean; readonly reason?: 'OWN_WORK' } {
   if (makerPrincipalId !== undefined && makerPrincipalId === reviewer.principalId) {

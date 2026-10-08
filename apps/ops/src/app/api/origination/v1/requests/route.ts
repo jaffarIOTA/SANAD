@@ -28,8 +28,14 @@ import { hasScope } from '@sanad/origination/principal.ts';
 import { fromRejection, problem } from '@sanad/origination/problem.ts';
 import { toWire, type RaiseRequestBody } from '@sanad/origination/representation.ts';
 
-import { MAKER } from '../../../../../server/session.ts';
-import { flushStore, keyRequest, listPartnerRequests, submit, findPartnerRequest, syncStore } from '../../../../../server/store.ts';
+import {
+  flushStore,
+  keyRequest,
+  listPartnerRequests,
+  submit,
+  findPartnerRequest,
+  syncStore,
+} from '../../../../../server/store.ts';
 
 const validateRaise = validatorFor('RaiseRequest');
 
@@ -38,40 +44,88 @@ const IDEMPOTENCY_KEY = Symbol.for('sanad.ops.idempotency');
 const idempotency: IdempotencyStore = ((globalThis as Record<symbol, IdempotencyStore | undefined>)[IDEMPOTENCY_KEY] ??=
   idempotencyLedger());
 
-
-
-
-
 export async function POST(request: Request): Promise<Response> {
   const correlationId = correlation(request);
   const principal = principalOr401(request, correlationId);
   if (principal instanceof Response) return principal;
   if (!hasScope(principal, 'origination:write')) {
-    return refuse(problem({ status: 403, title: 'Forbidden', detail: 'The credential does not carry the scope required.', reason: 'SCOPE_INSUFFICIENT', correlationId }));
+    return refuse(
+      problem({
+        status: 403,
+        title: 'Forbidden',
+        detail: 'The credential does not carry the scope required.',
+        reason: 'SCOPE_INSUFFICIENT',
+        correlationId,
+      }),
+    );
   }
 
   const key = request.headers.get('idempotency-key');
   if (key === null || !/^[0-9a-f-]{36}$/i.test(key)) {
-    return refuse(problem({ status: 400, kind: 'malformed-request', title: 'Malformed request', detail: 'A state-changing request requires an Idempotency-Key header carrying a UUID.', reason: 'IDEMPOTENCY_KEY_MISSING', correlationId }));
+    return refuse(
+      problem({
+        status: 400,
+        kind: 'malformed-request',
+        title: 'Malformed request',
+        detail: 'A state-changing request requires an Idempotency-Key header carrying a UUID.',
+        reason: 'IDEMPOTENCY_KEY_MISSING',
+        correlationId,
+      }),
+    );
   }
 
   // The book is loaded from the database before it is read or written; a call may arrive before any page has rendered.
   await syncStore();
   const raw = await request.text();
-  const reservation = await idempotency.reserve({ tenantId: principal.tenantId, partnerId: principal.partnerId, key, fingerprint: fingerprint('POST', '/requests', raw) });
-  if (reservation.kind === 'REPLAY') return json(reservation.response.status, reservation.response.body, correlationId, { 'idempotent-replay': 'true' });
+  const reservation = await idempotency.reserve({
+    tenantId: principal.tenantId,
+    partnerId: principal.partnerId,
+    key,
+    fingerprint: fingerprint('POST', '/requests', raw),
+  });
+  if (reservation.kind === 'REPLAY')
+    return json(reservation.response.status, reservation.response.body, correlationId, { 'idempotent-replay': 'true' });
   if (reservation.kind !== 'FRESH') {
-    return refuse(problem({ status: 409, kind: 'conflict', title: 'Idempotency conflict', detail: reservation.kind === 'CONFLICT' ? 'This Idempotency-Key has already been used with a different request body.' : 'A request with this Idempotency-Key is still being processed.', reason: reservation.kind === 'CONFLICT' ? 'IDEMPOTENCY_KEY_REUSED' : 'IDEMPOTENCY_KEY_IN_FLIGHT', correlationId }));
+    return refuse(
+      problem({
+        status: 409,
+        kind: 'conflict',
+        title: 'Idempotency conflict',
+        detail:
+          reservation.kind === 'CONFLICT'
+            ? 'This Idempotency-Key has already been used with a different request body.'
+            : 'A request with this Idempotency-Key is still being processed.',
+        reason: reservation.kind === 'CONFLICT' ? 'IDEMPOTENCY_KEY_REUSED' : 'IDEMPOTENCY_KEY_IN_FLIGHT',
+        correlationId,
+      }),
+    );
   }
 
   const finish = async (status: number, body: unknown): Promise<Response> => {
-    await idempotency.complete({ tenantId: principal.tenantId, partnerId: principal.partnerId, key, response: { status, body } });
+    await idempotency.complete({
+      tenantId: principal.tenantId,
+      partnerId: principal.partnerId,
+      key,
+      response: { status, body },
+    });
     return json(status, body, correlationId);
   };
 
   let parsed: unknown;
-  try { parsed = raw.trim() === '' ? {} : JSON.parse(raw); } catch {
-    return finish(400, problem({ status: 400, kind: 'malformed-request', title: 'Malformed request', detail: 'The request body is not valid JSON.', reason: 'MALFORMED_JSON', correlationId }));
+  try {
+    parsed = raw.trim() === '' ? {} : JSON.parse(raw);
+  } catch {
+    return finish(
+      400,
+      problem({
+        status: 400,
+        kind: 'malformed-request',
+        title: 'Malformed request',
+        detail: 'The request body is not valid JSON.',
+        reason: 'MALFORMED_JSON',
+        correlationId,
+      }),
+    );
   }
 
   // Validated against the published contract. A closed schema is the control:
@@ -79,15 +133,21 @@ export async function POST(request: Request): Promise<Response> {
   const failures = validateRaise(parsed);
   if (failures.length > 0) {
     const unknown = failures.find((f) => f.unknownProperty !== undefined);
-    return finish(400, problem({
-      status: 400, kind: 'malformed-request', title: 'Malformed request',
-      detail: unknown === undefined
-        ? failures.map((f) => `${f.path || 'body'} ${f.message}`).join(' ')
-        : 'Unknown property. Return in this system is expressed as a profit amount added to a disclosed cost, never as a proportion, and there is no field to carry one.',
-      reason: unknown === undefined ? 'SCHEMA_VALIDATION_FAILED' : 'UNKNOWN_PROPERTY',
-      ...(unknown === undefined ? {} : { control: 'SH-01' as const }),
-      correlationId,
-    }));
+    return finish(
+      400,
+      problem({
+        status: 400,
+        kind: 'malformed-request',
+        title: 'Malformed request',
+        detail:
+          unknown === undefined
+            ? failures.map((f) => `${f.path || 'body'} ${f.message}`).join(' ')
+            : 'Unknown property. Return in this system is expressed as a profit amount added to a disclosed cost, never as a proportion, and there is no field to carry one.',
+        reason: unknown === undefined ? 'SCHEMA_VALIDATION_FAILED' : 'UNKNOWN_PROPERTY',
+        ...(unknown === undefined ? {} : { control: 'SH-01' as const }),
+        correlationId,
+      }),
+    );
   }
 
   const body = parsed as RaiseRequestBody;
@@ -104,12 +164,14 @@ export async function POST(request: Request): Promise<Response> {
     amountMinorUnits: BigInt(body.requestedAmount.minorUnits),
     tenorDays: body.requestedTenorDays,
     // The maker of a partner-raised request is the partner. A person reviews.
-    maker: { principalId: principal.partnerId, tenantId: MAKER.tenantId },
+    maker: { principalId: principal.partnerId, tenantId: principal.tenantId },
     partnerId: principal.partnerId,
     credentialRef: principal.credentialRef,
     ...(body.partnerReference === undefined ? {} : { partnerReference: body.partnerReference }),
     ...(principal.channel === 'EMBEDDED_AGGREGATOR' ? { aggregatorId: principal.partnerId } : {}),
-    ...(body.initiator.kind === 'AGGREGATOR_ON_BEHALF' ? { merchantMandateRef: body.initiator.merchantMandateRef } : {}),
+    ...(body.initiator.kind === 'AGGREGATOR_ON_BEHALF'
+      ? { merchantMandateRef: body.initiator.merchantMandateRef }
+      : {}),
   });
   if (!keyed.ok) return finish(422, fromRejection(keyed.error, correlationId));
 
@@ -117,12 +179,27 @@ export async function POST(request: Request): Promise<Response> {
   if (!submitted.ok) return finish(422, fromRejection(submitted.error, correlationId));
 
   const stored = findPartnerRequest(keyed.value.requestId, principal.partnerId);
-  if (stored === undefined) return finish(500, problem({ status: 500, title: 'Internal error', detail: 'Quote the correlation identifier.', reason: 'INTERNAL', correlationId }));
+  if (stored === undefined)
+    return finish(
+      500,
+      problem({
+        status: 500,
+        title: 'Internal error',
+        detail: 'Quote the correlation identifier.',
+        reason: 'INTERNAL',
+        correlationId,
+      }),
+    );
 
   const wire = toWire(stored.request, stored.partnerReference);
   // Durable before it is acknowledged: the partner is told 201 only once the request is in the database.
   await flushStore();
-  await idempotency.complete({ tenantId: principal.tenantId, partnerId: principal.partnerId, key, response: { status: 201, body: wire } });
+  await idempotency.complete({
+    tenantId: principal.tenantId,
+    partnerId: principal.partnerId,
+    key,
+    response: { status: 201, body: wire },
+  });
   return json(201, wire, correlationId, { location: `/api/origination/v1/requests/${keyed.value.requestId}` });
 }
 

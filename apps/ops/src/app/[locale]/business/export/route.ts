@@ -6,7 +6,7 @@
  * no contact, no registration or identity reference — an export travels
  * further than the screen it came from.
  *
- * The tenant is the deployment's active tenant (ADR 0005), never a parameter.
+ * The tenant is the signed-in principal's own, active in the deployment (ADR 0005), never a parameter.
  * Amounts are formatted from minor units by string arithmetic, no float.
  */
 
@@ -14,7 +14,8 @@ import { formatMinorUnits } from '@sanad/design/Money.tsx';
 
 import { listApplications, productVariants, syncBusiness } from '../../../../server/business.ts';
 import { turnaroundSeconds, wholeDays } from '../../../../server/business-dashboard.ts';
-import { workbenchJurisdiction } from '../../../../server/jurisdiction.ts';
+import { staffJurisdiction } from '../../../../server/jurisdiction.ts';
+import { currentStaff } from '../../../../server/session.ts';
 import { developmentAttestation } from '../../../../server/store.ts';
 
 export const dynamic = 'force-dynamic';
@@ -30,7 +31,10 @@ function cell(value: string): string {
 }
 
 export async function GET(): Promise<Response> {
-  const j = await workbenchJurisdiction();
+  // Signed in, and the signed-in person's own institution only (the middleware has already sent a signed-out browser to sign in).
+  const staff = await currentStaff();
+  if (staff === undefined) return new Response('Sign in to export the pipeline', { status: 401 });
+  const j = await staffJurisdiction(staff.tenantId);
   if (j.tenant === undefined)
     return new Response('No institution is onboarded under this jurisdiction', { status: 404 });
   await syncBusiness(j.tenant);

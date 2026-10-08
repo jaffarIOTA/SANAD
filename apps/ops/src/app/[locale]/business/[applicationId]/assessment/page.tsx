@@ -32,9 +32,12 @@ import {
   recordAssessmentInputsAction,
   runAssessmentAction,
 } from '../../../../../server/business-actions.ts';
-import { BUSINESS_ROLES, getApplication, syncBusiness } from '../../../../../server/business.ts';
+import { getApplication, syncBusiness } from '../../../../../server/business.ts';
+import { pageStaff } from '../../../../../server/session.ts';
+import type { StaffPrincipal } from '../../../../../server/staff.ts';
+import { Gate } from '../../../Gate.tsx';
 import { formatFact, formatPercent, formatPoints } from '../../../../../server/business-dashboard.ts';
-import { workbenchJurisdiction } from '../../../../../server/jurisdiction.ts';
+import { staffJurisdiction } from '../../../../../server/jurisdiction.ts';
 import {
   ApplicationShell,
   BTN_PRIMARY,
@@ -136,7 +139,9 @@ export default async function CreditAssessmentPage({
   const locale = localeFromSegment(segment);
   if (locale === undefined) notFound();
   const applicationId = decodeURIComponent(rawId);
-  const j = await workbenchJurisdiction(query.tenant);
+  // The signed-in person's own institution, and only if the deployment has it active.
+  const staff = await pageStaff(segment);
+  const j = await staffJurisdiction(staff.tenantId);
   if (j.tenant === undefined) notFound();
   await syncBusiness(j.tenant);
   const view = await getApplication(j.tenant, applicationId);
@@ -174,7 +179,14 @@ export default async function CreditAssessmentPage({
     >
       {/* -- Inputs ------------------------------------------------------------------------------- */}
       {inputsOpen || inputs !== undefined ? (
-        <InputsCard segment={segment} applicationId={a.applicationId} view={view} editable={inputsOpen} f={f} />
+        <InputsCard
+          segment={segment}
+          applicationId={a.applicationId}
+          view={view}
+          editable={inputsOpen}
+          staff={staff}
+          f={f}
+        />
       ) : null}
 
       {run === undefined ? (
@@ -190,7 +202,7 @@ export default async function CreditAssessmentPage({
             <p className="mt-1 text-[13px] text-ink-quiet" data-runs-assessment>
               {f.arabic ? (
                 <>
-                  يشغّله المراجِع (<Id>{BUSINESS_ROLES.checker}</Id>)، لا الموظف الذي أحال الطلب
+                  يشغّله مراجِع — أنت (<Id>{staff.principalId}</Id>) — لا الموظف الذي أحال الطلب
                   {a.submittedBy === undefined ? null : (
                     <>
                       {' '}
@@ -201,7 +213,7 @@ export default async function CreditAssessmentPage({
                 </>
               ) : (
                 <>
-                  Run by the checker (<Id>{BUSINESS_ROLES.checker}</Id>), not the officer who submitted the application
+                  Run by a checker — you (<Id>{staff.principalId}</Id>) — not the officer who submitted the application
                   {a.submittedBy === undefined ? null : (
                     <>
                       {' '}
@@ -214,12 +226,14 @@ export default async function CreditAssessmentPage({
             </p>
           </div>
           {a.status === 'SUBMITTED' && inputs !== undefined ? (
-            <form action={runAssessmentAction}>
-              <FormContext segment={segment} applicationId={a.applicationId} screen="assessment" />
-              <button type="submit" className={BTN_PRIMARY}>
-                {t('Run assessment as checker', 'تشغيل التقييم بصفة المراجِع')}
-              </button>
-            </form>
+            <Gate staff={staff} act="BUSINESS_ASSESS" arabic={f.arabic} ownWork={a.submittedBy === staff.principalId}>
+              <form action={runAssessmentAction}>
+                <FormContext segment={segment} applicationId={a.applicationId} screen="assessment" />
+                <button type="submit" className={BTN_PRIMARY}>
+                  {t('Run assessment as checker', 'تشغيل التقييم بصفة المراجِع')}
+                </button>
+              </form>
+            </Gate>
           ) : (
             <DisabledAction
               label={t('Run assessment', 'تشغيل التقييم')}
@@ -535,7 +549,7 @@ export default async function CreditAssessmentPage({
             </div>
           </SectionCard>
 
-          <DecisionCard segment={segment} view={view} f={f} />
+          <DecisionCard segment={segment} view={view} staff={staff} f={f} />
         </>
       )}
     </ApplicationShell>
@@ -662,12 +676,14 @@ function InputsCard({
   applicationId,
   view,
   editable,
+  staff,
   f,
 }: {
   readonly segment: string;
   readonly applicationId: string;
   readonly view: NonNullable<Awaited<ReturnType<typeof getApplication>>>;
   readonly editable: boolean;
+  readonly staff: StaffPrincipal;
   readonly f: Formatters;
 }): ReactElement {
   const { t } = f;
@@ -759,106 +775,108 @@ function InputsCard({
           <summary className="cursor-pointer text-[13px] font-semibold text-brand">
             {inputs === undefined ? t('Record inputs', 'تسجيل المدخلات') : t('Record again', 'إعادة التسجيل')}
           </summary>
-          <form action={recordAssessmentInputsAction} className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <FormContext segment={segment} applicationId={applicationId} screen="assessment" />
-            <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">
-              {t('Bureau report reference', 'مرجع تقرير المكتب')}
-              <input name="bureauReportRef" required defaultValue={inputs?.bureau.reportRef} className={INPUT} />
-            </label>
-            <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">
-              {t('Bureau consent (stage-4 reference)', 'موافقة الاستعلام (مرجع المرحلة ٤)')}
-              <select
-                name="bureauConsentId"
-                required
-                defaultValue={inputs?.bureau.consentId ?? ''}
-                className={INPUT}
-                dir="ltr"
-              >
-                <option value="" disabled>
-                  {t('Choose the consent…', 'اختر الموافقة…')}
-                </option>
-                {consentRefs.map((ref) => (
-                  <option key={ref} value={ref}>
-                    {ref}
+          <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+            <form action={recordAssessmentInputsAction} className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <FormContext segment={segment} applicationId={applicationId} screen="assessment" />
+              <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">
+                {t('Bureau report reference', 'مرجع تقرير المكتب')}
+                <input name="bureauReportRef" required defaultValue={inputs?.bureau.reportRef} className={INPUT} />
+              </label>
+              <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">
+                {t('Bureau consent (stage-4 reference)', 'موافقة الاستعلام (مرجع المرحلة ٤)')}
+                <select
+                  name="bureauConsentId"
+                  required
+                  defaultValue={inputs?.bureau.consentId ?? ''}
+                  className={INPUT}
+                  dir="ltr"
+                >
+                  <option value="" disabled>
+                    {t('Choose the consent…', 'اختر الموافقة…')}
                   </option>
-                ))}
-              </select>
-            </label>
-            {field('bureauScore', 'Bureau score', 'درجة المكتب', undefined, inputs?.bureau.score.toString())}
-            {field(
-              'fullTimeEmployees',
-              'Full-time employees',
-              'الموظفون بدوام كامل',
-              undefined,
-              inputs === undefined ? undefined : String(inputs.fullTimeEmployees),
-            )}
-            {field(
-              'relevantExperienceYears',
-              'Relevant experience (years)',
-              'الخبرة ذات الصلة (سنوات)',
-              undefined,
-              inputs?.relevantExperienceYears.toString(),
-            )}
-            <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">
-              {t('Sector priority', 'أولوية القطاع')}
-              <select name="sectorPriority" defaultValue={inputs?.sectorPriority ?? 'NON_PRIORITY'} className={INPUT}>
-                <option value="PRIORITY">{t('Priority sector', 'قطاع ذو أولوية')}</option>
-                <option value="NON_PRIORITY">{t('Non-priority sector', 'قطاع غير ذي أولوية')}</option>
-              </select>
-            </label>
-            {field(
-              'commitmentRatioPerTenThousand',
-              'Commitment assessment',
-              'تقييم الالتزام',
-              per,
-              inputs?.commitmentRatioPerTenThousand.toString(),
-            )}
-            {field(
-              'riskAnalysisScorePerTenThousand',
-              'Risk analysis score',
-              'درجة تحليل المخاطر',
-              per,
-              inputs?.riskAnalysisScorePerTenThousand.toString(),
-            )}
-            {field(
-              'portfolioRepaymentPerTenThousand',
-              'Portfolio repayment',
-              'نسبة السداد في المحفظة',
-              per,
-              inputs?.portfolioRepaymentPerTenThousand.toString(),
-            )}
-            {field(
-              'failedFilesRatePerTenThousand',
-              'Failed files',
-              'الملفات المتعثرة',
-              per,
-              inputs?.failedFilesRatePerTenThousand.toString(),
-            )}
-            <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">
-              {t(`Collateral value (${f.cur})`, `قيمة الضمان (${f.cur})`)}
-              <input
-                name="collateralValue"
-                required
-                inputMode="decimal"
-                defaultValue={inputs === undefined ? undefined : majorUnits(inputs.collateralValue.minorUnits)}
-                className={INPUT}
-              />
-            </label>
-            <label className="flex items-center gap-2 self-end pb-2 text-[13px] text-ink">
-              <input
-                type="checkbox"
-                name="auditedFinancialsAvailable"
-                value="true"
-                defaultChecked={inputs?.auditedFinancialsAvailable ?? false}
-              />
-              {t('Audited financials available', 'قوائم مالية مدققة متوفرة')}
-            </label>
-            <div className="flex items-end">
-              <button type="submit" className={BTN_SECONDARY}>
-                {t('Record inputs', 'تسجيل المدخلات')}
-              </button>
-            </div>
-          </form>
+                  {consentRefs.map((ref) => (
+                    <option key={ref} value={ref}>
+                      {ref}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {field('bureauScore', 'Bureau score', 'درجة المكتب', undefined, inputs?.bureau.score.toString())}
+              {field(
+                'fullTimeEmployees',
+                'Full-time employees',
+                'الموظفون بدوام كامل',
+                undefined,
+                inputs === undefined ? undefined : String(inputs.fullTimeEmployees),
+              )}
+              {field(
+                'relevantExperienceYears',
+                'Relevant experience (years)',
+                'الخبرة ذات الصلة (سنوات)',
+                undefined,
+                inputs?.relevantExperienceYears.toString(),
+              )}
+              <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">
+                {t('Sector priority', 'أولوية القطاع')}
+                <select name="sectorPriority" defaultValue={inputs?.sectorPriority ?? 'NON_PRIORITY'} className={INPUT}>
+                  <option value="PRIORITY">{t('Priority sector', 'قطاع ذو أولوية')}</option>
+                  <option value="NON_PRIORITY">{t('Non-priority sector', 'قطاع غير ذي أولوية')}</option>
+                </select>
+              </label>
+              {field(
+                'commitmentRatioPerTenThousand',
+                'Commitment assessment',
+                'تقييم الالتزام',
+                per,
+                inputs?.commitmentRatioPerTenThousand.toString(),
+              )}
+              {field(
+                'riskAnalysisScorePerTenThousand',
+                'Risk analysis score',
+                'درجة تحليل المخاطر',
+                per,
+                inputs?.riskAnalysisScorePerTenThousand.toString(),
+              )}
+              {field(
+                'portfolioRepaymentPerTenThousand',
+                'Portfolio repayment',
+                'نسبة السداد في المحفظة',
+                per,
+                inputs?.portfolioRepaymentPerTenThousand.toString(),
+              )}
+              {field(
+                'failedFilesRatePerTenThousand',
+                'Failed files',
+                'الملفات المتعثرة',
+                per,
+                inputs?.failedFilesRatePerTenThousand.toString(),
+              )}
+              <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">
+                {t(`Collateral value (${f.cur})`, `قيمة الضمان (${f.cur})`)}
+                <input
+                  name="collateralValue"
+                  required
+                  inputMode="decimal"
+                  defaultValue={inputs === undefined ? undefined : majorUnits(inputs.collateralValue.minorUnits)}
+                  className={INPUT}
+                />
+              </label>
+              <label className="flex items-center gap-2 self-end pb-2 text-[13px] text-ink">
+                <input
+                  type="checkbox"
+                  name="auditedFinancialsAvailable"
+                  value="true"
+                  defaultChecked={inputs?.auditedFinancialsAvailable ?? false}
+                />
+                {t('Audited financials available', 'قوائم مالية مدققة متوفرة')}
+              </label>
+              <div className="flex items-end">
+                <button type="submit" className={BTN_SECONDARY}>
+                  {t('Record inputs', 'تسجيل المدخلات')}
+                </button>
+              </div>
+            </form>
+          </Gate>
         </details>
       )}
     </SectionCard>
@@ -868,10 +886,12 @@ function InputsCard({
 function DecisionCard({
   segment,
   view,
+  staff,
   f,
 }: {
   readonly segment: string;
   readonly view: NonNullable<Awaited<ReturnType<typeof getApplication>>>;
+  readonly staff: StaffPrincipal;
   readonly f: Formatters;
 }): ReactElement {
   const { t } = f;
@@ -880,100 +900,106 @@ function DecisionCard({
   let body: ReactElement;
   if (a.status === 'ASSESSED') {
     body = (
-      <form action={approveStraightThroughAction} className="flex flex-wrap items-center justify-between gap-3">
-        <FormContext segment={segment} applicationId={a.applicationId} screen="assessment" />
-        <p className="text-[13px] text-ink-quiet">
-          {f.arabic ? (
-            <>
-              اعتماد مباشر: يعتمده المراجِع (<Id>{BUSINESS_ROLES.checker}</Id>)، لا الموظف الذي أحاله (
-              <Id>{a.submittedBy ?? '—'}</Id>).
-            </>
-          ) : (
-            <>
-              Straight through: approved by the checker (<Id>{BUSINESS_ROLES.checker}</Id>), not the submitting officer
-              (<Id>{a.submittedBy ?? '—'}</Id>).
-            </>
-          )}
-        </p>
-        <button type="submit" className={BTN_PRIMARY}>
-          {t('Approve as checker', 'اعتماد بصفة المراجِع')}
-        </button>
-      </form>
+      <Gate staff={staff} act="BUSINESS_APPROVE" arabic={f.arabic} ownWork={a.submittedBy === staff.principalId}>
+        <form action={approveStraightThroughAction} className="flex flex-wrap items-center justify-between gap-3">
+          <FormContext segment={segment} applicationId={a.applicationId} screen="assessment" />
+          <p className="text-[13px] text-ink-quiet">
+            {f.arabic ? (
+              <>
+                اعتماد مباشر: يعتمده مراجِع — أنت (<Id>{staff.principalId}</Id>) — لا الموظف الذي أحاله (
+                <Id>{a.submittedBy ?? '—'}</Id>).
+              </>
+            ) : (
+              <>
+                Straight through: approved by a checker — you (<Id>{staff.principalId}</Id>) — not the submitting
+                officer (<Id>{a.submittedBy ?? '—'}</Id>).
+              </>
+            )}
+          </p>
+          <button type="submit" className={BTN_PRIMARY}>
+            {t('Approve as checker', 'اعتماد بصفة المراجِع')}
+          </button>
+        </form>
+      </Gate>
     );
   } else if (a.status === 'IN_COMMITTEE') {
     body = (
-      <form action={committeeDecisionAction} className="flex flex-col gap-3">
-        <FormContext segment={segment} applicationId={a.applicationId} screen="assessment" />
-        <p className="text-[13px] text-ink-quiet">
-          {f.arabic ? (
-            <>
-              بصفة عضو اللجنة <Id>{BUSINESS_ROLES.committee}</Id> — شخص غير الموظف الذي أحال الطلب (
-              <Id>{a.submittedBy ?? '—'}</Id>).
-            </>
-          ) : (
-            <>
-              Acting as committee member <Id>{BUSINESS_ROLES.committee}</Id> — a different principal from the submitting
-              officer (<Id>{a.submittedBy ?? '—'}</Id>).
-            </>
-          )}
-        </p>
-        <fieldset className="flex flex-wrap gap-4">
-          <legend className="sr-only">{t('Decision', 'القرار')}</legend>
-          <label className="flex items-center gap-2 text-[14px] text-ink">
-            <input type="radio" name="approved" value="true" required />
-            {t('Approve', 'اعتماد')}
+      <Gate staff={staff} act="BUSINESS_COMMITTEE" arabic={f.arabic} ownWork={a.submittedBy === staff.principalId}>
+        <form action={committeeDecisionAction} className="flex flex-col gap-3">
+          <FormContext segment={segment} applicationId={a.applicationId} screen="assessment" />
+          <p className="text-[13px] text-ink-quiet">
+            {f.arabic ? (
+              <>
+                بصفة عضو اللجنة <Id>{staff.principalId}</Id> — شخص غير الموظف الذي أحال الطلب (
+                <Id>{a.submittedBy ?? '—'}</Id>).
+              </>
+            ) : (
+              <>
+                Acting as committee member <Id>{staff.principalId}</Id> — a different person from the submitting officer
+                (<Id>{a.submittedBy ?? '—'}</Id>).
+              </>
+            )}
+          </p>
+          <fieldset className="flex flex-wrap gap-4">
+            <legend className="sr-only">{t('Decision', 'القرار')}</legend>
+            <label className="flex items-center gap-2 text-[14px] text-ink">
+              <input type="radio" name="approved" value="true" required />
+              {t('Approve', 'اعتماد')}
+            </label>
+            <label className="flex items-center gap-2 text-[14px] text-ink">
+              <input type="radio" name="approved" value="false" />
+              {t('Decline', 'رفض')}
+            </label>
+          </fieldset>
+          <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
+            {t('Reason (recorded with the decision)', 'السبب (يُسجَّل مع القرار)')}
+            <textarea
+              name="reason"
+              required
+              minLength={3}
+              rows={2}
+              className="w-full rounded-tile border border-line-strong bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+            />
           </label>
-          <label className="flex items-center gap-2 text-[14px] text-ink">
-            <input type="radio" name="approved" value="false" />
-            {t('Decline', 'رفض')}
-          </label>
-        </fieldset>
-        <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
-          {t('Reason (recorded with the decision)', 'السبب (يُسجَّل مع القرار)')}
-          <textarea
-            name="reason"
-            required
-            minLength={3}
-            rows={2}
-            className="w-full rounded-tile border border-line-strong bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
-          />
-        </label>
-        <div>
-          <button type="submit" className={BTN_PRIMARY}>
-            {t('Record committee decision', 'تسجيل قرار اللجنة')}
-          </button>
-        </div>
-      </form>
+          <div>
+            <button type="submit" className={BTN_PRIMARY}>
+              {t('Record committee decision', 'تسجيل قرار اللجنة')}
+            </button>
+          </div>
+        </form>
+      </Gate>
     );
   } else if (a.status === 'APPROVED') {
     body = (
-      <form action={generateOfferAction} className="flex flex-wrap items-end gap-3">
-        <FormContext segment={segment} applicationId={a.applicationId} screen="offer" />
-        <p className="w-full text-[13px] text-ink-quiet">
-          {a.committee === undefined ? (
-            t('Approved straight through.', 'معتمد مباشرة.')
-          ) : (
-            <>
-              {t('Approved by', 'اعتمده')} <Id>{a.committee.decidedBy}</Id>: {a.committee.reason}
-            </>
-          )}{' '}
-          {t(
-            'Dates are optional; by default disbursement is 14 days after the offer and the first instalment on the 1st of a month at least 15 days later (ILLUSTRATIVE).',
-            `التواريخ اختيارية؛ افتراضياً يكون الصرف بعد ${f.n(14)} يوماً من العرض وأول قسط في أول شهر يلي ذلك بـ ${f.n(15)} يوماً على الأقل (توضيحي).`,
-          )}
-        </p>
-        <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
-          {t('Disbursement date', 'تاريخ الصرف')}
-          <input type="date" name="disbursementDate" className={INPUT} />
-        </label>
-        <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
-          {t('First due date', 'تاريخ أول قسط')}
-          <input type="date" name="firstDueDate" className={INPUT} />
-        </label>
-        <button type="submit" className={BTN_PRIMARY}>
-          {t('Generate offer', 'إعداد العرض')}
-        </button>
-      </form>
+      <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+        <form action={generateOfferAction} className="flex flex-wrap items-end gap-3">
+          <FormContext segment={segment} applicationId={a.applicationId} screen="offer" />
+          <p className="w-full text-[13px] text-ink-quiet">
+            {a.committee === undefined ? (
+              t('Approved straight through.', 'معتمد مباشرة.')
+            ) : (
+              <>
+                {t('Approved by', 'اعتمده')} <Id>{a.committee.decidedBy}</Id>: {a.committee.reason}
+              </>
+            )}{' '}
+            {t(
+              'Dates are optional; by default disbursement is 14 days after the offer and the first instalment on the 1st of a month at least 15 days later (ILLUSTRATIVE).',
+              `التواريخ اختيارية؛ افتراضياً يكون الصرف بعد ${f.n(14)} يوماً من العرض وأول قسط في أول شهر يلي ذلك بـ ${f.n(15)} يوماً على الأقل (توضيحي).`,
+            )}
+          </p>
+          <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
+            {t('Disbursement date', 'تاريخ الصرف')}
+            <input type="date" name="disbursementDate" className={INPUT} />
+          </label>
+          <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
+            {t('First due date', 'تاريخ أول قسط')}
+            <input type="date" name="firstDueDate" className={INPUT} />
+          </label>
+          <button type="submit" className={BTN_PRIMARY}>
+            {t('Generate offer', 'إعداد العرض')}
+          </button>
+        </form>
+      </Gate>
     );
   } else if (a.status === 'DECLINED') {
     body = (

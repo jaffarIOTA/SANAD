@@ -23,7 +23,10 @@ import {
   submit,
   updateDraft,
 } from '../../apps/ops/src/server/store.ts';
-import { MAKER } from '../../apps/ops/src/server/session.ts';
+import type { Principal } from '@sanad/core/origination/request.ts';
+
+/** A fictional maker: the journey's actions take the signed-in principal; the store takes whoever it is handed. */
+const MAKER: Principal = { principalId: 'stf-maker-01', tenantId: 'bank-a' };
 
 const AVAILABLE = '3cf5d9a2-0000-4000-8000-000000000101';
 const SAME_ENTITY = '3cf5d9a2-0000-4000-8000-000000000104';
