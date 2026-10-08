@@ -23,6 +23,7 @@ import { Icon } from '@sanad/design/icons.tsx';
 import { LOCALE_SEGMENTS, htmlLang, isRtl, localeFromSegment, type LocaleSegment } from '@sanad/i18n/strings.ts';
 import { HeaderTitle } from './HeaderTitle.tsx';
 import { BottomNav, SideNav } from './SideNav.tsx';
+import { workbenchJurisdiction } from '../../server/jurisdiction.ts';
 import { developmentAttestation, syncOriginationPolicy, syncStore } from '../../server/store.ts';
 import '../globals.css';
 
@@ -44,6 +45,8 @@ export default async function OpsLayout({ children, params }: { readonly childre
   await syncOriginationPolicy(developmentAttestation().epochSeconds);
   // The request book is loaded from the database once per process, and anything changed is written before the page reads it.
   await syncStore();
+  // Which jurisdiction the whole deployment behaves as (Admin → Jurisdiction, ADR 0005).
+  const jurisdiction = await workbenchJurisdiction();
 
   const search = (
     <form action={`/${segment}`} method="get" role="search" className="w-full lg:w-[320px]">
@@ -65,6 +68,10 @@ export default async function OpsLayout({ children, params }: { readonly childre
               <span className="text-[20px] font-bold tracking-tight text-heading">Sanad</span>
             </a>
             <p className="hidden text-[14px] font-medium text-ink-quiet lg:block lg:ps-8"><HeaderTitle arabic={arabic} /></p>
+            <span title={arabic ? 'الولاية التي يعمل بها التطبيق — تُغيَّر من تطبيق الإدارة' : 'The jurisdiction the application behaves as — changed in the Admin app'} className="hidden items-center gap-1.5 rounded-pill border border-line bg-sunken px-3 py-1 text-[12px] font-semibold text-heading md:inline-flex">
+              <span aria-hidden className="size-1.5 rounded-full bg-positive-mark" />
+              {jurisdiction.code === 'AE' ? (arabic ? 'الإمارات' : 'UAE') : (arabic ? 'السعودية' : 'KSA')} · <span className="identifier">{jurisdiction.currency}</span>
+            </span>
             <div className="ms-auto hidden lg:block">{search}</div>
             <div className="ms-auto flex items-center gap-2 lg:ms-4 lg:gap-3 lg:pe-8">
               <a href={`/${segment}/products`} title={arabic ? 'المنتجات' : 'Products'} className="press hidden size-9 items-center justify-center rounded-tile text-ink-quiet hover:bg-sunken hover:text-brand lg:inline-flex">

@@ -38,6 +38,13 @@ import fundAeCatalogue from './tenants/sme-fund-ae/products/catalogue.json' with
 import fundAeRails from './tenants/sme-fund-ae/rails/rails.json' with { type: 'json' };
 import fundAeIdentity from './tenants/sme-fund-ae/identity/staff-identity.json' with { type: 'json' };
 import fundAeOrigination from './tenants/sme-fund-ae/origination/policy.json' with { type: 'json' };
+import fundAeSmeAssessment from './tenants/sme-fund-ae/credit-policy/sme-assessment.json' with { type: 'json' };
+import fundAeChecklistSmallLoan from './tenants/sme-fund-ae/documents/sme-ae-small-loan.json' with { type: 'json' };
+import fundAeChecklistWorkingCapital from './tenants/sme-fund-ae/documents/sme-ae-working-capital.json' with { type: 'json' };
+import fundAeChecklistFixedAssets from './tenants/sme-fund-ae/documents/sme-ae-fixed-assets.json' with { type: 'json' };
+import fundAeChecklistExpansion from './tenants/sme-fund-ae/documents/sme-ae-expansion.json' with { type: 'json' };
+import fundAeChecklistFounders from './tenants/sme-fund-ae/documents/sme-ae-first-time-founders.json' with { type: 'json' };
+import fundAeChecklistAdvancedTech from './tenants/sme-fund-ae/documents/sme-ae-advanced-tech.json' with { type: 'json' };
 
 import {
   type StructureDefinition,
@@ -50,6 +57,7 @@ import { type OriginationPolicy, parseOriginationPolicy } from '../core/originat
 import { type SmeDefinition, parseSmeDefinition } from '../core/applicant/sme-size.ts';
 import { type JurisdictionCode, type JurisdictionProfile, type TenantOnboarding, parseJurisdictionProfile, parseTenantOnboarding } from '../core/jurisdiction/profile.ts';
 import { type DocumentChecklist, parseDocumentChecklist } from '../core/documents/checklist.ts';
+import { type SmeAssessmentPolicy, parseSmeAssessmentPolicy } from '../core/decisioning/sme-assessment.ts';
 import { type Result, ok, reject } from '../core/kernel/result.ts';
 import { type ProductCatalogue, parseProductCatalogue } from '../core/products/catalogue.ts';
 import { ISLAMIC_PRODUCT_CODES } from '../core/products/registry.ts';
@@ -170,7 +178,10 @@ export function loadOriginationPolicy(tenant: TenantCode): Result<OriginationPol
 const CHECKLISTS: Readonly<Record<TenantCode, readonly unknown[]>> = {
   'bank-a': [bankAChecklist],
   'fintech-b': [fintechBChecklist],
-  'sme-fund-ae': [],
+  // One checklist per SME product variant, keyed by the variant's documentChecklistRef
+  // (config/tenants/sme-fund-ae/products/catalogue.json): sme-ae-small-loan, sme-ae-working-capital,
+  // sme-ae-fixed-assets, sme-ae-expansion, sme-ae-first-time-founders, sme-ae-advanced-tech.
+  'sme-fund-ae': [fundAeChecklistSmallLoan, fundAeChecklistWorkingCapital, fundAeChecklistFixedAssets, fundAeChecklistExpansion, fundAeChecklistFounders, fundAeChecklistAdvancedTech],
 };
 
 /** The documents a programme requires of this tenant's counterparties. */
@@ -198,7 +209,16 @@ export function loadSmeDefinition(jurisdiction: JurisdictionCode = 'SA'): Result
 /** Tenants that offer the Murabaha supply-chain product (have structure definitions). Not every tenant does. */
 export const MURABAHA_TENANT_CODES: readonly TenantCode[] = TENANT_CODES.filter((t) => STRUCTURES[t].length > 0);
 /** Tenants with a Wasl-style programme document checklist. */
-export const CHECKLIST_TENANT_CODES: readonly TenantCode[] = TENANT_CODES.filter((t) => CHECKLISTS[t].length > 0);
+export const CHECKLIST_TENANT_CODES: readonly TenantCode[] = TENANT_CODES.filter((t) => loadDocumentChecklist(t, 'prg-0001').ok);
+
+/** The SME credit assessment policy (knock-outs, scorecard, risk bands, route) for a tenant that has one. */
+const SME_ASSESSMENT_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = { 'sme-fund-ae': fundAeSmeAssessment };
+
+export function loadSmeAssessmentPolicy(tenant: TenantCode): Result<SmeAssessmentPolicy> {
+  const raw = SME_ASSESSMENT_POLICIES[tenant];
+  if (raw === undefined) return reject('OP-DETERMINACY', 'SME_ASSESSMENT_POLICY_NOT_FOUND', 'No SME assessment policy is configured for this tenant', { tenant });
+  return parseSmeAssessmentPolicy(raw);
+}
 
 export function isTenantCode(value: string): value is TenantCode {
   return (TENANT_CODES as readonly string[]).includes(value);

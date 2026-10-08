@@ -184,7 +184,26 @@ describe('AP-04 — vendor concepts stop at the adapter', () => {
     'datapower',
     'temporal',
     'kafka',
+    // UAE rails (ADR 0005). Long enough to match as substrings without
+    // catching an ordinary word.
+    'aecb',
+    'etihad credit',
+    'uae pass',
+    'uae_pass',
+    'uae-pass',
+    'uaepass',
+    'mohre',
+    'economic register',
+    'federal tax authority',
+    'emirates id',
   ];
+
+  /**
+   * Rail acronyms too short to match as substrings ("icp", "fta" sit inside
+   * ordinary identifiers), matched as whole words instead. "NER" is left to
+   * the long form above: as a word it is also named-entity recognition.
+   */
+  const SHORT_VENDOR_NAMES = ['icp', 'fta'];
 
   it.each(['core', PRODUCT_MODULES])('%s names no vendor or national rail', (surface) => {
     const offenders: string[] = [];
@@ -192,6 +211,9 @@ describe('AP-04 — vendor concepts stop at the adapter', () => {
       const content = read(file).toLowerCase();
       for (const vendor of VENDOR_NAMES) {
         if (content.includes(vendor)) offenders.push(`${rel(file)}: ${vendor}`);
+      }
+      for (const vendor of SHORT_VENDOR_NAMES) {
+        if (new RegExp(`(^|[^a-z0-9])${vendor}([^a-z0-9]|$)`).test(content)) offenders.push(`${rel(file)}: ${vendor}`);
       }
     }
     expect(offenders).toEqual([]);

@@ -21,3 +21,17 @@ Each is enforced in code and attacked in `test/compliance/sme-products.test.ts`.
   before disbursement, no disbursement without its reference.
 - **S-9 APR is the platform's.** The module supplies the cash flows; `core/pricing/apr.ts`
   computes the APR.
+
+Variants (attacked in `test/compliance/sme-variants.test.ts`):
+
+- **S-10 One currency per term sheet.** A request in another currency is refused.
+- **S-11 The variant governs.** No quote without a known variant; the amount, tenor, grace,
+  owner contribution, years in operation and purpose are each checked against it and refused
+  with a typed reason when outside. A variant only narrows: the module's minimum, credit rule
+  and guarantee still apply.
+- **S-12 Dated, never defaulted.** The schedule is the dated ACT/365 schedule; the disbursement
+  and first due dates come from the request, and a quote without them is refused.
+- **S-13 Illustrative says so.** A variant value not taken from the institution's product paper
+  is named in the variant's `note`.
+- **S-14 One variant code, two copies.** `variants.ts` here and in `sme-term-islamic/` are
+  identical below their header comments; the test compares them.

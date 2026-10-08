@@ -14,8 +14,11 @@ import { Pool } from 'pg';
 
 import { databaseUrlFromEnvironment, sharedPool, tenantUuidByCode } from '@sanad/origination/credentials.ts';
 
-/** As constrained by migration 0007. */
-export const VAULT_PROVIDERS = ['TUUM', 'NUTRIENT', 'ZATCA', 'NAFATH', 'YAKEEN', 'TAHAQOQ', 'WATHQ', 'SIMAH', 'BAYAN', 'GOSI', 'OPEN_BANKING', 'SADAD', 'PAYMENTS_HUB', 'RATE_PUBLISHER', 'COMMODITY_BROKER', 'WORKFLOW_ENGINE', 'SCREENING', 'CSP', 'TSA'] as const;
+/** As constrained by migration 0007, widened for the UAE rails by migration 0015 (ADR 0005). */
+export const VAULT_PROVIDERS = [
+  'TUUM', 'NUTRIENT', 'ZATCA', 'NAFATH', 'YAKEEN', 'TAHAQOQ', 'WATHQ', 'SIMAH', 'BAYAN', 'GOSI', 'OPEN_BANKING', 'SADAD', 'PAYMENTS_HUB', 'RATE_PUBLISHER', 'COMMODITY_BROKER', 'WORKFLOW_ENGINE', 'SCREENING', 'CSP', 'TSA',
+  'AECB', 'UAE_PASS', 'ICP', 'NER', 'MOHRE', 'FTA', 'PARTNER_BANK',
+] as const;
 export type VaultProvider = (typeof VAULT_PROVIDERS)[number];
 export const ENVIRONMENTS = ['sandbox', 'uat', 'production'] as const;
 export type Environment = (typeof ENVIRONMENTS)[number];

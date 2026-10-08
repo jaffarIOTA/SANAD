@@ -37,10 +37,13 @@ const SMALL: BusinessFacts = { annualRevenue: money(600_000_000n), fullTimeEmplo
 const conventionalTerms = (tenant: 'bank-a' | 'fintech-b') => expectOk(smeTermConventional.validateTerms(expectOk(loadProductCatalogue(tenant)).entries.find((e) => e.productCode === 'sme-term-conventional')?.terms));
 const islamicTerms = (tenant: 'bank-a' | 'fintech-b') => expectOk(smeTermIslamic.validateTerms(expectOk(loadProductCatalogue(tenant)).entries.find((e) => e.productCode === 'sme-term-islamic')?.terms));
 
+/** The Saudi tenants' single variant, with the dates the dated schedule needs (never defaulted). */
+const PREFERENCES = { variant: 'SME_TERM', purpose: 'WORKING_CAPITAL', disbursementDate: '2026-11-01', firstDueDate: '2026-12-01' };
+
 /** `business: null` means the request carries no business facts at all. */
 const request = (amount: bigint, months: number, business: BusinessFacts | null = SMALL): QuoteRequest => ({
   tenantId: 'bank-a', programmeId: 'prg-0001', counterpartyId: 'ent-1', requestedAmount: money(amount), requestedTenorDays: months * 30, asOf: at(T0),
-  pricing: { rate: RATE }, regulatory: { smeDefinition: DEFINITION }, ...(business === null ? {} : { affordability: { business } }),
+  pricing: { rate: RATE }, regulatory: { smeDefinition: DEFINITION }, preferences: PREFERENCES, ...(business === null ? {} : { affordability: { business } }),
 });
 
 const MODULES = [
@@ -111,6 +114,11 @@ describe.each(MODULES)('SME $name: prohibited quotes are refused', (m) => {
     const offer = expectOk(buildOffer(module as never, q, at(T0)));
     expect(offer.apr.bp).toBeGreaterThan(0n);
     expect(offer.disclosure.lines.find((l) => l.code === 'GUARANTEED_PORTION')?.amount.minorUnits).toBe(40_000_000n); // 80% of SAR 500,000
+  });
+
+  it.each(['bank-a', 'fintech-b'] as const)('%s: the Saudi term sheet is one SAR variant; an AED request is refused', (tenant) => {
+    const r = m.quote(tenant, { ...request(10_000_000n, 24), requestedAmount: money(10_000_000n, 'AED') });
+    expect(r.ok).toBe(false); if (!r.ok) expect(r.error.reason).toBe('CURRENCY_MISMATCH');
   });
 });
 

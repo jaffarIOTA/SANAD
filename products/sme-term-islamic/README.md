@@ -12,6 +12,20 @@ shipped tenants carry it **disabled** until their ruling is recorded through Adm
 under four eyes. **Consumer:** no. **Booking shape:** `CORE_FACILITY` — the tenant maps a core
 banking product type in its catalogue.
 
+## Term sheet: currency and variants
+
+As `sme-term-conventional` (see its README for the field and preference tables): a required
+**currency** (`SAR` or `AED`) that the request must match, and a list of **variants**, each with
+its ceiling, tenor band, grace, owner contribution band, minimum years in operation, purposes,
+document checklist, collateral and an illustrative-values note. The variant code is written
+again in this module's `variants.ts`, not imported (modules are isolated); the compliance suite
+checks the two copies are identical. The schedule is the dated ACT/365 schedule
+(`core/pricing/dated-schedule.ts`); grace instalments carry **profit only**, and the deferred
+sale price is the schedule's total, fixed at the offer. Dates are never defaulted.
+
+The Saudi tenants carry one SAR variant each; the UAE SME fund carries the same six AED variants
+as its conventional entry, **disabled** until its board ruling is recorded.
+
 ## What governs it, and what is the institution's own
 
 | Figure | Where it comes from | Status |

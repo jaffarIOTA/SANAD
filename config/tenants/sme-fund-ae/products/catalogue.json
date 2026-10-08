@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-08.1",
+  "version": "2026-10-08.2",
   "entries": [
     {
       "productCode": "sme-term-conventional",
@@ -14,11 +14,171 @@
         "catalogueRef": "ILLUSTRATIVE — fund rate card from Tuum's prototype offer letter (1.5% p.a.), 2026-10-08; replace with the fund's approved rate card"
       },
       "terms": {
-        "minMonths": 6,
-        "maxMonths": 72,
+        "currency": "AED",
         "minAmountMinorUnits": "5000000",
-        "maxAmountMinorUnits": "500000000",
         "adminFeeMinorUnits": "0",
+        "variants": [
+          {
+            "code": "SMALL_LOAN",
+            "nameEn": "Small Loan",
+            "nameAr": "القرض الصغير",
+            "maxAmountMinorUnits": "100000000",
+            "minMonths": 6,
+            "maxMonths": 36,
+            "maxGraceMonths": 0,
+            "minContributionPerTenThousand": 0,
+            "maxContributionPerTenThousand": 10000,
+            "minYearsInOperation": 0,
+            "purposes": [
+              { "code": "WORKING_CAPITAL", "labelEn": "Working capital", "labelAr": "رأس المال العامل" },
+              { "code": "INVENTORY", "labelEn": "Inventory purchase", "labelAr": "شراء المخزون" },
+              { "code": "EQUIPMENT", "labelEn": "Equipment and machinery", "labelAr": "المعدات والآلات" }
+            ],
+            "documentChecklistRef": "sme-ae-small-loan",
+            "collateral": [
+              { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
+              { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" }
+            ],
+            "knockOutNotes": [
+              { "code": "DSCR_MIN", "labelEn": "Debt-service cover of at least 1.40×", "labelAr": "تغطية خدمة الدين ١٫٤٠ مرة على الأقل" }
+            ],
+            "note": "Source: Tuum prototype screens shared 2026-10-08 — maximum AED 1,000,000 and 36 months. ILLUSTRATIVE: minimum tenor, no grace, contribution band, purposes and collateral; replace with the fund's product paper."
+          },
+          {
+            "code": "WORKING_CAPITAL",
+            "nameEn": "Working Capital",
+            "nameAr": "تمويل رأس المال العامل",
+            "maxAmountMinorUnits": "100000000",
+            "minMonths": 3,
+            "maxMonths": 12,
+            "maxGraceMonths": 3,
+            "minContributionPerTenThousand": 0,
+            "maxContributionPerTenThousand": 10000,
+            "minYearsInOperation": 0,
+            "purposes": [
+              { "code": "WORKING_CAPITAL", "labelEn": "Working capital", "labelAr": "رأس المال العامل" },
+              { "code": "INVENTORY", "labelEn": "Inventory purchase", "labelAr": "شراء المخزون" }
+            ],
+            "documentChecklistRef": "sme-ae-working-capital",
+            "collateral": [
+              { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
+              { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" }
+            ],
+            "knockOutNotes": [
+              { "code": "DSCR_MIN", "labelEn": "Debt-service cover of at least 1.40×", "labelAr": "تغطية خدمة الدين ١٫٤٠ مرة على الأقل" }
+            ],
+            "note": "Source: Tuum prototype screens shared 2026-10-08 — maximum AED 1,000,000, 12 months, grace up to 3 months. ILLUSTRATIVE: minimum tenor, contribution band, years in operation, purposes and collateral; replace with the fund's product paper."
+          },
+          {
+            "code": "FIXED_ASSETS",
+            "nameEn": "Fixed Assets",
+            "nameAr": "تمويل الأصول الثابتة",
+            "maxAmountMinorUnits": "200000000",
+            "minMonths": 12,
+            "maxMonths": 60,
+            "maxGraceMonths": 6,
+            "minContributionPerTenThousand": 2000,
+            "maxContributionPerTenThousand": 10000,
+            "minYearsInOperation": 1,
+            "purposes": [
+              { "code": "EQUIPMENT", "labelEn": "Equipment and machinery", "labelAr": "المعدات والآلات" },
+              { "code": "PREMISES_FIT_OUT", "labelEn": "Premises and fit-out", "labelAr": "المقر والتجهيزات" }
+            ],
+            "documentChecklistRef": "sme-ae-fixed-assets",
+            "collateral": [
+              { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
+              { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" },
+              { "code": "UNDERLYING_ASSET", "labelEn": "Pledge of the financed asset", "labelAr": "رهن الأصل المموَّل" },
+              { "code": "INSURANCE", "labelEn": "Insurance of the financed asset, assigned to the fund", "labelAr": "تأمين الأصل المموَّل مع التنازل لصالح الصندوق" }
+            ],
+            "knockOutNotes": [
+              { "code": "DSCR_MIN", "labelEn": "Debt-service cover of at least 1.40×", "labelAr": "تغطية خدمة الدين ١٫٤٠ مرة على الأقل" },
+              { "code": "YEARS_MIN", "labelEn": "At least 1 year in operation", "labelAr": "سنة واحدة على الأقل من التشغيل" },
+              { "code": "CONTRIBUTION_MIN", "labelEn": "Owner contribution of at least 20% of the project cost", "labelAr": "مساهمة المالك ٢٠٪ على الأقل من تكلفة المشروع" }
+            ],
+            "note": "Source: Tuum prototype screens shared 2026-10-08 — maximum AED 2,000,000, 60 months, grace 6 months, contribution 20%, minimum 1 year in operation, collateral personal guarantee + promissory note + underlying asset + insurance. ILLUSTRATIVE: minimum tenor, the contribution ceiling and purposes; replace with the fund's product paper."
+          },
+          {
+            "code": "EXPANSION",
+            "nameEn": "Expansion Loan",
+            "nameAr": "قرض التوسع",
+            "maxAmountMinorUnits": "500000000",
+            "minMonths": 12,
+            "maxMonths": 72,
+            "maxGraceMonths": 12,
+            "minContributionPerTenThousand": 2000,
+            "maxContributionPerTenThousand": 4000,
+            "minYearsInOperation": 2,
+            "purposes": [
+              { "code": "CAPEX_OPEX", "labelEn": "Capital and operating expenditure", "labelAr": "النفقات الرأسمالية والتشغيلية" },
+              { "code": "BUSINESS_EXPANSION", "labelEn": "New branch or added capacity", "labelAr": "فرع جديد أو طاقة إضافية" },
+              { "code": "EQUIPMENT", "labelEn": "Equipment and machinery", "labelAr": "المعدات والآلات" }
+            ],
+            "documentChecklistRef": "sme-ae-expansion",
+            "collateral": [
+              { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
+              { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" }
+            ],
+            "knockOutNotes": [
+              { "code": "DSCR_MIN", "labelEn": "Debt-service cover of at least 1.40×", "labelAr": "تغطية خدمة الدين ١٫٤٠ مرة على الأقل" },
+              { "code": "YEARS_MIN", "labelEn": "At least 2 years in operation", "labelAr": "سنتان على الأقل من التشغيل" },
+              { "code": "CONTRIBUTION_BAND", "labelEn": "Owner contribution of 20% to 40% of the project cost", "labelAr": "مساهمة المالك بين ٢٠٪ و٤٠٪ من تكلفة المشروع" }
+            ],
+            "note": "Source: Tuum prototype screens shared 2026-10-08 — maximum AED 5,000,000, 72 months, grace up to 12 months, minimum 2 years in operation, contribution 20–40%. ILLUSTRATIVE: minimum tenor, purposes and collateral; replace with the fund's product paper."
+          },
+          {
+            "code": "FIRST_TIME_FOUNDERS",
+            "nameEn": "First-time Founders",
+            "nameAr": "المؤسسون لأول مرة",
+            "maxAmountMinorUnits": "100000000",
+            "minMonths": 6,
+            "maxMonths": 60,
+            "maxGraceMonths": 6,
+            "minContributionPerTenThousand": 0,
+            "maxContributionPerTenThousand": 10000,
+            "minYearsInOperation": 0,
+            "purposes": [
+              { "code": "BUSINESS_LAUNCH", "labelEn": "Starting the business", "labelAr": "تأسيس المشروع" },
+              { "code": "EQUIPMENT", "labelEn": "Equipment and machinery", "labelAr": "المعدات والآلات" },
+              { "code": "WORKING_CAPITAL", "labelEn": "Working capital", "labelAr": "رأس المال العامل" }
+            ],
+            "documentChecklistRef": "sme-ae-first-time-founders",
+            "collateral": [
+              { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
+              { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" }
+            ],
+            "knockOutNotes": [
+              { "code": "DSCR_MIN", "labelEn": "Debt-service cover of at least 1.40× on the business plan", "labelAr": "تغطية خدمة الدين ١٫٤٠ مرة على الأقل وفق خطة العمل" }
+            ],
+            "note": "Source: Tuum prototype screens shared 2026-10-08 — maximum AED 1,000,000 and 60 months. ILLUSTRATIVE: minimum tenor, grace, contribution band, purposes and collateral; replace with the fund's product paper."
+          },
+          {
+            "code": "ADVANCED_TECH_AI",
+            "nameEn": "Advanced Tech & AI",
+            "nameAr": "التقنيات المتقدمة والذكاء الاصطناعي",
+            "maxAmountMinorUnits": "200000000",
+            "minMonths": 6,
+            "maxMonths": 60,
+            "maxGraceMonths": 6,
+            "minContributionPerTenThousand": 0,
+            "maxContributionPerTenThousand": 10000,
+            "minYearsInOperation": 0,
+            "purposes": [
+              { "code": "TECHNOLOGY_DEVELOPMENT", "labelEn": "Technology and AI development", "labelAr": "تطوير التقنية والذكاء الاصطناعي" },
+              { "code": "EQUIPMENT", "labelEn": "Equipment and machinery", "labelAr": "المعدات والآلات" },
+              { "code": "WORKING_CAPITAL", "labelEn": "Working capital", "labelAr": "رأس المال العامل" }
+            ],
+            "documentChecklistRef": "sme-ae-advanced-tech",
+            "collateral": [
+              { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
+              { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" }
+            ],
+            "knockOutNotes": [
+              { "code": "DSCR_MIN", "labelEn": "Debt-service cover of at least 1.40×", "labelAr": "تغطية خدمة الدين ١٫٤٠ مرة على الأقل" }
+            ],
+            "note": "Source: Tuum prototype screens shared 2026-10-08 — maximum AED 2,000,000 and 60 months. ILLUSTRATIVE: minimum tenor, grace, contribution band, purposes and collateral; replace with the fund's product paper."
+          }
+        ],
         "credit": {
           "eligibleSizes": ["MICRO", "SMALL", "MEDIUM"],
           "minDebtServiceCoverPerTenThousand": 14000,
@@ -43,14 +203,152 @@
         "catalogueRef": "ILLUSTRATIVE — fund rate card, 2026-10-08"
       },
       "terms": {
-        "minMonths": 6,
-        "maxMonths": 72,
+        "currency": "AED",
         "minAmountMinorUnits": "5000000",
-        "maxAmountMinorUnits": "500000000",
         "brokerRef": "broker-board-approved-01",
         "commodityCode": "LME-AL",
         "agencyPermitted": true,
         "adminFeeMinorUnits": "0",
+        "variants": [
+          {
+            "code": "SMALL_LOAN",
+            "nameEn": "Small Finance",
+            "nameAr": "التمويل الصغير",
+            "maxAmountMinorUnits": "100000000",
+            "minMonths": 6,
+            "maxMonths": 36,
+            "maxGraceMonths": 0,
+            "minContributionPerTenThousand": 0,
+            "maxContributionPerTenThousand": 10000,
+            "minYearsInOperation": 0,
+            "purposes": [
+              { "code": "WORKING_CAPITAL", "labelEn": "Working capital", "labelAr": "رأس المال العامل" },
+              { "code": "INVENTORY", "labelEn": "Inventory purchase", "labelAr": "شراء المخزون" },
+              { "code": "EQUIPMENT", "labelEn": "Equipment and machinery", "labelAr": "المعدات والآلات" }
+            ],
+            "documentChecklistRef": "sme-ae-small-loan",
+            "collateral": [
+              { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
+              { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" }
+            ],
+            "note": "Mirror of the conventional SMALL_LOAN variant; disabled until the fund's Shariah board ruling is recorded. Source: Tuum prototype screens shared 2026-10-08 — maximum AED 1,000,000 and 36 months. ILLUSTRATIVE: everything else."
+          },
+          {
+            "code": "WORKING_CAPITAL",
+            "nameEn": "Working Capital",
+            "nameAr": "تمويل رأس المال العامل",
+            "maxAmountMinorUnits": "100000000",
+            "minMonths": 3,
+            "maxMonths": 12,
+            "maxGraceMonths": 3,
+            "minContributionPerTenThousand": 0,
+            "maxContributionPerTenThousand": 10000,
+            "minYearsInOperation": 0,
+            "purposes": [
+              { "code": "WORKING_CAPITAL", "labelEn": "Working capital", "labelAr": "رأس المال العامل" },
+              { "code": "INVENTORY", "labelEn": "Inventory purchase", "labelAr": "شراء المخزون" }
+            ],
+            "documentChecklistRef": "sme-ae-working-capital",
+            "collateral": [
+              { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
+              { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" }
+            ],
+            "note": "Mirror of the conventional WORKING_CAPITAL variant; disabled until the fund's Shariah board ruling is recorded. Source: Tuum prototype screens shared 2026-10-08 — maximum AED 1,000,000, 12 months, grace up to 3 months. ILLUSTRATIVE: everything else."
+          },
+          {
+            "code": "FIXED_ASSETS",
+            "nameEn": "Fixed Assets",
+            "nameAr": "تمويل الأصول الثابتة",
+            "maxAmountMinorUnits": "200000000",
+            "minMonths": 12,
+            "maxMonths": 60,
+            "maxGraceMonths": 6,
+            "minContributionPerTenThousand": 2000,
+            "maxContributionPerTenThousand": 10000,
+            "minYearsInOperation": 1,
+            "purposes": [
+              { "code": "EQUIPMENT", "labelEn": "Equipment and machinery", "labelAr": "المعدات والآلات" },
+              { "code": "PREMISES_FIT_OUT", "labelEn": "Premises and fit-out", "labelAr": "المقر والتجهيزات" }
+            ],
+            "documentChecklistRef": "sme-ae-fixed-assets",
+            "collateral": [
+              { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
+              { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" },
+              { "code": "UNDERLYING_ASSET", "labelEn": "Pledge of the financed asset", "labelAr": "رهن الأصل المموَّل" },
+              { "code": "INSURANCE", "labelEn": "Insurance of the financed asset, assigned to the fund", "labelAr": "تأمين الأصل المموَّل مع التنازل لصالح الصندوق" }
+            ],
+            "note": "Mirror of the conventional FIXED_ASSETS variant; disabled until the fund's Shariah board ruling is recorded. Source: Tuum prototype screens shared 2026-10-08 — maximum AED 2,000,000, 60 months, grace 6 months, contribution 20%, minimum 1 year, collateral as listed. ILLUSTRATIVE: minimum tenor, the contribution ceiling and purposes."
+          },
+          {
+            "code": "EXPANSION",
+            "nameEn": "Expansion Finance",
+            "nameAr": "تمويل التوسع",
+            "maxAmountMinorUnits": "500000000",
+            "minMonths": 12,
+            "maxMonths": 72,
+            "maxGraceMonths": 12,
+            "minContributionPerTenThousand": 2000,
+            "maxContributionPerTenThousand": 4000,
+            "minYearsInOperation": 2,
+            "purposes": [
+              { "code": "CAPEX_OPEX", "labelEn": "Capital and operating expenditure", "labelAr": "النفقات الرأسمالية والتشغيلية" },
+              { "code": "BUSINESS_EXPANSION", "labelEn": "New branch or added capacity", "labelAr": "فرع جديد أو طاقة إضافية" },
+              { "code": "EQUIPMENT", "labelEn": "Equipment and machinery", "labelAr": "المعدات والآلات" }
+            ],
+            "documentChecklistRef": "sme-ae-expansion",
+            "collateral": [
+              { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
+              { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" }
+            ],
+            "note": "Mirror of the conventional EXPANSION variant; disabled until the fund's Shariah board ruling is recorded. Source: Tuum prototype screens shared 2026-10-08 — maximum AED 5,000,000, 72 months, grace up to 12 months, minimum 2 years, contribution 20–40%. ILLUSTRATIVE: minimum tenor, purposes and collateral."
+          },
+          {
+            "code": "FIRST_TIME_FOUNDERS",
+            "nameEn": "First-time Founders",
+            "nameAr": "المؤسسون لأول مرة",
+            "maxAmountMinorUnits": "100000000",
+            "minMonths": 6,
+            "maxMonths": 60,
+            "maxGraceMonths": 6,
+            "minContributionPerTenThousand": 0,
+            "maxContributionPerTenThousand": 10000,
+            "minYearsInOperation": 0,
+            "purposes": [
+              { "code": "BUSINESS_LAUNCH", "labelEn": "Starting the business", "labelAr": "تأسيس المشروع" },
+              { "code": "EQUIPMENT", "labelEn": "Equipment and machinery", "labelAr": "المعدات والآلات" },
+              { "code": "WORKING_CAPITAL", "labelEn": "Working capital", "labelAr": "رأس المال العامل" }
+            ],
+            "documentChecklistRef": "sme-ae-first-time-founders",
+            "collateral": [
+              { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
+              { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" }
+            ],
+            "note": "Mirror of the conventional FIRST_TIME_FOUNDERS variant; disabled until the fund's Shariah board ruling is recorded. Source: Tuum prototype screens shared 2026-10-08 — maximum AED 1,000,000 and 60 months. ILLUSTRATIVE: everything else."
+          },
+          {
+            "code": "ADVANCED_TECH_AI",
+            "nameEn": "Advanced Tech & AI",
+            "nameAr": "التقنيات المتقدمة والذكاء الاصطناعي",
+            "maxAmountMinorUnits": "200000000",
+            "minMonths": 6,
+            "maxMonths": 60,
+            "maxGraceMonths": 6,
+            "minContributionPerTenThousand": 0,
+            "maxContributionPerTenThousand": 10000,
+            "minYearsInOperation": 0,
+            "purposes": [
+              { "code": "TECHNOLOGY_DEVELOPMENT", "labelEn": "Technology and AI development", "labelAr": "تطوير التقنية والذكاء الاصطناعي" },
+              { "code": "EQUIPMENT", "labelEn": "Equipment and machinery", "labelAr": "المعدات والآلات" },
+              { "code": "WORKING_CAPITAL", "labelEn": "Working capital", "labelAr": "رأس المال العامل" }
+            ],
+            "documentChecklistRef": "sme-ae-advanced-tech",
+            "collateral": [
+              { "code": "PERSONAL_GUARANTEE", "labelEn": "Personal guarantee of the owners", "labelAr": "كفالة شخصية من الملاك" },
+              { "code": "PROMISSORY_NOTE", "labelEn": "Promissory note", "labelAr": "سند لأمر" }
+            ],
+            "note": "Mirror of the conventional ADVANCED_TECH_AI variant; disabled until the fund's Shariah board ruling is recorded. Source: Tuum prototype screens shared 2026-10-08 — maximum AED 2,000,000 and 60 months. ILLUSTRATIVE: everything else."
+          }
+        ],
         "credit": {
           "eligibleSizes": ["MICRO", "SMALL", "MEDIUM"],
           "minDebtServiceCoverPerTenThousand": 14000,

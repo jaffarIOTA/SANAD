@@ -98,11 +98,29 @@
         "boundByMarketRange": false
       },
       "terms": {
-        "minMonths": 3,
-        "maxMonths": 36,
+        "currency": "SAR",
         "minAmountMinorUnits": "2000000",
-        "maxAmountMinorUnits": "300000000",
         "adminFeeMinorUnits": "100000",
+        "variants": [
+          {
+            "code": "SME_TERM",
+            "nameEn": "SME term finance",
+            "nameAr": "تمويل المنشآت لأجل",
+            "maxAmountMinorUnits": "300000000",
+            "minMonths": 3,
+            "maxMonths": 36,
+            "maxGraceMonths": 0,
+            "minContributionPerTenThousand": 0,
+            "maxContributionPerTenThousand": 10000,
+            "minYearsInOperation": 0,
+            "purposes": [
+              { "code": "WORKING_CAPITAL", "labelEn": "Working capital", "labelAr": "رأس المال العامل" },
+              { "code": "CAPEX_OPEX", "labelEn": "Capital and operating expenditure", "labelAr": "النفقات الرأسمالية والتشغيلية" }
+            ],
+            "collateral": [],
+            "note": "ILLUSTRATIVE — the former single term sheet converted to one variant (2026-10-08); purposes, grace and contribution band are placeholders until the company's SME product paper is supplied"
+          }
+        ],
         "credit": {
           "eligibleSizes": ["MICRO", "SMALL"],
           "minDebtServiceCoverPerTenThousand": 13000,
@@ -127,14 +145,32 @@
         "boundByMarketRange": false
       },
       "terms": {
-        "minMonths": 3,
-        "maxMonths": 36,
+        "currency": "SAR",
         "minAmountMinorUnits": "2000000",
-        "maxAmountMinorUnits": "300000000",
         "brokerRef": "broker-board-approved-01",
         "commodityCode": "LME-AL",
         "agencyPermitted": false,
         "adminFeeMinorUnits": "100000",
+        "variants": [
+          {
+            "code": "SME_TERM",
+            "nameEn": "SME finance (Tawarruq)",
+            "nameAr": "تمويل المنشآت (تورّق)",
+            "maxAmountMinorUnits": "300000000",
+            "minMonths": 3,
+            "maxMonths": 36,
+            "maxGraceMonths": 0,
+            "minContributionPerTenThousand": 0,
+            "maxContributionPerTenThousand": 10000,
+            "minYearsInOperation": 0,
+            "purposes": [
+              { "code": "WORKING_CAPITAL", "labelEn": "Working capital", "labelAr": "رأس المال العامل" },
+              { "code": "CAPEX_OPEX", "labelEn": "Capital and operating expenditure", "labelAr": "النفقات الرأسمالية والتشغيلية" }
+            ],
+            "collateral": [],
+            "note": "ILLUSTRATIVE — the former single term sheet converted to one variant (2026-10-08); purposes, grace and contribution band are placeholders until the company's SME product paper is supplied"
+          }
+        ],
         "credit": {
           "eligibleSizes": ["MICRO", "SMALL"],
           "minDebtServiceCoverPerTenThousand": 13000,

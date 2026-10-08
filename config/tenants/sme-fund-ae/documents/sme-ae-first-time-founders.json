@@ -1,0 +1,18 @@
+{
+  "tenantId": "sme-fund-ae",
+  "programmeId": "sme-ae-first-time-founders",
+  "version": "0.1.0-illustrative-2026-10-08",
+  "items": [
+    { "documentType": "TRADE_LICENCE", "titleEn": "Trade licence", "titleAr": "الرخصة التجارية", "required": true, "validForSeconds": 31536000 },
+    { "documentType": "OWNER_EMIRATES_ID", "titleEn": "Emirates ID of every owner", "titleAr": "الهوية الإماراتية لجميع الملاك", "required": true },
+    { "documentType": "PERSONAL_BUREAU_REPORT", "titleEn": "Personal credit bureau report (AECB) of every owner", "titleAr": "تقرير الاتحاد للمعلومات الائتمانية الشخصي لجميع الملاك", "required": true, "validForSeconds": 2592000 },
+    { "documentType": "PERSONAL_BANK_STATEMENT_12M", "titleEn": "Personal bank statements, 12 months", "titleAr": "كشوف الحساب الشخصي لاثني عشر شهرًا", "required": true, "validForSeconds": 7776000 },
+    { "documentType": "COMPANY_BANK_STATEMENT_12M", "titleEn": "Company bank statements, 12 months (where the company already holds an account)", "titleAr": "كشوف حساب المنشأة لاثني عشر شهرًا (إن وُجد حساب)", "required": false, "validForSeconds": 7776000 },
+    { "documentType": "AUDITED_FINANCIALS_2Y", "titleEn": "Audited financial statements, 2 years (where they exist)", "titleAr": "القوائم المالية المدققة لسنتين (إن وُجدت)", "required": false },
+    { "documentType": "SALARY_CERTIFICATE", "titleEn": "Salary certificate of the founder", "titleAr": "شهادة راتب المؤسس", "required": true, "validForSeconds": 7776000 },
+    { "documentType": "WPS_SALARY_REPORT", "titleEn": "WPS / MOHRE salary report (where the company has staff)", "titleAr": "تقرير الرواتب من نظام حماية الأجور / وزارة الموارد البشرية والتوطين (إن وُجد موظفون)", "required": false, "validForSeconds": 7776000 },
+    { "documentType": "COMPANY_PROFILE", "titleEn": "Company profile and business plan", "titleAr": "ملف تعريف المنشأة وخطة العمل", "required": true },
+    { "documentType": "RENTAL_CONTRACT", "titleEn": "Rental contract of the premises", "titleAr": "عقد إيجار المقر", "required": true },
+    { "documentType": "SUPPLIER_QUOTATIONS", "titleEn": "Supplier quotations or purchase invoices", "titleAr": "عروض أسعار الموردين أو فواتير الشراء", "required": false, "validForSeconds": 7776000 }
+  ]
+}

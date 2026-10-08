@@ -18,3 +18,8 @@ Each is enforced in code and attacked in `test/compliance/sme-products.test.ts`.
 - **SI-11 One disbursement, one bureau report**, keyed on the transaction; the programme
   guarantee first where the term sheet requires it.
 - **SI-12 APR is the platform's**, from the cash flows the module supplies.
+- **SI-13 to SI-17** as the conventional module's S-10 to S-14, attacked in
+  `test/compliance/sme-variants.test.ts`: one currency per term sheet; the variant governs
+  amount, tenor, grace, contribution, years in operation and purpose; a dated schedule whose
+  dates are never defaulted; illustrative values say so; the two copies of the variant code are
+  identical.

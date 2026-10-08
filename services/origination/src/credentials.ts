@@ -10,7 +10,9 @@
 import { Pool } from 'pg';
 
 import { EnvironmentCredentialProvider } from '../../../adapters/kernel/credentials-environment.ts';
-import { VaultCredentialProvider } from '../../../adapters/kernel/credentials-vault.ts';
+import { type ConfiguredRails, type VaultProviderResolver, VaultCredentialProvider, vaultProviderResolverFromRails } from '../../../adapters/kernel/credentials-vault.ts';
+import { ADAPTER_CATALOGUE } from '../../../adapters/catalogue.ts';
+import { TENANT_CODES, loadRailsConfiguration } from '../../../config/loader.ts';
 import type { CredentialProvider } from '../../../core/ports/credentials.ts';
 
 export function databaseUrlFromEnvironment(env: Readonly<Record<string, string | undefined>> = process.env): string | undefined {
@@ -41,8 +43,23 @@ export function credentialProviderFromEnvironment(env: Readonly<Record<string, s
   const quiet = (): void => undefined;
   state.provider = url === undefined
     ? new EnvironmentCredentialProvider(quiet, env)
-    : new VaultCredentialProvider(sharedPool(url), quiet, (code) => tenantUuidByCode(sharedPool(url), code));
+    : new VaultCredentialProvider(sharedPool(url), quiet, (code) => tenantUuidByCode(sharedPool(url), code), railsResolver());
   return state.provider;
+}
+
+/**
+ * Which adapter each tenant's rails name per capability, so a UAE tenant's
+ * bureau credential is read from its AECB row and never from a Saudi one
+ * (ADR 0005). From the checked-in rail files; a tenant whose file does not
+ * load falls back to the defaults, which the vault then refuses if absent.
+ */
+function railsResolver(): VaultProviderResolver {
+  const byTenant: Record<string, ConfiguredRails> = {};
+  for (const t of TENANT_CODES) {
+    const rails = loadRailsConfiguration(t, ADAPTER_CATALOGUE);
+    if (rails.ok) byTenant[t] = rails.value;
+  }
+  return vaultProviderResolverFromRails(byTenant);
 }
 
 export function credentialSource(env: Readonly<Record<string, string | undefined>> = process.env): 'VAULT' | 'ENVIRONMENT' {
