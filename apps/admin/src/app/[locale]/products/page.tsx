@@ -9,15 +9,15 @@
 
 import { notFound, redirect } from 'next/navigation';
 
-import { type TenantCode, isTenantCode } from '@sanad/config/loader.ts';
+import { type TenantCode, isTenantCode, loadProductCatalogue } from '@sanad/config/loader.ts';
 import type { CoreBankingProductDetail, CoreBankingProductType } from '@sanad/core/ports/core-banking-catalogue.ts';
 import { BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY, Card, ControlRejection, FIELD_INPUT, FIELD_LABEL, FIELD_TEXTAREA, PillLink, Status } from '@sanad/design/primitives.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 
-import { decideRevisionAction, proposeProductChangeAction } from '../../../server/actions.ts';
+import { decideRevisionAction, proposeProductAdditionAction, proposeProductChangeAction } from '../../../server/actions.ts';
 import { coreProductsState, describeCoreProduct, listCoreProducts } from '../../../server/core-banking-products.ts';
 import { listTenants, store } from '../../../server/credentials.ts';
-import { REGISTRY, resolveProductCatalogue } from '../../../server/products.ts';
+import { REGISTRY, productsNotInCatalogue, resolveProductCatalogue } from '../../../server/products.ts';
 import { listRevisions } from '../../../server/revisions.ts';
 import { currentAdmin } from '../../../server/session.ts';
 
@@ -61,6 +61,10 @@ export default async function ProductsAdminPage({ params, searchParams }: { read
   const entries = resolved.catalogue.ok ? resolved.catalogue.value.entries : [];
   const revisions = s.kind === 'READY' ? await listRevisions(s.pool, tenantCode, 'PRODUCTS') : [];
   const editing = entries.find((e) => e.productCode === edit) ?? entries[0];
+  // Shipped modules that are not in the catalogue in force, offered from the tenant's checked-in term sheet.
+  const template = loadProductCatalogue(tenantCode);
+  const addable = resolved.catalogue.ok && template.ok ? productsNotInCatalogue(resolved.catalogue.value, template.value) : [];
+  const pendingAdditions = new Set(revisions.filter((r) => r.status === 'PROPOSED').map((r) => /^Add (\S+) to the catalogue/.exec(r.summary)?.[1]).filter((c): c is string => c !== undefined));
   const n = notice === undefined ? undefined : (NOTICE[notice] ?? (notice.startsWith('REFUSED:') ? { en: `Refused before proposal: ${notice.slice(8)}`, ar: `رُفض قبل الاقتراح: ${notice.slice(8)}`, tone: 'blocked' as const } : undefined));
 
   // The core banking platform's own products, read live. Unavailability is shown, never hidden behind an empty table.
@@ -129,6 +133,33 @@ export default async function ProductsAdminPage({ params, searchParams }: { read
           </table>
         </div>
       </Card>
+
+      {addable.length > 0 ? (
+        <Card>
+          <h3 id="add" className="text-[16px] font-semibold text-heading">{arabic ? 'إضافة منتج إلى الكتالوج' : 'Add a product to the catalogue'}</h3>
+          <p className="mt-1 text-[14px] text-ink-quiet">{arabic ? 'وحدات تقدّمها المنصة وليست في الكتالوج الساري. تُقترح الإضافة بورقة الشروط المضمّنة لهذه المؤسسة، ويعتمدها مدير آخر؛ المنتج الإسلامي يُضاف معطّلاً حتى يُسجَّل قرار الهيئة.' : 'Modules the platform ships that are not in the catalogue in force. Adding one is proposed with this tenant’s checked-in term sheet and approved by another administrator; an Islamic product is added disabled until its board ruling is recorded.'}</p>
+          <ul className="mt-4 flex list-none flex-col divide-y divide-line p-0">
+            {addable.map((e) => {
+              const m = REGISTRY.find(e.productCode);
+              const pending = pendingAdditions.has(e.productCode);
+              return (
+                <li key={e.productCode} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                  <span className="flex min-w-0 flex-col">
+                    <span className="font-medium text-heading">{arabic ? e.nameAr : e.nameEn}</span>
+                    <span className="text-[13px] text-ink-quiet"><span className="identifier">{e.productCode}</span> · {m.ok ? (m.value.descriptor.family === 'ISLAMIC' ? (arabic ? 'إسلامي' : 'Islamic') : (arabic ? 'تقليدي' : 'conventional')) : ''} · {e.enabled ? (arabic ? 'يُضاف مفعّلاً' : 'added enabled') : (arabic ? 'يُضاف معطّلاً' : 'added disabled')}</span>
+                  </span>
+                  {pending ? <Status tone="progress" label={arabic ? 'إضافة مقترحة بانتظار الاعتماد' : 'addition proposed, awaiting approval'} /> : (
+                    <form action={proposeProductAdditionAction}>
+                      <input type="hidden" name="locale" value={segment} /><input type="hidden" name="tenant" value={tenantCode} /><input type="hidden" name="productCode" value={e.productCode} />
+                      <button type="submit" className={`${BUTTON_PRIMARY} h-[38px] min-w-0 px-4 text-[14px]`}>{arabic ? 'اقتراح الإضافة' : 'Propose adding'}</button>
+                    </form>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      ) : null}
 
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-3">

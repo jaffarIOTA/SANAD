@@ -15,11 +15,13 @@ import { ISLAMIC_PRODUCT_CODES, ProductRegistry } from '@sanad/core/products/reg
 import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
 import { bnpl } from '@sanad/products/bnpl/index.ts';
 import { conventionalTerm } from '@sanad/products/conventional-term/index.ts';
+import { smeTermConventional } from '@sanad/products/sme-term-conventional/index.ts';
+import { smeTermIslamic } from '@sanad/products/sme-term-islamic/index.ts';
 import { embeddedLending } from '@sanad/products/embedded-lending/index.ts';
 import { murabahaScf } from '@sanad/products/murabaha-scf/index.ts';
 import { tawarruqPersonal } from '@sanad/products/tawarruq-personal/index.ts';
 
-export const REGISTRY = new ProductRegistry().register(murabahaScf).register(tawarruqPersonal).register(bnpl).register(embeddedLending).register(conventionalTerm);
+export const REGISTRY = new ProductRegistry().register(murabahaScf).register(tawarruqPersonal).register(bnpl).register(embeddedLending).register(conventionalTerm).register(smeTermConventional).register(smeTermIslamic);
 
 export { resolveProductCatalogue };
 
@@ -63,6 +65,31 @@ export function catalogueWithChange(current: ProductCatalogue, change: EntryChan
     ...(change.coreBankingProductCode === undefined || change.coreBankingProductCode.trim().length === 0 ? {} : { coreBankingProductCode: change.coreBankingProductCode.trim() }),
   };
   const payload = catalogueToJson({ version: current.version, entries: current.entries.map((e) => (e.productCode === change.productCode ? next : e)) });
+  const parsed = parseProductCatalogue(payload, ISLAMIC_PRODUCT_CODES);
+  if (!parsed.ok) return parsed;
+  return ok({ payload, parsed: parsed.value });
+}
+
+/**
+ * Modules the platform ships that are not in the catalogue in force, each with
+ * the checked-in term sheet for this tenant as its starting point. Adding one is
+ * a proposal like any other change: a second administrator approves it.
+ */
+export function productsNotInCatalogue(current: ProductCatalogue, template: ProductCatalogue): readonly CatalogueEntry[] {
+  const have = new Set(current.entries.map((e) => e.productCode));
+  return template.entries.filter((e) => !have.has(e.productCode) && REGISTRY.find(e.productCode).ok);
+}
+
+/** The whole catalogue with one entry added from the checked-in template, parsed as production would parse it. */
+export function catalogueWithAddition(current: ProductCatalogue, template: ProductCatalogue, productCode: string): Result<{ readonly payload: unknown; readonly parsed: ProductCatalogue }> {
+  if (current.entries.some((e) => e.productCode === productCode)) return reject('OP-DETERMINACY', 'PRODUCT_ALREADY_IN_CATALOGUE', 'The product is already in the catalogue; propose a change to it instead', { productCode });
+  const entry = template.entries.find((e) => e.productCode === productCode);
+  if (entry === undefined) return reject('OP-DETERMINACY', 'PRODUCT_HAS_NO_TEMPLATE', 'This tenant has no checked-in term sheet for the product', { productCode });
+  const module = REGISTRY.find(productCode);
+  if (!module.ok) return module;
+  const terms = module.value.validateTerms(entry.terms);
+  if (!terms.ok) return terms;
+  const payload = catalogueToJson({ version: current.version, entries: [...current.entries, entry] });
   const parsed = parseProductCatalogue(payload, ISLAMIC_PRODUCT_CODES);
   if (!parsed.ok) return parsed;
   return ok({ payload, parsed: parsed.value });

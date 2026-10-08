@@ -16,7 +16,7 @@
 
 import type { ReactElement } from 'react';
 
-import { type TenantCode, isTenantCode } from '@sanad/config/loader.ts';
+import { type TenantCode, isTenantCode, loadSmeDefinition } from '@sanad/config/loader.ts';
 import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
 import { money } from '@sanad/core/kernel/money.ts';
 import type { QuoteRequest } from '@sanad/core/products/module.ts';
@@ -29,13 +29,15 @@ import { Card, PILL_OUTLINE, Status, Tile } from '@sanad/design/primitives.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 import { bnpl } from '@sanad/products/bnpl/index.ts';
 import { conventionalTerm } from '@sanad/products/conventional-term/index.ts';
+import { smeTermConventional } from '@sanad/products/sme-term-conventional/index.ts';
+import { smeTermIslamic } from '@sanad/products/sme-term-islamic/index.ts';
 import { embeddedLending } from '@sanad/products/embedded-lending/index.ts';
 import { murabahaScf } from '@sanad/products/murabaha-scf/index.ts';
 import { tawarruqPersonal } from '@sanad/products/tawarruq-personal/index.ts';
 
 import { developmentAttestation } from '../../../server/store.ts';
 
-const REGISTRY = new ProductRegistry().register(murabahaScf).register(tawarruqPersonal).register(bnpl).register(embeddedLending).register(conventionalTerm);
+const REGISTRY = new ProductRegistry().register(murabahaScf).register(tawarruqPersonal).register(bnpl).register(embeddedLending).register(conventionalTerm).register(smeTermConventional).register(smeTermIslamic);
 const SAMPLE_TRADE = { type: 'CLEARED_INVOICE' as const, invoiceUuid: '3cf5d9a2-0000-4000-8000-0000000000aa', invoiceHash: 'sample', issuerCr: '1010000002', recipientCr: '7001000001' };
 /** Development stand-ins for the Rate Publisher. Labelled on the page. */
 const DEV_BENCHMARK = { code: 'SAIBOR-3M', rate: rate(560n, 'REDUCING'), asOfEpochSeconds: 0n, referenceId: 'dev-benchmark' };
@@ -52,6 +54,12 @@ function coreBookingLabel(entry: { readonly coreBankingProductCode?: string }, b
   return { text: t('not mapped yet', 'غير مرتبط بعد'), tone: 'progress' };
 }
 
+/** The regulator's SME definition, loaded from configuration and handed to the quote — a module never reads configuration. */
+const SME_DEFINITION = loadSmeDefinition();
+const SME_REGULATORY = SME_DEFINITION.ok ? { smeDefinition: SME_DEFINITION.value } : {};
+/** An illustrative small enterprise, with the figures a real quote takes from its statements and the bureau. */
+const SAMPLE_BUSINESS = { annualRevenue: money(600_000_000n), fullTimeEmployees: 22, annualOperatingCashFlow: money(90_000_000n), existingAnnualDebtService: money(12_000_000n), financialsSourceRef: 'sample-audited-statements-2025' };
+
 /** A sample request per journey shape. Amounts and facts are illustrative. */
 function sampleFor(code: string, tenantId: string, at: QuoteRequest['asOf']): { readonly principal: bigint; readonly tenorDays: number; readonly build: (pricing: QuoteRequest['pricing']) => QuoteRequest; readonly note: { en: string; ar: string } } {
   const base = { tenantId, programmeId: 'prg-0001', counterpartyId: 'sample', asOf: at };
@@ -60,6 +68,9 @@ function sampleFor(code: string, tenantId: string, at: QuoteRequest['asOf']): { 
       return { principal: 18_500_000n, tenorDays: 90, build: (pricing) => ({ ...base, requestedAmount: money(18_500_000n), requestedTenorDays: 90, tradeReference: SAMPLE_TRADE, pricing }), note: { en: 'A cleared invoice of SAR 185,000.00 over 90 days.', ar: 'فاتورة مُخلّصة بقيمة ١٨٥٬٠٠٠٫٠٠ ريال على ٩٠ يوماً.' } };
     case 'bnpl':
       return { principal: 120_000n, tenorDays: 120, build: (pricing) => ({ ...base, requestedAmount: money(120_000n), requestedTenorDays: 120, pricing, affordability: { outstandingSameClass: money(0n) } }), note: { en: 'A basket of SAR 1,200.00 in four instalments; the merchant pays the discount.', ar: 'سلة بقيمة ١٬٢٠٠٫٠٠ ريال على أربعة أقساط؛ الخصم على التاجر.' } };
+    case 'sme-term-conventional':
+    case 'sme-term-islamic':
+      return { principal: 50_000_000n, tenorDays: 720, build: (pricing) => ({ ...base, requestedAmount: money(50_000_000n), requestedTenorDays: 720, pricing, regulatory: SME_REGULATORY, affordability: { business: SAMPLE_BUSINESS } }), note: { en: 'SAR 500,000.00 over 24 months for a small enterprise with SAR 6,000,000.00 revenue, SAR 900,000.00 operating cash flow and SAR 120,000.00 a year of existing debt service.', ar: '٥٠٠٬٠٠٠٫٠٠ ريال على ٢٤ شهراً لمنشأة صغيرة إيراداتها ٦٬٠٠٠٬٠٠٠٫٠٠ ريال وتدفقها التشغيلي ٩٠٠٬٠٠٠٫٠٠ ريال وخدمة ديونها القائمة ١٢٠٬٠٠٠٫٠٠ ريال سنوياً.' } };
     case 'embedded-lending':
       return { principal: 10_000_000n, tenorDays: 180, build: (pricing) => ({ ...base, requestedAmount: money(10_000_000n), requestedTenorDays: 180, pricing, partnerRef: 'aggregator-01', preferences: { collection: 'REVENUE_LINKED' } }), note: { en: 'A merchant advance of SAR 100,000.00 over 180 days, collected from partner-routed revenue.', ar: 'تمويل تاجر بقيمة ١٠٠٬٠٠٠٫٠٠ ريال على ١٨٠ يوماً، يُحصَّل من الإيرادات عبر الشريك.' } };
     default:

@@ -16,6 +16,8 @@ import { rate } from '@sanad/core/pricing/rate.ts';
 import { tsaInstant } from '@sanad/core/time/tsa.ts';
 import { bnpl } from '@sanad/products/bnpl/index.ts';
 import { conventionalTerm, disburse } from '@sanad/products/conventional-term/index.ts';
+import { smeTermConventional } from '@sanad/products/sme-term-conventional/index.ts';
+import { smeTermIslamic } from '@sanad/products/sme-term-islamic/index.ts';
 import { book, embeddedLending } from '@sanad/products/embedded-lending/index.ts';
 import { murabahaScf } from '@sanad/products/murabaha-scf/index.ts';
 import { tawarruqPersonal } from '@sanad/products/tawarruq-personal/index.ts';
@@ -26,7 +28,7 @@ const fintechB = expectOk(loadProductCatalogue('fintech-b'));
 const approved = (tenantId: string) => ({ state: 'APPROVED' as const, core: { tenantId } }) as unknown as Parameters<typeof conventionalTerm.execute>[1];
 
 describe('every module registers and every catalogue entry validates against its module', () => {
-  const registry = new ProductRegistry().register(murabahaScf).register(tawarruqPersonal).register(bnpl).register(embeddedLending).register(conventionalTerm);
+  const registry = new ProductRegistry().register(murabahaScf).register(tawarruqPersonal).register(bnpl).register(embeddedLending).register(conventionalTerm).register(smeTermConventional).register(smeTermIslamic);
   it.each(['bank-a', 'fintech-b'] as const)('%s', (tenant) => {
     for (const entry of expectOk(loadProductCatalogue(tenant)).entries) {
       const module = expectOk(registry.find(entry.productCode));

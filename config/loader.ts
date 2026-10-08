@@ -26,6 +26,7 @@ import bankARails from './tenants/bank-a/rails/rails.json' with { type: 'json' }
 import fintechBRails from './tenants/fintech-b/rails/rails.json' with { type: 'json' };
 import bankAIdentity from './tenants/bank-a/identity/staff-identity.json' with { type: 'json' };
 import fintechBIdentity from './tenants/fintech-b/identity/staff-identity.json' with { type: 'json' };
+import smeDefinition from './regulatory/sme-definition.json' with { type: 'json' };
 
 import {
   type StructureDefinition,
@@ -35,6 +36,7 @@ import { type CreditPolicy, parseCreditPolicy } from '../core/decisioning/policy
 import { type AdapterCatalogue, type RailsConfiguration, parseRailsConfiguration } from '../core/config/rails.ts';
 import { type DeploymentProfile, type StaffIdentityConfiguration, parseStaffIdentity } from '../core/config/staff-identity.ts';
 import { type OriginationPolicy, parseOriginationPolicy } from '../core/origination/policy.ts';
+import { type SmeDefinition, parseSmeDefinition } from '../core/applicant/sme-size.ts';
 import { type DocumentChecklist, parseDocumentChecklist } from '../core/documents/checklist.ts';
 import { type Result, ok, reject } from '../core/kernel/result.ts';
 import { type ProductCatalogue, parseProductCatalogue } from '../core/products/catalogue.ts';
@@ -108,6 +110,11 @@ export function loadDocumentChecklist(tenant: TenantCode, programmeId: string): 
     if (parsed.value.programmeId === programmeId) return parsed;
   }
   return reject('OP-DETERMINACY', 'DOCUMENT_CHECKLIST_NOT_FOUND', 'No document checklist is configured for that programme', { tenant, programmeId });
+}
+
+/** The regulator's SME size definition. Platform-wide, not per tenant: it is the regulator's, with its circular. */
+export function loadSmeDefinition(): Result<SmeDefinition> {
+  return parseSmeDefinition(smeDefinition);
 }
 
 export function isTenantCode(value: string): value is TenantCode {

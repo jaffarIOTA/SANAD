@@ -11,7 +11,7 @@
 import { type Result, ok, reject } from '../kernel/result.ts';
 import type { AnyProductModule } from './module.ts';
 
-export const ISLAMIC_PRODUCT_CODES: ReadonlySet<string> = new Set(['murabaha-scf', 'tawarruq-personal']);
+export const ISLAMIC_PRODUCT_CODES: ReadonlySet<string> = new Set(['murabaha-scf', 'tawarruq-personal', 'sme-term-islamic']);
 
 /**
  * Products booked as account postings rather than under a core banking

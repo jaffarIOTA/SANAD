@@ -71,6 +71,81 @@
         "citation": "SAMA Rules for Regulating BNPL Companies, Nov 2023 (Jumada I 1445H), Art. 22(1): total outstanding financing per consumer natural person not to exceed SAR 10,000; tenant applies SAR 5,000. Art. 22(2): at most 12 instalments."
       },
       "effectiveFromEpochSeconds": "1780000000"
+    },
+    {
+      "productCode": "sme-term-conventional",
+      "enabled": true,
+      "nameEn": "SME term finance",
+      "nameAr": "تمويل المنشآت لأجل",
+      "programmeIds": "ALL",
+      "pricingRule": {
+        "kind": "BENCHMARK_PLUS_MARGIN",
+        "benchmarkCode": "SAIBOR-3M",
+        "marginBp": "400",
+        "basis": "REDUCING",
+        "boundByMarketRange": false
+      },
+      "terms": {
+        "minMonths": 6,
+        "maxMonths": 60,
+        "minAmountMinorUnits": "5000000",
+        "maxAmountMinorUnits": "1000000000",
+        "adminFeeMinorUnits": "250000",
+        "credit": {
+          "eligibleSizes": ["MICRO", "SMALL", "MEDIUM"],
+          "minDebtServiceCoverPerTenThousand": 12500,
+          "maxFinancingShareOfRevenuePerTenThousand": 3000,
+          "maxFinancingWithoutRevenueHistoryMinorUnits": "50000000",
+          "source": "TENANT_CREDIT_POLICY",
+          "policyRef": "ILLUSTRATIVE — bank-a SME credit policy v1: replace with the bank's approved policy and version before go-live"
+        },
+        "guarantee": {
+          "programme": "Kafalah",
+          "coveragePerTenThousand": 8000,
+          "programmeRef": "PLACEHOLDER — Kafalah SME loan guarantee programme: coverage varies by initiative and enterprise size; confirm against the bank's Kafalah agreement before go-live",
+          "requiredBeforeDisbursement": false
+        }
+      },
+      "effectiveFromEpochSeconds": "1780000000"
+    },
+    {
+      "productCode": "sme-term-islamic",
+      "enabled": false,
+      "nameEn": "SME finance (Tawarruq)",
+      "nameAr": "تمويل المنشآت (تورّق)",
+      "programmeIds": "ALL",
+      "pricingRule": {
+        "kind": "BENCHMARK_PLUS_MARGIN",
+        "benchmarkCode": "SAIBOR-3M",
+        "marginBp": "425",
+        "basis": "REDUCING",
+        "boundByMarketRange": false
+      },
+      "terms": {
+        "minMonths": 6,
+        "maxMonths": 60,
+        "minAmountMinorUnits": "5000000",
+        "maxAmountMinorUnits": "1000000000",
+        "brokerRef": "broker-board-approved-01",
+        "commodityCode": "LME-AL",
+        "agencyPermitted": true,
+        "adminFeeMinorUnits": "250000",
+        "credit": {
+          "eligibleSizes": ["MICRO", "SMALL", "MEDIUM"],
+          "minDebtServiceCoverPerTenThousand": 12500,
+          "maxFinancingShareOfRevenuePerTenThousand": 3000,
+          "maxFinancingWithoutRevenueHistoryMinorUnits": "50000000",
+          "source": "TENANT_CREDIT_POLICY",
+          "policyRef": "ILLUSTRATIVE — bank-a SME credit policy v1: replace with the bank's approved policy and version before go-live"
+        },
+        "guarantee": {
+          "programme": "Kafalah",
+          "coveragePerTenThousand": 8000,
+          "programmeRef": "PLACEHOLDER — Kafalah SME loan guarantee programme: coverage varies by initiative and enterprise size; confirm against the bank's Kafalah agreement before go-live",
+          "requiredBeforeDisbursement": false
+        }
+      },
+      "effectiveFromEpochSeconds": "1780000000"
     }
   ]
 }

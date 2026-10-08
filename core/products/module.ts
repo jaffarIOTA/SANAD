@@ -11,6 +11,7 @@
  * interface for every module — never with a special case for one.
  */
 
+import type { SmeDefinition } from '../applicant/sme-size.ts';
 import type { Money } from '../kernel/money.ts';
 import type { Result } from '../kernel/result.ts';
 import type { TsaInstant } from '../time/tsa.ts';
@@ -71,6 +72,27 @@ export interface AffordabilityFacts {
   /** Outstanding under products of the same class on this platform, for consumer limits. */
   readonly outstandingSameClass?: Money;
   readonly incomeSourceRef?: string;
+  /** For a business applicant (SME products). Absent for an individual. */
+  readonly business?: BusinessFacts;
+}
+
+/**
+ * What a business affordability rule needs, as snapshots with their source
+ * reference (audited statements, VAT returns through the tax rail, the
+ * bureau's commercial report). Never typed in by the applicant; never a copy
+ * of the statements themselves.
+ */
+export interface BusinessFacts {
+  /** Last full financial year. Absent for a new enterprise with no revenue history. */
+  readonly annualRevenue?: Money;
+  /** A count of people, not an amount. Used for size classification when there is no revenue history. */
+  readonly fullTimeEmployees: number;
+  /** Cash available to service debt over a year (the tenant's credit policy says how it is derived). */
+  readonly annualOperatingCashFlow: Money;
+  /** What the enterprise already pays a year on existing finance, from the bureau. */
+  readonly existingAnnualDebtService: Money;
+  /** Where the figures came from, for the audit pack. */
+  readonly financialsSourceRef: string;
 }
 
 export interface QuoteRequest {
@@ -89,6 +111,11 @@ export interface QuoteRequest {
   readonly partnerRef?: string;
   /** Product-specific choices the applicant or partner made (a collection mode, a delivery option). The module validates them. */
   readonly preferences?: Readonly<Record<string, string>>;
+  /**
+   * Regulatory definitions the engine loaded from configuration, for a module
+   * whose rules depend on them. A module never reads configuration itself.
+   */
+  readonly regulatory?: { readonly smeDefinition?: SmeDefinition };
 }
 
 export interface Fee {

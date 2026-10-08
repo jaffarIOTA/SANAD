@@ -116,6 +116,8 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
       { id: 'merchants', titleEn: 'Merchants & checkout', titleAr: 'التجار والدفع عند الشراء', href: '/merchants', readiness: live(), reference: 'core/merchants on PostgreSQL (core.merchant): onboard, verify under four eyes and a store contract (SAMA BNPL Rules Art. 27), suspend, reinstate, close; the checkout API reads the same rows. Registry and screening references are typed until those rails are live.' },
       { id: 'embedded-lending', titleEn: 'Embedded lending', titleAr: 'التمويل المدمج', readiness: live(), reference: 'products/embedded-lending — module and partner settlement reconciliation (core/reconciliation) built; settlement feed adapter not built' },
       { id: 'conventional-term', titleEn: 'Conventional term loan', titleAr: 'قرض لأجل تقليدي', readiness: live(), reference: 'products/conventional-term — module built; affordability cap carries a placeholder citation' },
+      { id: 'sme-term-conventional', titleEn: 'SME term finance', titleAr: 'تمويل المنشآت لأجل', readiness: live(), reference: 'products/sme-term-conventional — module built; size by the SAMA SME definition (config/regulatory/sme-definition.json); DSCR and revenue-share limits are tenant credit policy, illustrative until the bank supplies its own; Kafalah coverage a placeholder' },
+      { id: 'sme-term-islamic', titleEn: 'SME finance (Tawarruq)', titleAr: 'تمويل المنشآت (تورّق)', readiness: live(), reference: 'products/sme-term-islamic — module built; disabled in both tenants until each board ruling is recorded through Admin; same SME rules as the conventional module' },
     ],
   },
   {

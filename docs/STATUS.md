@@ -170,6 +170,21 @@ Ordered by what it costs to guess wrong.
   mapping to staff. Customer screens do not show it, and nothing is booked
   through Tuum yet: the booking transport is still unwritten.
 
+### SME Lending — built 2026-10-08, at Tuum's request, conventional and Islamic
+
+Two product modules for business applicants: `products/sme-term-conventional` (rate-priced
+term finance) and `products/sme-term-islamic` (Tawarruq, board ruling required). Enterprise
+size follows SAMA's *Definition of SMEs* (Circular 381000064902), held as cited configuration
+in `config/regulatory/sme-definition.json`. Debt-service cover, revenue share and the
+new-enterprise ceiling are the institution's own credit policy and are labelled so; the
+shipped values are illustrative. An optional programme guarantee (Kafalah) is configuration
+with a placeholder reference. Both tenants ship the conventional module enabled and the
+Islamic one disabled. Neither is in the catalogue revision approved in the database yet:
+Admin → Products now has **Add a product to the catalogue**, which proposes the checked-in
+term sheet for a second administrator to approve. Still needed from the bank: its SME credit
+policy, its board's ruling on SME Tawarruq, its guarantee agreement, and a Tuum SME product
+type on its own tenant.
+
 ### Buildable now, nothing blocking
 
 1. **The repository split** — first half done 2026-10-05: the workbench's

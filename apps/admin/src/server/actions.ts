@@ -9,7 +9,7 @@
 import { redirect } from 'next/navigation';
 
 import { ENVIRONMENTS, type Environment, VAULT_PROVIDERS, type VaultProvider, revokeCredential, saveCredential, store } from './credentials.ts';
-import { catalogueWithChange, checkProposal, resolveProductCatalogue } from './products.ts';
+import { catalogueWithAddition, catalogueWithChange, checkProposal, resolveProductCatalogue } from './products.ts';
 import { decideRevision, proposeRevision } from './revisions.ts';
 import { railsWithChange, resolveRailsConfiguration } from './rails.ts';
 import { parseRailsConfiguration } from '@sanad/core/config/rails.ts';
@@ -19,7 +19,7 @@ import { deploymentProfile, identityFromForm, resolveStaffIdentity } from './ide
 import { parseStaffIdentity } from '@sanad/core/config/staff-identity.ts';
 import { policyWithPartner, resolveOriginationPolicy } from './partners.ts';
 import { parseOriginationPolicy } from '@sanad/core/origination/policy.ts';
-import { isTenantCode } from '@sanad/config/loader.ts';
+import { isTenantCode, loadProductCatalogue } from '@sanad/config/loader.ts';
 import { randomUUID } from 'node:crypto';
 import { currentAdmin, developmentPrincipalFor, endAdminSession, startAdminSession } from './session.ts';
 
@@ -108,6 +108,33 @@ export async function proposeProductChangeAction(form: FormData): Promise<void> 
   if (!checked.ok) return back(to, `REFUSED:${checked.error.reason}`);
   try {
     await proposeRevision(s.pool, { tenantCode: tenant, area: 'PRODUCTS', payload: changed.value.payload, summary, effectiveFromEpochSeconds: BigInt(Math.floor(effectiveMs / 1000)), proposedBy: admin?.principalId ?? '', correlationId: randomUUID() });
+  } catch { return back(to, 'PROPOSE_FAILED'); }
+  back(to, 'PROPOSED');
+}
+
+/** Propose adding a shipped product module to the catalogue, from the tenant's checked-in term sheet. A second administrator approves it. */
+export async function proposeProductAdditionAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'ar';
+  const tenant = field(form, 'tenant');
+  const to = `/${locale}/products?tenant=${encodeURIComponent(tenant)}`;
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${locale}`);
+  if (!isTenantCode(tenant)) return back(to, 'TENANT_UNKNOWN');
+  const s = store();
+  if (s.kind !== 'READY') return back(to, 'NO_DATABASE');
+  const now = nowEpoch();
+  const current = await resolveProductCatalogue(tenant, now);
+  if (!current.catalogue.ok) return back(to, 'CATALOGUE_UNREADABLE');
+  const template = loadProductCatalogue(tenant);
+  if (!template.ok) return back(to, 'CATALOGUE_UNREADABLE');
+  const productCode = field(form, 'productCode');
+  const added = catalogueWithAddition(current.catalogue.value, template.value, productCode);
+  if (!added.ok) return back(to, `REFUSED:${added.error.reason}`);
+  const summary = `Add ${productCode} to the catalogue, from the checked-in term sheet`;
+  const checked = checkProposal({ tenant, payload: added.value.payload, summary, effectiveFromEpochSeconds: now, proposedBy: admin?.principalId ?? '', nowEpochSeconds: now });
+  if (!checked.ok) return back(to, `REFUSED:${checked.error.reason}`);
+  try {
+    await proposeRevision(s.pool, { tenantCode: tenant, area: 'PRODUCTS', payload: added.value.payload, summary, effectiveFromEpochSeconds: now, proposedBy: admin?.principalId ?? '', correlationId: randomUUID() });
   } catch { return back(to, 'PROPOSE_FAILED'); }
   back(to, 'PROPOSED');
 }

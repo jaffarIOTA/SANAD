@@ -83,6 +83,67 @@
         }
       },
       "effectiveFromEpochSeconds": "1780000000"
+    },
+    {
+      "productCode": "sme-term-conventional",
+      "enabled": true,
+      "nameEn": "SME term finance",
+      "nameAr": "تمويل المنشآت لأجل",
+      "programmeIds": "ALL",
+      "pricingRule": {
+        "kind": "BENCHMARK_PLUS_MARGIN",
+        "benchmarkCode": "SAIBOR-3M",
+        "marginBp": "550",
+        "basis": "REDUCING",
+        "boundByMarketRange": false
+      },
+      "terms": {
+        "minMonths": 3,
+        "maxMonths": 36,
+        "minAmountMinorUnits": "2000000",
+        "maxAmountMinorUnits": "300000000",
+        "adminFeeMinorUnits": "100000",
+        "credit": {
+          "eligibleSizes": ["MICRO", "SMALL"],
+          "minDebtServiceCoverPerTenThousand": 13000,
+          "maxFinancingShareOfRevenuePerTenThousand": 2000,
+          "source": "TENANT_CREDIT_POLICY",
+          "policyRef": "ILLUSTRATIVE — fintech-b SME credit policy v1: replace with the company's approved policy and version before go-live"
+        }
+      },
+      "effectiveFromEpochSeconds": "1780000000"
+    },
+    {
+      "productCode": "sme-term-islamic",
+      "enabled": false,
+      "nameEn": "SME finance (Tawarruq)",
+      "nameAr": "تمويل المنشآت (تورّق)",
+      "programmeIds": "ALL",
+      "pricingRule": {
+        "kind": "BENCHMARK_PLUS_MARGIN",
+        "benchmarkCode": "SAIBOR-3M",
+        "marginBp": "575",
+        "basis": "REDUCING",
+        "boundByMarketRange": false
+      },
+      "terms": {
+        "minMonths": 3,
+        "maxMonths": 36,
+        "minAmountMinorUnits": "2000000",
+        "maxAmountMinorUnits": "300000000",
+        "brokerRef": "broker-board-approved-01",
+        "commodityCode": "LME-AL",
+        "agencyPermitted": false,
+        "adminFeeMinorUnits": "100000",
+        "credit": {
+          "eligibleSizes": ["MICRO", "SMALL"],
+          "minDebtServiceCoverPerTenThousand": 13000,
+          "maxFinancingShareOfRevenuePerTenThousand": 2000,
+          "source": "TENANT_CREDIT_POLICY",
+          "policyRef": "ILLUSTRATIVE — fintech-b SME credit policy v1: replace with the company's approved policy and version before go-live"
+        }
+      },
+      "effectiveFromEpochSeconds": "1780000000"
     }
   ]
 }
