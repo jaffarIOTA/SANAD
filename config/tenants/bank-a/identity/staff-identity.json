@@ -1,33 +1,42 @@
 {
-  "version": "2026-10-05",
-  "provider": {
-    "protocol": "DEVELOPMENT",
-    "issuer": "development:bank-a",
-    "groupsClaim": "groups"
+  "version": "2026-10-09",
+  "providers": {
+    "DEVELOPMENT": {
+      "protocol": "DEVELOPMENT",
+      "issuer": "development:bank-a",
+      "groupsClaim": "groups"
+    },
+    "DEPLOYED": {
+      "protocol": "OIDC",
+      "issuer": "https://login.microsoftonline.com/<ENTRA_TENANT_ID>/v2.0",
+      "metadataUrl": "https://login.microsoftonline.com/<ENTRA_TENANT_ID>/v2.0/.well-known/openid-configuration",
+      "clientId": "<ENTRA_CLIENT_ID>",
+      "groupsClaim": "roles"
+    }
   },
   "mappings": [
     {
-      "group": "sanad-makers",
+      "group": "sanad.bank-a.makers",
       "authority": "MAKER"
     },
     {
-      "group": "sanad-checkers",
+      "group": "sanad.bank-a.checkers",
       "authority": "CHECKER"
     },
     {
-      "group": "sanad-senior-checkers",
+      "group": "sanad.bank-a.senior-checkers",
       "authority": "SENIOR_CHECKER"
     },
     {
-      "group": "sanad-credit-committee",
+      "group": "sanad.bank-a.credit-committee",
       "authority": "CREDIT_COMMITTEE"
     },
     {
-      "group": "sanad-finance",
+      "group": "sanad.bank-a.finance",
       "authority": "FINANCE"
     },
     {
-      "group": "sanad-platform-admins",
+      "group": "sanad.bank-a.platform-admins",
       "authority": "PLATFORM_ADMIN"
     }
   ],

@@ -49,49 +49,52 @@ export interface DevelopmentStaff {
  * The development staff. Fictional people; each token is one of them. The
  * groups are the tenant's own group names (its staff-identity.json), so the
  * authorities follow that configuration rather than being hard-coded here.
+ * Group names are scoped by tenant (`sanad.<tenant>.<role>`), the same values
+ * the deployed identity provider asserts, so several tenants can share one
+ * issuer without one tenant's group granting anything in another.
  */
 export const DEVELOPMENT_STAFF: readonly DevelopmentStaff[] = [
   {
     environmentName: 'STAFF_DEV_TOKEN_MAKER',
     principalId: 'stf-maker-01',
     tenantId: 'bank-a',
-    groups: ['sanad-makers'],
+    groups: ['sanad.bank-a.makers'],
   },
   {
     environmentName: 'STAFF_DEV_TOKEN_CHECKER',
     principalId: 'stf-checker-01',
     tenantId: 'bank-a',
-    groups: ['sanad-checkers'],
+    groups: ['sanad.bank-a.checkers'],
   },
   {
     environmentName: 'STAFF_DEV_TOKEN_SENIOR',
     principalId: 'stf-senior-01',
     tenantId: 'bank-a',
-    groups: ['sanad-senior-checkers'],
+    groups: ['sanad.bank-a.senior-checkers'],
   },
   {
     environmentName: 'STAFF_DEV_TOKEN_AE_OFFICER',
     principalId: 'stf-ae-officer-01',
     tenantId: 'sme-fund-ae',
-    groups: ['sanad-makers'],
+    groups: ['sanad.sme-fund-ae.makers'],
   },
   {
     environmentName: 'STAFF_DEV_TOKEN_AE_CHECKER',
     principalId: 'stf-ae-checker-01',
     tenantId: 'sme-fund-ae',
-    groups: ['sanad-checkers'],
+    groups: ['sanad.sme-fund-ae.checkers'],
   },
   {
     environmentName: 'STAFF_DEV_TOKEN_AE_COMMITTEE',
     principalId: 'stf-ae-committee-01',
     tenantId: 'sme-fund-ae',
-    groups: ['sanad-credit-committee'],
+    groups: ['sanad.sme-fund-ae.credit-committee'],
   },
   {
     environmentName: 'STAFF_DEV_TOKEN_AE_FINANCE',
     principalId: 'stf-ae-finance-01',
     tenantId: 'sme-fund-ae',
-    groups: ['sanad-finance'],
+    groups: ['sanad.sme-fund-ae.finance'],
   },
 ];
 
