@@ -23,7 +23,16 @@ import { deploymentJurisdiction } from '@sanad/origination/jurisdiction.ts';
 
 import { type WorkbenchAct, permits } from './authority.ts';
 import type { StaffPrincipal } from './staff.ts';
-import { STAFF_SESSION_COOKIE, epochNow, issueStaffSession, openStaffSession } from './staff-session.ts';
+import { resolveStaffIdentity } from '@sanad/origination/staff-identity.ts';
+
+import {
+  type OpenedStaffSession,
+  STAFF_SESSION_COOKIE,
+  epochNow,
+  freshEnough,
+  issueStaffSession,
+  openStaffSession,
+} from './staff-session.ts';
 
 export type { StaffPrincipal } from './staff.ts';
 
@@ -32,20 +41,34 @@ export const localeSegmentOf = (raw: string | undefined): LocaleSegment =>
   (LOCALE_SEGMENTS as readonly string[]).includes(raw ?? '') ? (raw as LocaleSegment) : 'ar';
 
 export type SignInReason =
-  'SIGNED_OUT' | 'SESSION_REQUIRED' | 'SIGN_IN_REFUSED' | 'TENANT_NOT_ACTIVE' | 'DEVELOPMENT_SIGN_IN_REFUSED';
+  | 'SIGNED_OUT'
+  | 'SESSION_REQUIRED'
+  | 'SIGN_IN_REFUSED'
+  | 'TENANT_NOT_ACTIVE'
+  | 'DEVELOPMENT_SIGN_IN_REFUSED'
+  | 'SSO_FAILED'
+  | 'SSO_UNAVAILABLE'
+  | 'STEP_UP_REQUIRED';
 export const signInPath = (locale: string, reason?: SignInReason): string =>
   `/${localeSegmentOf(locale)}/sign-in${reason === undefined ? '' : `?reason=${reason}`}`;
 
-/** The signed-in principal, or undefined. A forged, tampered or expired cookie is no session. */
-export async function currentStaff(): Promise<StaffPrincipal | undefined> {
+export type CurrentSession = Extract<OpenedStaffSession, { readonly kind: 'VALID' }>;
+
+/** The signed-in session (principal, how and when they authenticated), or undefined. */
+export async function currentStaffSession(): Promise<CurrentSession | undefined> {
   const jar = await cookies();
   const opened = openStaffSession(jar.get(STAFF_SESSION_COOKIE)?.value, epochNow());
-  return opened.kind === 'VALID' ? opened.principal : undefined;
+  return opened.kind === 'VALID' ? opened : undefined;
+}
+
+/** The signed-in principal, or undefined. A forged, tampered or expired cookie is no session. */
+export async function currentStaff(): Promise<StaffPrincipal | undefined> {
+  return (await currentStaffSession())?.principal;
 }
 
 /** `lifetimeSeconds` is the tenant's staff identity configuration in force; it is bounded by the session layer regardless. */
 export async function startStaffSession(principal: StaffPrincipal, lifetimeSeconds: bigint | undefined): Promise<void> {
-  const issued = issueStaffSession(principal, lifetimeSeconds, epochNow());
+  const issued = issueStaffSession(principal, lifetimeSeconds, epochNow(), { method: 'DEVELOPMENT' });
   const jar = await cookies();
   jar.set(STAFF_SESSION_COOKIE, issued.token, {
     httpOnly: true,
@@ -73,10 +96,37 @@ export async function tenantActive(tenant: TenantCode): Promise<boolean> {
  * sent to sign in with that reason, and nothing is done.
  */
 export async function actingPrincipal(locale: string): Promise<StaffPrincipal> {
-  const staff = await currentStaff();
-  if (staff === undefined) redirect(signInPath(locale, 'SESSION_REQUIRED'));
-  if (!(await tenantActive(staff.tenantId))) redirect(signInPath(locale, 'TENANT_NOT_ACTIVE'));
-  return staff;
+  return (await actingSession(locale)).principal;
+}
+
+async function actingSession(locale: string): Promise<CurrentSession> {
+  const session = await currentStaffSession();
+  if (session === undefined) redirect(signInPath(locale, 'SESSION_REQUIRED'));
+  if (!(await tenantActive(session.principal.tenantId))) redirect(signInPath(locale, 'TENANT_NOT_ACTIVE'));
+  return session;
+}
+
+/**
+ * The acts that decide or release: an approval in the sense of the staff
+ * identity configuration's `stepUpForApprovalSeconds`. Each needs the person
+ * to have authenticated within that window; otherwise they sign in again
+ * (at the provider, with a forced fresh authentication) before it is done.
+ */
+export const STEP_UP_ACTS: ReadonlySet<WorkbenchAct> = new Set<WorkbenchAct>([
+  'REVIEW',
+  'MERCHANT_VERIFY',
+  'MERCHANT_CHANGE',
+  'BUSINESS_APPROVE',
+  'BUSINESS_COMMITTEE',
+  'BUSINESS_DISBURSE',
+]);
+
+/** The step-up window in force for a tenant; a configuration that does not resolve fails closed (a zero window). */
+async function stepUpWindow(tenant: TenantCode): Promise<bigint | undefined> {
+  const resolved = await resolveStaffIdentity(tenant, epochNow());
+  if (!resolved.identity.ok) return 0n;
+  const s = resolved.identity.value.stepUpForApprovalSeconds;
+  return s === undefined ? undefined : BigInt(s);
 }
 
 /**
@@ -86,12 +136,18 @@ export async function actingPrincipal(locale: string): Promise<StaffPrincipal> {
  * action built from fixed segments, never one from the form.
  */
 export async function authorise(locale: string, act: WorkbenchAct, back: string): Promise<StaffPrincipal> {
-  const staff = await actingPrincipal(locale);
+  const session = await actingSession(locale);
+  const staff = session.principal;
   const p = permits(staff, act);
   if (!p.allowed) {
     const query = new URLSearchParams({ control: 'OP-DETERMINACY', reason: p.reason, needs: p.needs.join(',') });
     redirect(`${back}${back.includes('?') ? '&' : '?'}${query.toString()}`);
   }
+  if (
+    STEP_UP_ACTS.has(act) &&
+    !freshEnough(session.authenticatedAtEpochSeconds, await stepUpWindow(staff.tenantId), epochNow())
+  )
+    redirect(signInPath(locale, 'STEP_UP_REQUIRED'));
   return staff;
 }
 

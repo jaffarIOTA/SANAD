@@ -143,9 +143,9 @@ dispute is IOTA's dispute with the institution, never with the institution's cus
 
 ## Open questions for the product owner
 
-1. ~~Is there a **cap on POC extensions**?~~ **Answered 2026-10-09: no cap.** Each extension is
-   one calendar month, issued on request; the chain may run as long as the issuer keeps
-   extending it.
+1. ~~Is there a cap on POC extensions?~~ **Decided 2026-10-09: no cap.** Each extension is
+   one calendar month, issued on request; the supersession history keeps the POC's full length
+   visible.
 2. Should the licence limit anything beyond products, jurisdictions and tenants, such as staff
    users or applications per month? Each limit added is something an institution can hit in
    the middle of its business.

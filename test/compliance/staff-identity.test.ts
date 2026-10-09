@@ -6,9 +6,20 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { loadStaffIdentity } from '@sanad/config/loader.ts';
+import { TENANT_CODES, type TenantCode, loadStaffIdentity } from '@sanad/config/loader.ts';
 import { authoritiesFor, parseStaffIdentity } from '@sanad/core/config/staff-identity.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
+import { singleSignOnInstitutions } from '@sanad/origination/staff-identity.ts';
+import bankA from '@sanad/config/tenants/bank-a/identity/staff-identity.json' with { type: 'json' };
+import fintechB from '@sanad/config/tenants/fintech-b/identity/staff-identity.json' with { type: 'json' };
+import fundAe from '@sanad/config/tenants/sme-fund-ae/identity/staff-identity.json' with { type: 'json' };
+
+const TENANT_IDENTITY_FILES: Readonly<Record<TenantCode, unknown>> = {
+  'bank-a': bankA,
+  'fintech-b': fintechB,
+  'sme-fund-ae': fundAe,
+};
+const devProvider = { protocol: 'DEVELOPMENT', issuer: 'development:t', groupsClaim: 'groups' };
 
 const oidc = {
   version: 't',
@@ -31,13 +42,76 @@ const reason = (raw: unknown, profile: 'DEVELOPMENT' | 'DEPLOYED' = 'DEPLOYED'):
 };
 
 describe('staff identity configuration', () => {
-  it('both tenants’ files parse in development and are refused when deployed, because they name the development stand-in', () => {
-    for (const t of ['bank-a', 'fintech-b'] as const) {
-      expect(loadStaffIdentity(t, 'DEVELOPMENT').ok).toBe(true);
-      const deployed = loadStaffIdentity(t, 'DEPLOYED');
-      expect(deployed.ok).toBe(false);
-      if (!deployed.ok) expect(deployed.error.reason).toBe('IDENTITY_DEVELOPMENT_PROVIDER_REFUSED');
+  it('every tenant’s file selects the development stand-in in development, and a real OIDC provider when deployed', () => {
+    for (const t of TENANT_CODES) {
+      const dev = loadStaffIdentity(t, 'DEVELOPMENT');
+      expect(dev.ok).toBe(true);
+      if (dev.ok) expect(dev.value.provider.protocol).toBe('DEVELOPMENT');
+      const deployed = expectOk(loadStaffIdentity(t, 'DEPLOYED'));
+      expect(deployed.provider.protocol).toBe('OIDC');
+      expect(deployed.provider.issuer.startsWith('https://')).toBe(true);
+      expect(deployed.provider.groupsClaim).toBe('roles');
     }
+  });
+  it('a tenant’s deployed groups are scoped to that tenant, so a shared provider grants nothing across tenants', () => {
+    for (const t of TENANT_CODES) {
+      const deployed = expectOk(parseStaffIdentity(TENANT_IDENTITY_FILES[t], 'DEPLOYED'));
+      expect(deployed.mappings.every((m) => m.group.startsWith(`sanad.${t}.`))).toBe(true);
+    }
+  });
+  it('a provider keyed by profile: the stand-in is never selected when deployed, and is refused as the deployed entry', () => {
+    const keyed = { ...oidc, provider: undefined, providers: { DEVELOPMENT: devProvider, DEPLOYED: oidc.provider } };
+    const dev = expectOk(parseStaffIdentity(keyed, 'DEVELOPMENT'));
+    expect(dev.provider.protocol).toBe('DEVELOPMENT');
+    expect(expectOk(parseStaffIdentity(keyed, 'DEPLOYED')).provider.protocol).toBe('OIDC');
+    expect(reason({ ...oidc, provider: undefined, providers: { DEPLOYED: devProvider } })).toBe(
+      'IDENTITY_DEVELOPMENT_PROVIDER_REFUSED',
+    );
+    expect(reason({ ...oidc, provider: undefined, providers: { DEVELOPMENT: devProvider } })).toBe(
+      'IDENTITY_PROVIDER_REQUIRED',
+    );
+    // Only DEPLOYED given: development uses it too.
+    expect(
+      expectOk(
+        parseStaffIdentity({ ...oidc, provider: undefined, providers: { DEPLOYED: oidc.provider } }, 'DEVELOPMENT'),
+      ).provider.protocol,
+    ).toBe('OIDC');
+    expect(reason({ ...oidc, providers: { DEPLOYED: oidc.provider } })).toBe('IDENTITY_PROVIDER_AMBIGUOUS');
+    expect(reason({ ...oidc, provider: undefined, providers: { PRODUCTION: oidc.provider } })).toBe(
+      'IDENTITY_PROVIDER_PROFILE_UNKNOWN',
+    );
+    // A malformed entry is refused even when it is not the one selected.
+    expect(
+      reason(
+        {
+          ...oidc,
+          provider: undefined,
+          providers: { DEVELOPMENT: devProvider, DEPLOYED: { ...oidc.provider, metadataUrl: 'http://x' } },
+        },
+        'DEVELOPMENT',
+      ),
+    ).toBe('IDENTITY_METADATA_URL_REQUIRED');
+  });
+  it('the sign-in page offers single sign-on only when deployed, and only for the institutions active in the jurisdiction', async () => {
+    expect(await singleSignOnInstitutions(1_800_000_000n)).toEqual([]);
+    const before = process.env['SANAD_DEPLOYMENT_PROFILE'];
+    process.env['SANAD_DEPLOYMENT_PROFILE'] = 'DEPLOYED';
+    try {
+      // The default jurisdiction is the Kingdom: its two institutions, never the UAE fund.
+      const listed = (await singleSignOnInstitutions(1_800_000_000n)).map((x) => x.tenant).sort();
+      expect(listed).toEqual(['bank-a', 'fintech-b']);
+    } finally {
+      if (before === undefined) delete process.env['SANAD_DEPLOYMENT_PROFILE'];
+      else process.env['SANAD_DEPLOYMENT_PROFILE'] = before;
+    }
+  });
+  it('an OIDC issuer is an https URL, and a placeholder is never accepted as configuration', () => {
+    expect(reason({ ...oidc, provider: { ...oidc.provider, issuer: 'idp.example' } })).toBe(
+      'IDENTITY_ISSUER_NOT_HTTPS',
+    );
+    expect(reason({ ...oidc, provider: { ...oidc.provider, clientId: '<CLIENT_ID>' } })).toBe(
+      'IDENTITY_PLACEHOLDER_UNFILLED',
+    );
   });
   it('a real provider parses when deployed; metadata must be TLS; OIDC needs a client id', () => {
     expect(reason(oidc)).toBe('OK');

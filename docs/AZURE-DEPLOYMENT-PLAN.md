@@ -113,14 +113,26 @@ apply per app.
 8. **Smoke test.** Sign in to ops as each development role, run a business application through
    to offer, and quote a consumer product with full disclosure.
 
+**Built 2026-10-09** (`deploy/azure/`, `apps/Containerfile`, `.github/workflows/deploy-azure.yml`).
+It differs from the steps above in three ways:
+- **Region: UAE North.** It offers every Phase 2 service, so Phase 2 for UAE tenants is a data
+  move, not a rebuild.
+- **No Application Gateway yet.** Container Apps' own ingress and managed certificates are
+  used, and Admin is limited to an IP allow-list at ingress. The gateway arrives with Phase 2.
+- **Three apps only:** consumer, ops and admin. The origination API and the outbox worker wait
+  for SR-004. No Redis is needed: no runtime code reads it.
+
 ## 6. Phase 2 — hosted, real data
 
-1. **Region.** Confirm that an in-Kingdom Azure region is available to our subscription, and
-   that Container Apps, PostgreSQL Flexible Server, Key Vault managed HSM, Redis and
-   Application Gateway are offered there. Check with
-   `az account list-locations` and `az provider show`, then confirm with Microsoft. If
-   Container Apps is not offered there, fall back to AKS. ADR 0003's OpenShift manifest is the
-   starting point.
+1. **Region — checked 2026-10-09.** The IOTA subscription has **no deployable Saudi region**.
+   `saudiarabia` appears only as a logical geography in `az account list-locations`, and no
+   resource provider lists a Saudi location. UAE North offers Container Apps, PostgreSQL
+   Flexible Server, Key Vault with managed HSM, Application Gateway, ACR and AKS. So:
+   - **UAE tenants:** Phase 2 on Azure UAE North is lawful for UAE data residency.
+   - **KSA tenants:** real Saudi customer data **cannot** be hosted on this Azure subscription
+     today. The options are installation in the institution's own in-Kingdom environment
+     (OpenShift, ADR 0003), an in-Kingdom cloud the institution has SAMA approval for, or
+     waiting for an Azure Saudi region and re-running this check.
 2. **Regulatory.** IOTA becomes an outsourcing provider to each institution that uses the
    hosted service. That institution notifies SAMA under the outsourcing rules, and IOTA must
    meet NCA CCC (cloud) as a provider. This is a legal and compliance workstream, not an
@@ -151,12 +163,11 @@ Every one of these is true and evidenced in the release record:
 - [ ] The institution's SAMA outsourcing notification made; IOTA's NCA cloud obligations met.
 - [ ] A valid production licence installed (ADR 0006).
 
-## 8. What we need from the product owner
+## 8. Decisions recorded 2026-10-09
 
-1. Approval of this plan and of ADR 0006.
-2. **Sign in with `az login`** and say which subscription and tenant to use. Then we run the
-   region and service availability checks in §6.1 before writing any Bicep.
-3. **DNS:** who manages the `iotatechnologies.io` zone (Azure DNS, Cloudflare, or a
-   registrar), and who can add records.
-4. **SR-001:** rotate the Upstash token today.
-5. **SR-040:** decide whether the repository stays public.
+- Subscription: IOTA Subscription. Phase 1 provisioned in UAE North (`deploy/azure/README.md`).
+- DNS records are added by the product owner.
+- `prod` protection: passing security checks only, no required reviewer, for now.
+- Staff sign-in in production: generic OIDC, IOTA's Entra ID as the first provider.
+- SR-001 rotation deferred by the product owner; it still blocks any real-data release.
+- SR-040 (public repository): still open.

@@ -5,7 +5,8 @@
  * - `/api/*` is not redirected: those routes authenticate their own callers
  *   (staff bearer, partner credential) and answer 401 as an API should.
  * - Next's own assets and static files pass.
- * - The sign-in page itself passes, or nothing could ever sign in.
+ * - The sign-in page itself passes, or nothing could ever sign in; so do the
+ *   single sign-on callback and post-logout return (exact paths only).
  *
  * Runs on the Node.js runtime so it opens the session with the same sealed
  * token code as the server components (no second implementation to drift). It
@@ -15,6 +16,8 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 
+import { CALLBACK_PATH, SIGNED_OUT_PATH } from '@sanad/auth/staff-oidc.ts';
+
 import { STAFF_SESSION_COOKIE, epochNow, openStaffSession } from './server/staff-session.ts';
 
 export const config = {
@@ -23,6 +26,8 @@ export const config = {
 };
 
 const LOCALES = new Set(['ar', 'en']);
+/** The single sign-on callback and post-logout return: they establish or end a session, so they cannot require one. */
+const SIGN_IN_ROUTES = new Set([CALLBACK_PATH, SIGNED_OUT_PATH]);
 const STATIC_FILE = /\/[^/]+\.[A-Za-z0-9]{1,8}$/;
 
 export type FrontDoor =
@@ -34,7 +39,8 @@ export function frontDoor(pathname: string, cookieValue: string | undefined, now
     pathname === '/api' ||
     pathname.startsWith('/api/') ||
     pathname.startsWith('/_next/') ||
-    STATIC_FILE.test(pathname)
+    STATIC_FILE.test(pathname) ||
+    SIGN_IN_ROUTES.has(pathname)
   )
     return { kind: 'PASS' };
   const first = pathname.split('/')[1] ?? '';

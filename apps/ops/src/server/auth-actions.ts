@@ -3,12 +3,18 @@
 /**
  * Sign in and sign out of the workbench.
  *
+ * Production: the institution's single sign-on by OpenID Connect
+ * (single-sign-on.ts). The person picks their institution; it is sealed
+ * server-side into the state cookie before the redirect, and on the way back
+ * the principal's tenant is that sealed one and its authorities come only from
+ * that tenant's mappings. Sign-out clears the session and, where the provider
+ * publishes an end-session endpoint, signs out there too.
+ *
  * Development: a staff token from the local environment, compared by digest in
  * constant time against the one registry (staff.ts); its person's authorities
  * come from the tenant's staff identity configuration in force, and so does the
  * session's lifetime (bounded to an hour regardless). Refused outright when
- * NODE_ENV is production: production staff sign in through the institution's
- * SSO, which is not built. The token is read once and never echoed into a
+ * NODE_ENV is production. The token is read once and never echoed into a
  * redirect, a log or an error.
  */
 
@@ -17,7 +23,15 @@ import { redirect } from 'next/navigation';
 import { resolveStaffIdentity } from '@sanad/origination/staff-identity.ts';
 
 import { developmentStaffFor, developmentTokensPermitted, principalFor } from './staff.ts';
-import { endStaffSession, localeSegmentOf, signInPath, startStaffSession, tenantActive } from './session.ts';
+import {
+  currentStaffSession,
+  endStaffSession,
+  localeSegmentOf,
+  signInPath,
+  startStaffSession,
+  tenantActive,
+} from './session.ts';
+import { beginSingleSignOn, providerSignOut } from './single-sign-on.ts';
 import { epochNow } from './staff-session.ts';
 
 const field = (form: FormData, name: string): string => {
@@ -41,7 +55,25 @@ export async function signInAction(form: FormData): Promise<void> {
   redirect(`/${locale}`);
 }
 
+/**
+ * Begin single sign-on at the chosen institution's identity provider. The
+ * `institution` field is a choice made before authentication: it only selects
+ * whose provider and mappings apply, and it must be one the page lists.
+ */
+export async function singleSignOnAction(form: FormData): Promise<void> {
+  const locale = localeSegmentOf(field(form, 'locale'));
+  const begun = await beginSingleSignOn(field(form, 'institution'), locale, field(form, 'stepUp') === '1');
+  if (!begun.ok) redirect(signInPath(locale, begun.reason));
+  redirect(begun.location);
+}
+
 export async function signOutAction(form: FormData): Promise<void> {
+  const locale = localeSegmentOf(field(form, 'locale'));
+  const session = await currentStaffSession();
   await endStaffSession();
-  redirect(signInPath(field(form, 'locale'), 'SIGNED_OUT'));
+  if (session?.method === 'OIDC') {
+    const atProvider = await providerSignOut(session.principal.tenantId, locale);
+    if (atProvider !== undefined) redirect(atProvider);
+  }
+  redirect(signInPath(locale, 'SIGNED_OUT'));
 }

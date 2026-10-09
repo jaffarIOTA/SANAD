@@ -66,11 +66,29 @@ export default async function AdminLayout({
                   </span>
                   <span className="hidden flex-col leading-tight xl:flex">
                     <span className="text-sm font-medium text-heading">
-                      <span className="identifier">{admin.principalId}</span>
+                      {admin.displayName === undefined ? (
+                        <span className="identifier">{admin.principalId}</span>
+                      ) : (
+                        <bdi>{admin.displayName}</bdi>
+                      )}
                     </span>
-                    <span className="text-[0.6875rem] text-attention">
-                      {arabic ? 'جلسة تطوير · ٣٠ دقيقة' : 'development session · 30 min'}
-                    </span>
+                    {admin.method === 'OIDC' ? (
+                      <span className="text-[0.6875rem] text-ink-quiet">
+                        {arabic ? 'الدخول الموحد' : 'single sign-on'}
+                        {admin.tenantId === undefined ? null : (
+                          <>
+                            {' · '}
+                            <bdi dir="ltr" className="identifier">
+                              {admin.tenantId}
+                            </bdi>
+                          </>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-[0.6875rem] text-attention">
+                        {arabic ? 'جلسة تطوير' : 'development session'}
+                      </span>
+                    )}
                   </span>
                   <button type="submit" className="press rounded-pill bg-sunken px-3 py-2 text-xs text-ink-quiet">
                     {arabic ? 'خروج' : 'Sign out'}

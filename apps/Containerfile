@@ -1,0 +1,56 @@
+# One image per Next.js surface: ops, admin or consumer, chosen by APP.
+#
+#   docker build -f apps/Containerfile --build-arg APP=ops -t sanad-ops .
+#
+# Built like services/origination/Containerfile, for OpenShift's restricted-v2
+# constraint as well as Azure Container Apps: no assumed UID, group 0 owns what
+# the runtime UID needs, port above 1024, nothing written outside /tmp and the
+# Next cache. Base images are pinned by digest (SEC-D17).
+
+ARG NODE_BUILD=registry.access.redhat.com/ubi9/nodejs-22@sha256:e52f879096f28d9a6cfb308b3bf2c71c0fc35caec613060bbe41dac054002831
+ARG NODE_RUN=registry.access.redhat.com/ubi9/nodejs-22-minimal@sha256:03b7dd64cafaaca5019c4cc1c36e05140b1650dab6cd5c4ab1fde9d88c0537ca
+
+FROM ${NODE_BUILD} AS build
+ARG APP
+USER 0
+WORKDIR /build
+ENV NEXT_TELEMETRY_DISABLED=1
+
+COPY package.json package-lock.json ./
+COPY core/package.json ./core/package.json
+COPY products/package.json ./products/package.json
+RUN npm ci --ignore-scripts --no-audit --no-fund
+
+COPY . .
+# The document viewer's assets are served same-origin from ops; generated, not committed.
+RUN if [ "$APP" = "ops" ]; then npm run nutrient:assets; fi
+RUN test -n "$APP" && npx next build "apps/$APP"
+
+# Standalone output plus the static and public files Next leaves out of it.
+# The repository root is an ES module package; the generated server is CommonJS.
+RUN mkdir -p /out && cp -r "apps/$APP/.next/standalone/." /out/ \
+ && mkdir -p "/out/apps/$APP/.next" && cp -r "apps/$APP/.next/static" "/out/apps/$APP/.next/static" \
+ && if [ -d "apps/$APP/public" ]; then cp -r "apps/$APP/public" "/out/apps/$APP/public"; fi \
+ && echo '{"type":"commonjs"}' > "/out/apps/$APP/package.json" \
+ && mkdir -p /out/api && cp -r api/openapi /out/api/openapi
+
+FROM ${NODE_RUN}
+ARG APP
+WORKDIR /opt/app-root/src
+# Root only to set group ownership; the image runs as 1001 (or OpenShift's assigned UID).
+USER 0
+COPY --from=build --chown=0:0 /out ./
+RUN mkdir -p "apps/$APP/.next/cache" && chgrp -R 0 /opt/app-root && chmod -R g=u /opt/app-root
+USER 1001
+
+# SANAD_CONTRACT_DIR: the API routes validate against the OpenAPI contracts at
+# runtime, and the bundle's build-time path does not exist in this image.
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    HOSTNAME=0.0.0.0 \
+    PORT=3000 \
+    SANAD_APP=${APP} \
+    SANAD_CONTRACT_DIR=/opt/app-root/src/api/openapi
+
+EXPOSE 3000
+CMD ["sh", "-c", "exec node apps/$SANAD_APP/server.js"]
