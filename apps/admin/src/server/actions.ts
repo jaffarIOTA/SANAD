@@ -29,7 +29,14 @@ import { policyWithPartner, resolveOriginationPolicy } from './partners.ts';
 import { parseOriginationPolicy } from '@sanad/core/origination/policy.ts';
 import { catalogueForTenant, isTenantCode, loadProductCatalogue } from '@sanad/config/loader.ts';
 import { randomUUID } from 'node:crypto';
-import { currentAdmin, developmentPrincipalFor, endAdminSession, startAdminSession } from './session.ts';
+import {
+  currentAdmin,
+  developmentPrincipalFor,
+  developmentSignInPermitted,
+  endAdminSession,
+  startAdminSession,
+} from './session.ts';
+import { beginSingleSignOn, providerSignOut } from './single-sign-on.ts';
 import { decideDeploymentJurisdiction, proposeDeploymentJurisdiction } from '@sanad/origination/jurisdiction.ts';
 
 const field = (form: FormData, name: string): string => {
@@ -41,6 +48,7 @@ const back = (to: string, notice: string): never =>
 
 export async function signInAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
+  if (!developmentSignInPermitted()) return back(`/${locale}`, 'DEVELOPMENT_SIGN_IN_REFUSED');
   const principal = developmentPrincipalFor(field(form, 'token'));
   if (principal === undefined) return back(`/${locale}`, 'SIGN_IN_REFUSED');
   // The session lifetime is the tenant's staff identity configuration in force, bounded by the session layer.
@@ -52,9 +60,27 @@ export async function signInAction(form: FormData): Promise<void> {
   redirect(`/${locale}/credentials`);
 }
 
+/**
+ * Begin single sign-on at the chosen institution's identity provider. The
+ * choice is made before authentication and only selects whose provider and
+ * mappings apply; it must be one the page lists.
+ */
+export async function singleSignOnAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') === 'en' ? 'en' : 'ar';
+  const begun = await beginSingleSignOn(field(form, 'institution'), locale);
+  if (!begun.ok) return back(`/${locale}`, begun.notice);
+  redirect(begun.location);
+}
+
 export async function signOutAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') === 'en' ? 'en' : 'ar';
+  const admin = await currentAdmin();
   await endAdminSession();
-  redirect(`/${field(form, 'locale') || 'ar'}`);
+  if (admin?.method === 'OIDC' && admin.tenantId !== undefined) {
+    const atProvider = await providerSignOut(admin.tenantId, locale);
+    if (atProvider !== undefined) redirect(atProvider);
+  }
+  redirect(`/${locale}`);
 }
 
 export async function saveCredentialAction(form: FormData): Promise<void> {

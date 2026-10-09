@@ -194,7 +194,7 @@ describe('development tokens', () => {
     expect(authenticateStaff(`Bearer ${TOKENS.STAFF_DEV_TOKEN_CHECKER}`, TOKENS)?.principalId).toBe('stf-checker-01');
   });
 
-  it('confer nothing when the tenant’s configuration does not parse (a development provider in a deployed profile)', () => {
+  it('confer nothing under the deployed configuration, whose provider is real even where its group names coincide', () => {
     const staff = developmentStaffFor(TOKENS.STAFF_DEV_TOKEN_AE_FINANCE, TOKENS);
     expect(staff).toBeDefined();
     if (staff !== undefined) expect(principalFor(staff, loadStaffIdentity(staff.tenantId, 'DEPLOYED'))).toBeUndefined();
