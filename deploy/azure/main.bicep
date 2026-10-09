@@ -26,6 +26,12 @@ param deployApps bool = false
 @description('Public DNS name of the consumer app; the other apps are subdomains of it.')
 param publicHost string = 'sanad.iotatechnologies.io'
 
+@description('True once the custom domains are bound with certificates; until then each app\'s public origin is its Container Apps address.')
+param customDomainsLive bool = false
+
+@description('The Container Apps environment\'s default domain (pass 1 output environmentDefaultDomain). Fixed once the environment exists; a parameter because app definitions are evaluated before the environment\'s properties are known.')
+param environmentDomain string = ''
+
 @description('Networks allowed to reach Admin (CIDR). Admin is never open to the internet.')
 param adminAllowedCidrs array
 
@@ -190,6 +196,22 @@ resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
+// Each app's public origin. Until the custom domains are bound, the apps answer on
+// their Container Apps addresses, and the OIDC callback must return to the host
+// the sign-in started from.
+var origin = {
+  consumer: customDomainsLive ? 'https://${publicHost}' : 'https://ca-${name}-consumer.${environmentDomain}'
+  ops: customDomainsLive ? 'https://ops.${publicHost}' : 'https://ca-${name}-ops.${environmentDomain}'
+  admin: customDomainsLive ? 'https://admin.${publicHost}' : 'https://ca-${name}-admin.${environmentDomain}'
+}
+
+// Staff single sign-on: one Entra ID app registration serves every tenant on this
+// deployment, so every tenant's client-secret variable reads the same vault entry.
+// The variable names are packages/auth/staff-oidc.ts `clientSecretVariable`.
+var oidcTenants = ['BANK_A', 'FINTECH_B', 'SME_FUND_AE']
+var opsOidcEnv = [for t in oidcTenants: { name: 'OIDC_CLIENT_SECRET_${t}_OPS', secretRef: 'oidc-client-secret' }]
+var adminOidcEnv = [for t in oidcTenants: { name: 'OIDC_CLIENT_SECRET_${t}_ADMIN', secretRef: 'oidc-client-secret' }]
+
 // One entry per app. Secrets are Key Vault references read by the app identity;
 // no secret value passes through this template.
 var apps = [
@@ -200,30 +222,36 @@ var apps = [
     env: [
       { name: 'CONSUMER_SESSION_SECRET', secretRef: 'consumer-session-secret' }
       { name: 'SANAD_DATABASE_URL', secretRef: 'sanad-database-url' }
-      { name: 'CONSUMER_BASE_URL', value: 'https://${publicHost}' }
+      { name: 'CONSUMER_BASE_URL', value: origin.consumer }
     ]
     restricted: false
   }
   {
     app: 'ops'
     host: 'ops.${publicHost}'
-    secrets: ['ops-session-secret', 'sanad-database-url']
-    env: [
-      { name: 'OPS_SESSION_SECRET', secretRef: 'ops-session-secret' }
-      { name: 'SANAD_DATABASE_URL', secretRef: 'sanad-database-url' }
-      { name: 'OPS_PUBLIC_ORIGIN', value: 'https://ops.${publicHost}' }
-    ]
+    secrets: ['ops-session-secret', 'sanad-database-url', 'oidc-client-secret']
+    env: concat(
+      [
+        { name: 'OPS_SESSION_SECRET', secretRef: 'ops-session-secret' }
+        { name: 'SANAD_DATABASE_URL', secretRef: 'sanad-database-url' }
+        { name: 'OPS_PUBLIC_ORIGIN', value: origin.ops }
+      ],
+      opsOidcEnv
+    )
     restricted: false
   }
   {
     app: 'admin'
     host: 'admin.${publicHost}'
-    secrets: ['admin-session-secret', 'sanad-database-url']
-    env: [
-      { name: 'ADMIN_SESSION_SECRET', secretRef: 'admin-session-secret' }
-      { name: 'SANAD_DATABASE_URL', secretRef: 'sanad-database-url' }
-      { name: 'ADMIN_PUBLIC_ORIGIN', value: 'https://admin.${publicHost}' }
-    ]
+    secrets: ['admin-session-secret', 'sanad-database-url', 'oidc-client-secret']
+    env: concat(
+      [
+        { name: 'ADMIN_SESSION_SECRET', secretRef: 'admin-session-secret' }
+        { name: 'SANAD_DATABASE_URL', secretRef: 'sanad-database-url' }
+        { name: 'ADMIN_PUBLIC_ORIGIN', value: origin.admin }
+      ],
+      adminOidcEnv
+    )
     restricted: true
   }
 ]
