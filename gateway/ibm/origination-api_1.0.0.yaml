@@ -1196,6 +1196,33 @@ components:
           description: The owner's own contribution to the project cost, per ten thousand.
         contact:
           $ref: "#/components/schemas/BusinessContact"
+    BusinessApprovedTerms:
+      type: object
+      additionalProperties: false
+      description: |
+        What a decision approved, present once the application is approved:
+        the amount and tenor the offer is quoted on, in the tenant's currency.
+        The credit committee may approve less than was requested (the risk
+        band and the product variant cap it); a straight-through approval is
+        the request. A decision recorded before approved terms existed is
+        reported as the request with basis RECORDED_BEFORE_APPROVED_TERMS.
+      required:
+        - amountMinorUnits
+        - tenorMonths
+        - basis
+      properties:
+        amountMinorUnits:
+          type: string
+          pattern: ^[1-9][0-9]{0,18}$
+        tenorMonths:
+          type: integer
+          minimum: 1
+        basis:
+          type: string
+          enum:
+            - STRAIGHT_THROUGH_AS_REQUESTED
+            - COMMITTEE
+            - RECORDED_BEFORE_APPROVED_TERMS
     BusinessApplicationStatus:
       type: object
       additionalProperties: false
@@ -1207,6 +1234,7 @@ components:
         - productCode
         - variantCode
         - requestedMinorUnits
+        - requestedTenorMonths
         - currency
       properties:
         applicationId:
@@ -1240,12 +1268,19 @@ components:
         requestedMinorUnits:
           type: string
           pattern: ^[1-9][0-9]{0,18}$
+          description: The amount the applicant requested, as handed over. Never overwritten by a decision.
+        requestedTenorMonths:
+          type: integer
+          minimum: 1
+          description: The tenor the applicant requested, as handed over. Never overwritten by a decision.
         currency:
           type: string
           enum:
             - SAR
             - AED
           description: The tenant's base currency, from its onboarding record.
+        approvedTerms:
+          $ref: "#/components/schemas/BusinessApprovedTerms"
         offerLetterVersion:
           type: string
           pattern: ^[0-9a-f]{64}$
