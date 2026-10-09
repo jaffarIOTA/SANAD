@@ -32,7 +32,12 @@ import {
   recordAssessmentInputsAction,
   runAssessmentAction,
 } from '../../../../../server/business-actions.ts';
-import { getApplication, syncBusiness } from '../../../../../server/business.ts';
+import {
+  type CommitteeApprovalDefaults,
+  committeeApprovalDefaults,
+  getApplication,
+  syncBusiness,
+} from '../../../../../server/business.ts';
 import { pageStaff } from '../../../../../server/session.ts';
 import type { StaffPrincipal } from '../../../../../server/staff.ts';
 import { Gate } from '../../../Gate.tsx';
@@ -56,6 +61,7 @@ import {
   TH,
   TH_END,
   formatters,
+  RequestedVsApproved,
   humanise,
   label,
   riskLevelLabel,
@@ -153,6 +159,9 @@ export default async function CreditAssessmentPage({
   const a = view.application;
   const run = view.latestAssessment;
   const inputs = view.assessmentInputs;
+  // The committee form's starting figures and the limits beside them, from the server; the page only shows them.
+  const approvalDefaults =
+    a.status === 'IN_COMMITTEE' ? await committeeApprovalDefaults(j.tenant, applicationId) : undefined;
   // Inputs are recorded while the application is open (RECEIVED, SPREADING) and lock at submission; from then on they are shown read-only.
   const inputsOpen = ['RECEIVED', 'SPREADING'].includes(a.status);
   const fact = (name: string, value: unknown): string => f.digits(formatFact(name, value as bigint, f.arabic));
@@ -549,7 +558,7 @@ export default async function CreditAssessmentPage({
             </div>
           </SectionCard>
 
-          <DecisionCard segment={segment} view={view} staff={staff} f={f} />
+          <DecisionCard segment={segment} view={view} staff={staff} f={f} approvalDefaults={approvalDefaults} />
         </>
       )}
     </ApplicationShell>
@@ -883,16 +892,98 @@ function InputsCard({
   );
 }
 
+/** Minor units as the plain figure an input holds (12345678 → '123456.78'): display only, integer arithmetic. */
+const inputAmount = (minor: bigint): string => {
+  const fraction = minor % 100n;
+  return fraction === 0n
+    ? (minor / 100n).toString()
+    : `${(minor / 100n).toString()}.${fraction.toString().padStart(2, '0')}`;
+};
+
+/** The committee's approved amount and tenor, pre-filled with the server's defaults, with the limits stated beside them. */
+function ApprovedTermsInputs({
+  view,
+  defaults,
+  f,
+}: {
+  readonly view: NonNullable<Awaited<ReturnType<typeof getApplication>>>;
+  readonly defaults: CommitteeApprovalDefaults | undefined;
+  readonly f: Formatters;
+}): ReactElement {
+  const { t } = f;
+  const a = view.application;
+  const l = defaults?.limits;
+  return (
+    <fieldset className="flex flex-col gap-3 rounded-tile border border-line px-4 py-3">
+      <legend className="px-1 text-[13px] font-semibold text-heading">
+        {t('Approved terms (when approving)', 'الشروط المعتمدة (عند الاعتماد)')}
+      </legend>
+      <p className="text-[12px] text-ink-quiet" data-approval-limits>
+        {t('Requested', 'المطلوب')}: <bdi className="tabular-nums">{f.money(a.requested.minorUnits)}</bdi> {f.cur} ·{' '}
+        {t(`${f.n(a.tenorMonths)} months`, `${f.n(a.tenorMonths)} شهراً`)}
+        {l === undefined ? null : (
+          <>
+            <br />
+            {t(
+              `Risk level ${riskLevelLabel(l.riskLevel, f)}: up to`,
+              `فئة المخاطر ${riskLevelLabel(l.riskLevel, f)}: حتى`,
+            )}{' '}
+            <bdi className="tabular-nums">{f.money(l.riskBandMaxAmount.minorUnits)}</bdi> {f.cur} ·{' '}
+            {t(
+              `variant: up to ${f.money(l.variantMaxAmount.minorUnits)} ${f.cur}, ${f.n(l.variantMinMonths)}–${f.n(l.variantMaxMonths)} months`,
+              `الفئة: حتى ${f.money(l.variantMaxAmount.minorUnits)} ${f.cur}، من ${f.n(l.variantMinMonths)} إلى ${f.n(l.variantMaxMonths)} شهراً`,
+            )}
+          </>
+        )}
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
+          {t(`Approved amount (${f.cur})`, `المبلغ المعتمد (${f.cur})`)}
+          <input
+            type="text"
+            name="approvedAmount"
+            inputMode="decimal"
+            dir="ltr"
+            autoComplete="off"
+            defaultValue={defaults === undefined ? '' : inputAmount(defaults.amount.minorUnits)}
+            className={`${INPUT} text-end tabular-nums`}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
+          {t('Approved tenor (months)', 'المدة المعتمدة (بالأشهر)')}
+          <input
+            type="text"
+            name="approvedTenorMonths"
+            inputMode="numeric"
+            dir="ltr"
+            autoComplete="off"
+            defaultValue={defaults === undefined ? '' : String(defaults.tenorMonths)}
+            className={`${INPUT} text-end tabular-nums`}
+          />
+        </label>
+      </div>
+      <p className="text-[12px] text-ink-quiet">
+        {t(
+          'Pre-filled with the lower of the request and the risk level’s maximum, and the lower of the requested tenor and the variant’s maximum. The server checks the figures; the request itself is kept as submitted.',
+          'مُعبّأة مسبقاً بالأقل من المبلغ المطلوب والحد الأقصى لفئة المخاطر، وبالأقل من المدة المطلوبة والحد الأقصى لمدة الفئة. يتحقق الخادم من الأرقام، ويبقى الطلب نفسه كما قُدِّم.',
+        )}
+      </p>
+    </fieldset>
+  );
+}
+
 function DecisionCard({
   segment,
   view,
   staff,
   f,
+  approvalDefaults,
 }: {
   readonly segment: string;
   readonly view: NonNullable<Awaited<ReturnType<typeof getApplication>>>;
   readonly staff: StaffPrincipal;
   readonly f: Formatters;
+  readonly approvalDefaults: CommitteeApprovalDefaults | undefined;
 }): ReactElement {
   const { t } = f;
   const a = view.application;
@@ -951,6 +1042,7 @@ function DecisionCard({
               {t('Decline', 'رفض')}
             </label>
           </fieldset>
+          <ApprovedTermsInputs view={view} defaults={approvalDefaults} f={f} />
           <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
             {t('Reason (recorded with the decision)', 'السبب (يُسجَّل مع القرار)')}
             <textarea
@@ -974,6 +1066,9 @@ function DecisionCard({
       <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
         <form action={generateOfferAction} className="flex flex-wrap items-end gap-3">
           <FormContext segment={segment} applicationId={a.applicationId} screen="offer" />
+          <div className="w-full">
+            <RequestedVsApproved view={view} f={f} />
+          </div>
           <p className="w-full text-[13px] text-ink-quiet">
             {a.committee === undefined ? (
               t('Approved straight through.', 'معتمد مباشرة.')
@@ -1016,6 +1111,9 @@ function DecisionCard({
   } else {
     body = (
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full">
+          <RequestedVsApproved view={view} f={f} />
+        </div>
         <p className="text-[13px] text-ink-quiet">
           {a.committee === undefined
             ? t('Approved straight through.', 'معتمد مباشرة.')

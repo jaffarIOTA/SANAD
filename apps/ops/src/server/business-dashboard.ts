@@ -284,7 +284,11 @@ export function summarisePipeline(
     nearSlaCount: clocks.filter((c) => c.state === 'NEAR' || c.state === 'BREACHED').length,
     breachedCount: clocks.filter((c) => c.state === 'BREACHED').length,
     approvedThisMonthCount: approvedThisMonth.length,
-    disbursedThisMonthMinorUnits: disbursedThisMonth.reduce((s, v) => s + v.application.requested.minorUnits, 0n),
+    // What went out is the approved amount, which may be below the request.
+    disbursedThisMonthMinorUnits: disbursedThisMonth.reduce(
+      (s, v) => s + (v.approvedTerms ?? { amount: v.application.requested }).amount.minorUnits,
+      0n,
+    ),
     disbursedThisMonthCount: disbursedThisMonth.length,
     ...(averageTurnaroundTenthsOfDay === undefined ? {} : { averageTurnaroundTenthsOfDay }),
     completedCount: completed.length,
@@ -686,6 +690,79 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
   COMMITTEE_REASON_REQUIRED: {
     en: 'A committee decision is recorded with its reason.',
     ar: 'يُسجَّل قرار اللجنة مع سببه.',
+  },
+  // The committee's approved terms. Nothing was recorded on any of these; the member corrects the figure and decides again.
+  APPROVED_AMOUNT_MALFORMED: {
+    en: 'Enter the approved amount as a number with at most two decimals. Nothing was recorded.',
+    ar: 'أدخل المبلغ المعتمد رقماً بخانتين عشريتين على الأكثر. لم يُسجَّل شيء.',
+  },
+  APPROVED_TENOR_MALFORMED: {
+    en: 'Enter the approved tenor as a whole number of months. Nothing was recorded.',
+    ar: 'أدخل المدة المعتمدة عدداً صحيحاً من الأشهر. لم يُسجَّل شيء.',
+  },
+  APPROVED_AMOUNT_NOT_POSITIVE: {
+    en: 'The approved amount must be greater than zero. To refuse the financing, record a decline instead.',
+    ar: 'يجب أن يكون المبلغ المعتمد أكبر من صفر. لرفض التمويل، سجّل قرار الرفض بدلاً من ذلك.',
+  },
+  APPROVED_TENOR_INVALID: {
+    en: 'The approved tenor is a whole number of months greater than zero.',
+    ar: 'المدة المعتمدة عدد صحيح من الأشهر أكبر من صفر.',
+  },
+  APPROVED_CURRENCY_NOT_TENANTS: {
+    en: 'The approved amount is in the institution’s own currency only.',
+    ar: 'يكون المبلغ المعتمد بعملة المؤسسة فقط.',
+  },
+  APPROVED_AMOUNT_ABOVE_REQUESTED: {
+    en: 'The committee may approve the amount requested or less, never more. The applicant’s request stays as submitted.',
+    ar: 'يجوز للجنة اعتماد المبلغ المطلوب أو أقل منه، ولا يجوز اعتماد أكثر منه. يبقى طلب المتقدم كما قُدِّم.',
+  },
+  APPROVED_TENOR_ABOVE_REQUESTED: {
+    en: 'The committee may approve the tenor requested or a shorter one, never a longer one.',
+    ar: 'يجوز للجنة اعتماد المدة المطلوبة أو مدة أقصر منها، ولا يجوز اعتماد مدة أطول.',
+  },
+  APPROVED_AMOUNT_ABOVE_RISK_BAND: {
+    en: 'The approved amount is above the maximum for the risk level the assessment assigned. Approve within that maximum.',
+    ar: 'المبلغ المعتمد يتجاوز الحد الأقصى لفئة المخاطر التي حددها التقييم. اعتمد مبلغاً ضمن ذلك الحد.',
+  },
+  APPROVED_AMOUNT_ABOVE_VARIANT: {
+    en: 'The approved amount is above the maximum of this product variant.',
+    ar: 'المبلغ المعتمد يتجاوز الحد الأقصى لفئة المنتج هذه.',
+  },
+  APPROVED_AMOUNT_BELOW_MINIMUM: {
+    en: 'The approved amount is below the product’s minimum financing amount.',
+    ar: 'المبلغ المعتمد أقل من الحد الأدنى للتمويل في هذا المنتج.',
+  },
+  APPROVED_TENOR_OUTSIDE_VARIANT: {
+    en: 'The approved tenor is outside the tenor range of this product variant.',
+    ar: 'المدة المعتمدة خارج نطاق المدة المسموح به لفئة المنتج هذه.',
+  },
+  APPROVED_TENOR_NOT_ABOVE_GRACE: {
+    en: 'The approved tenor must be longer than the grace period on the application.',
+    ar: 'يجب أن تكون المدة المعتمدة أطول من فترة السماح المذكورة في الطلب.',
+  },
+  CONTRIBUTION_BELOW_RISK_BAND: {
+    en: 'The owner’s contribution on the application is below the minimum for the assigned risk level, so the facility cannot be approved as it stands.',
+    ar: 'مساهمة المالك في الطلب دون الحد الأدنى لفئة المخاطر المحددة، فلا يمكن اعتماد التمويل بوضعه الحالي.',
+  },
+  CONTRIBUTION_OUTSIDE_VARIANT: {
+    en: 'The owner’s contribution on the application is outside the range this product variant requires.',
+    ar: 'مساهمة المالك في الطلب خارج النطاق الذي تشترطه فئة المنتج هذه.',
+  },
+  RISK_BAND_REQUIRED: {
+    en: 'The assessment placed this application in no risk level, so there is no maximum to approve against. It can be declined, not approved.',
+    ar: 'لم يضع التقييم هذا الطلب في أي فئة مخاطر، فلا يوجد حد أقصى يُعتمد في إطاره. يمكن رفضه ولا يمكن اعتماده.',
+  },
+  APPROVAL_LIMITS_MISMATCH: {
+    en: 'The limits found are not this application’s product variant; nothing was recorded. Reload and try again.',
+    ar: 'الحدود المستخدمة لا تخص فئة المنتج في هذا الطلب، ولم يُسجَّل شيء. أعد التحميل وحاول مرة أخرى.',
+  },
+  APPROVAL_CONTEXT_REQUIRED: {
+    en: 'The approval could not be checked against the institution’s limits; nothing was recorded.',
+    ar: 'تعذّر التحقق من الاعتماد مقابل حدود المؤسسة، ولم يُسجَّل شيء.',
+  },
+  APPROVED_TERMS_MISSING: {
+    en: 'The application carries no approved amount and tenor to offer on.',
+    ar: 'لا يتضمن الطلب مبلغاً ومدة معتمدين لإعداد العرض عليهما.',
   },
   SIGNED_LETTER_NOT_SENT_LETTER: {
     en: 'The signature is on a different letter from the one sent.',

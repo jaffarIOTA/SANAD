@@ -51,9 +51,14 @@ export async function GET(): Promise<Response> {
     'status',
     'receivedOn',
     'turnaroundDays',
+    // After the existing columns, so a sheet built on the earlier layout still reads. `amount` stays the request.
+    'requestedTenorMonths',
+    'approvedAmount',
+    'approvedTenorMonths',
   ];
   const rows = views.map((v) => {
     const a = v.application;
+    const approved = v.approvedTerms;
     return [
       a.applicationId,
       a.applicant.businessNameEn,
@@ -65,6 +70,9 @@ export async function GET(): Promise<Response> {
       a.status,
       new Date(Number(a.receivedAtEpochSeconds) * 1000).toISOString().slice(0, 10),
       String(wholeDays(turnaroundSeconds(v, now))),
+      String(a.tenorMonths),
+      approved === undefined ? '' : formatMinorUnits(approved.amount, 'latin').replace(/,/g, ''),
+      approved === undefined ? '' : String(approved.tenorMonths),
     ]
       .map(cell)
       .join(',');

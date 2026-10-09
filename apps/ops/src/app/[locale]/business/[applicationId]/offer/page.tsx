@@ -175,6 +175,13 @@ export default async function OfferPage({
             <bdi className="text-[30px] font-bold tabular-nums">{f.money(terms.facilityAmount.minorUnits)}</bdi>
             <span className="text-[14px] opacity-80">{f.cur}</span>
           </span>
+          {/* For reference only, from the application: the request the committee approved less than. Not part of the letter. */}
+          {a.requested.minorUnits === terms.facilityAmount.minorUnits && a.tenorMonths === terms.months ? null : (
+            <span className="text-[12px] opacity-70" data-requested-reference>
+              {t('Requested', 'المطلوب')} <bdi className="tabular-nums">{f.money(a.requested.minorUnits)}</bdi> {f.cur}{' '}
+              · {t(`${f.n(a.tenorMonths)} months`, `${f.n(a.tenorMonths)} شهراً`)}
+            </span>
+          )}
         </div>
       </section>
 
