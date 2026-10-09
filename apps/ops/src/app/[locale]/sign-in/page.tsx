@@ -1,10 +1,15 @@
 /**
  * Sign in to the operations workbench.
  *
+ * Production: the institution's single sign-on by OpenID Connect. The page
+ * lists the institutions active in this deployment's jurisdiction whose staff
+ * identity configuration uses OIDC; the person picks theirs and continues to
+ * its identity provider. No development path is offered (the action refuses
+ * it too).
+ *
  * Development: a member of staff's own token from the local environment,
- * compared by digest on the server; one token is one person. Production: the
- * institution's single sign-on, which is not built — the page says so and
- * offers no development path (the action refuses it too).
+ * compared by digest on the server; one token is one person. Single sign-on is
+ * offered as well wherever an institution's configuration in force uses OIDC.
  *
  * Arabic first; every word on the page in both languages.
  */
@@ -14,10 +19,14 @@ import { notFound } from 'next/navigation';
 import { BUTTON_PRIMARY, Card, ControlRejection, FIELD_INPUT, FIELD_LABEL } from '@sanad/design/primitives.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 
-import { signInAction } from '../../../server/auth-actions.ts';
+import { SingleSignOnCard } from '@sanad/design/SingleSignOn.tsx';
+import { singleSignOnInstitutions } from '@sanad/origination/staff-identity.ts';
+
+import { signInAction, singleSignOnAction } from '../../../server/auth-actions.ts';
 import { authorityLabel } from '../../../server/authority.ts';
-import { currentStaff } from '../../../server/session.ts';
+import { currentStaffSession } from '../../../server/session.ts';
 import { developmentTokensPermitted } from '../../../server/staff.ts';
+import { epochNow } from '../../../server/staff-session.ts';
 
 type Words = { readonly en: string; readonly ar: string; readonly refusal: boolean };
 
@@ -29,9 +38,24 @@ const REASONS: Readonly<Record<string, Words>> = {
   },
   SIGNED_OUT: { en: 'You are signed out.', ar: 'تم تسجيل خروجك.', refusal: false },
   SIGN_IN_REFUSED: {
-    en: 'The token was not recognised, or it grants no authority under your institution’s staff identity configuration.',
-    ar: 'لم يُتعرَّف على الرمز، أو أنه لا يمنح أي صلاحية وفق إعدادات هوية الموظفين لدى مؤسستك.',
+    en: 'Your sign-in was not recognised, or it grants no authority under your institution’s staff identity configuration.',
+    ar: 'لم يُتعرَّف على تسجيل دخولك، أو أنه لا يمنح أي صلاحية وفق إعدادات هوية الموظفين لدى مؤسستك.',
     refusal: true,
+  },
+  SSO_FAILED: {
+    en: 'Sign-in through your institution could not be completed. Nothing was signed in. Start again from this page.',
+    ar: 'تعذّر إكمال تسجيل الدخول عبر مؤسستك، ولم يُسجَّل دخول أحد. ابدأ من جديد من هذه الصفحة.',
+    refusal: true,
+  },
+  SSO_UNAVAILABLE: {
+    en: 'Single sign-on is not set up for that institution in this deployment.',
+    ar: 'الدخول الموحد غير مهيأ لتلك المؤسسة في هذه البيئة.',
+    refusal: true,
+  },
+  STEP_UP_REQUIRED: {
+    en: 'This decision needs a recent authentication. Sign in again to confirm it is you, then repeat the action.',
+    ar: 'يتطلب هذا القرار تحققاً حديثاً من الهوية. سجّل الدخول مجدداً لتأكيد هويتك، ثم أعد تنفيذ الإجراء.',
+    refusal: false,
   },
   TENANT_NOT_ACTIVE: {
     en: 'Your institution is not active in the jurisdiction this deployment runs as. Nothing can be done in its name here.',
@@ -59,8 +83,10 @@ export default async function SignInPage({
   const arabic = locale === 'ar-SA';
   const t = (en: string, ar: string): string => (arabic ? ar : en);
   const words = reason === undefined ? undefined : REASONS[reason];
-  const staff = await currentStaff();
+  const session = await currentStaffSession();
+  const staff = session?.principal;
   const production = !developmentTokensPermitted();
+  const institutions = await singleSignOnInstitutions(epochNow());
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-6" data-sign-in>
@@ -90,6 +116,11 @@ export default async function SignInPage({
         <Card>
           <p className="text-[14px] text-ink">
             {t('Signed in as', 'مسجّل الدخول باسم')}{' '}
+            {session?.displayName === undefined ? null : (
+              <>
+                <bdi className="font-semibold">{session.displayName}</bdi>{' '}
+              </>
+            )}
             <bdi dir="ltr" className="identifier font-semibold">
               {staff.principalId}
             </bdi>{' '}
@@ -105,19 +136,17 @@ export default async function SignInPage({
         </Card>
       )}
 
-      {production ? (
-        <Card>
-          <h2 className="text-[16px] font-semibold text-heading">
-            {t('Single sign-on is not built yet', 'الدخول الموحد لم يُبنَ بعد')}
-          </h2>
-          <p className="mt-2 text-[14px] text-ink-quiet">
-            {t(
-              'In production, staff sign in through the institution’s identity provider (SAML or OIDC), and their authorities come from its group claim mapped by the institution’s staff identity configuration. That integration is not built, so this deployment cannot sign anyone in. Development tokens are refused here by design.',
-              'في بيئة الإنتاج يسجّل الموظفون الدخول عبر مزوّد الهوية لدى المؤسسة (SAML أو OIDC)، وتُستمد صلاحياتهم من مجموعاتهم وفق إعدادات هوية الموظفين لدى المؤسسة. هذا التكامل لم يُبنَ بعد، لذا لا يمكن لهذه البيئة تسجيل دخول أحد. ورموز التطوير مرفوضة هنا عمداً.',
-            )}
-          </p>
-        </Card>
-      ) : (
+      {production || institutions.length > 0 ? (
+        <SingleSignOnCard
+          institutions={institutions}
+          action={singleSignOnAction}
+          segment={segment}
+          arabic={arabic}
+          stepUp={reason === 'STEP_UP_REQUIRED'}
+        />
+      ) : null}
+
+      {production ? null : (
         <Card>
           <form action={signInAction} className="flex flex-col gap-6">
             <input type="hidden" name="locale" value={segment} />

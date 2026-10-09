@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { TENANT_CODES, type TenantCode, loadStaffIdentity } from '@sanad/config/loader.ts';
 import { authoritiesFor, parseStaffIdentity } from '@sanad/core/config/staff-identity.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
+import { singleSignOnInstitutions } from '@sanad/origination/staff-identity.ts';
 import bankA from '@sanad/config/tenants/bank-a/identity/staff-identity.json' with { type: 'json' };
 import fintechB from '@sanad/config/tenants/fintech-b/identity/staff-identity.json' with { type: 'json' };
 import fundAe from '@sanad/config/tenants/sme-fund-ae/identity/staff-identity.json' with { type: 'json' };
@@ -101,6 +102,17 @@ describe('staff identity configuration', () => {
         'DEVELOPMENT',
       ),
     ).toBe('IDENTITY_METADATA_URL_REQUIRED');
+  });
+  it('the sign-in page offers no institution for single sign-on until a real provider is configured', async () => {
+    expect(await singleSignOnInstitutions(1_800_000_000n)).toEqual([]);
+    const before = process.env['SANAD_DEPLOYMENT_PROFILE'];
+    process.env['SANAD_DEPLOYMENT_PROFILE'] = 'DEPLOYED';
+    try {
+      expect(await singleSignOnInstitutions(1_800_000_000n)).toEqual([]);
+    } finally {
+      if (before === undefined) delete process.env['SANAD_DEPLOYMENT_PROFILE'];
+      else process.env['SANAD_DEPLOYMENT_PROFILE'] = before;
+    }
   });
   it('an OIDC issuer is an https URL, and a placeholder is never accepted as configuration', () => {
     expect(reason({ ...oidc, provider: { ...oidc.provider, issuer: 'idp.example' } })).toBe(

@@ -26,7 +26,7 @@ import { type JSONWebKeySet, type JWTPayload, createLocalJWKSet, decodeProtected
 export const ID_TOKEN_ALGORITHMS = ['RS256', 'ES256'] as const;
 /** Clock skew tolerated on exp, nbf and iat. */
 export const CLOCK_SKEW_SECONDS = 60;
-/** An ID token older than this (by iat) is refused, however long it claims to live. */
+/** An ID token older than this many seconds (by iat) is refused, however long it claims to live. */
 export const ID_TOKEN_MAX_AGE = 600;
 const METADATA_TTL_MS = 3_600_000;
 const JWKS_TTL_MS = 3_600_000;

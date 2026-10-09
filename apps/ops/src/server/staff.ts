@@ -9,8 +9,9 @@
  * the tenant's staff identity configuration (`config/tenants/<t>/identity/`),
  * exactly as the institution's identity provider's group claim will in
  * production. Development tokens are refused when NODE_ENV is production: there
- * a member of staff signs in through the institution's SSO, which is not built
- * (apps/ops/src/server/modules.ts says so).
+ * a member of staff signs in through the institution's single sign-on by
+ * OpenID Connect (single-sign-on.ts), whose principal is derived from the
+ * provider's `sub` claim and whose authorities come from the same mappings.
  *
  * No token, digest or principal is logged here or anywhere it is called from.
  */
