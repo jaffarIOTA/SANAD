@@ -8,6 +8,9 @@ import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 
 import { BrandMark, LanguageSwitch } from '@sanad/design/primitives.tsx';
+import { LicenceBanner } from '@sanad/design/LicenceBanner.tsx';
+import { licenceBanner } from '@sanad/core/licensing/explain.ts';
+import { currentLicence } from '@sanad/origination/licensing.ts';
 import { LOCALE_SEGMENTS, htmlLang, isRtl, localeFromSegment, type LocaleSegment } from '@sanad/i18n/strings.ts';
 
 import { currentAdmin } from '../../server/session.ts';
@@ -33,6 +36,8 @@ export default async function AdminLayout({
   if (locale === undefined) notFound();
   const arabic = locale === 'ar-SA';
   const admin = await currentAdmin();
+  // The installation licence's banner, while it is expiring, in grace or blocking new business (ADR 0006).
+  const banner = admin === undefined ? undefined : licenceBanner((await currentLicence()).state);
 
   return (
     <html lang={htmlLang(locale)} dir={isRtl(locale) ? 'rtl' : 'ltr'}>
@@ -61,11 +66,29 @@ export default async function AdminLayout({
                   </span>
                   <span className="hidden flex-col leading-tight xl:flex">
                     <span className="text-sm font-medium text-heading">
-                      <span className="identifier">{admin.principalId}</span>
+                      {admin.displayName === undefined ? (
+                        <span className="identifier">{admin.principalId}</span>
+                      ) : (
+                        <bdi>{admin.displayName}</bdi>
+                      )}
                     </span>
-                    <span className="text-[0.6875rem] text-attention">
-                      {arabic ? 'جلسة تطوير · ٣٠ دقيقة' : 'development session · 30 min'}
-                    </span>
+                    {admin.method === 'OIDC' ? (
+                      <span className="text-[0.6875rem] text-ink-quiet">
+                        {arabic ? 'الدخول الموحد' : 'single sign-on'}
+                        {admin.tenantId === undefined ? null : (
+                          <>
+                            {' · '}
+                            <bdi dir="ltr" className="identifier">
+                              {admin.tenantId}
+                            </bdi>
+                          </>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-[0.6875rem] text-attention">
+                        {arabic ? 'جلسة تطوير' : 'development session'}
+                      </span>
+                    )}
                   </span>
                   <button type="submit" className="press rounded-pill bg-sunken px-3 py-2 text-xs text-ink-quiet">
                     {arabic ? 'خروج' : 'Sign out'}
@@ -75,6 +98,7 @@ export default async function AdminLayout({
             </div>
           </div>
         </header>
+        <LicenceBanner banner={banner} arabic={arabic} href={`/${segment}/licence`} />
         <div className="flex min-h-[calc(100dvh-100px)]">
           <SideNav segment={segment} arabic={arabic} signedIn={admin !== undefined} />
           <main className="min-w-0 flex-1 overflow-x-clip px-4 pb-10 pt-6 lg:px-10">{children}</main>

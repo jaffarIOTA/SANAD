@@ -29,8 +29,16 @@ import { policyWithPartner, resolveOriginationPolicy } from './partners.ts';
 import { parseOriginationPolicy } from '@sanad/core/origination/policy.ts';
 import { catalogueForTenant, isTenantCode, loadProductCatalogue } from '@sanad/config/loader.ts';
 import { randomUUID } from 'node:crypto';
-import { currentAdmin, developmentPrincipalFor, endAdminSession, startAdminSession } from './session.ts';
+import {
+  currentAdmin,
+  developmentPrincipalFor,
+  developmentSignInPermitted,
+  endAdminSession,
+  startAdminSession,
+} from './session.ts';
+import { beginSingleSignOn, providerSignOut } from './single-sign-on.ts';
 import { decideDeploymentJurisdiction, proposeDeploymentJurisdiction } from '@sanad/origination/jurisdiction.ts';
+import { decideLicenceInstall, proposeLicenceInstall } from '@sanad/origination/licensing.ts';
 
 const field = (form: FormData, name: string): string => {
   const v = form.get(name);
@@ -41,6 +49,7 @@ const back = (to: string, notice: string): never =>
 
 export async function signInAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
+  if (!developmentSignInPermitted()) return back(`/${locale}`, 'DEVELOPMENT_SIGN_IN_REFUSED');
   const principal = developmentPrincipalFor(field(form, 'token'));
   if (principal === undefined) return back(`/${locale}`, 'SIGN_IN_REFUSED');
   // The session lifetime is the tenant's staff identity configuration in force, bounded by the session layer.
@@ -52,9 +61,27 @@ export async function signInAction(form: FormData): Promise<void> {
   redirect(`/${locale}/credentials`);
 }
 
+/**
+ * Begin single sign-on at the chosen institution's identity provider. The
+ * choice is made before authentication and only selects whose provider and
+ * mappings apply; it must be one the page lists.
+ */
+export async function singleSignOnAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') === 'en' ? 'en' : 'ar';
+  const begun = await beginSingleSignOn(field(form, 'institution'), locale);
+  if (!begun.ok) return back(`/${locale}`, begun.notice);
+  redirect(begun.location);
+}
+
 export async function signOutAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') === 'en' ? 'en' : 'ar';
+  const admin = await currentAdmin();
   await endAdminSession();
-  redirect(`/${field(form, 'locale') || 'ar'}`);
+  if (admin?.method === 'OIDC' && admin.tenantId !== undefined) {
+    const atProvider = await providerSignOut(admin.tenantId, locale);
+    if (atProvider !== undefined) redirect(atProvider);
+  }
+  redirect(`/${locale}`);
 }
 
 export async function saveCredentialAction(form: FormData): Promise<void> {
@@ -489,4 +516,47 @@ export async function proposePartnerChangeAction(form: FormData): Promise<void> 
     return back(to, 'PROPOSE_FAILED');
   }
   back(to, 'PROPOSED');
+}
+
+/** Licence files are small; anything larger is not one. */
+const MAX_LICENCE_FILE_BYTES = 64 * 1024;
+
+/**
+ * Propose installing a licence (ADR 0006): one administrator uploads the
+ * signed file; it is verified now (signature, term, installation) and held
+ * for a different administrator to approve. Never gated on the licence's own
+ * state — installing a licence is how a blocked installation recovers.
+ */
+export async function proposeLicenceAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'ar';
+  const to = `/${locale}/licence`;
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${locale}`);
+  const file = form.get('licenceFile');
+  if (!(file instanceof Blob) || file.size === 0) return back(to, 'FILE_REQUIRED');
+  if (file.size > MAX_LICENCE_FILE_BYTES) return back(to, 'REFUSED:MALFORMED');
+  const proposed = await proposeLicenceInstall({ fileText: await file.text(), proposedBy: admin?.principalId ?? '' });
+  if (!proposed.ok) return back(to, `REFUSED:${proposed.error.refusal.reason}`);
+  back(to, 'PROPOSED');
+}
+
+/** Approve (install, re-verified now) or reject a proposed licence. Never by the administrator who proposed it. */
+export async function decideLicenceAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'ar';
+  const to = `/${locale}/licence`;
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${locale}`);
+  const id = field(form, 'proposalId');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return back(to, 'PROPOSAL_ID_MALFORMED');
+  const approve = field(form, 'decision') === 'approve';
+  const reason = field(form, 'reason');
+  if (!approve && reason.length < 3) return back(to, 'REJECTION_REASON_REQUIRED');
+  const decided = await decideLicenceInstall({
+    proposalId: id,
+    approve,
+    decidedBy: admin?.principalId ?? '',
+    ...(approve ? {} : { reason }),
+  });
+  if (!decided.ok) return back(to, `REFUSED:${decided.error.refusal.reason}`);
+  back(to, approve ? 'INSTALLED' : 'REJECTED');
 }

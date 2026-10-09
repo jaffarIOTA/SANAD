@@ -65,6 +65,7 @@ import {
   INPUT,
   Id,
   METRIC_LABELS,
+  RequestedVsApproved,
   SECTOR_LABELS,
   SectionCard,
   TH,
@@ -305,6 +306,11 @@ export default async function LoanApplicationPage({
               {f.digits(formatPercent(BigInt(a.contributionPerTenThousand)))}
             </Field>
           </dl>
+          {view.approvedTerms === undefined ? null : (
+            <div className="mt-4">
+              <RequestedVsApproved view={view} f={f} />
+            </div>
+          )}
           {variant === undefined ? null : (
             <p className="mt-4 rounded-tile bg-sunken px-3 py-2.5 text-[12px] leading-relaxed text-ink-quiet">
               <span className="font-semibold text-heading">{t('Variant limits: ', 'حدود الفئة: ')}</span>

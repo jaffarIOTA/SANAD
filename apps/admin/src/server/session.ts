@@ -1,11 +1,17 @@
 /**
  * Who is administering.
  *
+ * Production: the institution's single sign-on by OpenID Connect
+ * (single-sign-on.ts). The person signs in at their institution's identity
+ * provider and is an administrator only if that institution's staff identity
+ * configuration maps one of their groups to PLATFORM_ADMIN. The session
+ * records the institution, when they authenticated, and how.
+ *
  * Development: an operator signs in once with the platform operations token
- * (compared by digest, constant time) and receives a sealed session cookie
- * good for thirty minutes from sign-in. Production: the institution's
- * identity provider (SAML or OIDC) issues the principal and this module reads
- * the session, with nothing that calls it changing.
+ * (compared by digest, constant time). Refused when NODE_ENV is production.
+ *
+ * Either way the browser holds a sealed session cookie whose lifetime counts
+ * from sign-in and is never more than an hour.
  */
 
 import { createHash, timingSafeEqual } from 'node:crypto';
@@ -13,9 +19,17 @@ import { cookies } from 'next/headers';
 
 import { type SealKey, deriveSealKey, ephemeralMasterSecret, open, seal } from '@sanad/auth/sealed-token.ts';
 
+export type AdminSignInMethod = 'DEVELOPMENT' | 'OIDC';
+
 export interface AdminPrincipal {
   readonly principalId: string;
   readonly role: 'PLATFORM_ADMIN';
+  /** The institution whose identity provider and mappings granted the role (single sign-on only). */
+  readonly tenantId?: string;
+  readonly method: AdminSignInMethod;
+  readonly authenticatedAtEpochSeconds: bigint;
+  /** For the screen only. */
+  readonly displayName?: string;
 }
 
 const COOKIE = 'sanad_admin';
@@ -24,25 +38,40 @@ export const ADMIN_SESSION_SECONDS = 1_800n;
 const ADMIN_SESSION_CEILING = 3_600n;
 
 interface KeyState {
+  master?: Uint8Array;
   key?: SealKey;
+  stateKey?: SealKey;
 }
 const keyState: KeyState = ((globalThis as { __sanadAdminKey?: KeyState }).__sanadAdminKey ??= {});
 
-function sealKey(): SealKey {
-  if (keyState.key !== undefined) return keyState.key;
-  const raw = process.env['ADMIN_SESSION_SECRET'];
-  if (process.env['NODE_ENV'] === 'production' && (raw === undefined || raw.trim().length === 0))
+function masterSecret(): Uint8Array {
+  if (keyState.master !== undefined) return keyState.master;
+  const raw = process.env['ADMIN_SESSION_SECRET']?.trim();
+  if (process.env['NODE_ENV'] === 'production' && (raw === undefined || raw.length === 0))
     throw new Error('admin session master secret is not configured');
-  const master =
-    raw === undefined || raw.trim().length === 0
+  keyState.master =
+    raw === undefined || raw.length === 0
       ? ephemeralMasterSecret()
-      : new Uint8Array(Buffer.from(raw.trim(), /^[0-9a-f]+$/i.test(raw.trim()) ? 'hex' : 'base64'));
-  keyState.key = deriveSealKey(master, 'admin-session-v1');
+      : new Uint8Array(Buffer.from(raw, /^[0-9a-f]+$/i.test(raw) ? 'hex' : 'base64'));
+  return keyState.master;
+}
+
+function sealKey(): SealKey {
+  keyState.key ??= deriveSealKey(masterSecret(), 'admin-session-v1');
   return keyState.key;
 }
 
-const now = (): bigint => BigInt(Math.floor(Date.now() / 1000));
+/** The single sign-on state cookie's key: its own purpose, so a state never opens as a session. */
+export function adminStateSealKey(): SealKey {
+  keyState.stateKey ??= deriveSealKey(masterSecret(), 'admin-oidc-state-v1');
+  return keyState.stateKey;
+}
+
+export const now = (): bigint => BigInt(Math.floor(Date.now() / 1000));
 const digest = (s: string): Buffer => createHash('sha256').update(s, 'utf8').digest();
+
+/** Development tokens are a development stand-in; production authenticates through the institution's single sign-on. */
+export const developmentSignInPermitted = (): boolean => process.env['NODE_ENV'] !== 'production';
 
 /**
  * Development sign-in: the presented token is compared, in constant time, to
@@ -50,7 +79,7 @@ const digest = (s: string): Buffer => createHash('sha256').update(s, 'utf8').dig
  * eyes can be exercised locally: what one proposes the other decides.
  */
 export function developmentPrincipalFor(presented: string): string | undefined {
-  if (process.env['NODE_ENV'] === 'production') return undefined;
+  if (!developmentSignInPermitted()) return undefined;
   const candidates: readonly [string | undefined, string][] = [
     [process.env['PLATFORM_OPS_DEV_TOKEN'], 'adm-dev-01'],
     [process.env['STAFF_DEV_TOKEN_SENIOR'], 'adm-dev-02'],
@@ -64,25 +93,57 @@ export function developmentPrincipalFor(presented: string): string | undefined {
   return found;
 }
 
+/** p principal · r role · t institution (SSO) · at authenticated at · m method (D/O) · n display name. */
 interface Payload {
   readonly p: string;
   readonly r: 'PLATFORM_ADMIN';
+  readonly t?: string;
+  readonly at?: string;
+  readonly m?: string;
+  readonly n?: string;
 }
+const PAYLOAD_KEYS = new Set(['p', 'r', 't', 'at', 'm', 'n']);
 const isPayload = (v: Readonly<Record<string, unknown>>): v is Payload & Record<string, string> =>
-  typeof v['p'] === 'string' && v['p'].length > 0 && v['r'] === 'PLATFORM_ADMIN';
+  Object.keys(v).every((k) => PAYLOAD_KEYS.has(k)) &&
+  typeof v['p'] === 'string' &&
+  /^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$/.test(v['p']) &&
+  v['r'] === 'PLATFORM_ADMIN' &&
+  (v['t'] === undefined || (typeof v['t'] === 'string' && /^[a-z][a-z0-9-]{1,40}$/.test(v['t']))) &&
+  (v['at'] === undefined || (typeof v['at'] === 'string' && /^\d{1,12}$/.test(v['at']))) &&
+  (v['m'] === undefined || v['m'] === 'D' || v['m'] === 'O') &&
+  (v['n'] === undefined || (typeof v['n'] === 'string' && v['n'].length <= 80));
 
 export async function currentAdmin(): Promise<AdminPrincipal | undefined> {
   const jar = await cookies();
   const raw = jar.get(COOKIE)?.value;
-  if (raw === undefined) return undefined;
+  if (raw === undefined || raw.length > 4096) return undefined;
   const opened = open(raw, sealKey(), now(), ADMIN_SESSION_CEILING, isPayload);
-  return opened.kind === 'VALID' ? { principalId: opened.value.payload.p, role: 'PLATFORM_ADMIN' } : undefined;
+  if (opened.kind !== 'VALID') return undefined;
+  const { p, t, at, m, n } = opened.value.payload;
+  const authenticatedAt = at === undefined ? opened.value.issuedAtEpochSeconds : BigInt(at);
+  if (authenticatedAt > opened.value.issuedAtEpochSeconds) return undefined;
+  return {
+    principalId: p,
+    role: 'PLATFORM_ADMIN',
+    method: m === 'O' ? 'OIDC' : 'DEVELOPMENT',
+    authenticatedAtEpochSeconds: authenticatedAt,
+    ...(t === undefined ? {} : { tenantId: t }),
+    ...(n === undefined ? {} : { displayName: n }),
+  };
+}
+
+export interface AdminSessionOptions {
+  readonly method?: AdminSignInMethod;
+  readonly tenantId?: string;
+  readonly authenticatedAtEpochSeconds?: bigint;
+  readonly displayName?: string;
 }
 
 /** `lifetimeSeconds` comes from the tenant's staff identity configuration in force; it is bounded here regardless. */
 export async function startAdminSession(
   principalId: string,
   lifetimeSeconds: bigint = ADMIN_SESSION_SECONDS,
+  options: AdminSessionOptions = {},
 ): Promise<void> {
   const life =
     lifetimeSeconds <= 0n
@@ -91,9 +152,18 @@ export async function startAdminSession(
         ? ADMIN_SESSION_CEILING
         : lifetimeSeconds;
   const issued = now();
+  const authenticatedAt = options.authenticatedAtEpochSeconds ?? issued;
+  const name = options.displayName?.slice(0, 80);
   const token = seal(
     {
-      payload: { p: principalId, r: 'PLATFORM_ADMIN' },
+      payload: {
+        p: principalId,
+        r: 'PLATFORM_ADMIN',
+        at: (authenticatedAt > issued ? issued : authenticatedAt).toString(),
+        m: options.method === 'OIDC' ? 'O' : 'D',
+        ...(options.tenantId === undefined ? {} : { t: options.tenantId }),
+        ...(name === undefined || name.length === 0 ? {} : { n: name }),
+      },
       issuedAtEpochSeconds: issued,
       expiresAtEpochSeconds: issued + life,
     },

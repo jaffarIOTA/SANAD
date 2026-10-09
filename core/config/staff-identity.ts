@@ -20,7 +20,12 @@ import { type Result, ok, reject } from '../kernel/result.ts';
  * between the decision and the payment).
  */
 export type StaffAuthority = 'MAKER' | ApprovalAuthority | 'FINANCE' | 'PLATFORM_ADMIN';
-export const STAFF_AUTHORITIES: readonly StaffAuthority[] = ['MAKER', ...APPROVAL_AUTHORITIES, 'FINANCE', 'PLATFORM_ADMIN'];
+export const STAFF_AUTHORITIES: readonly StaffAuthority[] = [
+  'MAKER',
+  ...APPROVAL_AUTHORITIES,
+  'FINANCE',
+  'PLATFORM_ADMIN',
+];
 
 export type IdentityProtocol = 'SAML' | 'OIDC' | 'DEVELOPMENT';
 
@@ -56,57 +61,177 @@ export type DeploymentProfile = 'DEVELOPMENT' | 'DEPLOYED';
 
 export const MAX_SESSION_LIFETIME_SECONDS = 3_600;
 
-const TOP_KEYS = new Set(['version', 'provider', 'mappings', 'sessionLifetimeSeconds', 'stepUpForApprovalSeconds']);
+const TOP_KEYS = new Set([
+  'version',
+  'provider',
+  'providers',
+  'mappings',
+  'sessionLifetimeSeconds',
+  'stepUpForApprovalSeconds',
+]);
 const PROVIDER_KEYS = new Set(['protocol', 'issuer', 'metadataUrl', 'clientId', 'groupsClaim']);
+const PROFILES: readonly DeploymentProfile[] = ['DEVELOPMENT', 'DEPLOYED'];
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-const bad = (reason: string, detail: string, context?: Readonly<Record<string, string>>): Result<never> => reject('OP-DETERMINACY', reason, detail, context);
+const bad = (reason: string, detail: string, context?: Readonly<Record<string, string>>): Result<never> =>
+  reject('OP-DETERMINACY', reason, detail, context);
 const text = (v: unknown, max = 400): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
+/** A value still carrying a `<TO_BE_FILLED>` placeholder is not configuration yet. */
+const placeholder = (v: unknown): boolean => typeof v === 'string' && /[<>]/.test(v);
+const httpsUrl = (v: string): boolean => {
+  if (!/^https:\/\/[^\s]+$/.test(v)) return false;
+  try {
+    return new URL(v).protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * One provider entry. `profile` is the profile the entry is for: a development
+ * stand-in is refused for anything but DEVELOPMENT. A placeholder is refused
+ * only in the entry that is `selected`: an unfilled deployed entry does not
+ * stop development, and is never used.
+ */
+function parseProvider(p: unknown, profile: DeploymentProfile, selected: boolean): Result<IdentityProvider> {
+  if (!isRecord(p)) return bad('IDENTITY_PROVIDER_REQUIRED', 'provider is an object');
+  const unknownP = Object.keys(p).filter((k) => !PROVIDER_KEYS.has(k));
+  if (unknownP.length > 0)
+    return bad('IDENTITY_PROVIDER_UNKNOWN_KEY', 'Unknown key in provider; a secret never belongs here', {
+      keys: unknownP.join(','),
+    });
+  const protocol = p['protocol'];
+  if (protocol !== 'SAML' && protocol !== 'OIDC' && protocol !== 'DEVELOPMENT')
+    return bad('IDENTITY_PROTOCOL_UNKNOWN', 'protocol is SAML, OIDC or DEVELOPMENT');
+  if (protocol === 'DEVELOPMENT' && profile !== 'DEVELOPMENT')
+    return bad(
+      'IDENTITY_DEVELOPMENT_PROVIDER_REFUSED',
+      'A deployed environment authenticates staff through the institution’s identity provider, never a development stand-in',
+      { profile },
+    );
+  if (!text(p['issuer'], 400)) return bad('IDENTITY_ISSUER_REQUIRED', 'The provider’s issuer or entity id is required');
+  const metadataUrl = p['metadataUrl'];
+  if (protocol !== 'DEVELOPMENT') {
+    if (selected && [p['issuer'], metadataUrl, p['clientId']].some(placeholder))
+      return bad(
+        'IDENTITY_PLACEHOLDER_UNFILLED',
+        'The provider still carries a placeholder; fill in the institution’s issuer, discovery URL and client identifier',
+        { protocol },
+      );
+    if (typeof metadataUrl !== 'string' || !httpsUrl(metadataUrl))
+      return bad('IDENTITY_METADATA_URL_REQUIRED', 'SAML metadata or OIDC discovery is fetched over TLS', { protocol });
+    if (protocol === 'OIDC' && !httpsUrl(p['issuer'].trim()))
+      return bad('IDENTITY_ISSUER_NOT_HTTPS', 'An OIDC issuer is an https URL (OpenID Connect Discovery §3)');
+    if (protocol === 'OIDC' && !text(p['clientId'], 200))
+      return bad(
+        'IDENTITY_CLIENT_ID_REQUIRED',
+        'An OIDC provider needs the client identifier (the secret goes to the vault)',
+      );
+  } else if (metadataUrl !== undefined) {
+    return bad('IDENTITY_DEVELOPMENT_NO_METADATA', 'The development stand-in has no metadata');
+  }
+  if (!text(p['groupsClaim'], 100))
+    return bad('IDENTITY_GROUPS_CLAIM_REQUIRED', 'The claim that carries group membership is named');
+  return ok({
+    protocol,
+    issuer: p['issuer'].trim(),
+    groupsClaim: p['groupsClaim'].trim(),
+    ...(typeof metadataUrl === 'string' ? { metadataUrl } : {}),
+    ...(typeof p['clientId'] === 'string' ? { clientId: p['clientId'].trim() } : {}),
+  });
+}
+
+/**
+ * The provider in force for `profile`. Either one `provider`, or `providers`
+ * keyed by deployment profile — so one file can carry the development
+ * stand-in for local work and the institution's provider for a deployed
+ * environment. Every entry is checked whichever is selected. DEPLOYED selects
+ * only its own entry; DEVELOPMENT selects its own, else the deployed one.
+ */
+function selectProvider(raw: Record<string, unknown>, profile: DeploymentProfile): Result<IdentityProvider> {
+  const single = raw['provider'];
+  const keyed = raw['providers'];
+  if (single !== undefined && keyed !== undefined)
+    return bad('IDENTITY_PROVIDER_AMBIGUOUS', 'Give provider or providers, not both');
+  if (keyed === undefined) return parseProvider(single, profile, true);
+  if (!isRecord(keyed)) return bad('IDENTITY_PROVIDER_REQUIRED', 'providers is an object keyed by deployment profile');
+  const unknownProfiles = Object.keys(keyed).filter((k) => !(PROFILES as readonly string[]).includes(k));
+  if (unknownProfiles.length > 0)
+    return bad('IDENTITY_PROVIDER_PROFILE_UNKNOWN', 'providers is keyed by DEVELOPMENT or DEPLOYED', {
+      keys: unknownProfiles.join(','),
+    });
+  const selectedKey: DeploymentProfile =
+    profile === 'DEVELOPMENT' && keyed['DEVELOPMENT'] !== undefined ? 'DEVELOPMENT' : 'DEPLOYED';
+  let selected: IdentityProvider | undefined;
+  for (const entryProfile of PROFILES) {
+    if (keyed[entryProfile] === undefined) continue;
+    const r = parseProvider(keyed[entryProfile], entryProfile, entryProfile === selectedKey);
+    if (!r.ok) return r;
+    if (entryProfile === selectedKey) selected = r.value;
+  }
+  if (selected === undefined)
+    return bad('IDENTITY_PROVIDER_REQUIRED', 'No provider is configured for this deployment profile', { profile });
+  return ok(selected);
+}
 
 export function parseStaffIdentity(raw: unknown, profile: DeploymentProfile): Result<StaffIdentityConfiguration> {
   if (!isRecord(raw)) return bad('IDENTITY_MALFORMED', 'The staff identity configuration is an object');
   const unknownTop = Object.keys(raw).filter((k) => !TOP_KEYS.has(k));
-  if (unknownTop.length > 0) return bad('IDENTITY_UNKNOWN_KEY', 'Unknown key in the staff identity configuration', { keys: unknownTop.join(',') });
+  if (unknownTop.length > 0)
+    return bad('IDENTITY_UNKNOWN_KEY', 'Unknown key in the staff identity configuration', {
+      keys: unknownTop.join(','),
+    });
   if (!text(raw['version'], 40)) return bad('IDENTITY_VERSION_REQUIRED', 'The configuration carries a version');
-  const p = raw['provider'];
-  if (!isRecord(p)) return bad('IDENTITY_PROVIDER_REQUIRED', 'provider is an object');
-  const unknownP = Object.keys(p).filter((k) => !PROVIDER_KEYS.has(k));
-  if (unknownP.length > 0) return bad('IDENTITY_PROVIDER_UNKNOWN_KEY', 'Unknown key in provider; a secret never belongs here', { keys: unknownP.join(',') });
-  const protocol = p['protocol'];
-  if (protocol !== 'SAML' && protocol !== 'OIDC' && protocol !== 'DEVELOPMENT') return bad('IDENTITY_PROTOCOL_UNKNOWN', 'protocol is SAML, OIDC or DEVELOPMENT');
-  if (protocol === 'DEVELOPMENT' && profile !== 'DEVELOPMENT') return bad('IDENTITY_DEVELOPMENT_PROVIDER_REFUSED', 'A deployed environment authenticates staff through the institution’s identity provider, never a development stand-in', { profile });
-  if (!text(p['issuer'], 400)) return bad('IDENTITY_ISSUER_REQUIRED', 'The provider’s issuer or entity id is required');
-  const metadataUrl = p['metadataUrl'];
-  if (protocol !== 'DEVELOPMENT') {
-    if (typeof metadataUrl !== 'string' || !/^https:\/\/[^\s]+$/.test(metadataUrl)) return bad('IDENTITY_METADATA_URL_REQUIRED', 'SAML metadata or OIDC discovery is fetched over TLS', { protocol });
-    if (protocol === 'OIDC' && !text(p['clientId'], 200)) return bad('IDENTITY_CLIENT_ID_REQUIRED', 'An OIDC provider needs the client identifier (the secret goes to the vault)');
-  } else if (metadataUrl !== undefined) {
-    return bad('IDENTITY_DEVELOPMENT_NO_METADATA', 'The development stand-in has no metadata');
-  }
-  if (!text(p['groupsClaim'], 100)) return bad('IDENTITY_GROUPS_CLAIM_REQUIRED', 'The claim that carries group membership is named');
+  const provider = selectProvider(raw, profile);
+  if (!provider.ok) return provider;
   const m = raw['mappings'];
-  if (!Array.isArray(m) || m.length === 0) return bad('IDENTITY_MAPPINGS_REQUIRED', 'At least one group maps to an authority');
+  if (!Array.isArray(m) || m.length === 0)
+    return bad('IDENTITY_MAPPINGS_REQUIRED', 'At least one group maps to an authority');
   const mappings: AuthorityMapping[] = [];
   const seenGroups = new Set<string>();
   for (const [i, entry] of m.entries()) {
     const at = { index: String(i) };
-    if (!isRecord(entry) || !text(entry['group'], 200) || typeof entry['authority'] !== 'string') return bad('IDENTITY_MAPPING_MALFORMED', 'A mapping is { group, authority }', at);
-    if (!STAFF_AUTHORITIES.includes(entry['authority'] as StaffAuthority)) return bad('IDENTITY_AUTHORITY_UNKNOWN', 'authority is one the platform defines', { ...at, authority: entry['authority'], allowed: STAFF_AUTHORITIES.join(',') });
+    if (!isRecord(entry) || !text(entry['group'], 200) || typeof entry['authority'] !== 'string')
+      return bad('IDENTITY_MAPPING_MALFORMED', 'A mapping is { group, authority }', at);
+    if (!STAFF_AUTHORITIES.includes(entry['authority'] as StaffAuthority))
+      return bad('IDENTITY_AUTHORITY_UNKNOWN', 'authority is one the platform defines', {
+        ...at,
+        authority: entry['authority'],
+        allowed: STAFF_AUTHORITIES.join(','),
+      });
     const group = entry['group'].trim();
-    if (seenGroups.has(group)) return bad('IDENTITY_GROUP_MAPPED_TWICE', 'A group maps to one authority; a person holding two authorities belongs to two groups', { ...at, group });
+    if (seenGroups.has(group))
+      return bad(
+        'IDENTITY_GROUP_MAPPED_TWICE',
+        'A group maps to one authority; a person holding two authorities belongs to two groups',
+        { ...at, group },
+      );
     seenGroups.add(group);
     mappings.push({ group, authority: entry['authority'] as StaffAuthority });
   }
   const mapped = new Set(mappings.map((x) => x.authority));
   for (const required of ['MAKER', 'CHECKER'] as const) {
-    if (!mapped.has(required)) return bad('IDENTITY_AUTHORITY_UNMAPPED', 'Maker and checker must each be reachable, or nothing can be keyed and approved', { authority: required });
+    if (!mapped.has(required))
+      return bad(
+        'IDENTITY_AUTHORITY_UNMAPPED',
+        'Maker and checker must each be reachable, or nothing can be keyed and approved',
+        { authority: required },
+      );
   }
   const life = raw['sessionLifetimeSeconds'];
-  if (typeof life !== 'number' || !Number.isInteger(life) || life <= 0 || life > MAX_SESSION_LIFETIME_SECONDS) return bad('IDENTITY_SESSION_LIFETIME', `sessionLifetimeSeconds is a whole number of seconds, at most ${String(MAX_SESSION_LIFETIME_SECONDS)}`);
+  if (typeof life !== 'number' || !Number.isInteger(life) || life <= 0 || life > MAX_SESSION_LIFETIME_SECONDS)
+    return bad(
+      'IDENTITY_SESSION_LIFETIME',
+      `sessionLifetimeSeconds is a whole number of seconds, at most ${String(MAX_SESSION_LIFETIME_SECONDS)}`,
+    );
   const step = raw['stepUpForApprovalSeconds'];
-  if (step !== undefined && (typeof step !== 'number' || !Number.isInteger(step) || step <= 0 || step > life)) return bad('IDENTITY_STEP_UP_WINDOW', 'stepUpForApprovalSeconds is a whole number of seconds no longer than the session');
+  if (step !== undefined && (typeof step !== 'number' || !Number.isInteger(step) || step <= 0 || step > life))
+    return bad(
+      'IDENTITY_STEP_UP_WINDOW',
+      'stepUpForApprovalSeconds is a whole number of seconds no longer than the session',
+    );
   return ok({
     version: raw['version'],
-    provider: { protocol, issuer: p['issuer'].trim(), groupsClaim: (p['groupsClaim'] as string).trim(), ...(typeof metadataUrl === 'string' ? { metadataUrl } : {}), ...(typeof p['clientId'] === 'string' ? { clientId: p['clientId'].trim() } : {}) },
+    provider: provider.value,
     mappings,
     sessionLifetimeSeconds: life,
     ...(typeof step === 'number' ? { stepUpForApprovalSeconds: step } : {}),
@@ -116,7 +241,10 @@ export function parseStaffIdentity(raw: unknown, profile: DeploymentProfile): Re
 /** The authorities a person holds, from the groups the provider asserted. Unknown groups confer nothing. */
 export function authoritiesFor(groups: readonly string[], c: StaffIdentityConfiguration): readonly StaffAuthority[] {
   const held = new Set<StaffAuthority>();
-  for (const g of groups) { const m = c.mappings.find((x) => x.group === g); if (m !== undefined) held.add(m.authority); }
+  for (const g of groups) {
+    const m = c.mappings.find((x) => x.group === g);
+    if (m !== undefined) held.add(m.authority);
+  }
   return STAFF_AUTHORITIES.filter((a) => held.has(a));
 }
 

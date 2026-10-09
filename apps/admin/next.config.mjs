@@ -6,6 +6,8 @@
  */
 const config = {
   outputFileTracingRoot: new URL('../..', import.meta.url).pathname,
+  // A self-contained server for the container image (apps/admin/Containerfile).
+  output: 'standalone',
   reactStrictMode: true,
   eslint: { ignoreDuringBuilds: true },
   async redirects() {

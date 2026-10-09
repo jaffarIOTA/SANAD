@@ -94,6 +94,14 @@ export interface BusinessApplication {
     readonly reason: string;
     readonly atEpochSeconds: bigint;
   };
+  /**
+   * What was approved, recorded by the decision that approved it: the amount
+   * and tenor the offer is quoted on. `requested` and `tenorMonths` are never
+   * overwritten — they stay the applicant's request. Absent on a record
+   * decided before approved terms were recorded: read it through
+   * `approvedTermsOf`, never directly.
+   */
+  readonly approvedTerms?: ApprovedTerms;
   readonly offer?: {
     readonly letterVersion: string;
     readonly sentAtEpochSeconds: bigint;
@@ -105,6 +113,54 @@ export interface BusinessApplication {
 }
 
 export type AssessmentOutcome = 'STRAIGHT_THROUGH' | 'COMMITTEE' | 'DECLINE' | 'REFER';
+
+/**
+ * How the approved terms came to be:
+ *   STRAIGHT_THROUGH_AS_REQUESTED  a straight-through approval; it applies only when the request already qualifies
+ *   COMMITTEE                      entered by the committee member and checked against the limits recorded with them
+ *   RECORDED_BEFORE_APPROVED_TERMS a decision recorded before approved terms existed; read as the request (see `approvedTermsOf`)
+ */
+export type ApprovedTermsBasis = 'STRAIGHT_THROUGH_AS_REQUESTED' | 'COMMITTEE' | 'RECORDED_BEFORE_APPROVED_TERMS';
+
+/**
+ * The limits a committee approval is checked against, snapshotted with it so
+ * the check can be reproduced: the risk band the assessment placed the
+ * application in (the tenant's credit policy) and the product variant's
+ * bounds (the tenant's catalogue). Plain data: this module knows no product.
+ */
+export interface ApprovalLimits {
+  readonly riskLevel: string;
+  readonly riskBandMaxAmount: Money;
+  readonly riskBandMinContributionPerTenThousand: number;
+  readonly variantCode: string;
+  /** The product's minimum amount; a variant carries no minimum of its own. */
+  readonly minAmount: Money;
+  readonly variantMaxAmount: Money;
+  readonly variantMinMonths: number;
+  readonly variantMaxMonths: number;
+  readonly variantMinContributionPerTenThousand: number;
+  readonly variantMaxContributionPerTenThousand: number;
+}
+
+export interface ApprovedTerms {
+  readonly amount: Money;
+  readonly tenorMonths: number;
+  readonly basis: ApprovedTermsBasis;
+  /** Present for a committee approval: what the figures were checked against. */
+  readonly limits?: ApprovalLimits;
+}
+
+/** What a committee member enters. Either figure left out takes its default (`defaultApprovedTerms`). */
+export interface ProposedTerms {
+  readonly amount?: Money;
+  readonly tenorMonths?: number;
+}
+
+/** What the caller knows that the application does not: the tenant's currency and the limits (absent when the assessment placed it in no risk band). */
+export interface ApprovalContext {
+  readonly tenantCurrency: CurrencyCode;
+  readonly limits?: ApprovalLimits;
+}
 
 export interface StageEvent {
   readonly eventType: string;
@@ -329,13 +385,167 @@ export function approveStraightThrough(app: BusinessApplication, approver: strin
     return bad('NOT_STRAIGHT_THROUGH', 'Only a straight-through assessment is approved without the committee');
   if (approver === app.submittedBy)
     return reject('OP-DETERMINACY', 'FOUR_EYES_SELF_APPROVAL', 'The officer who submitted may not approve');
-  return ok(move(app, 'APPROVED', {}, 'APPROVED_STRAIGHT_THROUGH', approver, at));
+  // Straight through applies only when the request already qualifies, so what is approved is what was requested — recorded explicitly.
+  const approvedTerms: ApprovedTerms = {
+    amount: app.requested,
+    tenorMonths: app.tenorMonths,
+    basis: 'STRAIGHT_THROUGH_AS_REQUESTED',
+  };
+  return ok(
+    move(
+      app,
+      'APPROVED',
+      { approvedTerms },
+      'APPROVED_STRAIGHT_THROUGH',
+      approver,
+      at,
+      approvedDetail(app, approvedTerms),
+    ),
+  );
 }
 
+/** The event detail of an approval: requested and approved side by side, as digit strings. */
+function approvedDetail(app: BusinessApplication, terms: ApprovedTerms): Readonly<Record<string, string>> {
+  return {
+    requestedMinorUnits: app.requested.minorUnits.toString(),
+    requestedTenorMonths: String(app.tenorMonths),
+    approvedMinorUnits: terms.amount.minorUnits.toString(),
+    approvedTenorMonths: String(terms.tenorMonths),
+    currency: terms.amount.currency,
+  };
+}
+
+const minMoney = (a: Money, b: Money): Money => (a.minorUnits <= b.minorUnits ? a : b);
+
+/**
+ * The committee screen's defaults: the lower of the requested amount and the
+ * risk band's maximum, and the lower of the requested tenor and the variant's
+ * maximum. A default is a starting figure, not an approval: it is checked like
+ * any figure the member enters.
+ */
+export function defaultApprovedTerms(
+  app: BusinessApplication,
+  limits: ApprovalLimits,
+): { readonly amount: Money; readonly tenorMonths: number } {
+  return {
+    amount: minMoney(app.requested, limits.riskBandMaxAmount),
+    tenorMonths: Math.min(app.tenorMonths, limits.variantMaxMonths),
+  };
+}
+
+const limit = (reason: string, detail: string, context?: Readonly<Record<string, string>>): Result<never> =>
+  reject('OP-LIMIT', reason, detail, context);
+
+/**
+ * Checks a committee's approved amount and tenor against the request, the
+ * risk band and the variant. Every refusal is typed: OP-DETERMINACY where a
+ * figure is not a figure (not positive, not whole, not the tenant's currency,
+ * limits for another variant), OP-LIMIT where it is a figure the limits do not
+ * allow.
+ *
+ * Contribution: the application holds it as a share of the project cost
+ * (per ten thousand, `contributionPerTenThousand`), not as a share of the
+ * financing, so approving less financing does not change it. It is
+ * re-checked as recorded against the band's minimum and the variant's band.
+ */
+export function checkApprovedTerms(
+  app: BusinessApplication,
+  proposed: { readonly amount: Money; readonly tenorMonths: number },
+  limits: ApprovalLimits,
+  tenantCurrency: CurrencyCode,
+): Result<ApprovedTerms> {
+  const limitAmounts = [limits.riskBandMaxAmount, limits.minAmount, limits.variantMaxAmount];
+  if (limits.variantCode !== app.variantCode || limitAmounts.some((m) => m.currency !== tenantCurrency))
+    return bad('APPROVAL_LIMITS_MISMATCH', 'The limits are not this application’s variant in the tenant’s currency', {
+      variantCode: limits.variantCode,
+    });
+  const { amount, tenorMonths } = proposed;
+  if (amount.currency !== tenantCurrency)
+    return bad('APPROVED_CURRENCY_NOT_TENANTS', 'The approved amount is in the tenant’s base currency', {
+      expected: tenantCurrency,
+      given: amount.currency,
+    });
+  if (amount.minorUnits <= 0n) return bad('APPROVED_AMOUNT_NOT_POSITIVE', 'The approved amount must be positive');
+  if (!Number.isSafeInteger(tenorMonths) || tenorMonths <= 0)
+    return bad('APPROVED_TENOR_INVALID', 'The approved tenor is a positive whole number of months');
+  const figures = {
+    approvedMinorUnits: amount.minorUnits.toString(),
+    approvedTenorMonths: String(tenorMonths),
+  };
+  if (amount.minorUnits > app.requested.minorUnits)
+    return limit('APPROVED_AMOUNT_ABOVE_REQUESTED', 'The committee approves at most the amount requested', {
+      ...figures,
+      requestedMinorUnits: app.requested.minorUnits.toString(),
+    });
+  if (tenorMonths > app.tenorMonths)
+    return limit('APPROVED_TENOR_ABOVE_REQUESTED', 'The committee approves at most the tenor requested', {
+      ...figures,
+      requestedTenorMonths: String(app.tenorMonths),
+    });
+  if (amount.minorUnits > limits.riskBandMaxAmount.minorUnits)
+    return limit('APPROVED_AMOUNT_ABOVE_RISK_BAND', 'The approved amount is above the risk band’s maximum', {
+      ...figures,
+      riskLevel: limits.riskLevel,
+      maxMinorUnits: limits.riskBandMaxAmount.minorUnits.toString(),
+    });
+  if (amount.minorUnits > limits.variantMaxAmount.minorUnits)
+    return limit('APPROVED_AMOUNT_ABOVE_VARIANT', 'The approved amount is above the variant’s maximum', {
+      ...figures,
+      variantCode: limits.variantCode,
+      maxMinorUnits: limits.variantMaxAmount.minorUnits.toString(),
+    });
+  if (amount.minorUnits < limits.minAmount.minorUnits)
+    return limit('APPROVED_AMOUNT_BELOW_MINIMUM', 'The approved amount is below the product’s minimum', {
+      ...figures,
+      minMinorUnits: limits.minAmount.minorUnits.toString(),
+    });
+  if (tenorMonths < limits.variantMinMonths || tenorMonths > limits.variantMaxMonths)
+    return limit('APPROVED_TENOR_OUTSIDE_VARIANT', 'The approved tenor is outside the variant’s tenor band', {
+      ...figures,
+      variantCode: limits.variantCode,
+      minMonths: String(limits.variantMinMonths),
+      maxMonths: String(limits.variantMaxMonths),
+    });
+  if (app.graceMonths >= tenorMonths)
+    return limit('APPROVED_TENOR_NOT_ABOVE_GRACE', 'The approved tenor is longer than the grace period', {
+      ...figures,
+      graceMonths: String(app.graceMonths),
+    });
+  if (app.contributionPerTenThousand < limits.riskBandMinContributionPerTenThousand)
+    return limit('CONTRIBUTION_BELOW_RISK_BAND', 'The owner’s contribution is below the risk band’s minimum', {
+      riskLevel: limits.riskLevel,
+      contributionPerTenThousand: String(app.contributionPerTenThousand),
+      minPerTenThousand: String(limits.riskBandMinContributionPerTenThousand),
+    });
+  if (
+    app.contributionPerTenThousand < limits.variantMinContributionPerTenThousand ||
+    app.contributionPerTenThousand > limits.variantMaxContributionPerTenThousand
+  )
+    return limit('CONTRIBUTION_OUTSIDE_VARIANT', 'The owner’s contribution is outside the variant’s band', {
+      variantCode: limits.variantCode,
+      contributionPerTenThousand: String(app.contributionPerTenThousand),
+      minPerTenThousand: String(limits.variantMinContributionPerTenThousand),
+      maxPerTenThousand: String(limits.variantMaxContributionPerTenThousand),
+    });
+  return ok({ amount, tenorMonths, basis: 'COMMITTEE', limits });
+}
+
+/**
+ * The credit committee's decision. An approval records the approved amount
+ * and tenor, checked by `checkApprovedTerms`; a figure the member leaves out
+ * takes its default. A decline records no terms. Four eyes and the reason are
+ * checked first, so neither is masked by a terms refusal.
+ */
 export function decideInCommittee(
   app: BusinessApplication,
-  decision: { readonly decidedBy: string; readonly approved: boolean; readonly reason: string },
+  decision: {
+    readonly decidedBy: string;
+    readonly approved: boolean;
+    readonly reason: string;
+    readonly terms?: ProposedTerms;
+  },
   at: bigint,
+  approval?: ApprovalContext,
 ): Result<Transition> {
   const e = expect(app, ['IN_COMMITTEE'], 'Decide in committee');
   if (!e.ok) return e;
@@ -354,17 +564,57 @@ export function decideInCommittee(
     reason: decision.reason,
     atEpochSeconds: at,
   };
-  return ok(
-    move(
-      app,
-      decision.approved ? 'APPROVED' : 'DECLINED',
-      { committee },
-      decision.approved ? 'COMMITTEE_APPROVED' : 'COMMITTEE_DECLINED',
-      decision.decidedBy,
-      at,
-      { reason: decision.reason },
-    ),
+  if (!decision.approved)
+    return ok(
+      move(app, 'DECLINED', { committee }, 'COMMITTEE_DECLINED', decision.decidedBy, at, { reason: decision.reason }),
+    );
+
+  if (approval === undefined)
+    return bad('APPROVAL_CONTEXT_REQUIRED', 'An approval is checked against the tenant’s currency and limits');
+  if (approval.limits === undefined)
+    return bad(
+      'RISK_BAND_REQUIRED',
+      'An approval is checked against the risk band the assessment placed the application in; there is none',
+    );
+  const defaults = defaultApprovedTerms(app, approval.limits);
+  const checked = checkApprovedTerms(
+    app,
+    {
+      amount: decision.terms?.amount ?? defaults.amount,
+      tenorMonths: decision.terms?.tenorMonths ?? defaults.tenorMonths,
+    },
+    approval.limits,
+    approval.tenantCurrency,
   );
+  if (!checked.ok) return checked;
+  return ok(
+    move(app, 'APPROVED', { committee, approvedTerms: checked.value }, 'COMMITTEE_APPROVED', decision.decidedBy, at, {
+      reason: decision.reason,
+      ...approvedDetail(app, checked.value),
+    }),
+  );
+}
+
+const APPROVED_ONWARDS: ReadonlySet<BusinessStatus> = new Set(['APPROVED', 'OFFER_SENT', 'SIGNED', 'DISBURSED']);
+
+/**
+ * The approved terms of an application, or undefined while it is undecided
+ * or was declined.
+ *
+ * A decision recorded before approved terms were recorded (October 2026)
+ * carries none. Such an application was offered on its request — that was the
+ * only figure the service had — so its approved terms are read as the request,
+ * with basis RECORDED_BEFORE_APPROVED_TERMS. The stored record is not
+ * rewritten; the reading is derived each time. An application counts as
+ * approved when the committee approved it, when it is APPROVED or later, or
+ * when it was withdrawn after an offer was sent.
+ */
+export function approvedTermsOf(app: BusinessApplication): ApprovedTerms | undefined {
+  if (app.approvedTerms !== undefined) return app.approvedTerms;
+  const approved = app.committee?.approved === true || APPROVED_ONWARDS.has(app.status) || app.offer !== undefined;
+  return approved
+    ? { amount: app.requested, tenorMonths: app.tenorMonths, basis: 'RECORDED_BEFORE_APPROVED_TERMS' }
+    : undefined;
 }
 
 // -- Stage 7: contract & disbursement --------------------------------------------------

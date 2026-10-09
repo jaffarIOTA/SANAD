@@ -9,8 +9,9 @@
  * the tenant's staff identity configuration (`config/tenants/<t>/identity/`),
  * exactly as the institution's identity provider's group claim will in
  * production. Development tokens are refused when NODE_ENV is production: there
- * a member of staff signs in through the institution's SSO, which is not built
- * (apps/ops/src/server/modules.ts says so).
+ * a member of staff signs in through the institution's single sign-on by
+ * OpenID Connect (single-sign-on.ts), whose principal is derived from the
+ * provider's `sub` claim and whose authorities come from the same mappings.
  *
  * No token, digest or principal is logged here or anywhere it is called from.
  */
@@ -49,49 +50,52 @@ export interface DevelopmentStaff {
  * The development staff. Fictional people; each token is one of them. The
  * groups are the tenant's own group names (its staff-identity.json), so the
  * authorities follow that configuration rather than being hard-coded here.
+ * Group names are scoped by tenant (`sanad.<tenant>.<role>`), the same values
+ * the deployed identity provider asserts, so several tenants can share one
+ * issuer without one tenant's group granting anything in another.
  */
 export const DEVELOPMENT_STAFF: readonly DevelopmentStaff[] = [
   {
     environmentName: 'STAFF_DEV_TOKEN_MAKER',
     principalId: 'stf-maker-01',
     tenantId: 'bank-a',
-    groups: ['sanad-makers'],
+    groups: ['sanad.bank-a.makers'],
   },
   {
     environmentName: 'STAFF_DEV_TOKEN_CHECKER',
     principalId: 'stf-checker-01',
     tenantId: 'bank-a',
-    groups: ['sanad-checkers'],
+    groups: ['sanad.bank-a.checkers'],
   },
   {
     environmentName: 'STAFF_DEV_TOKEN_SENIOR',
     principalId: 'stf-senior-01',
     tenantId: 'bank-a',
-    groups: ['sanad-senior-checkers'],
+    groups: ['sanad.bank-a.senior-checkers'],
   },
   {
     environmentName: 'STAFF_DEV_TOKEN_AE_OFFICER',
     principalId: 'stf-ae-officer-01',
     tenantId: 'sme-fund-ae',
-    groups: ['sanad-makers'],
+    groups: ['sanad.sme-fund-ae.makers'],
   },
   {
     environmentName: 'STAFF_DEV_TOKEN_AE_CHECKER',
     principalId: 'stf-ae-checker-01',
     tenantId: 'sme-fund-ae',
-    groups: ['sanad-checkers'],
+    groups: ['sanad.sme-fund-ae.checkers'],
   },
   {
     environmentName: 'STAFF_DEV_TOKEN_AE_COMMITTEE',
     principalId: 'stf-ae-committee-01',
     tenantId: 'sme-fund-ae',
-    groups: ['sanad-credit-committee'],
+    groups: ['sanad.sme-fund-ae.credit-committee'],
   },
   {
     environmentName: 'STAFF_DEV_TOKEN_AE_FINANCE',
     principalId: 'stf-ae-finance-01',
     tenantId: 'sme-fund-ae',
-    groups: ['sanad-finance'],
+    groups: ['sanad.sme-fund-ae.finance'],
   },
 ];
 
@@ -124,15 +128,16 @@ export function developmentStaffFor(presented: string, env: Env = process.env): 
 /**
  * The principal a development identity becomes under its tenant's staff
  * identity configuration: the authorities its groups map to. Undefined when the
- * configuration does not parse (a development provider in a deployed profile
- * does not) or grants the person nothing — a person with no authority does not
- * sign in.
+ * configuration does not parse, when its provider is not the development
+ * stand-in, or when it grants the person nothing — a person with no authority
+ * does not sign in. A development token is never mapped through a real
+ * provider's configuration, even where the group names coincide.
  */
 export function principalFor(
   staff: DevelopmentStaff,
   identity: Result<StaffIdentityConfiguration>,
 ): StaffPrincipal | undefined {
-  if (!identity.ok) return undefined;
+  if (!identity.ok || identity.value.provider.protocol !== 'DEVELOPMENT') return undefined;
   const authorities = authoritiesFor(staff.groups, identity.value);
   if (authorities.length === 0) return undefined;
   return { principalId: staff.principalId, tenantId: staff.tenantId, authorities };

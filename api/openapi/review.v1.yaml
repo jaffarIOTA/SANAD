@@ -291,6 +291,7 @@ components:
           OP-DETERMINACY,
           OP-CHAIN,
           OP-LIMIT,
+          OP-LICENCE,
           PLAT-01,
           PLAT-02,
           PLAT-03,

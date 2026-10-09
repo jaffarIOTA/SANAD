@@ -922,6 +922,7 @@ components:
         - OP-DETERMINACY
         - OP-CHAIN
         - OP-LIMIT
+        - OP-LICENCE
 
     Problem:
       type: object
@@ -1035,10 +1036,38 @@ components:
           description: The owner's own contribution to the project cost, per ten thousand.
         contact: { $ref: '#/components/schemas/BusinessContact' }
 
+    BusinessApprovedTerms:
+      type: object
+      additionalProperties: false
+      description: |
+        What a decision approved, present once the application is approved:
+        the amount and tenor the offer is quoted on, in the tenant's currency.
+        The credit committee may approve less than was requested (the risk
+        band and the product variant cap it); a straight-through approval is
+        the request. A decision recorded before approved terms existed is
+        reported as the request with basis RECORDED_BEFORE_APPROVED_TERMS.
+      required: [amountMinorUnits, tenorMonths, basis]
+      properties:
+        amountMinorUnits: { type: string, pattern: '^[1-9][0-9]{0,18}$' }
+        tenorMonths: { type: integer, minimum: 1 }
+        basis:
+          type: string
+          enum: [STRAIGHT_THROUGH_AS_REQUESTED, COMMITTEE, RECORDED_BEFORE_APPROVED_TERMS]
     BusinessApplicationStatus:
       type: object
       additionalProperties: false
-      required: [applicationId, upstreamRef, status, stage, productCode, variantCode, requestedMinorUnits, currency]
+      required:
+        [
+          applicationId,
+          upstreamRef,
+          status,
+          stage,
+          productCode,
+          variantCode,
+          requestedMinorUnits,
+          requestedTenorMonths,
+          currency,
+        ]
       properties:
         applicationId: { type: string }
         upstreamRef: { type: string }
@@ -1065,11 +1094,20 @@ components:
           description: 5 credit assessment, 6 decisioning, 7 contract & disbursement, 8 portfolio, 9 collections.
         productCode: { type: string }
         variantCode: { type: string }
-        requestedMinorUnits: { type: string, pattern: '^[1-9][0-9]{0,18}$' }
+        requestedMinorUnits:
+          type: string
+          pattern: '^[1-9][0-9]{0,18}$'
+          description: The amount the applicant requested, as handed over. Never overwritten by a decision.
+        requestedTenorMonths:
+          type: integer
+          minimum: 1
+          description: The tenor the applicant requested, as handed over. Never overwritten by a decision.
         currency:
           type: string
           enum: [SAR, AED]
           description: The tenant's base currency, from its onboarding record.
+        approvedTerms:
+          $ref: '#/components/schemas/BusinessApprovedTerms'
         offerLetterVersion:
           type: string
           pattern: '^[0-9a-f]{64}$'
@@ -1152,6 +1190,13 @@ components:
 
         Distinguished from `400` on purpose: the body was understood. Retrying
         it unchanged will be refused again. `control` names what refused.
+
+        One exception: `OP-LICENCE` / `LICENCE_NOT_ACTIVE` — the installation's
+        licence does not permit new business now (ADR 0006), with the cause in
+        `context.licenceReason`. Nothing was stored and the Idempotency-Key was
+        released, so the same request with the same key succeeds once the
+        institution has renewed. Reads, withdrawals and everything owed on
+        existing contracts are unaffected.
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
@@ -1189,6 +1234,18 @@ components:
                 correlationId: 018f3a2f-0000-7000-8000-000000000004
                 control: OP-DETERMINACY
                 reason: MERCHANT_MANDATE_EMPTY
+            licenceNotActive:
+              summary: The installation's licence does not permit new business now
+              value:
+                type: https://sanad.example/problems/control-rejection
+                title: Refused
+                status: 422
+                detail: The institution cannot start new business through this service at the moment, for a reason on its side; nothing was recorded. Retry the same request later. Existing contracts, repayments, collections and regulatory reporting continue as normal.
+                detailAr: 'لا تستطيع المؤسسة بدء أعمال جديدة عبر هذه الخدمة حالياً لسبب يخصها، ولم يُسجَّل شيء. أعد الطلب نفسه لاحقاً. تستمر العقود القائمة والسداد والتحصيل والتقارير الرقابية كالمعتاد.'
+                correlationId: 018f3a2f-0000-7000-8000-000000000005
+                control: OP-LICENCE
+                reason: LICENCE_NOT_ACTIVE
+                context: { licenceReason: GRACE_ENDED }
     RateLimited:
       description: Too many requests. Declared in `gateway/`, enforced there, re-checked by the service.
       headers:

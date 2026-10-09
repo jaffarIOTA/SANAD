@@ -32,9 +32,9 @@ signing or tenant isolation (SEC-V10).
 | Critical | 1 | 0 | 0 | 1 |
 | High | 3 | 1 | 0 | 4 |
 | Medium | 21 | 1 | 0 | 22 |
-| Low | 8 | 0 | 0 | 8 |
+| Low | 10 | 0 | 0 | 10 |
 | Closed (High 3, Medium 3, Low 1) | | | 7 | 7 |
-| **Total** | **33** | **2** | **7** | **42** |
+| **Total** | **35** | **2** | **7** | **44** |
 
 **Release status: blocked.** One Critical and four Highs are open or in remediation, so
 SEC-C01 condition 1 is not met.
@@ -104,6 +104,8 @@ required, and the test that proves the item closed.
 | SR-033 | The Semgrep rule `sanad-no-tenant-id-from-client` matches only `req.body.tenantId` and `req.query.tenantId`, at WARNING. It misses `FormData` fields (`field(form, 'tenant')`) | SEC-D03, SEC-TM08 | Open | 2026-10-08 | 2027-01-06 | Platform engineering | Extend the rule to `FormData.get` and `searchParams.get` of `tenant*`. Raise it to ERROR | Semgrep rule test with positive and negative fixtures |
 | SR-034 | Session master secrets (`ADMIN_SESSION_SECRET`, `CONSUMER_SESSION_SECRET`) and the partner, staff and admin development tokens come from environment variables, not the vault. The consumer session comment says "comes from the vault", but the code reads the environment. `STAFF_DEV_TOKEN_SENIOR` signs in as both the ops senior checker and admin `adm-dev-02` | SEC-TM10, SEC-O07 | Open | 2026-10-08 | 2027-01-06 | Platform engineering | Master secrets from the vault with rotation. One development token per person per app | Unit test: a production profile with no vault reference refuses to start. Architecture test: no token variable is read by two apps |
 | SR-041 | The hosted Supabase project's PostgREST exposed-schema setting is not asserted. Only the local `supabase/config.toml` is checked | SEC-TM02, SEC-TM08 | Open | 2026-10-08 | 2027-01-06 | Platform engineering | Read the setting from the hosted project's management API in a scheduled check | Scheduled check: the exposed schemas are exactly `public` and `graphql_public` |
+| SR-043 | The OIDC sign-in state replay guard is per process (`packages/auth/staff-oidc.ts` `inMemoryReplayGuard`). On several replicas a copied state cookie could open once per replica; the provider's single-use authorization code is the remaining backstop. Phase 1 runs one replica. Raised 2026-10-09 | SEC-TM06 | Open | 2026-10-09 | 2027-01-07 | Platform engineering | A shared store (Redis or PostgreSQL) for consumed states, with the state's expiry as TTL, before any app runs more than one replica | Test: a state consumed on one guard instance is refused by a second instance sharing the store |
+| SR-044 | Step-up freshness falls back to the ID token's `iat` when the provider sends no `auth_time` (Entra ID may omit it), so freshness rests on the provider honouring `prompt=login`. Provider sign-out sends no `id_token_hint`. Raised 2026-10-09 | SEC-TM06 | Open | 2026-10-09 | 2027-01-07 | Platform engineering; Product owner (Entra configuration) | Request `auth_time` (`max_age` on the step-up request) and refuse a step-up token without it; configure Entra Conditional Access sign-in frequency for the Sanad app | Test: a step-up callback whose token lacks `auth_time` is refused |
 
 ### Closed
 

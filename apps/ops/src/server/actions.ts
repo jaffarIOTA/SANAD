@@ -21,6 +21,9 @@ import type { ServicingOutcome } from '@sanad/core/origination/request.ts';
 import type { OriginationChannel } from '@sanad/core/origination/channel.ts';
 import { tsaInstant } from '@sanad/core/time/tsa.ts';
 
+import { licenceRefusalText } from '@sanad/core/licensing/explain.ts';
+import { newBusinessPermitted } from '@sanad/origination/licensing.ts';
+
 import { authorise, localeSegmentOf } from './session.ts';
 import { requestPrincipal } from './staff.ts';
 import { findClearedInvoice, unavailableReason } from './invoices.ts';
@@ -159,10 +162,24 @@ export async function rejectAction(form: FormData): Promise<void> {
 // first because a Murabaha finances identified goods; the amount is read from
 // the invoice and never keyed (§6).
 
+/**
+ * Starting an application is new business: the installation's licence must
+ * permit it (ADR 0006). The workbench keys the trade-first Murabaha SCF
+ * journey. A refusal goes back as OP-LICENCE with the explanation in the
+ * screen's language — never a generic decline.
+ */
+async function requireLicence(locale: string, path: string): Promise<void> {
+  const r = await newBusinessPermitted({ productCode: 'murabaha-scf' });
+  if (r.ok) return;
+  const words = licenceRefusalText(r.error.reason);
+  failTo(path, 'OP-LICENCE', locale === 'ar' ? words.ar : words.en);
+}
+
 export async function beginOriginationAction(form: FormData): Promise<void> {
   const locale = localeOf(form);
   const channel = (field(form, 'channel') || 'MAKER_CHECKER') as OriginationChannel;
   await authorise(locale, 'ORIGINATE', `/${locale}/originate`);
+  await requireLicence(locale, `/${locale}/originate`);
 
   const draft = startDraft(channel);
   redirect(`/${locale}/originate/${draft.draftId}/trade`);
@@ -229,6 +246,8 @@ export async function submitDraftAction(form: FormData): Promise<void> {
   // The maker is whoever is signed in, and the request is keyed under their tenant.
   const staff = await authorise(locale, 'ORIGINATE', `/${locale}/originate/${encodeURIComponent(draftId)}/review`);
   const maker = requestPrincipal(staff);
+  // A draft started before the licence lapsed still does not become an application after it.
+  await requireLicence(locale, `/${locale}/originate/${draftId}/review`);
 
   const draft = findDraft(draftId);
   if (draft?.invoiceUuid === undefined || draft.tenorDays === undefined) {

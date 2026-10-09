@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { money } from '@sanad/core/kernel/money.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
 import {
+  type ApprovalContext,
   type BusinessApplication,
   type HandoverInput,
   approveStraightThrough,
@@ -43,6 +44,22 @@ const input: HandoverInput = {
   tenorMonths: 60,
   graceMonths: 0,
   contributionPerTenThousand: 2000,
+};
+/** The LOW band and the EXPANSION variant as the fund's (ILLUSTRATIVE) configuration gives them: what a committee approval is checked against. */
+const APPROVAL: ApprovalContext = {
+  tenantCurrency: 'AED',
+  limits: {
+    riskLevel: 'LOW',
+    riskBandMaxAmount: money(200_000_000n, 'AED'),
+    riskBandMinContributionPerTenThousand: 2000,
+    variantCode: 'EXPANSION',
+    minAmount: money(5_000_000n, 'AED'),
+    variantMaxAmount: money(500_000_000n, 'AED'),
+    variantMinMonths: 12,
+    variantMaxMonths: 72,
+    variantMinContributionPerTenThousand: 2000,
+    variantMaxContributionPerTenThousand: 4000,
+  },
 };
 const ready = { spreadComplete: true, missingFigures: [], checklistComplete: true, missingDocuments: [] };
 const submitted = (): BusinessApplication =>
@@ -129,7 +146,7 @@ describe('stage 5: hand-over', () => {
       recordAssessment(submitted(), { outcome: 'COMMITTEE', assessmentRef: 'asm-9' }, 'engine', T + 3n),
     ).application;
     for (const reason of ['Guarantor 784-1971-1234567-1 is strong', 'Owner 1012345678 has history']) {
-      const d = decideInCommittee(inCommittee, { decidedBy: 'mcc-1', approved: true, reason }, T + 4n);
+      const d = decideInCommittee(inCommittee, { decidedBy: 'mcc-1', approved: true, reason }, T + 4n, APPROVAL);
       expect(d.ok).toBe(false);
       if (!d.ok) expect(d.error.reason).toBe('IDENTITY_NUMBER_IN_PAYLOAD');
       const w = withdraw(inCommittee, reason, 'officer-1', T + 4n);
@@ -137,7 +154,12 @@ describe('stage 5: hand-over', () => {
       if (!w.ok) expect(w.error.reason).toBe('IDENTITY_NUMBER_IN_PAYLOAD');
     }
     const approved = expectOk(
-      decideInCommittee(inCommittee, { decidedBy: 'mcc-1', approved: true, reason: 'strong revenue growth' }, T + 4n),
+      decideInCommittee(
+        inCommittee,
+        { decidedBy: 'mcc-1', approved: true, reason: 'strong revenue growth' },
+        T + 4n,
+        APPROVAL,
+      ),
     ).application;
     const sent = expectOk(
       recordOfferSent(approved, { letterVersion: LETTER, channels: ['EMAIL'] }, 'officer-1', T + 5n),
@@ -189,12 +211,22 @@ describe('stage 6: decisioning under four eyes', () => {
       ),
     ).application;
     expect(inCommittee.status).toBe('IN_COMMITTEE');
-    const self = decideInCommittee(inCommittee, { decidedBy: 'officer-1', approved: true, reason: 'fine' }, T + 4n);
+    const self = decideInCommittee(
+      inCommittee,
+      { decidedBy: 'officer-1', approved: true, reason: 'fine' },
+      T + 4n,
+      APPROVAL,
+    );
     expect(self.ok).toBe(false);
     if (!self.ok) expect(self.error.reason).toBe('FOUR_EYES_SELF_APPROVAL');
     expect(
       expectOk(
-        decideInCommittee(inCommittee, { decidedBy: 'mcc-1', approved: true, reason: 'strong revenue growth' }, T + 4n),
+        decideInCommittee(
+          inCommittee,
+          { decidedBy: 'mcc-1', approved: true, reason: 'strong revenue growth' },
+          T + 4n,
+          APPROVAL,
+        ),
       ).application.status,
     ).toBe('APPROVED');
   });
@@ -230,6 +262,7 @@ describe('stage 7: offer, signature, disbursement', () => {
           .application,
         { decidedBy: 'mcc-1', approved: true, reason: 'approved' },
         T + 4n,
+        APPROVAL,
       ),
     ).application;
   it('the signature must be on the letter that was sent; disbursement only after signing', () => {

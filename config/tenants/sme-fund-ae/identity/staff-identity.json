@@ -1,17 +1,44 @@
 {
-  "version": "2026-10-08",
-  "provider": {
-    "protocol": "DEVELOPMENT",
-    "issuer": "development:sme-fund-ae",
-    "groupsClaim": "groups"
+  "version": "2026-10-09",
+  "providers": {
+    "DEVELOPMENT": {
+      "protocol": "DEVELOPMENT",
+      "issuer": "development:sme-fund-ae",
+      "groupsClaim": "groups"
+    },
+    "DEPLOYED": {
+      "protocol": "OIDC",
+      "issuer": "https://login.microsoftonline.com/802e569b-c3fe-495f-a8c2-7735b7430e5f/v2.0",
+      "metadataUrl": "https://login.microsoftonline.com/802e569b-c3fe-495f-a8c2-7735b7430e5f/v2.0/.well-known/openid-configuration",
+      "clientId": "88295a3e-34af-41ed-a327-42719ff65d59",
+      "groupsClaim": "roles"
+    }
   },
   "mappings": [
-    { "group": "sanad-makers", "authority": "MAKER" },
-    { "group": "sanad-checkers", "authority": "CHECKER" },
-    { "group": "sanad-senior-checkers", "authority": "SENIOR_CHECKER" },
-    { "group": "sanad-credit-committee", "authority": "CREDIT_COMMITTEE" },
-    { "group": "sanad-finance", "authority": "FINANCE" },
-    { "group": "sanad-platform-admins", "authority": "PLATFORM_ADMIN" }
+    {
+      "group": "sanad.sme-fund-ae.makers",
+      "authority": "MAKER"
+    },
+    {
+      "group": "sanad.sme-fund-ae.checkers",
+      "authority": "CHECKER"
+    },
+    {
+      "group": "sanad.sme-fund-ae.senior-checkers",
+      "authority": "SENIOR_CHECKER"
+    },
+    {
+      "group": "sanad.sme-fund-ae.credit-committee",
+      "authority": "CREDIT_COMMITTEE"
+    },
+    {
+      "group": "sanad.sme-fund-ae.finance",
+      "authority": "FINANCE"
+    },
+    {
+      "group": "sanad.sme-fund-ae.platform-admins",
+      "authority": "PLATFORM_ADMIN"
+    }
   ],
   "sessionLifetimeSeconds": 1800,
   "stepUpForApprovalSeconds": 300

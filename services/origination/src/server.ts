@@ -37,7 +37,7 @@ import {
 import { money } from '@sanad/core/kernel/money.ts';
 import { preCheck } from '@sanad/core/decisioning/eligibility.ts';
 import type { CreditPolicy } from '@sanad/core/decisioning/policy.ts';
-import type { Result } from '@sanad/core/kernel/result.ts';
+import type { Rejection, Result } from '@sanad/core/kernel/result.ts';
 import type { ApplicantSnapshotPort } from '@sanad/core/ports/applicant-snapshot.ts';
 import { type TsaInstant, tsaInstant } from '@sanad/core/time/tsa.ts';
 
@@ -48,6 +48,10 @@ import { fingerprint, type IdempotencyStore, type StoredResponse } from './idemp
 import { authenticate, hasScope, type CredentialRegistry, type PartnerPrincipal } from './principal.ts';
 import { eligibilityToWire, toWire, type EligibilityRequestBody, type RaiseRequestBody } from './representation.ts';
 import type { RequestRepository, StoredRequest } from './repository.ts';
+import { type NewBusinessAct, newBusinessRefusal } from './licensing.ts';
+
+/** The product a partner request originates: the trade-first Murabaha SCF journey is the only one this API raises. */
+const PARTNER_REQUEST_PRODUCT = 'murabaha-scf';
 
 export const BASE_PATH = '/origination/v1';
 
@@ -103,6 +107,12 @@ export interface ServiceDependencies {
   readonly idempotency: IdempotencyStore;
   readonly credentials: CredentialRegistry;
   readonly timestamps: TimestampPort;
+  /**
+   * The installation licence's answer for a new-business act (ADR 0006): a
+   * rejection, or undefined when permitted. Defaults to the installation's own
+   * licence (`licensing.ts`); a test substitutes one.
+   */
+  readonly newBusiness?: (act: NewBusinessAct) => Promise<Rejection | undefined>;
 }
 
 // -- Plumbing -----------------------------------------------------------------
@@ -112,6 +122,12 @@ interface Reply {
   readonly body: unknown;
   readonly headers?: Readonly<Record<string, string>>;
   readonly problem?: boolean;
+  /**
+   * A refusal that may well not hold on retry (the licence is renewed): its
+   * Idempotency-Key is released rather than bound to the refusal, so the same
+   * request with the same key succeeds once the licence permits it.
+   */
+  readonly transient?: boolean;
 }
 
 const ok = (status: number, body: unknown, headers?: Record<string, string>): Reply => ({
@@ -490,7 +506,11 @@ export function createService(deps: ServiceDependencies): DrainableServer {
       throw error;
     }
 
-    await complete(principal, key, reply);
+    if (reply.transient === true) {
+      await deps.idempotency.release({ tenantId: principal.tenantId, partnerId: principal.partnerId, key });
+    } else {
+      await complete(principal, key, reply);
+    }
     send(response, reply, correlationId);
   }
 
@@ -513,6 +533,10 @@ export function createService(deps: ServiceDependencies): DrainableServer {
     if (failures.length > 0) return malformed(failures, correlationId);
 
     const payload = body as RaiseRequestBody;
+
+    // Starting an application is new business: the installation's licence must permit it (ADR 0006).
+    const licence = await (deps.newBusiness ?? newBusinessRefusal)({ productCode: PARTNER_REQUEST_PRODUCT });
+    if (licence !== undefined) return { ...fail(fromRejection(licence, correlationId)), transient: true };
 
     // The initiator's identity comes from the credential. The only thing the
     // body contributes is the merchant's own mandate, which the credential

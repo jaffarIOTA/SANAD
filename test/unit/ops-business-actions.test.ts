@@ -383,3 +383,45 @@ describe('four eyes between people at the decision', () => {
     expect((await getApplication(TENANT, id))?.application.status).toBe(status);
   });
 });
+
+describe('the committee form carries the approved amount and tenor; the server decides', () => {
+  beforeEach(() => {
+    jar.clear();
+    resetBusinessStore();
+  });
+
+  it('refuses a malformed or over-request figure by code, records nothing, then records the approved terms', async () => {
+    const inCommittee = (await listApplications(TENANT)).find((v) => v.application.status === 'IN_COMMITTEE');
+    expect(inCommittee, 'the illustrative book holds an application in committee').toBeDefined();
+    const id = inCommittee?.application.applicationId ?? '';
+    const requested = inCommittee?.application.requested.minorUnits ?? 0n;
+    const at = (fields: Record<string, string>): FormData =>
+      form({ applicationId: id, screen: 'assessment', approved: 'true', reason: 'MCC decision', ...fields });
+    signIn(SEED_PRINCIPALS.committee, ['CREDIT_COMMITTEE']);
+
+    const malformed = await redirectOf(
+      committeeDecisionAction,
+      at({ approvedAmount: '1.234', approvedTenorMonths: '' }),
+    );
+    expect(malformed.searchParams.get('reason')).toBe('APPROVED_AMOUNT_MALFORMED');
+    const tenor = await redirectOf(committeeDecisionAction, at({ approvedAmount: '', approvedTenorMonths: '3.5' }));
+    expect(tenor.searchParams.get('reason')).toBe('APPROVED_TENOR_MALFORMED');
+    // One fils above the request: refused by the domain, and only the codes travel.
+    const plusOne = requested + 1n;
+    const above = `${(plusOne / 100n).toString()}.${(plusOne % 100n).toString().padStart(2, '0')}`;
+    const tooMuch = await redirectOf(committeeDecisionAction, at({ approvedAmount: above, approvedTenorMonths: '' }));
+    expect(tooMuch.searchParams.get('control')).toBe('OP-LIMIT');
+    expect(tooMuch.searchParams.get('reason')).toBe('APPROVED_AMOUNT_ABOVE_REQUESTED');
+    expect([...tooMuch.searchParams.keys()].sort()).toEqual(['control', 'reason']);
+    expect((await getApplication(TENANT, id))?.application.status).toBe('IN_COMMITTEE');
+
+    // Empty fields take the server's defaults; the request is kept beside them.
+    const done = await redirectOf(committeeDecisionAction, at({ approvedAmount: '', approvedTenorMonths: '' }));
+    expect(done.searchParams.get('notice')).toBe('COMMITTEE_APPROVED');
+    const after = await getApplication(TENANT, id);
+    expect(after?.application.status).toBe('APPROVED');
+    expect(after?.approvedTerms?.basis).toBe('COMMITTEE');
+    expect(after?.application.requested.minorUnits).toBe(requested);
+    expect((after?.approvedTerms?.amount.minorUnits ?? 0n) <= requested).toBe(true);
+  });
+});

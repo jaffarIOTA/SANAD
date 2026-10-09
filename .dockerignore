@@ -1,0 +1,30 @@
+# Build context for every image. Secrets first: nothing from a developer's
+# environment may reach an image or a remote build context.
+.env
+.env.*
+!.env.example
+**/*.pem
+**/*.key
+
+# Version control and local tooling
+.git
+.github
+.claude
+.codebase-memory
+*.log
+
+# Installed or generated output; each image builds its own
+node_modules
+**/node_modules
+**/.next
+**/dist
+coverage
+*.tsbuildinfo
+apps/ops/public/nutrient
+
+# Not part of any runtime
+docs
+test
+supabase
+gateway
+deploy

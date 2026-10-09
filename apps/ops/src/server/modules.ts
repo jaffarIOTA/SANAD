@@ -673,9 +673,10 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         href: '/sign-in',
         readiness: {
           kind: 'BLOCKED',
-          on: 'production staff sign-in is the institution’s SSO (SAML/OIDC), not built — needs the institution’s identity provider metadata and a test tenant. Development signs in with per-person staff tokens (refused when NODE_ENV=production); sealed session, authorities from the tenant’s staff identity configuration',
+          on: 'OIDC staff sign-in is built for the workbench and Admin (authorization code + PKCE, state and nonce in a sealed single-use cookie, discovery, JWKS with rotation, ID token validation; tenant sealed before the redirect; authorities only from that tenant’s group mappings; step-up before approvals) and tested against a local key pair with no network. It stays BLOCKED until a live call to a real provider (the first: IOTA’s identity provider) has been verified with the demo tenants’ placeholders filled in. SAML is not built. Development per-person staff tokens are unchanged and refused when NODE_ENV=production',
         },
-        reference: 'SDD §4.7 · SEC-TM08/12/14 — config/tenants/*/identity/staff-identity.json',
+        reference:
+          'SDD §4.7 · SEC-TM08/12/14 · ASVS V2/V3 — packages/auth/oidc.ts, packages/auth/staff-oidc.ts, config/tenants/*/identity/staff-identity.json',
       },
       {
         id: 'users',
@@ -683,6 +684,19 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         titleAr: 'المستخدمون والصلاحيات',
         readiness: soon(),
         reference: 'SDD §4.7 — catalogue built',
+      },
+      {
+        id: 'licensing',
+        titleEn: 'Installation licence',
+        titleAr: 'ترخيص النظام',
+        // Built: signed-licence verification, the state and the one gate at every new-business entry point,
+        // Admin → Licence under four eyes, the request file, a fixture-only check-in. Not yet able to license a
+        // production installation, for the two reasons below — so not LIVE.
+        readiness: {
+          kind: 'BLOCKED',
+          on: 'the issuer’s production public key is added to core/licensing/keys.ts at provisioning (until then a production build verifies no licence and starts no new business); the issuer’s check-in server does not exist yet, so online check-in has a fixture transport only',
+        },
+        reference: 'ADR 0006 · core/licensing · migration 0017 · Admin → Licence',
       },
       { id: 'configuration', titleEn: 'Configuration', titleAr: 'الإعدادات', readiness: soon(), reference: 'NFR-13' },
       { id: 'tenants', titleEn: 'Tenants', titleAr: 'المؤسسات', readiness: soon(), reference: 'NFR-12' },

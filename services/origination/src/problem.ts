@@ -15,6 +15,8 @@
  */
 
 import type { ControlCode, Rejection } from '@sanad/core/kernel/result.ts';
+import { type Bilingual, LICENCE_GATE_REASONS, licenceRefusalText } from '@sanad/core/licensing/explain.ts';
+import type { LicenceGateReason } from '@sanad/core/licensing/gate.ts';
 
 const BASE = 'https://sanad.example/problems';
 
@@ -91,6 +93,8 @@ const ARABIC: Readonly<Record<string, string>> = {
   STALE_APPLICATION: 'تغيّر الطلب من جهة أخرى منذ تحميله، ولم يُحفظ شيء. أعد التحميل وحاول مرة أخرى.',
   TENANT_NOT_ACTIVE: 'هذه المؤسسة غير مفعّلة في نطاق الاختصاص الحالي للنظام.',
   ELIGIBILITY_POLICY_UNAVAILABLE: 'تعذّر تحميل سياسة الائتمان لهذه المؤسسة.',
+  // Installation licence (ADR 0006). The specific wording comes from core/licensing/explain.ts by `licenceReason`.
+  LICENCE_NOT_ACTIVE: 'ترخيص النظام لا يسمح ببدء أعمال جديدة الآن. تستمر العقود القائمة والسداد والتحصيل كالمعتاد.',
 
   // Transport-level refusals raised by this service
   MALFORMED_JSON: 'تعذّرت قراءة محتوى الطلب كبيانات JSON صحيحة.',
@@ -118,6 +122,22 @@ function arabicFor(reason: string, control: ControlCode | undefined): string {
   return control === undefined ? 'تعذّر إتمام الطلب.' : `رُفض الطلب بموجب الضابط ${control}.`;
 }
 
+/**
+ * A licence refusal over an API is worded for the counterparty, in both
+ * languages, with the reassurance that servicing continues; the specific
+ * reason travels as `context.licenceReason`.
+ */
+function licenceWording(
+  reason: string,
+  context: Readonly<Record<string, string | number | boolean>> | undefined,
+): Bilingual | undefined {
+  if (reason !== 'LICENCE_NOT_ACTIVE') return undefined;
+  const why = context?.['licenceReason'];
+  return typeof why === 'string' && (LICENCE_GATE_REASONS as readonly string[]).includes(why)
+    ? licenceRefusalText(why as LicenceGateReason, 'COUNTERPARTY')
+    : undefined;
+}
+
 export function problem(params: {
   readonly status: number;
   readonly title: string;
@@ -130,12 +150,13 @@ export function problem(params: {
   readonly kind?: 'malformed-request' | 'control-rejection' | 'conflict' | 'error';
 }): Problem {
   const kind = params.kind ?? 'error';
+  const licence = licenceWording(params.reason, params.context);
   return {
     type: `${BASE}/${kind}`,
     title: params.title,
     status: params.status,
-    detail: params.detail,
-    detailAr: arabicFor(params.reason, params.control),
+    detail: licence?.en ?? params.detail,
+    detailAr: licence?.ar ?? arabicFor(params.reason, params.control),
     correlationId: params.correlationId,
     reason: params.reason,
     ...(params.control === undefined ? {} : { control: params.control }),
