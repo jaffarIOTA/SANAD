@@ -38,8 +38,8 @@ param adminAllowedCidrs array
 @description('Object ID of the person running the deployment; granted rights to set secrets and create the licence signing key.')
 param deployerObjectId string
 
-@description('GitHub repository allowed to deploy, as owner/name.')
-param githubRepository string = 'jaffarIOTA/SANAD'
+@description('The GitHub repository allowed to deploy, as GitHub names it in OIDC token subjects: owner@ownerId/repo@repoId (immutable IDs, so a renamed or re-created repository cannot inherit the federation). Find the IDs with `gh api repos/<owner>/<repo> --jq ".owner.id, .id"`.')
+param githubOidcRepository string = 'jaffarIOTA@216283503/SANAD@1379562991'
 
 var tags = {
   product: 'sanad'
@@ -116,7 +116,7 @@ resource deployFederation 'Microsoft.ManagedIdentity/userAssignedIdentities/fede
   name: 'github-production'
   properties: {
     issuer: 'https://token.actions.githubusercontent.com'
-    subject: 'repo:${githubRepository}:environment:production'
+    subject: 'repo:${githubOidcRepository}:environment:production'
     audiences: ['api://AzureADTokenExchange']
   }
 }
