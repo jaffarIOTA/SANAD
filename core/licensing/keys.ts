@@ -5,10 +5,9 @@
  * under the previous one: add the new key, keep the old one until every
  * licence it signed has expired.
  *
- * EMPTY for now, on purpose. The issuer's production public key is added here
- * at provisioning: it is the public half of the issuer's P-256 signing key,
- * which lives in a managed HSM and never leaves it, exported as a JWK
- * (`kty: EC`, `crv: P-256`, `x`, `y`). Until it is added, a production build
+ * Each entry is the public half of one of the issuer's P-256 signing keys,
+ * which live in a managed HSM and never leave it, exported as a JWK
+ * (`kty: EC`, `crv: P-256`, `x`, `y`). Without an entry, a production build
  * verifies no licence, and so — by design — starts no new business.
  *
  * A public key is not a secret; it belongs in the source. A private key never
@@ -26,4 +25,14 @@ export interface EcP256PublicJwk {
 
 export type Keyring = Readonly<Record<string, EcP256PublicJwk>>;
 
-export const PRODUCTION_KEYRING: Keyring = Object.freeze({});
+export const PRODUCTION_KEYRING: Keyring = Object.freeze({
+  // Created 2026-10-09 in the issuer's HSM (EC-HSM, P-256, sign/verify only).
+  // Verified at provisioning: an ES256 signature from the HSM checks against
+  // this key in the 64-byte IEEE P1363 form verify.ts expects.
+  'issuer-2026-10': {
+    kty: 'EC',
+    crv: 'P-256',
+    x: 'e9_lEadDYDA1H2ywizBBUKU0Lvjf0ppmx13WHm7RDTc',
+    y: 'MtevAxOuYOO86eVu6KRRVn5dKkZ5hm9FWKAGiW4avRY',
+  },
+});

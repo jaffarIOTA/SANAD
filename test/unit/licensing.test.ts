@@ -4,6 +4,8 @@
  * file. The prohibited outcomes themselves are in test/compliance/licensing.test.ts.
  */
 
+import { createPublicKey } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
 import { checkInRequest, handleCheckIn } from '../../core/licensing/check-in.ts';
@@ -103,8 +105,12 @@ describe('verification', () => {
     const r2 = verifyLicenceFile(issuer.signLicence(poc({ graceDays: 30 })), verifier, INSTALLATION);
     expect(r2.ok ? undefined : r2.error.reason).toBe('GRACE_DAYS_MISMATCH');
   });
-  it('the compiled-in production keyring is empty until provisioning', () => {
-    expect(Object.keys(PRODUCTION_KEYRING)).toEqual([]);
+  it('the compiled-in production keyring holds only P-256 public keys, each a usable key', () => {
+    expect(Object.keys(PRODUCTION_KEYRING).length).toBeGreaterThan(0);
+    for (const jwk of Object.values(PRODUCTION_KEYRING)) {
+      expect(Object.keys(jwk).sort()).toEqual(['crv', 'kty', 'x', 'y']);
+      expect(createPublicKey({ key: { ...jwk }, format: 'jwk' }).asymmetricKeyDetails?.namedCurve).toBe('prime256v1');
+    }
   });
 });
 
@@ -307,6 +313,6 @@ describe('a verifier outside production', () => {
   it('uses the compiled-in keyring when no test keyring is given', () => {
     const v = expectOk(createVerifier({ nodeEnv: 'development' }));
     expect(v.mode).toBe('NON_PRODUCTION');
-    expect(v.keyIds()).toEqual([]);
+    expect(v.keyIds()).toEqual(Object.keys(PRODUCTION_KEYRING));
   });
 });
