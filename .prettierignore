@@ -19,6 +19,8 @@ packages/**/*.js
 
 # Generated or vendored
 supabase
+# Emitted by `npm run build:apic`; the gateway job fails if it differs from the generator's output
+gateway/ibm/origination-api_1.0.0.yaml
 apps/ops/public/nutrient
 adapters/nutrient/verification/samples
 adapters/*/verification/findings
