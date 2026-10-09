@@ -13,7 +13,7 @@ import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
 import { newBusinessRefusal } from '@sanad/origination/licensing.ts';
 
 import { flushConsumerStore } from './durable.ts';
-import { developmentIdentity } from './identity.ts';
+import { consumerIdentity } from './identity.ts';
 import { TENANT, maturityDates, quoteFor } from './engine.ts';
 import { clearSession, currentSession, startSession } from './session.ts';
 import { accept, developmentAttestation, findOffer, nextId, saveOffer } from './store.ts';
@@ -27,9 +27,11 @@ const fail = (to: string, reason: string, control: string): never =>
 
 export async function signInAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
+  // No identity provider here: refused before the form's reference is read (SR-005).
+  const identity = await consumerIdentity(() => developmentAttestation().epochSeconds);
+  if (identity === undefined) return fail(`/${locale}`, 'IDENTITY_PROVIDER_NOT_CONFIGURED', 'OP-DETERMINACY');
   const applicantRef = field(form, 'applicantRef');
   if (!/^[a-z0-9-]{3,40}$/.test(applicantRef)) fail(`/${locale}`, 'APPLICANT_REF_MALFORMED', 'OP-DETERMINACY');
-  const identity = developmentIdentity(() => developmentAttestation().epochSeconds);
   const started = await identity.startAuthentication({
     tenantId: TENANT,
     applicantRef,

@@ -32,6 +32,10 @@ param customDomainsLive bool = false
 @description('The Container Apps environment\'s default domain (pass 1 output environmentDefaultDomain). Fixed once the environment exists; a parameter because app definitions are evaluated before the environment\'s properties are known.')
 param environmentDomain string = ''
 
+@description('What data this deployment holds. SYNTHETIC (Phase 1, ADR 0004) lets the consumer demonstration sign-in run, and only while the database\'s config.deployment_profile also says it is not cleared for production data (SR-005). Phase 2 passes PRODUCTION.')
+@allowed(['SYNTHETIC', 'PRODUCTION'])
+param dataClass string = 'SYNTHETIC'
+
 @description('Networks allowed to reach Admin (CIDR). Admin is never open to the internet.')
 param adminAllowedCidrs array
 
@@ -223,6 +227,7 @@ var apps = [
       { name: 'CONSUMER_SESSION_SECRET', secretRef: 'consumer-session-secret' }
       { name: 'SANAD_DATABASE_URL', secretRef: 'sanad-database-url' }
       { name: 'CONSUMER_BASE_URL', value: origin.consumer }
+      { name: 'SANAD_DATA_CLASS', value: dataClass }
     ]
     restricted: false
   }

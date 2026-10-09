@@ -2,10 +2,14 @@
  * Development ports for the dispatcher: every rail answers as a rail would,
  * and what it "did" is written to a ledger the workbench can show. Nothing
  * leaves the process. Replaced port by port as the adapters go live.
+ *
+ * Because they report bureau reports and payments as delivered without
+ * delivering them, they refuse construction under a deployed profile (SR-004).
  */
 
 import { type Result, ok } from '../../../core/kernel/result.ts';
 import type { DispatchPorts } from '../../../core/outbox/dispatch.ts';
+import { refuseUnderDeployedProfile } from '../../origination/src/profile.ts';
 
 export interface DevelopmentDelivery {
   readonly port: string;
@@ -15,8 +19,12 @@ export interface DevelopmentDelivery {
 
 export function developmentDispatchPorts(
   ledger: DevelopmentDelivery[],
-  options: { readonly unavailable?: ReadonlySet<string> } = {},
+  options: {
+    readonly unavailable?: ReadonlySet<string>;
+    readonly env?: Readonly<Record<string, string | undefined>>;
+  } = {},
 ): DispatchPorts {
+  refuseUnderDeployedProfile('developmentDispatchPorts', options.env);
   const down = (port: string) => options.unavailable?.has(port) === true;
   const record = (port: string, idempotencyKey: string, summary: string): void => {
     ledger.push({ port, idempotencyKey, summary });

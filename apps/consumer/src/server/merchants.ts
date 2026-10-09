@@ -17,6 +17,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { type Merchant, beginOnboarding, verify } from '@sanad/core/merchants/merchant.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
 import { loadMerchants, saveMerchant } from '@sanad/origination/merchants.ts';
+import { deploymentProfile } from '@sanad/origination/profile.ts';
 
 import { persistencePool } from './persistence.ts';
 import { developmentAttestation } from './store.ts';
@@ -76,7 +77,8 @@ function initial(): State {
   // Without a database the development merchant is seeded here; with one, `refreshMerchants()` reads it from there.
   if (persistencePool() === undefined) merchants.set('mer-demo-01', developmentMerchant());
   const tokens = new Map<string, MerchantPrincipal>();
-  const token = process.env['MERCHANT_DEV_TOKEN'];
+  // A development credential: never recognised under a deployed profile (SR-004).
+  const token = deploymentProfile() === 'DEVELOPMENT' ? process.env['MERCHANT_DEV_TOKEN'] : undefined;
   if (token !== undefined && token.trim().length > 0)
     tokens.set(digestOf(token), {
       merchantId: 'mer-demo-01',
