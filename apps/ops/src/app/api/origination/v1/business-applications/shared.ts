@@ -23,12 +23,20 @@ export interface BusinessApplicationStatusWire {
   readonly productCode: string;
   readonly variantCode: string;
   readonly requestedMinorUnits: string;
+  readonly requestedTenorMonths: number;
   readonly currency: string;
+  /** Once a decision approved the application: what the offer is quoted on. The request above is unchanged. */
+  readonly approvedTerms?: {
+    readonly amountMinorUnits: string;
+    readonly tenorMonths: number;
+    readonly basis: string;
+  };
   readonly offerLetterVersion?: string;
 }
 
 export function toStatusWire(v: BusinessApplicationView): BusinessApplicationStatusWire {
   const a = v.application;
+  const approved = v.approvedTerms;
   return {
     applicationId: a.applicationId,
     upstreamRef: a.upstreamRef,
@@ -37,7 +45,17 @@ export function toStatusWire(v: BusinessApplicationView): BusinessApplicationSta
     productCode: a.productCode,
     variantCode: a.variantCode,
     requestedMinorUnits: a.requested.minorUnits.toString(),
+    requestedTenorMonths: a.tenorMonths,
     currency: a.requested.currency,
+    ...(approved === undefined
+      ? {}
+      : {
+          approvedTerms: {
+            amountMinorUnits: approved.amount.minorUnits.toString(),
+            tenorMonths: approved.tenorMonths,
+            basis: approved.basis,
+          },
+        }),
     ...(a.offer === undefined ? {} : { offerLetterVersion: a.offer.letterVersion }),
   };
 }

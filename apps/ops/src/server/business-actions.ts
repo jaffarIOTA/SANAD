@@ -270,9 +270,26 @@ export async function approveStraightThroughAction(form: FormData): Promise<void
   return finish(ctx, () => approveStraightThrough(ctx.tenant, ctx.applicationId, ctx.actor), 'APPROVED');
 }
 
+/**
+ * The committee's decision. On approval, the approved amount (major units,
+ * the tenant's currency — no currency field is read) and tenor in months; a
+ * field left empty takes the server's default. Only the shape is checked
+ * here; whether the figures are allowed is the service's decision.
+ */
 export async function committeeDecisionAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_COMMITTEE');
   const approved = field(form, 'approved') === 'true';
+  const rawAmount = approved ? field(form, 'approvedAmount') : '';
+  const rawTenor = approved ? field(form, 'approvedTenorMonths') : '';
+  const amount = rawAmount === '' ? undefined : minorUnits(rawAmount);
+  if (rawAmount !== '' && amount === undefined)
+    return finish(
+      ctx,
+      refused('APPROVED_AMOUNT_MALFORMED', 'Enter the approved amount as a number with at most two decimals'),
+      '',
+    );
+  if (rawTenor !== '' && !/^\d{1,3}$/.test(rawTenor))
+    return finish(ctx, refused('APPROVED_TENOR_MALFORMED', 'Enter the approved tenor as a whole number of months'), '');
   return finish(
     ctx,
     () =>
@@ -280,6 +297,8 @@ export async function committeeDecisionAction(form: FormData): Promise<void> {
         decidedBy: ctx.actor,
         approved,
         reason: field(form, 'reason'),
+        ...(amount === undefined ? {} : { approvedAmountMinorUnits: amount }),
+        ...(rawTenor === '' ? {} : { approvedTenorMonths: Number.parseInt(rawTenor, 10) }),
       }),
     approved ? 'COMMITTEE_APPROVED' : 'COMMITTEE_DECLINED',
   );

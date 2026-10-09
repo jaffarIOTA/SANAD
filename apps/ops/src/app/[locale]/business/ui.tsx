@@ -247,6 +247,60 @@ export function Field({ label, children }: { readonly label: string; readonly ch
   );
 }
 
+const BASIS_WORDS: Readonly<Record<string, { readonly en: string; readonly ar: string }>> = {
+  STRAIGHT_THROUGH_AS_REQUESTED: {
+    en: 'Approved straight through, as requested',
+    ar: 'معتمد مباشرة كما طُلب',
+  },
+  COMMITTEE: { en: 'Approved by the credit committee', ar: 'اعتمدته لجنة الائتمان' },
+  RECORDED_BEFORE_APPROVED_TERMS: {
+    en: 'Decided before approved terms were recorded; read as the request',
+    ar: 'تقرر قبل تسجيل الشروط المعتمدة؛ يُقرأ كما طُلب',
+  },
+};
+
+/**
+ * The request beside what was approved, once a decision approved it. Both
+ * from the record — the screen compares nothing and decides nothing. Renders
+ * nothing while the application is undecided or declined.
+ */
+export function RequestedVsApproved({
+  view,
+  f,
+}: {
+  readonly view: BusinessApplicationView;
+  readonly f: Formatters;
+}): ReactElement | null {
+  const approved = view.approvedTerms;
+  if (approved === undefined) return null;
+  const a = view.application;
+  const months = (n: number): string => f.t(`${f.n(n)} months`, `${f.n(n)} شهراً`);
+  const lower = approved.amount.minorUnits < a.requested.minorUnits || approved.tenorMonths < a.tenorMonths;
+  const basis = BASIS_WORDS[approved.basis];
+  return (
+    <div className="rounded-tile border border-line px-4 py-3" data-requested-vs-approved>
+      <dl className="grid gap-4 sm:grid-cols-2">
+        <Field label={f.t('Requested', 'المطلوب')}>
+          <bdi className="tabular-nums">{f.money(a.requested.minorUnits)}</bdi>{' '}
+          <span className="text-[12px] font-normal text-ink-quiet">{f.cur}</span>
+          <span className="text-[13px] font-normal text-ink-quiet"> · {months(a.tenorMonths)}</span>
+        </Field>
+        <Field label={f.t('Approved', 'المعتمد')}>
+          <bdi className="tabular-nums" data-approved-amount>
+            {f.money(approved.amount.minorUnits)}
+          </bdi>{' '}
+          <span className="text-[12px] font-normal text-ink-quiet">{f.cur}</span>
+          <span className="text-[13px] font-normal text-ink-quiet"> · {months(approved.tenorMonths)}</span>
+        </Field>
+      </dl>
+      <p className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-ink-quiet">
+        {basis === undefined ? null : <span>{f.t(basis.en, basis.ar)}</span>}
+        {lower ? <Chip tone="warn">{f.t('Approved below the request', 'اعتُمد بأقل من المطلوب')}</Chip> : null}
+      </p>
+    </div>
+  );
+}
+
 export const BTN_PRIMARY =
   'press inline-flex h-10 items-center justify-center gap-2 rounded-tile bg-brand px-4 text-[14px] font-semibold text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-sunken disabled:text-ink-faint';
 export const BTN_SECONDARY =

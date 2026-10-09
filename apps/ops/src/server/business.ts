@@ -86,6 +86,8 @@ import {
   previewOfferNotifications,
 } from '@sanad/core/notifications/offer-notification.ts';
 import {
+  type ApprovalLimits,
+  type ApprovedTerms,
   type BusinessApplicant,
   type BusinessApplication,
   type BusinessStage,
@@ -93,8 +95,10 @@ import {
   type StageEvent,
   type Transition,
   approveStraightThrough as approveStraightThroughCore,
+  approvedTermsOf,
   containsIdentityNumber,
   decideInCommittee as decideInCommitteeCore,
+  defaultApprovedTerms,
   receiveHandover,
   recordAssessment,
   recordDisbursed as recordDisbursedCore,
@@ -384,6 +388,12 @@ export interface FigureView {
 
 export interface BusinessApplicationView {
   readonly application: BusinessApplication;
+  /**
+   * What was approved, once a decision approved it (`approvedTermsOf`): the
+   * amount and tenor the offer is quoted on. The request stays on
+   * `application.requested` and `application.tenorMonths`.
+   */
+  readonly approvedTerms?: ApprovedTerms;
   /** 9 when the loan system reports arrears; the application's stage otherwise. */
   readonly displayStage: BusinessStage;
   readonly currency: CurrencyCode;
@@ -843,8 +853,10 @@ function view(record: BusinessRecord, currency: CurrencyCode): BusinessApplicati
   const latestOffer = record.offers[record.offers.length - 1];
   const inCollections =
     record.application.status === 'DISBURSED' && record.portfolio !== undefined && record.portfolio.daysPastDue > 0;
+  const approvedTerms = approvedTermsOf(record.application);
   return {
     application: record.application,
+    ...(approvedTerms === undefined ? {} : { approvedTerms }),
     displayStage: inCollections ? 9 : record.application.stage,
     currency,
     contact: record.contact,
@@ -2250,10 +2262,90 @@ export async function approveStraightThrough(
   return withTenantLock(tenant, () => approveAt(tenant, applicationId, approver, developmentAttestation()));
 }
 
+/**
+ * A committee decision. On approval the member may enter the approved amount
+ * (minor units, always in the tenant's currency — never a currency from
+ * input) and tenor; either left out takes the default the screen shows
+ * (`committeeApprovalDefaults`). The figures are checked in the domain.
+ */
+export interface CommitteeDecision {
+  readonly decidedBy: string;
+  readonly approved: boolean;
+  readonly reason: string;
+  readonly approvedAmountMinorUnits?: bigint;
+  readonly approvedTenorMonths?: number;
+}
+
+/**
+ * The limits a committee approval is checked against: the risk band from the
+ * latest assessment run on record (its terms as the tenant's credit policy
+ * gave them) and the variant's bounds from the tenant's catalogue. Undefined
+ * limits — no risk band on the latest run — means the application cannot be
+ * approved (RISK_BAND_REQUIRED, from the domain); a missing product is the
+ * product's own refusal.
+ */
+async function approvalLimitsFor(
+  tenant: TenantCode,
+  record: BusinessRecord,
+  at: TsaInstant,
+): Promise<Result<ApprovalLimits | undefined>> {
+  const app = record.application;
+  const product = await productFor(tenant, app.productCode, app.variantCode, at);
+  if (!product.ok) return product;
+  const run = record.assessments[record.assessments.length - 1];
+  const band = run?.assessment.terms;
+  const level = run?.assessment.riskLevel;
+  if (
+    run === undefined ||
+    band === undefined ||
+    level === undefined ||
+    run.assessmentId !== app.assessment?.assessmentRef
+  )
+    return ok(undefined);
+  const v = product.value.variant;
+  return ok({
+    riskLevel: level,
+    riskBandMaxAmount: band.maxFinancing,
+    riskBandMinContributionPerTenThousand: band.minEquityContributionPerTenThousand,
+    variantCode: v.code,
+    minAmount: product.value.terms.minAmount,
+    variantMaxAmount: v.maxAmount,
+    variantMinMonths: v.minMonths,
+    variantMaxMonths: v.maxMonths,
+    variantMinContributionPerTenThousand: v.minContributionPerTenThousand,
+    variantMaxContributionPerTenThousand: v.maxContributionPerTenThousand,
+  });
+}
+
+/** What the committee screen pre-fills, and the limits it states beside the inputs. Computed here, never in the page. */
+export interface CommitteeApprovalDefaults {
+  readonly amount: Money;
+  readonly tenorMonths: number;
+  readonly limits: ApprovalLimits;
+}
+
+/**
+ * The committee screen's defaults for an application in committee: the lower
+ * of the requested amount and the risk band's maximum, the lower of the
+ * requested tenor and the variant's maximum. Undefined when there is nothing
+ * to default from (not in committee, or no risk band).
+ */
+export async function committeeApprovalDefaults(
+  tenant: TenantCode,
+  applicationId: string,
+): Promise<CommitteeApprovalDefaults | undefined> {
+  const book = await hydrate(tenant);
+  const r = book.records.get(applicationId);
+  if (r === undefined || r.application.status !== 'IN_COMMITTEE') return undefined;
+  const limits = await approvalLimitsFor(tenant, r, developmentAttestation());
+  if (!limits.ok || limits.value === undefined) return undefined;
+  return { ...defaultApprovedTerms(r.application, limits.value), limits: limits.value };
+}
+
 async function decideAt(
   tenant: TenantCode,
   applicationId: string,
-  decision: { readonly decidedBy: string; readonly approved: boolean; readonly reason: string },
+  decision: CommitteeDecision,
   at: TsaInstant,
 ): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
@@ -2261,17 +2353,44 @@ async function decideAt(
   if (!ctx.ok) return ctx;
   const r = book.records.get(applicationId);
   if (r === undefined) return notFound(applicationId);
-  const t = decideInCommitteeCore(r.application, decision, at.epochSeconds);
+  // A decline needs no limits; an approval is checked against them (in the domain, after four eyes and the reason).
+  let limits: ApprovalLimits | undefined;
+  if (decision.approved && r.application.status === 'IN_COMMITTEE') {
+    const found = await approvalLimitsFor(tenant, r, at);
+    if (!found.ok) return found;
+    limits = found.value;
+  }
+  const currency = ctx.value.currency;
+  const t = decideInCommitteeCore(
+    r.application,
+    {
+      decidedBy: decision.decidedBy,
+      approved: decision.approved,
+      reason: decision.reason,
+      terms: {
+        ...(decision.approvedAmountMinorUnits === undefined
+          ? {}
+          : { amount: money(decision.approvedAmountMinorUnits, currency) }),
+        ...(decision.approvedTenorMonths === undefined ? {} : { tenorMonths: decision.approvedTenorMonths }),
+      },
+    },
+    at.epochSeconds,
+    { tenantCurrency: currency, ...(limits === undefined ? {} : { limits }) },
+  );
   if (!t.ok) return t;
   apply(book, r, t.value);
-  return ok(view(r, ctx.value.currency));
+  return ok(view(r, currency));
 }
 
-/** The credit committee's decision, by a member who is not the submitting officer, with its reason. */
+/**
+ * The credit committee's decision, by a member who is not the submitting
+ * officer, with its reason; an approval records the approved amount and tenor
+ * (the request stays as it was).
+ */
 export async function decideInCommittee(
   tenant: TenantCode,
   applicationId: string,
-  decision: { readonly decidedBy: string; readonly approved: boolean; readonly reason: string },
+  decision: CommitteeDecision,
 ): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () => decideAt(tenant, applicationId, decision, developmentAttestation()));
 }
@@ -2306,7 +2425,11 @@ async function generateOfferAt(
       status: app.status,
       action: 'Generate the offer',
     });
-  if (app.requested.currency !== ctx.value.currency)
+  // The offer is on what was approved, never on what was requested (they differ when the committee approved less).
+  const approved = approvedTermsOf(app);
+  if (approved === undefined) return fail('APPROVED_TERMS_MISSING', 'The application carries no approved terms');
+  const facility = approved.amount;
+  if (app.requested.currency !== ctx.value.currency || facility.currency !== ctx.value.currency)
     return fail('CURRENCY_NOT_TENANTS', 'The application is not in the tenant’s base currency');
 
   const product = await productFor(tenant, app.productCode, app.variantCode, at);
@@ -2343,19 +2466,20 @@ async function generateOfferAt(
   const validUntil = isoOfDays(offerDays + datePolicy.value.offerValidityDays);
   const dates = checkOfferDates(datePolicy.value, offerDate, disbursementDate, firstDueDate);
   if (!dates.ok) return dates;
-  const tenorDays = app.tenorMonths * 30;
+  const tenorDays = approved.tenorMonths * 30;
 
   const pricing = resolvePricingInputs(product.value.entry.pricingRule, {
-    principal: app.requested,
+    principal: facility,
     tenorDays,
     asOfEpochSeconds: at.epochSeconds,
   });
   if (!pricing.ok) return pricing;
+  // The module's "requested" amount and tenor are what the institution offers: the approved terms.
   const quote = smeTermConventional.quote(product.value.terms, {
     tenantId: tenant,
     programmeId: product.value.variant.documentChecklistRef ?? 'sme-direct-lending',
     counterpartyId: app.applicationId,
-    requestedAmount: app.requested,
+    requestedAmount: facility,
     requestedTenorDays: tenorDays,
     asOf: at,
     pricing: pricing.value,
@@ -2387,7 +2511,7 @@ async function generateOfferAt(
     },
     productVariantName: { en: q.variantNameEn, ar: q.variantNameAr },
     family: smeTermConventional.descriptor.family,
-    facilityAmount: app.requested,
+    facilityAmount: facility,
     tenorMonths: q.months,
     graceMonths: q.graceMonths,
     rateBp: q.rateSnapshot.rate.bp,
@@ -2399,7 +2523,7 @@ async function generateOfferAt(
     totals: {
       instalment: q.monthlyInstalment,
       totalCharge,
-      totalPayable: money(app.requested.minorUnits + totalCharge.minorUnits, app.requested.currency),
+      totalPayable: money(facility.minorUnits + totalCharge.minorUnits, facility.currency),
     },
     institutionLegalName: { en: ctx.value.legalNameEn, ar: ctx.value.legalNameAr },
     signatories: [
@@ -2415,10 +2539,10 @@ async function generateOfferAt(
     variantCode: app.variantCode,
     months: q.months,
     graceMonths: q.graceMonths,
-    facilityAmount: app.requested,
+    facilityAmount: facility,
     monthlyInstalment: q.monthlyInstalment,
     totalInterest: q.interestAmount,
-    totalPayable: money(app.requested.minorUnits + totalCharge.minorUnits, app.requested.currency),
+    totalPayable: money(facility.minorUnits + totalCharge.minorUnits, facility.currency),
     rateBp: q.rateSnapshot.rate.bp,
     rateBasis: q.rateSnapshot.rate.basis,
     ratePeriod: q.rateSnapshot.rate.period,
@@ -2447,8 +2571,8 @@ async function generateOfferAt(
       offerId,
       applicationId,
       letterVersion: letter.value.version,
-      currency: app.requested.currency,
-      facilityMinorUnits: app.requested.minorUnits,
+      currency: facility.currency,
+      facilityMinorUnits: facility.minorUnits,
       createdBy: actor,
       letter: { letter: run.letter, terms: run.terms, createdAtEpochSeconds: run.createdAtEpochSeconds },
       schedule: run.schedule,
