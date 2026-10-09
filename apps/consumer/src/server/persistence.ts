@@ -11,12 +11,13 @@
  * Enabled only when `SANAD_DATABASE_URL` is set.
  */
 
-import type { Pool, PoolClient } from 'pg';
+import type { Pool } from 'pg';
 
 import type { CheckoutSession } from '@sanad/core/checkout/session.ts';
 import { tsaInstant } from '@sanad/core/time/tsa.ts';
 import { decodeJson, encodeJson } from '@sanad/origination/codec.ts';
 import { sharedPool, tenantUuidByCode } from '@sanad/origination/credentials.ts';
+import { type Scoped, inTenant } from '@sanad/origination/tenant-scope.ts';
 
 import type { Acceptance, StoredOffer } from './store.ts';
 
@@ -47,11 +48,15 @@ const asText = (v: unknown): string => (typeof v === 'string' ? v : JSON.stringi
 
 export async function loadConsumerBook(pool: Pool, tenantCode: string): Promise<ConsumerBook> {
   const tenant = await tenantUuidByCode(pool, tenantCode);
-  const offers = await pool.query<{ body: unknown }>(
+  return inTenant(pool, tenant, (db) => readConsumerBook(db, tenant));
+}
+
+async function readConsumerBook(db: Scoped, tenant: string): Promise<ConsumerBook> {
+  const offers = await db.query<{ body: unknown }>(
     'select body from core.offer where tenant_id = $1::uuid order by sequence asc',
     [tenant],
   );
-  const acceptances = await pool.query<{
+  const acceptances = await db.query<{
     acceptance_id: string;
     offer_id: string;
     disclosure_version: string;
@@ -66,11 +71,11 @@ export async function loadConsumerBook(pool: Pool, tenantCode: string): Promise<
        from core.offer_acceptance where tenant_id = $1::uuid order by created_at asc`,
     [tenant],
   );
-  const sessions = await pool.query<{ session: unknown }>(
+  const sessions = await db.query<{ session: unknown }>(
     'select session from core.checkout_session where tenant_id = $1::uuid order by sequence asc',
     [tenant],
   );
-  const idempotency = await pool.query<{ merchant_id: string; idempotency_key: string; session_id: string }>(
+  const idempotency = await db.query<{ merchant_id: string; idempotency_key: string; session_id: string }>(
     'select merchant_id, idempotency_key, session_id from core.checkout_idempotency where tenant_id = $1::uuid',
     [tenant],
   );
@@ -99,20 +104,6 @@ export async function loadConsumerBook(pool: Pool, tenantCode: string): Promise<
   };
 }
 
-async function inTransaction(pool: Pool, work: (client: PoolClient) => Promise<void>): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query('begin');
-    await work(client);
-    await client.query('commit');
-  } catch (error) {
-    await client.query('rollback');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
 /**
  * One transaction for everything changed: offers before the acceptances and
  * sessions that refer to them, sessions before the idempotency keys that
@@ -122,7 +113,7 @@ export async function saveConsumerBook(pool: Pool, tenantCode: string, changed: 
   if (changed.offers.length + changed.acceptances.length + changed.sessions.length + changed.idempotency.length === 0)
     return;
   const tenant = await tenantUuidByCode(pool, tenantCode);
-  await inTransaction(pool, async (client) => {
+  await inTenant(pool, tenant, async (client) => {
     for (const o of changed.offers) {
       await client.query(
         `insert into core.offer (tenant_id, offer_id, applicant_ref, product_code, body, disclosure_version, expires_at_epoch, correlation_id, created_by)

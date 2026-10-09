@@ -1161,7 +1161,10 @@ describe.skipIf(DB_CONFIGURED)('#1 two interleaved requests on one tenant', () =
       order.push(`${name}:end`);
       return r;
     };
-    const commitsBefore = (): number => transactions(db.log).filter((t) => t.at(-1)?.sql === 'commit').length;
+    // Saves only: the book's load is a tenant-scoped transaction too (SR-003), and commits nothing it wrote.
+    const commitsBefore = (): number =>
+      transactions(db.log).filter((t) => t.at(-1)?.sql === 'commit' && t.some((l) => l.sql.startsWith('insert')))
+        .length;
     const [x, y] = await Promise.all([
       mutateBusiness(TENANT, op('FR-00009011')),
       mutateBusiness(TENANT, op('FR-00009012')),

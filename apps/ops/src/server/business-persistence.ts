@@ -29,6 +29,7 @@ import type { OutboxEvent } from '@sanad/core/outbox/outbox.ts';
 import { decodeJson, encodeJson } from '@sanad/origination/codec.ts';
 import { tenantUuidByCode } from '@sanad/origination/credentials.ts';
 import { databaseHoldsSyntheticDataOnly } from '@sanad/origination/profile.ts';
+import { Rollback, type Scoped, inTenant } from '@sanad/origination/tenant-scope.ts';
 
 /** A figure as a row: the row id is what supersedes it. */
 export interface FigureRow {
@@ -131,13 +132,16 @@ export const illustrativeSeedPermitted = (pool: Pool): Promise<boolean> => datab
 /** The tenant's whole business book. */
 export async function loadBusinessBook(pool: Pool, tenantCode: string): Promise<BusinessBook> {
   const tenant = await tenantUuidByCode(pool, tenantCode);
+  return inTenant(pool, tenant, (db) => readBusinessBook(db, tenant));
+}
 
-  const apps = await pool.query<{ record: unknown; status: string; updated_at: string }>(
+async function readBusinessBook(db: Scoped, tenant: string): Promise<BusinessBook> {
+  const apps = await db.query<{ record: unknown; status: string; updated_at: string }>(
     'select record, status, updated_at::text as updated_at from core.business_application where tenant_id = $1::uuid order by sequence asc',
     [tenant],
   );
 
-  const figures = await pool.query<{
+  const figures = await db.query<{
     id: string;
     application_id: string;
     metric: string;
@@ -161,7 +165,7 @@ export async function loadBusinessBook(pool: Pool, tenantCode: string): Promise<
     [tenant],
   );
 
-  const assessments = await pool.query<{
+  const assessments = await db.query<{
     id: string;
     application_id: string;
     outcome: string;
@@ -177,7 +181,7 @@ export async function loadBusinessBook(pool: Pool, tenantCode: string): Promise<
     [tenant],
   );
 
-  const offers = await pool.query<{
+  const offers = await db.query<{
     id: string;
     application_id: string;
     letter_version: string;
@@ -192,7 +196,7 @@ export async function loadBusinessBook(pool: Pool, tenantCode: string): Promise<
     [tenant],
   );
 
-  const events = await pool.query<{
+  const events = await db.query<{
     id: string;
     application_id: string;
     event_type: string;
@@ -339,9 +343,7 @@ export async function saveBusinessChanges(
   const versions = new Map<string, ApplicationVersion>();
   if (total === 0) return { kind: 'SAVED', versions };
   const tenant = await tenantUuidByCode(pool, tenantCode);
-  const client = await pool.connect();
-  try {
-    await client.query('begin');
+  return inTenant(pool, tenant, async (client): Promise<SaveOutcome> => {
     for (const { application: a, expected } of changes.applications) {
       const written = await client.query<{ status: string; updated_at: string }>(
         `insert into core.business_application
@@ -374,10 +376,8 @@ export async function saveBusinessChanges(
         ],
       );
       const row = written.rows[0];
-      if (row === undefined) {
-        await client.query('rollback');
-        return { kind: 'STALE', applicationId: a.applicationId };
-      }
+      // Another process moved it first: abandon the whole transaction and report it.
+      if (row === undefined) throw new Rollback<SaveOutcome>({ kind: 'STALE', applicationId: a.applicationId });
       versions.set(a.applicationId, { status: row.status, updatedAt: row.updated_at });
     }
     for (const f of changes.figures) {
@@ -476,18 +476,6 @@ export async function saveBusinessChanges(
         [tenant, o.eventId, o.kind, o.subjectRef, o.idempotencyKey, JSON.stringify(o.payload), o.correlationId],
       );
     }
-    await client.query('commit');
     return { kind: 'SAVED', versions };
-  } catch (error) {
-    // A rollback on a broken connection fails too; the original error is the one that matters, and the
-    // transaction is abandoned with the connection either way.
-    try {
-      await client.query('rollback');
-    } catch {
-      /* the connection is gone; nothing was committed */
-    }
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }
