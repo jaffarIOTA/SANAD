@@ -19,13 +19,6 @@ const TENANT_IDENTITY_FILES: Readonly<Record<TenantCode, unknown>> = {
   'fintech-b': fintechB,
   'sme-fund-ae': fundAe,
 };
-/** The hosted environment's filling-in of the placeholders, with illustrative identifiers. */
-const fill = (file: unknown): unknown =>
-  JSON.parse(
-    JSON.stringify(file)
-      .replaceAll('<ENTRA_TENANT_ID>', '00000000-0000-0000-0000-000000000001')
-      .replaceAll('<ENTRA_CLIENT_ID>', '00000000-0000-0000-0000-000000000002'),
-  );
 const devProvider = { protocol: 'DEVELOPMENT', issuer: 'development:t', groupsClaim: 'groups' };
 
 const oidc = {
@@ -49,24 +42,20 @@ const reason = (raw: unknown, profile: 'DEVELOPMENT' | 'DEPLOYED' = 'DEPLOYED'):
 };
 
 describe('staff identity configuration', () => {
-  it('every tenant’s file selects the development stand-in in development, and is refused when deployed until its OIDC placeholders are filled', () => {
+  it('every tenant’s file selects the development stand-in in development, and a real OIDC provider when deployed', () => {
     for (const t of TENANT_CODES) {
       const dev = loadStaffIdentity(t, 'DEVELOPMENT');
       expect(dev.ok).toBe(true);
       if (dev.ok) expect(dev.value.provider.protocol).toBe('DEVELOPMENT');
-      const deployed = loadStaffIdentity(t, 'DEPLOYED');
-      expect(deployed.ok).toBe(false);
-      if (!deployed.ok) expect(deployed.error.reason).toBe('IDENTITY_PLACEHOLDER_UNFILLED');
+      const deployed = expectOk(loadStaffIdentity(t, 'DEPLOYED'));
+      expect(deployed.provider.protocol).toBe('OIDC');
+      expect(deployed.provider.issuer.startsWith('https://')).toBe(true);
+      expect(deployed.provider.groupsClaim).toBe('roles');
     }
   });
-  it('a filled-in copy of a tenant file selects OIDC when deployed, and its groups are scoped to that tenant', () => {
+  it('a tenant’s deployed groups are scoped to that tenant, so a shared provider grants nothing across tenants', () => {
     for (const t of TENANT_CODES) {
-      const filled = fill(TENANT_IDENTITY_FILES[t]);
-      const deployed = expectOk(parseStaffIdentity(filled, 'DEPLOYED'));
-      expect(deployed.provider.protocol).toBe('OIDC');
-      expect(deployed.provider.issuer).toBe(
-        'https://login.microsoftonline.com/00000000-0000-0000-0000-000000000001/v2.0',
-      );
+      const deployed = expectOk(parseStaffIdentity(TENANT_IDENTITY_FILES[t], 'DEPLOYED'));
       expect(deployed.mappings.every((m) => m.group.startsWith(`sanad.${t}.`))).toBe(true);
     }
   });
@@ -103,12 +92,14 @@ describe('staff identity configuration', () => {
       ),
     ).toBe('IDENTITY_METADATA_URL_REQUIRED');
   });
-  it('the sign-in page offers no institution for single sign-on until a real provider is configured', async () => {
+  it('the sign-in page offers single sign-on only when deployed, and only for the institutions active in the jurisdiction', async () => {
     expect(await singleSignOnInstitutions(1_800_000_000n)).toEqual([]);
     const before = process.env['SANAD_DEPLOYMENT_PROFILE'];
     process.env['SANAD_DEPLOYMENT_PROFILE'] = 'DEPLOYED';
     try {
-      expect(await singleSignOnInstitutions(1_800_000_000n)).toEqual([]);
+      // The default jurisdiction is the Kingdom: its two institutions, never the UAE fund.
+      const listed = (await singleSignOnInstitutions(1_800_000_000n)).map((x) => x.tenant).sort();
+      expect(listed).toEqual(['bank-a', 'fintech-b']);
     } finally {
       if (before === undefined) delete process.env['SANAD_DEPLOYMENT_PROFILE'];
       else process.env['SANAD_DEPLOYMENT_PROFILE'] = before;

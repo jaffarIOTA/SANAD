@@ -29,13 +29,19 @@ type SigningKey = Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
 /** A fixed clock, in seconds. */
 export const NOW = 1_800_000_000;
 
-/** The checked-in tenant files with the hosted environment's placeholders filled in. */
+/**
+ * The checked-in tenant files, deployed, with this stand-in provider's issuer,
+ * discovery URL and client id in place of the real ones. Everything else —
+ * protocol, groups claim, mappings, lifetimes — is the file's own.
+ */
 const FILES = { 'bank-a': bankA, 'fintech-b': fintechB, 'sme-fund-ae': fundAe } as const;
+export function withTestProvider(file: unknown): unknown {
+  const copy = JSON.parse(JSON.stringify(file)) as { providers: { DEPLOYED: Record<string, unknown> } };
+  copy.providers.DEPLOYED = { ...copy.providers.DEPLOYED, issuer: ISSUER, metadataUrl: DISCOVERY, clientId: CLIENT_ID };
+  return copy;
+}
 export function filledIdentity(tenant: keyof typeof FILES): StaffIdentityConfiguration {
-  const filled: unknown = JSON.parse(
-    JSON.stringify(FILES[tenant]).replaceAll('<ENTRA_TENANT_ID>', ENTRA_TENANT).replaceAll('<ENTRA_CLIENT_ID>', CLIENT_ID),
-  );
-  return expectOk(parseStaffIdentity(filled, 'DEPLOYED'));
+  return expectOk(parseStaffIdentity(withTestProvider(FILES[tenant]), 'DEPLOYED'));
 }
 
 export interface TestProvider {

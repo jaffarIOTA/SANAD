@@ -128,15 +128,16 @@ export function developmentStaffFor(presented: string, env: Env = process.env): 
 /**
  * The principal a development identity becomes under its tenant's staff
  * identity configuration: the authorities its groups map to. Undefined when the
- * configuration does not parse (a development provider in a deployed profile
- * does not) or grants the person nothing — a person with no authority does not
- * sign in.
+ * configuration does not parse, when its provider is not the development
+ * stand-in, or when it grants the person nothing — a person with no authority
+ * does not sign in. A development token is never mapped through a real
+ * provider's configuration, even where the group names coincide.
  */
 export function principalFor(
   staff: DevelopmentStaff,
   identity: Result<StaffIdentityConfiguration>,
 ): StaffPrincipal | undefined {
-  if (!identity.ok) return undefined;
+  if (!identity.ok || identity.value.provider.protocol !== 'DEVELOPMENT') return undefined;
   const authorities = authoritiesFor(staff.groups, identity.value);
   if (authorities.length === 0) return undefined;
   return { principalId: staff.principalId, tenantId: staff.tenantId, authorities };
