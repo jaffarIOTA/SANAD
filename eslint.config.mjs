@@ -1,6 +1,5 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
-import nextPlugin from '@next/eslint-plugin-next';
 import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 
@@ -49,15 +48,11 @@ export default tseslint.config(
     },
   },
   {
-    // Next.js apps: browser + Node globals and the Next rules. App Router only,
-    // so the Pages-directory link rule is switched off.
+    // Next.js apps: browser + Node globals. The Next lint rules
+    // (@next/eslint-plugin-next) are withdrawn until braces ships a fix for
+    // GHSA-vfj7-8cjw-p6xm, which fails the npm audit gate; see SR register.
     files: ['apps/**/*.{ts,tsx,mjs}', 'packages/**/*.{ts,tsx}'],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
-    plugins: { '@next/next': nextPlugin },
-    rules: {
-      ...nextPlugin.configs['core-web-vitals'].rules,
-      '@next/next/no-html-link-for-pages': 'off',
-    },
   },
   {
     // React Hooks rules only where React components and hooks live. Server-side

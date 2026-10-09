@@ -7,7 +7,7 @@
     "core",
     "products"
   ],
-  "description": "Sanad \u2014 Shariah-compliant origination platform. Wasl \u2014 SME supply chain finance.",
+  "description": "Sanad — Shariah-compliant origination platform. Wasl — SME supply chain finance.",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=20"
@@ -40,7 +40,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@next/eslint-plugin-next": "^15.5.27",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.20.4",
     "@types/react": "19.3.0",

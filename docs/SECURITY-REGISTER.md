@@ -33,8 +33,8 @@ signing or tenant isolation (SEC-V10).
 | High | 3 | 1 | 0 | 4 |
 | Medium | 21 | 1 | 0 | 22 |
 | Low | 8 | 0 | 0 | 8 |
-| Closed (High 2, Medium 3, Low 1) | | | 6 | 6 |
-| **Total** | **33** | **2** | **6** | **41** |
+| Closed (High 3, Medium 3, Low 1) | | | 7 | 7 |
+| **Total** | **33** | **2** | **7** | **42** |
 
 **Release status: blocked.** One Critical and four Highs are open or in remediation, so
 SEC-C01 condition 1 is not met.
@@ -115,6 +115,7 @@ required, and the test that proves the item closed.
 | SR-036 | GitHub Actions pinned to tags or `@master` (requirements §9 #7) | SEC-D17 | Medium | Closed | 2026-10-08 | 2026-10-08 | Platform engineering | Every `uses:` in `security.yml`, `gateway.yml` and `ibm.yml` is pinned to a full SHA | Commit `6ac4b01`. The container pin is tracked separately as SR-028 |
 | SR-037 | No security scanning in CI (requirements §9 #1, #3, #5) | SEC-D01..D08, SEC-D13 | High | Closed | 2026-10-08 | 2026-10-08 | Platform engineering | `security.yml`: CodeQL, Semgrep with Sanad rules, gitleaks, OSV and npm audit, dependency review, SBOM, Trivy filesystem, compliance suite | Commits `6ac4b01`, `0b9dfe9`, `77e07dc`. Run 37830450919 green. Coverage limits are tracked as SR-023, SR-024 and SR-032 |
 | SR-038 | AES-GCM authentication tag length not fixed on the sealed-token cipher (Semgrep `gcm-no-tag-length`). Also §9 #2: no security section in CLAUDE.md, closed by CLAUDE.md §14 in `6ac4b01` | SEC-TM06, SEC-R09 | Medium | Closed | 2026-10-08 | 2026-10-08 | Platform engineering | `authTagLength: 16` on cipher and decipher (`packages/auth/sealed-token.ts`) | Commit `0b9dfe9`. Test `test/unit/consumer-session.test.ts` "refuses a truncated authentication tag, which GCM would otherwise accept" |
+| SR-042 | `npm audit --audit-level=high` failed on GHSA-vfj7-8cjw-p6xm (braces, stack-exhaustion DoS), reached only through the development lint plugin `@next/eslint-plugin-next` via fast-glob and micromatch. No patched braces release exists. Raised 2026-10-09 | SEC-D04 | High | Closed | 2026-10-09 | 2026-10-09 | Platform engineering | Plugin removed and its Next.js lint rules withdrawn (`eslint.config.mjs`) rather than relaxing the audit gate. Re-add it when braces is patched | `npm audit --audit-level=high` reports 0 vulnerabilities; the SCA job is green |
 
 ---
 
