@@ -60,9 +60,22 @@ const REFUSAL: Readonly<Record<LicenceGateReason, Bilingual>> = {
   },
 };
 
+/**
+ * For a counterparty over an API (a partner, a merchant, an upstream system):
+ * what is refused and that it is not their doing, without directing them to
+ * screens they do not have. The reason code travels beside it.
+ */
+const COUNTERPARTY: Bilingual = {
+  en: 'The institution cannot start new business through this service at the moment, for a reason on its side; nothing was recorded. Retry the same request later.',
+  ar: 'لا تستطيع المؤسسة بدء أعمال جديدة عبر هذه الخدمة حالياً لسبب يخصها، ولم يُسجَّل شيء. أعد الطلب نفسه لاحقاً.',
+};
+
 /** The respectful explanation of a `LICENCE_NOT_ACTIVE` refusal, with the reassurance that servicing continues. */
-export function licenceRefusalText(reason: LicenceGateReason): Bilingual {
-  const r = REFUSAL[reason];
+export function licenceRefusalText(
+  reason: LicenceGateReason,
+  audience: 'STAFF' | 'COUNTERPARTY' = 'STAFF',
+): Bilingual {
+  const r = audience === 'STAFF' ? REFUSAL[reason] : COUNTERPARTY;
   return { en: `${r.en} ${SERVICING_CONTINUES.en}`, ar: `${r.ar} ${SERVICING_CONTINUES.ar}` };
 }
 

@@ -25,6 +25,7 @@ import { fingerprint, type IdempotencyStore } from '@sanad/origination/idempoten
 
 import { idempotencyLedger } from '../../../../../server/persistence.ts';
 import { hasScope } from '@sanad/origination/principal.ts';
+import { newBusinessRefusal } from '@sanad/origination/licensing.ts';
 import { fromRejection, problem } from '@sanad/origination/problem.ts';
 import { toWire, type RaiseRequestBody } from '@sanad/origination/representation.ts';
 
@@ -151,6 +152,13 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const body = parsed as RaiseRequestBody;
+  // Starting an application is new business: the installation's licence must permit it (ADR 0006).
+  // The key is released, not bound to the refusal, so the same request succeeds once the licence does.
+  const licence = await newBusinessRefusal({ productCode: 'murabaha-scf' });
+  if (licence !== undefined) {
+    await idempotency.release({ tenantId: principal.tenantId, partnerId: principal.partnerId, key });
+    return refuse(fromRejection(licence, correlationId));
+  }
   const keyed = keyRequest({
     tenantId: principal.tenantId,
     programmeId: body.programmeId,

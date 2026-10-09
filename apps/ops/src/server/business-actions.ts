@@ -96,7 +96,13 @@ async function finish(ctx: Context, change: () => Promise<Result<unknown>>, noti
   const result = await mutateBusiness(ctx.tenant, change);
   revalidatePath(`/${ctx.locale}/business`);
   if (ctx.applicationId !== '') revalidatePath(ctx.path);
-  if (!result.ok) redirect(`${ctx.path}?${refusalQuery(result.error.control, result.error.reason)}`);
+  if (!result.ok) {
+    // A licence refusal travels as LICENCE_<why>, so the screen words the specific reason from its own map.
+    const why = result.error.context?.['licenceReason'];
+    const reason =
+      result.error.control === 'OP-LICENCE' && typeof why === 'string' ? `LICENCE_${why}` : result.error.reason;
+    redirect(`${ctx.path}?${refusalQuery(result.error.control, reason)}`);
+  }
   redirect(`${ctx.path}?${new URLSearchParams({ notice }).toString()}`);
 }
 

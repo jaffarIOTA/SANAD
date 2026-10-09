@@ -7,6 +7,7 @@ import { book as bookBnpl } from '@sanad/products/bnpl/execution.ts';
 import { bnpl } from '@sanad/products/bnpl/index.ts';
 import type { BnplQuote } from '@sanad/products/bnpl/pricing.ts';
 import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
+import { newBusinessRefusal } from '@sanad/origination/licensing.ts';
 import { entryFor } from '@sanad/core/products/catalogue.ts';
 
 import { findSession, outboxStore, saveSession } from '../../../../server/checkout-store.ts';
@@ -36,6 +37,10 @@ export async function checkoutAcceptAction(form: FormData): Promise<void> {
   if (session === undefined || session.state !== 'OFFERED') return;
   if (field(form, 'confirm') !== 'yes') fail('CONFIRMATION_REQUIRED', 'OP-DETERMINACY');
   const at = developmentAttestation();
+  // Booking the facility, accepted now: permitted while the licence is valid or in grace, refused after grace
+  // ended (ADR 0006 §4) — checked before the acceptance is recorded, so nothing is half done.
+  const licence = await newBusinessRefusal({ productCode: 'bnpl', booking: { offerAcceptedAtEpochSeconds: at.epochSeconds } });
+  if (licence !== undefined) return fail(licence.reason, licence.control);
   const recorded = accept({
     offerId: session.offerId,
     identityAssertionId: identity.identityAssertionId,

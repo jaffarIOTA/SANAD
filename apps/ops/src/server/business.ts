@@ -114,6 +114,7 @@ import { buildOffer } from '@sanad/core/products/offer.ts';
 import { type TsaInstant, tsaInstant } from '@sanad/core/time/tsa.ts';
 import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
 import { tenantUuidByCode } from '@sanad/origination/credentials.ts';
+import { type NewBusinessAct, newBusinessRefusal } from '@sanad/origination/licensing.ts';
 import { smeTermConventional } from '@sanad/products/sme-term-conventional/index.ts';
 import type { SmeVariant } from '@sanad/products/sme-term-conventional/variants.ts';
 
@@ -1466,7 +1467,36 @@ export async function handOver(
   request: HandoverRequest,
   actor: string,
 ): Promise<Result<{ readonly view: BusinessApplicationView; readonly created: boolean }>> {
+  // Starting an application is new business: the installation's licence must permit the product (ADR 0006).
+  const licence = await licencePermits({ productCode: request.productCode });
+  if (!licence.ok) return licence;
   return withTenantLock(tenant, () => handOverAt(tenant, request, actor, developmentAttestation()));
+}
+
+/**
+ * The installation licence's answer for a new-business act (ADR 0006), as a
+ * Result. Called by the hand-over, offer generation and disbursement wrappers
+ * only — never by servicing, portfolio status, withdrawal or the outbox, so no
+ * licence state can stop what is owed on an existing facility. The seed calls
+ * the `*At` functions directly and is not gated.
+ */
+async function licencePermits(act: NewBusinessAct): Promise<Result<true>> {
+  const refusal = await newBusinessRefusal(act);
+  return refusal === undefined ? ok(true) : { ok: false, error: refusal };
+}
+
+/** The application's product and signing instant, read under the tenant's lock, for the licence gate. */
+async function licenceFacts(
+  tenant: TenantCode,
+  applicationId: string,
+): Promise<{ readonly productCode: string; readonly signedAtEpochSeconds?: bigint } | undefined> {
+  const r = (await hydrate(tenant)).records.get(applicationId);
+  if (r === undefined) return undefined;
+  const signedAt = r.application.signature?.atEpochSeconds;
+  return {
+    productCode: r.application.productCode,
+    ...(signedAt === undefined ? {} : { signedAtEpochSeconds: signedAt }),
+  };
 }
 
 function startSpreadingIfReceived(book: TenantBook, record: BusinessRecord, actor: string, at: bigint): Result<true> {
@@ -2446,7 +2476,15 @@ export async function generateOffer(
   actor: string,
   options: OfferOptions = {},
 ): Promise<Result<BusinessApplicationView>> {
-  return withTenantLock(tenant, () => generateOfferAt(tenant, applicationId, actor, options, developmentAttestation()));
+  return withTenantLock(tenant, async () => {
+    // A new offer is new business: the installation's licence must permit the product (ADR 0006).
+    const facts = await licenceFacts(tenant, applicationId);
+    if (facts !== undefined) {
+      const licence = await licencePermits({ productCode: facts.productCode });
+      if (!licence.ok) return licence;
+    }
+    return generateOfferAt(tenant, applicationId, actor, options, developmentAttestation());
+  });
 }
 
 function latestOfferOf(r: BusinessRecord): Result<OfferRun> {
@@ -2682,7 +2720,21 @@ export async function recordDisbursed(
   actor: string,
   paymentRef?: string,
 ): Promise<Result<BusinessApplicationView>> {
-  return withTenantLock(tenant, () => disburseAt(tenant, applicationId, actor, paymentRef, developmentAttestation()));
+  return withTenantLock(tenant, async () => {
+    // Booking the facility. The borrower's signature is the acceptance: one signed before the licence's grace
+    // ended is booked whatever the licence's state now; one signed after is refused (ADR 0006 §4).
+    const facts = await licenceFacts(tenant, applicationId);
+    if (facts !== undefined) {
+      const licence = await licencePermits({
+        productCode: facts.productCode,
+        ...(facts.signedAtEpochSeconds === undefined
+          ? {}
+          : { booking: { offerAcceptedAtEpochSeconds: facts.signedAtEpochSeconds } }),
+      });
+      if (!licence.ok) return licence;
+    }
+    return disburseAt(tenant, applicationId, actor, paymentRef, developmentAttestation());
+  });
 }
 
 // =============================================================================
