@@ -52,8 +52,7 @@ values the screens imply but do not show).
 
 Read the 🟡 rows as the real work list: most are things built to a different shape (a manual
 step where the screen shows an integration, a reference where the screen shows a file, a fixed
-value where the screen shows a dropdown). The ❌ rows are: approved amount below requested,
-LMS loan reference, the second contract with the partner bank, "Awaiting bank KYC", DoA tiers,
+value where the screen shows a dropdown). The ❌ rows are: LMS loan reference, the second contract with the partner bank, "Awaiting bank KYC", DoA tiers,
 credit report notes, "Back to Tuum CIF".
 
 ### 1.2 The schedule
@@ -67,10 +66,16 @@ the screens' own inconsistencies are in sections 13 and 14.
 
 ### 1.3 The most important gaps (what Tuum asked for that we do not do, or do differently)
 
-1. **No approved amount different from the requested amount.** The screens request AED 5,000,000
-   and offer AED 2,000,000, capped by the risk band. We carry one amount from hand-over to offer:
-   the committee approves or declines, but cannot approve a lower amount, so this case would be
-   refused at offer generation (`AMOUNT_EXCEEDS_VARIANT`). (T-08-06, T-09-01)
+1. ~~**No approved amount different from the requested amount.**~~ **Closed 2026-10-09.** Both
+   decisions now record approved terms (amount and tenor) beside the unchanged request: straight
+   through approves the request; the committee enters the approved figures, pre-filled with the
+   lower of the request and the risk band's maximum and the lower of the requested tenor and the
+   variant's maximum, and each is checked with a typed refusal (above the request, the band, the
+   variant; tenor outside the variant; contribution below the band). Quote, schedule, letter and
+   disbursement use the approved figures. The prototype's case (5M / 72 requested, 2M / 60
+   approved) runs end to end to the fil in `test/compliance/business-approved-terms.test.ts`.
+   Who sets the approved amount (Q2) is still the partner's to confirm: we chose the MCC, with
+   the band and variant as caps. (T-08-06, T-09-01)
 2. **The scorecard does not reproduce the screen's scores.** For the example applicant's inputs we
    score applicant 92.50, project 70.00, cumulative 79.00 (LOW); the screen shows 90.59, 86.89,
    88.37 (LOW). The criteria, the 40/60 split, the knock-outs and the LOW-band terms match; the
@@ -309,7 +314,7 @@ except DBR, whose band score is the same).
 
 | ID | What the screen shows | Screen | Where it is built | Test proving it | Status | Notes / question for Tuum |
 |---|---|---|---|---|---|---|
-| T-09-01 | Approved facility AED 2,000,000 (requested AED 5,000,000 on screen 03) | 09, 03 | offer uses `app.requested` `business.ts:2390`, `:2418` | none | ❌ | No approved amount separate from the requested amount; a 5M request on Fixed Assets is refused at quote (`AMOUNT_EXCEEDS_VARIANT`, `TENOR_OUTSIDE_VARIANT`). ❓ Q2. |
+| T-09-01 | Approved facility AED 2,000,000 (requested AED 5,000,000 on screen 03) | 09, 03 | `approvedTerms` recorded by `approveStraightThrough` / `decideInCommittee` (`core/origination/business-application.ts`, checked by `checkApprovedTerms`); the offer quotes `approvedTermsOf(app)` in `generateOfferAt` (`business.ts`) | `test/compliance/business-approved-terms.test.ts` "defaults, approves, offers, schedules and disburses on the approved figures" | ✅ | Request kept unchanged beside the approved terms. Who sets the amount: the MCC, capped by band and variant — ❓ Q2 to confirm. |
 | T-09-02 | "Facility Offer Letter — Stage 7 · Digital Signing", business name, "Expansion Loan · FR-00005061 · Score 88.4% LOW · 05 June 2026" | 09 | `[app]/offer/page.tsx:150-180` | `test/ui/business-screens.test.ts` "the offer's send action and figures" | 🟡 | Variant, reference and date shown; score not on the offer header. |
 | T-09-03 | "Loan ref: L000000002569"; "Tuum LMS generated · 10 Sep 2029 → 10 Aug 2034" | 09 | none (CORE_BANKING rail disabled, `config/tenants/sme-fund-ae/rails/rails.json`) | none | ❌ | Our schedule is Sanad's, built to match the LMS to the fil (section 13); no LMS booking or loan reference yet. |
 | T-09-04 | Tenor 60 months, "10 Sep 2029 → 10 Aug 2034" | 09 | `quoteSmeConventional` `products/sme-term-conventional/pricing.ts:66-157`; tiles `[app]/offer/page.tsx:182-212` | `test/compliance/sme-variants.test.ts` "the golden core-banking case is priced on the dated ACT/365 schedule…" | ✅ | |
@@ -411,12 +416,13 @@ the dated ACT/365 schedule, and the platform computes the APR").
 
 **APR.** `buildOffer` computes 151 bp (1.51%) from the dated cash flows; the screens show no APR.
 
-**But the workbench would not produce this offer from this application as shown.** Three things
-stand in the way, all in section 14: the application asks for AED 5,000,000 (the quote would
-refuse it above the 2M variant ceiling, and the facility is always the requested amount); it asks
-for 72 months on a Fixed Assets product (maximum 60); and a schedule starting in 2029 from an
-offer dated June 2026 is outside our illustrative offer-date bounds (`offer-policy.json`:
-disbursement at most 60 days after the offer).
+**The workbench now produces this offer from this application** (since 2026-10-09): the committee
+approves AED 2,000,000 over 60 months against the 5,000,000 / 72 request (the LOW band and the
+Fixed Assets variant cap both), and the offer is quoted on the approved figures
+(`test/compliance/business-approved-terms.test.ts`). One thing from section 14 still stands in
+the way of the screens as shown: a schedule starting in 2029 from an offer dated June 2026 is
+outside our illustrative offer-date bounds (`offer-policy.json`: disbursement at most 60 days
+after the offer); the test offers in July 2029.
 
 ## 14. Inconsistencies inside the screens
 
