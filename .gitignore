@@ -51,3 +51,6 @@ adapters/*/verification/findings/
 
 # TypeScript incremental build state: rewritten on every type check, never source.
 *.tsbuildinfo
+
+# Claude Code agent worktrees (temporary checkouts, never committed)
+.claude/worktrees/

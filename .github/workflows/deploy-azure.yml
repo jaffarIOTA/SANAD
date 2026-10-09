@@ -1,0 +1,77 @@
+# Deploy the hosted environment (docs/AZURE-DEPLOYMENT-PLAN.md §3, §5).
+#
+# Runs on a release tag (vYYYY.MM.DD-N) whose commit is on `prod`. `prod` only
+# moves by a pull request whose security gates passed, so what deploys has
+# already been vetted. GitHub signs in to Azure by OIDC federation with the
+# `id-sanad-deploy` identity; no Azure secret is stored in GitHub.
+#
+# Each image is built on the runner, scanned by Trivy (a HIGH or CRITICAL
+# finding with a fix stops the release), pushed, then rolled out.
+
+name: deploy-azure
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-azure-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    strategy:
+      max-parallel: 1
+      matrix:
+        app: [consumer, ops, admin]
+    env:
+      RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      REGISTRY: ${{ vars.AZURE_REGISTRY }}
+      IMAGE: ${{ vars.AZURE_REGISTRY }}.azurecr.io/sanad-${{ matrix.app }}:${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: The tag must be on prod
+        run: |
+          set -euo pipefail
+          git fetch origin prod
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/prod \
+            || { echo "::error::$GITHUB_REF_NAME is not on prod; only vetted commits deploy"; exit 1; }
+
+      - name: Build
+        run: docker build -f apps/Containerfile --build-arg APP=${{ matrix.app }} -t "$IMAGE" .
+
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Push
+        run: |
+          set -euo pipefail
+          az acr login --name "$REGISTRY"
+          docker push "$IMAGE"
+
+      - name: Roll out
+        run: |
+          set -euo pipefail
+          az containerapp update -g "$RESOURCE_GROUP" -n "ca-sanad-${{ matrix.app }}" --image "$IMAGE" -o none
+          az containerapp show -g "$RESOURCE_GROUP" -n "ca-sanad-${{ matrix.app }}" \
+            --query "{revision: properties.latestRevisionName, state: properties.runningStatus}" -o tsv
