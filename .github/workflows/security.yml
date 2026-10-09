@@ -150,6 +150,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: '22', cache: npm }
       - run: npm ci
+      # As in the compliance job: the architecture suite asserts the versioned pre-commit hook is configured.
+      - run: git config core.hooksPath .githooks
       - name: Apply every migration, in order, from empty
         run: |
           set -euo pipefail
