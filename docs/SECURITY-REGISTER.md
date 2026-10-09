@@ -25,18 +25,18 @@ signing or tenant isolation (SEC-V10).
 
 ---
 
-## Summary at 2026-10-08
+## Summary at 2026-10-09
 
 | | Open | In remediation | Closed | Total |
 |---|---|---|---|---|
 | Critical | 1 | 0 | 0 | 1 |
-| High | 3 | 1 | 0 | 4 |
+| High | 3 | 0 | 0 | 3 |
 | Medium | 21 | 1 | 0 | 22 |
 | Low | 10 | 0 | 0 | 10 |
-| Closed (High 3, Medium 3, Low 1) | | | 7 | 7 |
-| **Total** | **35** | **2** | **7** | **44** |
+| Closed (High 4, Medium 3, Low 1) | | | 8 | 8 |
+| **Total** | **35** | **1** | **8** | **44** |
 
-**Release status: blocked.** One Critical and four Highs are open or in remediation, so
+**Release status: blocked.** One Critical and three Highs are open, so
 SEC-C01 condition 1 is not met.
 
 ---
@@ -63,7 +63,6 @@ required, and the test that proves the item closed.
 | SR-003 | RLS is not enforced at runtime. No code sets `sanad.tenant_id`. Apps and services connect with the session-pooler `postgres` (owner) login. `FORCE ROW LEVEL SECURITY` is applied only to the `0003` and `0004` tables. The runtime tables (`0006`, `0008`, `0009`, `0011`, `0012`, `0014`, `0016`) are `ENABLE` only. The owner can also read `vault.decrypted_secrets` and disable triggers | SEC-TM08, SEC-TM02, SEC-TM07, SEC-TM10 | Open | 2026-10-08 | 2026-10-15 | Platform engineering | Run as a `NOBYPASSRLS` non-owner role (`sanad_app` exists in `0003`). Set `set_config('sanad.tenant_id', …, true)` per transaction from the principal. `FORCE` RLS on every tenant table. Migrations run as a separate owner role | Contract test (run in CI, see SR-024): as `sanad_app` with tenant A set, a select of tenant B rows returns none and an insert for tenant B fails. Architecture test: every tenant table has `relforcerowsecurity`. A test asserts the runtime role is neither owner nor `BYPASSRLS` |
 | SR-004 | Development stand-ins are wired into production entry points with no guard. `services/origination/src/index.ts` uses `developmentRegistry` (environment tokens, no expiry or rotation), `developmentSnapshots` and `developmentTimestamps` (host clock). `services/outbox/src/index.ts` uses `developmentDispatchPorts`, which marks bureau-reporting and payment events delivered without delivering them | SEC-TM06, SEC-TM11, SEC-TM14 | Open | 2026-10-08 | 2026-10-15 | Platform engineering | Each stand-in throws when `NODE_ENV=production` or when the deployment profile is not development. Production wiring takes a vault-backed credential registry, live adapters and a TSA adapter, or refuses to start | Architecture test: building the service or worker with any `development*` dependency under a production profile throws, and the entry points pass that check |
 | SR-005 | Consumer impersonation: `signInAction` accepts any `applicantRef` matching `^[a-z0-9-]{3,40}$` and authenticates it through `developmentIdentity()`, with no production guard. Anyone can view and accept another applicant's offers | SEC-TM06, SEC-TM12, SEC-TM14 | Open | 2026-10-08 | 2026-10-15 | Platform engineering | Refuse the development identity outside development. In production, sign-in goes through the identity-authentication port (Nafath / UAE Pass) only. The applicant reference comes from the assertion, never from the form | Compliance test: under a production profile `signInAction` refuses; the session's applicant comes from the assertion, not the form field |
-| SR-018 | The review API returns other tenants' requests. `GET /api/review/v1/requests/{id}` and `GET /api/review/v1/queue` authenticate staff but never compare the staff principal's tenant with the row's (`apps/ops/src/app/api/review/v1/...`). Writes are protected by `core/origination/request.ts`; reads are not. Raised to High because it breaks tenant isolation | SEC-TM08, SEC-TM12 | In remediation | 2026-10-08 | 2026-10-15 | Platform engineering | Filter every read by `staff.tenantId`. Another tenant's request is reported absent (404), not forbidden. The read filter landed with SR-002 in `a6b6260`; it stays open until the contract test below exists | Contract test: staff of `sme-fund-ae` gets 404 for a `bank-a` request ID and an empty queue for `bank-a` rows |
 
 ### Medium
 
@@ -118,6 +117,7 @@ required, and the test that proves the item closed.
 | SR-037 | No security scanning in CI (requirements §9 #1, #3, #5) | SEC-D01..D08, SEC-D13 | High | Closed | 2026-10-08 | 2026-10-08 | Platform engineering | `security.yml`: CodeQL, Semgrep with Sanad rules, gitleaks, OSV and npm audit, dependency review, SBOM, Trivy filesystem, compliance suite | Commits `6ac4b01`, `0b9dfe9`, `77e07dc`. Run 37830450919 green. Coverage limits are tracked as SR-023, SR-024 and SR-032 |
 | SR-038 | AES-GCM authentication tag length not fixed on the sealed-token cipher (Semgrep `gcm-no-tag-length`). Also §9 #2: no security section in CLAUDE.md, closed by CLAUDE.md §14 in `6ac4b01` | SEC-TM06, SEC-R09 | Medium | Closed | 2026-10-08 | 2026-10-08 | Platform engineering | `authTagLength: 16` on cipher and decipher (`packages/auth/sealed-token.ts`) | Commit `0b9dfe9`. Test `test/unit/consumer-session.test.ts` "refuses a truncated authentication tag, which GCM would otherwise accept" |
 | SR-042 | `npm audit --audit-level=high` failed on GHSA-vfj7-8cjw-p6xm (braces, stack-exhaustion DoS), reached only through the development lint plugin `@next/eslint-plugin-next` via fast-glob and micromatch. No patched braces release exists. Raised 2026-10-09 | SEC-D04 | High | Closed | 2026-10-09 | 2026-10-09 | Platform engineering | Plugin removed and its Next.js lint rules withdrawn (`eslint.config.mjs`) rather than relaxing the audit gate. Re-add it when braces is patched | `npm audit --audit-level=high` reports 0 vulnerabilities; the SCA job is green |
+| SR-018 | The review API returned other tenants' requests. `GET /api/review/v1/requests/{id}` and `GET /api/review/v1/queue` authenticated staff but never compared the staff principal's tenant with the row's. Raised to High because it breaks tenant isolation | SEC-TM08, SEC-TM12 | High | Closed | 2026-10-08 | 2026-10-09 | Platform engineering | Every review read and write is filtered by `staff.tenantId`; another tenant's request is reported absent (404, `REQUEST_NOT_FOUND`), not forbidden. The filter landed with SR-002 in `a6b6260` | `test/compliance/review-tenant-isolation.test.ts` (in the CI compliance job): `sme-fund-ae` staff see an empty queue in all seven views, get 404 on every seeded `bank-a` request, a response identical to a nonexistent ID, and 404 on cross-tenant APPROVE/RETURN/REJECT and servicing retry, with the row unchanged |
 
 ---
 
