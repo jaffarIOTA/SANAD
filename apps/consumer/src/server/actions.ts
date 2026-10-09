@@ -10,6 +10,7 @@
 import { redirect } from 'next/navigation';
 
 import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
+import { newBusinessRefusal } from '@sanad/origination/licensing.ts';
 
 import { flushConsumerStore } from './durable.ts';
 import { developmentIdentity } from './identity.ts';
@@ -71,6 +72,9 @@ export async function quoteAction(form: FormData): Promise<void> {
   if (!Number.isFinite(amountMajor) || amountMajor <= 0)
     fail(`/${locale}/apply`, 'AMOUNT_NOT_POSITIVE', 'OP-DETERMINACY');
   if (!Number.isFinite(months) || months <= 0) fail(`/${locale}/apply`, 'MONTHS_NOT_POSITIVE', 'OP-DETERMINACY');
+  // A quote and a new offer are new business: the installation's licence must permit the product (ADR 0006).
+  const licence = await newBusinessRefusal({ productCode });
+  if (licence !== undefined) return fail(`/${locale}/apply`, licence.reason, licence.control);
   const at = developmentAttestation();
   const quoted = quoteFor(
     productCode,

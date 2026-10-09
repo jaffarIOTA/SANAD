@@ -381,7 +381,7 @@ describe('the contract agrees with the domain it fronts', () => {
   it('lists exactly the control codes the kernel defines', async () => {
     const declared = spec.components.schemas['ControlCode']?.['enum'] as string[];
     const shariah = Array.from({ length: 18 }, (_, i) => `SH-${String(i + 1).padStart(2, '0')}`);
-    const operational = ['OP-DETERMINACY', 'OP-CHAIN', 'OP-LIMIT'];
+    const operational = ['OP-DETERMINACY', 'OP-CHAIN', 'OP-LIMIT', 'OP-LICENCE'];
     expect(declared).toEqual([...shariah, ...operational]);
   });
 

@@ -42,6 +42,12 @@ const EXPLANATIONS: Readonly<Record<string, { readonly ar: string; readonly en: 
   MONTHS_NOT_POSITIVE: { ar: 'أدخل عدد الأشهر.', en: 'Enter the number of months.' },
   PRODUCT_NOT_ENABLED: { ar: 'هذا المنتج غير متاح حالياً.', en: 'This product is not available at the moment.' },
   OFFER_NOT_FOUND: { ar: 'لم نجد هذا العرض.', en: 'We could not find that offer.' },
+  // The installation's licence (ADR 0006). A customer is not told about the institution's licensing, only that
+  // this finance is not available now and that nothing has been recorded against them.
+  LICENCE_NOT_ACTIVE: {
+    ar: 'هذا التمويل غير متاح حالياً، ولم يُسجَّل عليك أي شيء. إن كان لديك تمويل قائم فسداده ومتابعته مستمران كالمعتاد.',
+    en: 'This finance is not available at the moment, and nothing has been recorded against you. Any finance you already hold continues as normal.',
+  },
 };
 
 export function explain(reason: string, arabic: boolean): string {

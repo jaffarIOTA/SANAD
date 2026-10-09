@@ -685,6 +685,19 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         readiness: soon(),
         reference: 'SDD §4.7 — catalogue built',
       },
+      {
+        id: 'licensing',
+        titleEn: 'Installation licence',
+        titleAr: 'ترخيص النظام',
+        // Built: signed-licence verification, the state and the one gate at every new-business entry point,
+        // Admin → Licence under four eyes, the request file, a fixture-only check-in. Not yet able to license a
+        // production installation, for the two reasons below — so not LIVE.
+        readiness: {
+          kind: 'BLOCKED',
+          on: 'the issuer’s production public key is added to core/licensing/keys.ts at provisioning (until then a production build verifies no licence and starts no new business); the issuer’s check-in server does not exist yet, so online check-in has a fixture transport only',
+        },
+        reference: 'ADR 0006 · core/licensing · migration 0017 · Admin → Licence',
+      },
       { id: 'configuration', titleEn: 'Configuration', titleAr: 'الإعدادات', readiness: soon(), reference: 'NFR-13' },
       { id: 'tenants', titleEn: 'Tenants', titleAr: 'المؤسسات', readiness: soon(), reference: 'NFR-12' },
     ],

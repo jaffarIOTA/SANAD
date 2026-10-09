@@ -19,6 +19,7 @@ import { Card, ControlRejection } from '@sanad/design/primitives.tsx';
 import { formatMinorUnits, defaultNumerals } from '@sanad/design/Money.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
+import { newBusinessRefusal } from '@sanad/origination/licensing.ts';
 
 import { quoteFor, maturityDates, TENANT } from '../../../../server/engine.ts';
 import { explain } from '../../../../server/explain.ts';
@@ -56,6 +57,13 @@ export default async function CheckoutPage({
       session = identified.value;
       saveSession(session);
     }
+  }
+  // A quote is new business: the installation's licence must permit BNPL (ADR 0006). Refused, the session ends
+  // REFUSED under OP-LICENCE, which the merchant sees on the session and the shopper sees explained.
+  const licence = session.state === 'IDENTIFIED' ? await newBusinessRefusal({ productCode: 'bnpl' }) : undefined;
+  if (session.state === 'IDENTIFIED' && licence !== undefined) {
+    session = refuseSession(session, licence.control, licence.reason);
+    saveSession(session);
   }
   if (session.state === 'IDENTIFIED') {
     const quoted = quoteFor(

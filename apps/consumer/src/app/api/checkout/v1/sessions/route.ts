@@ -4,6 +4,7 @@ import { create } from '@sanad/core/checkout/session.ts';
 import { canTransact } from '@sanad/core/merchants/merchant.ts';
 import { money } from '@sanad/core/kernel/money.ts';
 import { fromRejection, problem } from '@sanad/origination/problem.ts';
+import { newBusinessRefusal } from '@sanad/origination/licensing.ts';
 
 import { consumerBaseUrl, contract, correlation, json, merchantOr401, refuse, toWire } from '../shared.ts';
 import { merchantById, refreshMerchants } from '@/server/merchants.ts';
@@ -95,6 +96,11 @@ export async function POST(request: Request): Promise<Response> {
         correlationId,
       }),
     );
+
+  // A checkout session starts a BNPL application: new business, which the installation's licence must permit
+  // (ADR 0006). Refused before anything is stored, and the key is not remembered, so a retry succeeds once it does.
+  const licence = await newBusinessRefusal({ productCode: 'bnpl' });
+  if (licence !== undefined) return refuse(fromRejection(licence, correlationId));
 
   const at = developmentAttestation();
   const created = create({

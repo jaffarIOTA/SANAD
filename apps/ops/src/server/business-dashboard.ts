@@ -19,6 +19,7 @@
  */
 
 import type { FactValue } from '@sanad/core/decisioning/sme-assessment.ts';
+import { LICENCE_GATE_REASONS, licenceRefusalText } from '@sanad/core/licensing/explain.ts';
 import { REASONS } from '@sanad/origination/problem.ts';
 
 import { type BusinessApplicationView, PIPELINE_STAGES, TARGET_TURNAROUND_SECONDS } from './business.ts';
@@ -753,6 +754,12 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
     en: 'Your sign-in does not hold the authority this step needs. Nothing was changed; a colleague who holds it performs the step.',
     ar: 'لا تحمل جلستك الصلاحية التي تتطلبها هذه الخطوة. لم يتغير شيء؛ يؤديها زميل يحمل هذه الصلاحية.',
   },
+  // The installation licence (ADR 0006): the generic refusal, then one per reason the gate gives (LICENCE_<reason>).
+  LICENCE_NOT_ACTIVE: {
+    en: 'The installation’s licence does not permit new business now. Existing contracts, repayments, collections and regulatory reporting continue as normal.',
+    ar: 'ترخيص النظام لا يسمح ببدء أعمال جديدة الآن. تستمر العقود القائمة والسداد والتحصيل والتقارير الرقابية كالمعتاد.',
+  },
+  ...Object.fromEntries(LICENCE_GATE_REASONS.map((r) => [`LICENCE_${r}`, licenceRefusalText(r)])),
 };
 
 const GENERIC_REFUSAL = {

@@ -121,10 +121,31 @@ dispute is IOTA's dispute with the institution, never with the institution's cus
 - The hosted environment (`sanad.iotatechnologies.io`) is licensed like any installation, so
   IOTA's own hosting proves the mechanism.
 
+## Implementation (2026-10-09)
+
+- `core/licensing/`: `licence.ts` (type and strict parser), `verify.ts` (canonical form and
+  ES256 verification; `createVerifier` refuses an injected keyring under production), `keys.ts`
+  (the compiled-in keyring, **empty until the issuer's public key is added at provisioning**),
+  `state.ts` (`licenceState`), `gate.ts` (`assertNewBusinessPermitted`, refusal `OP-LICENCE` /
+  `LICENCE_NOT_ACTIVE` with `context.licenceReason`), `explain.ts` (Arabic and English words),
+  `check-in.ts`, `request-file.ts`, `repository.ts` (port and in-memory double).
+- **What the issuer signs**, byte for byte: the canonical serialisation of the inner `licence`
+  (or `revocation`) object — keys sorted by UTF-16 code unit, no whitespace, strings as
+  ECMAScript `JSON.stringify` writes them, whole numbers only (RFC 8785 for this value domain) —
+  as UTF-8; ES256 (P-256, SHA-256); the signature as the 64-byte IEEE P1363 `r‖s`, base64url
+  without padding. The file is `{"licence":{…},"signature":"…"}`; a revocation is
+  `{"revocation":{revocationId, licenceId, installationId, effectiveFrom, issuedAt, issuedBy,
+  keyId},"signature":"…"}`. Dates are `YYYY-MM-DD` UTC; `notAfter` is exclusive (00:00 UTC of
+  that day), so an extension's `notBefore` equals its predecessor's `notAfter`.
+- Migration `0017_installation_licence.sql`; services runtime
+  `services/origination/src/licensing.ts`; Admin → Licence; fixture-only check-in
+  (`adapters/licensing/check-in/`).
+
 ## Open questions for the product owner
 
 1. ~~Is there a cap on POC extensions?~~ **Decided 2026-10-09: no cap.** Each extension is
-   one month, issued on request; the supersession history keeps the POC's full length visible.
+   one calendar month, issued on request; the supersession history keeps the POC's full length
+   visible.
 2. Should the licence limit anything beyond products, jurisdictions and tenants, such as staff
    users or applications per month? Each limit added is something an institution can hit in
    the middle of its business.

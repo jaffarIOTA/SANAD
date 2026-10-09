@@ -332,6 +332,7 @@ components:
         - OP-DETERMINACY
         - OP-CHAIN
         - OP-LIMIT
+        - OP-LICENCE
     Problem:
       type: object
       additionalProperties: false
@@ -421,10 +422,29 @@ components:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
     ControlRejection:
-      description: Well-formed, and refused by a control — a merchant that is not active, a basket over the consumer limit, a session past acceptance.
+      description: |
+        Well-formed, and refused by a control — a merchant that is not active, a basket over the consumer limit, a session past acceptance.
+
+        `OP-LICENCE` / `LICENCE_NOT_ACTIVE`: the installation's licence does not permit new business now
+        (ADR 0006); `context.licenceReason` says why. Nothing was stored and the Idempotency-Key was not
+        consumed, so the same request may be retried once the institution has renewed. Existing sessions,
+        repayments and collections are unaffected.
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            licenceNotActive:
+              summary: The installation's licence does not permit new business now
+              value:
+                type: https://sanad.example/problems/control-rejection
+                title: Refused
+                status: 422
+                detail: The institution cannot start new business through this service at the moment, for a reason on its side; nothing was recorded. Retry the same request later. Existing contracts, repayments, collections and regulatory reporting continue as normal.
+                detailAr: 'لا تستطيع المؤسسة بدء أعمال جديدة عبر هذه الخدمة حالياً لسبب يخصها، ولم يُسجَّل شيء. أعد الطلب نفسه لاحقاً. تستمر العقود القائمة والسداد والتحصيل والتقارير الرقابية كالمعتاد.'
+                correlationId: 018f3a2f-0000-7000-8000-000000000005
+                control: OP-LICENCE
+                reason: LICENCE_NOT_ACTIVE
+                context: { licenceReason: GRACE_ENDED }
     RateLimited:
       description: Too many requests. Declared in `gateway/`, enforced there, re-checked by the service.
       headers:

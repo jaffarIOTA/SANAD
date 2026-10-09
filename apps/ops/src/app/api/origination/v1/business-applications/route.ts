@@ -20,6 +20,7 @@ import { containsIdentityNumber } from '@sanad/core/origination/business-applica
 import { validatorFor } from '@sanad/origination/contract.ts';
 import { fingerprint, type IdempotencyStore } from '@sanad/origination/idempotency.ts';
 import { fromRejection, problem } from '@sanad/origination/problem.ts';
+import { newBusinessRefusal } from '@sanad/origination/licensing.ts';
 
 import { handOver, isSettleFailure, mutateBusiness, syncBusiness } from '../../../../../server/business.ts';
 import { idempotencyLedger } from '../../../../../server/persistence.ts';
@@ -160,6 +161,15 @@ export async function POST(request: Request): Promise<Response> {
         correlationId,
       ),
     );
+  }
+
+  // Starting an application is new business: the installation's licence must permit this product (ADR 0006).
+  // Refused before the service is called, and the key released rather than bound to the refusal, so the same
+  // hand-over succeeds with the same key once the licence permits it. The service checks again (business.ts).
+  const licence = await newBusinessRefusal({ productCode: body.productCode });
+  if (licence !== undefined) {
+    await idempotency.release({ tenantId: principal.tenantId, partnerId: principal.partnerId, key });
+    return refuse(fromRejection(licence, correlationId));
   }
 
   // Anything that throws from here (the service, the database) releases the key, so the caller can retry the

@@ -18,6 +18,8 @@ import type { ReactElement } from 'react';
 
 import { type TenantCode, isTenantCode, loadSmeDefinition, loadTenantOnboarding } from '@sanad/config/loader.ts';
 import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
+import { newBusinessPermitted } from '@sanad/origination/licensing.ts';
+import { licenceRefusalText } from '@sanad/core/licensing/explain.ts';
 import type { JurisdictionCode } from '@sanad/core/jurisdiction/profile.ts';
 import { type CurrencyCode, money as moneyOf } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
@@ -306,6 +308,15 @@ export default async function ProductsPage({
     return m.ok && m.value.descriptor.consumer;
   });
   const programmes = new Set(enabled.flatMap((e) => (e.programmeIds === 'ALL' ? ['ALL'] : [...e.programmeIds])));
+  // A quote is new business: the installation's licence decides, per product, whether one is shown (ADR 0006).
+  const licenceRefusals = new Map(
+    await Promise.all(
+      enabled.map(async (e) => {
+        const r = await newBusinessPermitted({ productCode: e.productCode });
+        return [e.productCode, r.ok ? undefined : licenceRefusalText(r.error.reason)] as const;
+      }),
+    ),
+  );
 
   return (
     <div className="flex flex-col gap-8">
@@ -463,8 +474,11 @@ export default async function ProductsPage({
             const ctx: SampleContext | undefined = sampleBase.ok
               ? { ...sampleBase.value, ...(smeVariant === undefined ? {} : { smeVariant }) }
               : undefined;
+            const licenceRefusal = licenceRefusals.get(entry.productCode);
+            // Not licensed: no quote, and the reason in the reader's language (OP-LICENCE).
+            if (licenceRefusal !== undefined) refusal = `OP-LICENCE: ${arabic ? licenceRefusal.ar : licenceRefusal.en}`;
             // Without the tenant's onboarding there is no currency to quote in: refuse, saying why.
-            if (!sampleBase.ok) refusal = `${sampleBase.error.reason}: ${sampleBase.error.detail}`;
+            else if (!sampleBase.ok) refusal = `${sampleBase.error.reason}: ${sampleBase.error.detail}`;
             else if (ctx !== undefined && module !== undefined && entry.enabled) {
               const sample = sampleFor(entry.productCode, tenant, at, ctx);
               const terms = module.validateTerms(entry.terms);
