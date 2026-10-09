@@ -39,7 +39,10 @@ export async function checkoutAcceptAction(form: FormData): Promise<void> {
   const at = developmentAttestation();
   // Booking the facility, accepted now: permitted while the licence is valid or in grace, refused after grace
   // ended (ADR 0006 §4) — checked before the acceptance is recorded, so nothing is half done.
-  const licence = await newBusinessRefusal({ productCode: 'bnpl', booking: { offerAcceptedAtEpochSeconds: at.epochSeconds } });
+  const licence = await newBusinessRefusal({
+    productCode: 'bnpl',
+    booking: { offerAcceptedAtEpochSeconds: at.epochSeconds },
+  });
   if (licence !== undefined) return fail(licence.reason, licence.control);
   const recorded = accept({
     offerId: session.offerId,

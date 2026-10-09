@@ -13,7 +13,7 @@
  */
 
 import { type LicenceGateReason, blockedReasonOf } from './gate.ts';
-import type { LicenceState, LicenceStatus } from './state.ts';
+import type { LicenceState, LicenceStateReason, LicenceStatus } from './state.ts';
 
 export interface Bilingual {
   readonly en: string;
@@ -71,10 +71,7 @@ const COUNTERPARTY: Bilingual = {
 };
 
 /** The respectful explanation of a `LICENCE_NOT_ACTIVE` refusal, with the reassurance that servicing continues. */
-export function licenceRefusalText(
-  reason: LicenceGateReason,
-  audience: 'STAFF' | 'COUNTERPARTY' = 'STAFF',
-): Bilingual {
+export function licenceRefusalText(reason: LicenceGateReason, audience: 'STAFF' | 'COUNTERPARTY' = 'STAFF'): Bilingual {
   const r = audience === 'STAFF' ? REFUSAL[reason] : COUNTERPARTY;
   return { en: `${r.en} ${SERVICING_CONTINUES.en}`, ar: `${r.ar} ${SERVICING_CONTINUES.ar}` };
 }
@@ -82,12 +79,40 @@ export function licenceRefusalText(
 /** Every reason the gate can give, for a screen that renders a reason from a query string. */
 export const LICENCE_GATE_REASONS: readonly LicenceGateReason[] = Object.keys(REFUSAL) as LicenceGateReason[];
 
-export const STATUS_LABEL: Readonly<Record<LicenceStatus, Bilingual>> = {
-  VALID: { en: 'valid', ar: 'سارٍ' },
-  EXPIRING: { en: 'expiring', ar: 'قارب على الانتهاء' },
-  GRACE: { en: 'in grace', ar: 'في المهلة' },
-  NEW_BUSINESS_BLOCKED: { en: 'new business blocked', ar: 'الأعمال الجديدة موقوفة' },
-  DEVELOPMENT_UNLICENSED: { en: 'development, unlicensed', ar: 'تطوير، دون ترخيص' },
+export type StatusTone = 'ok' | 'attention' | 'blocked' | 'neutral';
+
+export const STATUS_LABEL: Readonly<Record<LicenceStatus, Bilingual & { readonly tone: StatusTone }>> = {
+  VALID: { en: 'valid', ar: 'سارٍ', tone: 'ok' },
+  EXPIRING: { en: 'expiring', ar: 'قارب على الانتهاء', tone: 'attention' },
+  GRACE: { en: 'in grace', ar: 'في المهلة', tone: 'attention' },
+  NEW_BUSINESS_BLOCKED: { en: 'new business blocked', ar: 'الأعمال الجديدة موقوفة', tone: 'blocked' },
+  DEVELOPMENT_UNLICENSED: { en: 'development, unlicensed', ar: 'تطوير، دون ترخيص', tone: 'neutral' },
+};
+
+/** Why the installation is in its state, in words. */
+export const STATE_REASON: Readonly<Record<LicenceStateReason, Bilingual>> = {
+  IN_TERM: { en: 'Inside the licence term.', ar: 'ضمن مدة الترخيص.' },
+  EXPIRING_SOON: { en: 'The licence term ends soon.', ar: 'تنتهي مدة الترخيص قريباً.' },
+  EXPIRED_IN_GRACE: {
+    en: 'The term has ended; the grace period is running. Nothing is blocked yet.',
+    ar: 'انتهت المدة وتسري المهلة. لا شيء موقوف بعد.',
+  },
+  REVOKED_IN_GRACE: {
+    en: 'The issuer revoked the licence; the grace period is running. Nothing is blocked yet.',
+    ar: 'ألغت جهة الإصدار الترخيص وتسري المهلة. لا شيء موقوف بعد.',
+  },
+  GRACE_ENDED: { en: 'The grace period has ended.', ar: 'انقضت المهلة.' },
+  NO_LICENCE: { en: 'No licence is installed.', ar: 'لا يوجد ترخيص مثبّت.' },
+  NO_VALID_LICENCE: { en: 'No installed licence verifies.', ar: 'لا يوجد ترخيص مثبّت يمكن التحقق منه.' },
+  NOT_YET_VALID: { en: 'The installed licence has not started yet.', ar: 'لم يبدأ الترخيص المثبّت بعد.' },
+  CLOCK_ROLLBACK: {
+    en: 'The server clock is more than a day behind the latest time this installation has seen.',
+    ar: 'ساعة الخادم متأخرة أكثر من يوم عن آخر وقت سجّله النظام.',
+  },
+  DEVELOPMENT_NO_LICENCE: {
+    en: 'Not a production build and no licence installed: everything is permitted. A production build with no licence starts no new business.',
+    ar: 'ليس إصدار إنتاج ولا يوجد ترخيص مثبّت: كل شيء مسموح. إصدار الإنتاج دون ترخيص لا يبدأ أعمالاً جديدة.',
+  },
 };
 
 export type BannerTone = 'attention' | 'blocked';

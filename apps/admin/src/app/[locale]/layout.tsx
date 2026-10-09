@@ -8,6 +8,9 @@ import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 
 import { BrandMark, LanguageSwitch } from '@sanad/design/primitives.tsx';
+import { LicenceBanner } from '@sanad/design/LicenceBanner.tsx';
+import { licenceBanner } from '@sanad/core/licensing/explain.ts';
+import { currentLicence } from '@sanad/origination/licensing.ts';
 import { LOCALE_SEGMENTS, htmlLang, isRtl, localeFromSegment, type LocaleSegment } from '@sanad/i18n/strings.ts';
 
 import { currentAdmin } from '../../server/session.ts';
@@ -33,6 +36,8 @@ export default async function AdminLayout({
   if (locale === undefined) notFound();
   const arabic = locale === 'ar-SA';
   const admin = await currentAdmin();
+  // The installation licence's banner, while it is expiring, in grace or blocking new business (ADR 0006).
+  const banner = admin === undefined ? undefined : licenceBanner((await currentLicence()).state);
 
   return (
     <html lang={htmlLang(locale)} dir={isRtl(locale) ? 'rtl' : 'ltr'}>
@@ -75,6 +80,7 @@ export default async function AdminLayout({
             </div>
           </div>
         </header>
+        <LicenceBanner banner={banner} arabic={arabic} href={`/${segment}/licence`} />
         <div className="flex min-h-[calc(100dvh-100px)]">
           <SideNav segment={segment} arabic={arabic} signedIn={admin !== undefined} />
           <main className="min-w-0 flex-1 overflow-x-clip px-4 pb-10 pt-6 lg:px-10">{children}</main>

@@ -20,6 +20,9 @@ import { notFound } from 'next/navigation';
 
 import { BrandMark, LanguageSwitch } from '@sanad/design/primitives.tsx';
 import { Icon } from '@sanad/design/icons.tsx';
+import { LicenceBanner } from '@sanad/design/LicenceBanner.tsx';
+import { licenceBanner } from '@sanad/core/licensing/explain.ts';
+import { currentLicence } from '@sanad/origination/licensing.ts';
 import { LOCALE_SEGMENTS, htmlLang, isRtl, localeFromSegment, type LocaleSegment } from '@sanad/i18n/strings.ts';
 import { HeaderTitle } from './HeaderTitle.tsx';
 import { BottomNav, SideNav } from './SideNav.tsx';
@@ -99,6 +102,8 @@ export default async function OpsLayout({
   await syncStore();
   // Which jurisdiction the whole deployment behaves as (Admin → Jurisdiction, ADR 0005).
   const jurisdiction = await workbenchJurisdiction();
+  // The installation licence's banner, while it is expiring, in grace or blocking new business (ADR 0006).
+  const banner = licenceBanner((await currentLicence()).state);
 
   const search = (
     <form action={`/${segment}`} method="get" role="search" className="w-full lg:w-[320px]">
@@ -176,6 +181,7 @@ export default async function OpsLayout({
           </div>
           <div className="px-4 pb-3 lg:hidden">{search}</div>
         </header>
+        <LicenceBanner banner={banner} arabic={arabic} />
 
         <div className="flex min-h-[calc(100dvh-64px)]">
           <SideNav segment={segment} arabic={arabic} jurisdiction={jurisdiction.code} />

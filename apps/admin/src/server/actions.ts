@@ -31,6 +31,7 @@ import { catalogueForTenant, isTenantCode, loadProductCatalogue } from '@sanad/c
 import { randomUUID } from 'node:crypto';
 import { currentAdmin, developmentPrincipalFor, endAdminSession, startAdminSession } from './session.ts';
 import { decideDeploymentJurisdiction, proposeDeploymentJurisdiction } from '@sanad/origination/jurisdiction.ts';
+import { decideLicenceInstall, proposeLicenceInstall } from '@sanad/origination/licensing.ts';
 
 const field = (form: FormData, name: string): string => {
   const v = form.get(name);
@@ -489,4 +490,47 @@ export async function proposePartnerChangeAction(form: FormData): Promise<void> 
     return back(to, 'PROPOSE_FAILED');
   }
   back(to, 'PROPOSED');
+}
+
+/** Licence files are small; anything larger is not one. */
+const MAX_LICENCE_FILE_BYTES = 64 * 1024;
+
+/**
+ * Propose installing a licence (ADR 0006): one administrator uploads the
+ * signed file; it is verified now (signature, term, installation) and held
+ * for a different administrator to approve. Never gated on the licence's own
+ * state — installing a licence is how a blocked installation recovers.
+ */
+export async function proposeLicenceAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'ar';
+  const to = `/${locale}/licence`;
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${locale}`);
+  const file = form.get('licenceFile');
+  if (!(file instanceof Blob) || file.size === 0) return back(to, 'FILE_REQUIRED');
+  if (file.size > MAX_LICENCE_FILE_BYTES) return back(to, 'REFUSED:MALFORMED');
+  const proposed = await proposeLicenceInstall({ fileText: await file.text(), proposedBy: admin?.principalId ?? '' });
+  if (!proposed.ok) return back(to, `REFUSED:${proposed.error.refusal.reason}`);
+  back(to, 'PROPOSED');
+}
+
+/** Approve (install, re-verified now) or reject a proposed licence. Never by the administrator who proposed it. */
+export async function decideLicenceAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'ar';
+  const to = `/${locale}/licence`;
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${locale}`);
+  const id = field(form, 'proposalId');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return back(to, 'PROPOSAL_ID_MALFORMED');
+  const approve = field(form, 'decision') === 'approve';
+  const reason = field(form, 'reason');
+  if (!approve && reason.length < 3) return back(to, 'REJECTION_REASON_REQUIRED');
+  const decided = await decideLicenceInstall({
+    proposalId: id,
+    approve,
+    decidedBy: admin?.principalId ?? '',
+    ...(approve ? {} : { reason }),
+  });
+  if (!decided.ok) return back(to, `REFUSED:${decided.error.refusal.reason}`);
+  back(to, approve ? 'INSTALLED' : 'REJECTED');
 }
