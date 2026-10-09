@@ -8,9 +8,9 @@
     },
     "DEPLOYED": {
       "protocol": "OIDC",
-      "issuer": "https://login.microsoftonline.com/<ENTRA_TENANT_ID>/v2.0",
-      "metadataUrl": "https://login.microsoftonline.com/<ENTRA_TENANT_ID>/v2.0/.well-known/openid-configuration",
-      "clientId": "<ENTRA_CLIENT_ID>",
+      "issuer": "https://login.microsoftonline.com/802e569b-c3fe-495f-a8c2-7735b7430e5f/v2.0",
+      "metadataUrl": "https://login.microsoftonline.com/802e569b-c3fe-495f-a8c2-7735b7430e5f/v2.0/.well-known/openid-configuration",
+      "clientId": "88295a3e-34af-41ed-a327-42719ff65d59",
       "groupsClaim": "roles"
     }
   },
