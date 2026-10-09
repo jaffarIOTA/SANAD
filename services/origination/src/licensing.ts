@@ -131,7 +131,9 @@ export interface NewBusinessAct {
 }
 
 /** Ask the one gate. The jurisdiction and active tenant count come from the deployment, never from a request. */
-export async function newBusinessPermitted(act: NewBusinessAct): Promise<Result<NewBusinessPermitted, LicenceNotActive>> {
+export async function newBusinessPermitted(
+  act: NewBusinessAct,
+): Promise<Result<NewBusinessPermitted, LicenceNotActive>> {
   const [{ state: s }, deployment] = await Promise.all([currentLicence(), deploymentJurisdiction()]);
   return assertNewBusinessPermitted({
     state: s,
@@ -246,7 +248,11 @@ export async function runLicenceCheckIn(port: LicenceCheckInPort): Promise<Check
   );
   if (handled.kind === 'NO_CHANGE') return handled;
   for (const item of handled.install) {
-    await rt.repository.recordFromCheckIn({ signed: item.signed, subjectId: item.subjectId, correlationId: randomUUID() });
+    await rt.repository.recordFromCheckIn({
+      signed: item.signed,
+      subjectId: item.subjectId,
+      correlationId: randomUUID(),
+    });
   }
   return { kind: 'INSTALLED', installed: handled.install.length, refused: handled.refused.length };
 }
