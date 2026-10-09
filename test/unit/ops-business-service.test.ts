@@ -1043,7 +1043,8 @@ describe.skipIf(DB_CONFIGURED)('#3 the outbox row is written in the business tra
   });
 
   it('rolls the send back with its outbox row: neither is written, the notification is not queued, and the answer is PERSISTENCE_FAILED', async () => {
-    let failing: string | undefined;
+    // Read by the pool before the failure is armed below, so it starts explicitly unset.
+    let failing: string | undefined = undefined;
     const db = recordingPool({ failOn: () => failing });
     resetBusinessStore({ seed: false, pool: db.pool });
     await driveToApproved();
