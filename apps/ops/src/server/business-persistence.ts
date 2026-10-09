@@ -28,6 +28,7 @@ import type { BusinessApplication } from '@sanad/core/origination/business-appli
 import type { OutboxEvent } from '@sanad/core/outbox/outbox.ts';
 import { decodeJson, encodeJson } from '@sanad/origination/codec.ts';
 import { tenantUuidByCode } from '@sanad/origination/credentials.ts';
+import { databaseHoldsSyntheticDataOnly } from '@sanad/origination/profile.ts';
 
 /** A figure as a row: the row id is what supersedes it. */
 export interface FigureRow {
@@ -125,17 +126,7 @@ const decode = (v: unknown): unknown => decodeJson(typeof v === 'string' ? v : J
  * deployment profile (migration 0005) is readable and says it is not cleared
  * for production data. Unreadable, absent, or cleared for production — no.
  */
-export async function illustrativeSeedPermitted(pool: Pool): Promise<boolean> {
-  try {
-    const { rows } = await pool.query<{ production_data_permitted: boolean }>(
-      'select production_data_permitted from config.deployment_profile limit 1',
-    );
-    const row = rows[0];
-    return row !== undefined && row.production_data_permitted === false;
-  } catch {
-    return false;
-  }
-}
+export const illustrativeSeedPermitted = (pool: Pool): Promise<boolean> => databaseHoldsSyntheticDataOnly(pool);
 
 /** The tenant's whole business book. */
 export async function loadBusinessBook(pool: Pool, tenantCode: string): Promise<BusinessBook> {

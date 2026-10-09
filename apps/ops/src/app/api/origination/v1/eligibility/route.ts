@@ -22,7 +22,6 @@ import { developmentSnapshots } from '@sanad/origination/snapshots.ts';
 import { developmentAttestation } from '../../../../../server/store.ts';
 
 const validate = validatorFor('EligibilityRequest');
-const snapshots = developmentSnapshots();
 
 const IDEMPOTENCY_KEY = Symbol.for('sanad.ops.idempotency');
 const idempotency: IdempotencyStore = ((globalThis as Record<symbol, IdempotencyStore | undefined>)[IDEMPOTENCY_KEY] ??=
@@ -129,7 +128,8 @@ export async function POST(request: Request): Promise<Response> {
   if (!all.ok) return finish(422, fromRejection(all.error, correlationId));
 
   const at = developmentAttestation();
-  const snapshot = await snapshots.assemble({
+  // Constructed per call, after authentication: a deployed build must load this module without a stand-in (SR-004).
+  const snapshot = await developmentSnapshots().assemble({
     tenantId: principal.tenantId,
     counterpartyId: body.counterpartyId,
     programmeId: body.programmeId,

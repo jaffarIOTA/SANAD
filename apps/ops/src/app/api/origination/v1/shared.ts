@@ -8,8 +8,18 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { authenticate, developmentRegistry, type PartnerPrincipal } from '@sanad/origination/principal.ts';
+import {
+  NO_CREDENTIALS_REGISTERED,
+  authenticate,
+  developmentRegistry,
+  type PartnerPrincipal,
+} from '@sanad/origination/principal.ts';
 import { problem, type Problem } from '@sanad/origination/problem.ts';
+import { deploymentProfile } from '@sanad/origination/profile.ts';
+
+/** Development tokens in development; deployed, nothing is recognised until the vault-backed registry exists (SR-004). */
+const registry = () =>
+  deploymentProfile() === 'DEVELOPMENT' ? developmentRegistry(process.env) : NO_CREDENTIALS_REGISTERED;
 
 export function json(
   status: number,
@@ -40,7 +50,7 @@ export function correlation(request: Request): string {
 
 /** The authenticated partner, or the 401 to send instead. */
 export function principalOr401(request: Request, correlationId: string): PartnerPrincipal | Response {
-  const auth = authenticate(request.headers.get('authorization') ?? undefined, developmentRegistry(process.env));
+  const auth = authenticate(request.headers.get('authorization') ?? undefined, registry());
   if (auth.ok) return auth.principal;
   return refuse(
     problem({

@@ -49,6 +49,7 @@ import { authenticate, hasScope, type CredentialRegistry, type PartnerPrincipal 
 import { eligibilityToWire, toWire, type EligibilityRequestBody, type RaiseRequestBody } from './representation.ts';
 import type { RequestRepository, StoredRequest } from './repository.ts';
 import { type NewBusinessAct, newBusinessRefusal } from './licensing.ts';
+import { refuseUnderDeployedProfile } from './profile.ts';
 
 /** The product a partner request originates: the trade-first Murabaha SCF journey is the only one this API raises. */
 const PARTNER_REQUEST_PRODUCT = 'murabaha-scf';
@@ -71,7 +72,8 @@ export interface TimestampPort {
  * (SH-06) — but from UAT onward even this must be an accredited authority.
  * See ClaudeRecommendations.md E-04.
  */
-export function developmentTimestamps(): TimestampPort {
+export function developmentTimestamps(env: Readonly<Record<string, string | undefined>> = process.env): TimestampPort {
+  refuseUnderDeployedProfile('developmentTimestamps', env);
   return {
     attest(): Promise<TsaInstant> {
       return Promise.resolve(

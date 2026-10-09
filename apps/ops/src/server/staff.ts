@@ -104,7 +104,7 @@ type Env = Readonly<Record<string, string | undefined>>;
 const digestOf = (token: string): Buffer => createHash('sha256').update(token, 'utf8').digest();
 
 /** Development tokens are a development stand-in; production authenticates staff through the institution's SSO. */
-export const developmentTokensPermitted = (env: Env = process.env): boolean => env['NODE_ENV'] !== 'production';
+export const developmentTokensPermitted = (env: Env = process.env): boolean => deploymentProfile(env) === 'DEVELOPMENT';
 
 /**
  * The development identity a presented token names, or undefined. Every

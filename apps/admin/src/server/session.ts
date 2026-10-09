@@ -18,6 +18,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { cookies } from 'next/headers';
 
 import { type SealKey, deriveSealKey, ephemeralMasterSecret, open, seal } from '@sanad/auth/sealed-token.ts';
+import { deploymentProfile } from '@sanad/origination/profile.ts';
 
 export type AdminSignInMethod = 'DEVELOPMENT' | 'OIDC';
 
@@ -71,7 +72,7 @@ export const now = (): bigint => BigInt(Math.floor(Date.now() / 1000));
 const digest = (s: string): Buffer => createHash('sha256').update(s, 'utf8').digest();
 
 /** Development tokens are a development stand-in; production authenticates through the institution's single sign-on. */
-export const developmentSignInPermitted = (): boolean => process.env['NODE_ENV'] !== 'production';
+export const developmentSignInPermitted = (): boolean => deploymentProfile() === 'DEVELOPMENT';
 
 /**
  * Development sign-in: the presented token is compared, in constant time, to
