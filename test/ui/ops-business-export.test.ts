@@ -22,6 +22,10 @@ const DATABASE = process.env['SANAD_DATABASE_URL'];
 
 describe.skipIf(DATABASE !== undefined)('#15 the pipeline CSV export', () => {
   beforeAll(() => {
+    // Wholly in memory. The business store reads only SANAD_DATABASE_URL, but the deployment's
+    // jurisdiction falls back to SANAD_TEST_DATABASE_URL; with a test database configured it came from
+    // there (SA), the fund tenant was inactive, and the export was empty.
+    vi.stubEnv('SANAD_TEST_DATABASE_URL', '');
     process.env['SANAD_JURISDICTION'] = 'AE';
     resetBusinessStore({ seed: false });
   });

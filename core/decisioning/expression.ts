@@ -133,6 +133,12 @@ export function evaluate(expr: Expr, ctx: EvaluationContext): Result<PolicyValue
           return ok(c > 0);
         case 'gte':
           return ok(c >= 0);
+        default:
+          // Unreachable while the four comparisons are the only ones; a new one must say what it means,
+          // not fall through into membership. A refusal here REFERs, never approves.
+          return reject('OP-DETERMINACY', 'UNKNOWN_COMPARISON', 'Policy uses a comparison the engine does not know', {
+            op: String(expr.op satisfies never),
+          });
       }
     }
 
