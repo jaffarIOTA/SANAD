@@ -119,3 +119,41 @@ jobs:
       - run: npm run test:compliance
       # The architecture suite asserts the absences (no vendor in core, no float in pricing, no secret, no PostgREST exposure).
       - run: npx vitest run test/architecture
+
+  database-controls:                              # SR-003, SR-024
+    name: Database controls (RLS at runtime)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # The hosted database's own image, so roles, extensions and the vault behave as they do there.
+        image: public.ecr.aws/supabase/postgres:17.11.0.002@sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53
+        env:
+          # A throwaway container's password, different every run; nothing else ever reaches it.
+          POSTGRES_PASSWORD: run-${{ github.run_id }}-${{ github.run_attempt }}
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -h localhost"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: run-${{ github.run_id }}-${{ github.run_attempt }}
+      # Migrations run as the owner, as `supabase db push` does; the tests reach tenant rows only through
+      # the runtime role (test/contract/runtime-rls.test.ts proves it binds). No password in the URL:
+      # the driver reads PGPASSWORD.
+      SANAD_TEST_DATABASE_URL: postgresql://postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: '22', cache: npm }
+      - run: npm ci
+      - name: Apply every migration, in order, from empty
+        run: |
+          set -euo pipefail
+          for f in supabase/migrations/*.sql; do
+            echo "::group::$f"
+            psql -d postgres -v ON_ERROR_STOP=1 -q -f "$f"
+            echo "::endgroup::"
+          done
+      - name: Contract suite against the database
+        run: npx vitest run test/contract

@@ -7,7 +7,8 @@
  * next checkout call rather than at the next deployment.
  *
  * Every change of state is written with a chained audit event in the same
- * transaction: who, what it was, what it became.
+ * transaction: who, what it was, what it became. Every statement runs in the
+ * tenant's scope (SR-003).
  */
 
 import type { Pool } from 'pg';
@@ -16,24 +17,29 @@ import type { Merchant } from '../../../core/merchants/merchant.ts';
 
 import { decodeJson, encodeJson } from './codec.ts';
 import { tenantUuidByCode } from './credentials.ts';
+import { inTenant } from './tenant-scope.ts';
 
 const asText = (v: unknown): string => (typeof v === 'string' ? v : JSON.stringify(v));
 const isUuid = (s: string): boolean => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
 export async function loadMerchants(pool: Pool, tenantCode: string): Promise<readonly Merchant[]> {
   const tenant = await tenantUuidByCode(pool, tenantCode);
-  const { rows } = await pool.query<{ merchant: unknown }>(
-    'select merchant from core.merchant where tenant_id = $1::uuid order by sequence asc',
-    [tenant],
+  const { rows } = await inTenant(pool, tenant, (db) =>
+    db.query<{ merchant: unknown }>(
+      'select merchant from core.merchant where tenant_id = $1::uuid order by sequence asc',
+      [tenant],
+    ),
   );
   return rows.map((r) => decodeJson(asText(r.merchant)) as Merchant);
 }
 
 export async function findMerchant(pool: Pool, tenantCode: string, merchantId: string): Promise<Merchant | undefined> {
   const tenant = await tenantUuidByCode(pool, tenantCode);
-  const { rows } = await pool.query<{ merchant: unknown }>(
-    'select merchant from core.merchant where tenant_id = $1::uuid and merchant_id = $2',
-    [tenant, merchantId],
+  const { rows } = await inTenant(pool, tenant, (db) =>
+    db.query<{ merchant: unknown }>(
+      'select merchant from core.merchant where tenant_id = $1::uuid and merchant_id = $2',
+      [tenant, merchantId],
+    ),
   );
   const row = rows[0];
   return row === undefined ? undefined : (decodeJson(asText(row.merchant)) as Merchant);
@@ -52,14 +58,12 @@ export interface MerchantChange {
 export async function saveMerchant(pool: Pool, tenantCode: string, change: MerchantChange): Promise<void> {
   const tenant = await tenantUuidByCode(pool, tenantCode);
   const m = change.merchant;
-  const client = await pool.connect();
-  try {
-    await client.query('begin');
-    const before = await client.query<{ status: string }>(
+  await inTenant(pool, tenant, async (db) => {
+    const before = await db.query<{ status: string }>(
       'select status from core.merchant where tenant_id = $1::uuid and merchant_id = $2 for update',
       [tenant, m.core.merchantId],
     );
-    await client.query(
+    await db.query(
       `insert into core.merchant (tenant_id, merchant_id, commercial_registration, status, merchant, correlation_id, created_by)
        values ($1::uuid, $2, $3, $4, $5::jsonb, $6, $7)
        on conflict (tenant_id, merchant_id) do update
@@ -75,7 +79,7 @@ export async function saveMerchant(pool: Pool, tenantCode: string, change: Merch
       ],
     );
     // The audit subject is a uuid; a merchant's id is text. The subject is derived from it, deterministically.
-    await client.query(
+    await db.query(
       `select audit.record_event($1::uuid, 'core.merchant', md5($1::text || ':' || $2)::uuid, $3,
                                  $4::jsonb, $5::jsonb, $6, coalesce($7::uuid, gen_random_uuid()))`,
       [
@@ -88,13 +92,7 @@ export async function saveMerchant(pool: Pool, tenantCode: string, change: Merch
         isUuid(change.correlationId) ? change.correlationId : null,
       ],
     );
-    await client.query('commit');
-  } catch (error) {
-    await client.query('rollback');
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 export interface MerchantActivity {
@@ -109,9 +107,11 @@ export async function merchantActivity(
   merchantId: string,
 ): Promise<readonly MerchantActivity[]> {
   const tenant = await tenantUuidByCode(pool, tenantCode);
-  const { rows } = await pool.query<{ state: string; sessions: string }>(
-    'select state, count(*)::text as sessions from core.checkout_session where tenant_id = $1::uuid and merchant_id = $2 group by state order by state',
-    [tenant, merchantId],
+  const { rows } = await inTenant(pool, tenant, (db) =>
+    db.query<{ state: string; sessions: string }>(
+      'select state, count(*)::text as sessions from core.checkout_session where tenant_id = $1::uuid and merchant_id = $2 group by state order by state',
+      [tenant, merchantId],
+    ),
   );
   return rows.map((r) => ({ state: r.state, sessions: Number.parseInt(r.sessions, 10) }));
 }

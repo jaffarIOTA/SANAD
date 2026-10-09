@@ -21,6 +21,7 @@ import { decodeRequest, encodeRequest } from '@sanad/origination/codec.ts';
 import { sharedPool, tenantUuidByCode } from '@sanad/origination/credentials.ts';
 import { type IdempotencyStore, inMemoryIdempotencyStore } from '@sanad/origination/idempotency.ts';
 import { postgresIdempotencyStore } from '@sanad/origination/idempotency-postgres.ts';
+import { inTenant } from '@sanad/origination/tenant-scope.ts';
 
 export interface PersistedRequest {
   readonly requestId: string;
@@ -76,12 +77,14 @@ interface Row {
 /** The tenant's whole book, oldest first, so the store's sequence can be rebuilt in order. */
 export async function loadRequests(pool: Pool, tenantCode: string): Promise<readonly PersistedRequest[]> {
   const tenant = await tenantUuidByCode(pool, tenantCode);
-  const { rows } = await pool.query<Row>(
-    `select request_id, request, partner_reference, display
-       from core.origination_request
-      where tenant_id = $1::uuid
-      order by sequence asc`,
-    [tenant],
+  const { rows } = await inTenant(pool, tenant, (db) =>
+    db.query<Row>(
+      `select request_id, request, partner_reference, display
+         from core.origination_request
+        where tenant_id = $1::uuid
+        order by sequence asc`,
+      [tenant],
+    ),
   );
   return rows.map((row) => {
     const invoiceNumber = row.display?.invoiceNumber;
@@ -106,21 +109,23 @@ export interface PersistedDocument {
 /** Every document presented against the tenant's requests, in the order presented (`evidence.presented_document`, migration 0012). */
 export async function loadDocuments(pool: Pool, tenantCode: string): Promise<readonly PersistedDocument[]> {
   const tenant = await tenantUuidByCode(pool, tenantCode);
-  const { rows } = await pool.query<{
-    request_id: string;
-    position: number;
-    document_type: string;
-    validation_status: PresentedDocument['validationStatus'];
-    captured_at_epoch: string;
-    captured_tsa_digest: string;
-    captured_tsa_authority: string;
-  }>(
-    `select request_id, position, document_type, validation_status,
-            captured_at_epoch::text, captured_tsa_digest, captured_tsa_authority
-       from evidence.presented_document
-      where tenant_id = $1::uuid
-      order by request_id, position`,
-    [tenant],
+  const { rows } = await inTenant(pool, tenant, (db) =>
+    db.query<{
+      request_id: string;
+      position: number;
+      document_type: string;
+      validation_status: PresentedDocument['validationStatus'];
+      captured_at_epoch: string;
+      captured_tsa_digest: string;
+      captured_tsa_authority: string;
+    }>(
+      `select request_id, position, document_type, validation_status,
+              captured_at_epoch::text, captured_tsa_digest, captured_tsa_authority
+         from evidence.presented_document
+        where tenant_id = $1::uuid
+        order by request_id, position`,
+      [tenant],
+    ),
   );
   return rows.map((r) => ({
     requestId: r.request_id,
@@ -148,11 +153,9 @@ export async function saveDocuments(
 ): Promise<void> {
   if (documents.length === 0) return;
   const tenant = await tenantUuidByCode(pool, tenantCode);
-  const client = await pool.connect();
-  try {
-    await client.query('begin');
+  await inTenant(pool, tenant, async (db) => {
     for (const d of documents) {
-      await client.query(
+      await db.query(
         `insert into evidence.presented_document
            (tenant_id, request_id, document_type, validation_status, captured_at_epoch, captured_tsa_digest, captured_tsa_authority, position, correlation_id, created_by)
          values ($1::uuid, $2, $3, $4, $5::bigint, $6, $7, $8, $9, $10)
@@ -171,13 +174,7 @@ export async function saveDocuments(
         ],
       );
     }
-    await client.query('commit');
-  } catch (error) {
-    await client.query('rollback');
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 /** Upserts each record in one transaction: either the whole change is durable or none of it is. */
@@ -188,12 +185,10 @@ export async function saveRequests(
 ): Promise<void> {
   if (records.length === 0) return;
   const tenant = await tenantUuidByCode(pool, tenantCode);
-  const client = await pool.connect();
-  try {
-    await client.query('begin');
+  await inTenant(pool, tenant, async (db) => {
     for (const record of records) {
       const owner = ownerOf(record.request);
-      await client.query(
+      await db.query(
         `insert into core.origination_request
            (tenant_id, request_id, partner_id, state, request, partner_reference, display, correlation_id, created_by)
          values ($1::uuid, $2, $3, $4, $5::jsonb, $6, $7::jsonb, $8, $9)
@@ -216,11 +211,5 @@ export async function saveRequests(
         ],
       );
     }
-    await client.query('commit');
-  } catch (error) {
-    await client.query('rollback');
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }
