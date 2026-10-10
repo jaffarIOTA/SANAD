@@ -29,7 +29,7 @@ import type { OriginationChannel } from '@sanad/core/origination/channel.ts';
 import { money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import type { TsaInstant } from '@sanad/core/time/tsa.ts';
-import { hostClockInstant } from '@sanad/origination/host-clock.ts';
+import { hostClockInstant, hostClockPermitted } from '@sanad/origination/host-clock.ts';
 import {
   expire,
   provideInformation as provideInformationTransition,
@@ -751,7 +751,9 @@ const SEEDS: readonly Seed[] = [
 
 /** The development book: six requests in the states the screens need to demonstrate. */
 function seedDevelopmentBook(): void {
-  if (state.seeded) return;
+  // Development data, attested by the host clock: only where that is permitted (SR-006). Not in a real-data
+  // deployment, whose empty database stays empty, and not in `next build`, which loads this module in production mode.
+  if (state.seeded || !hostClockPermitted()) return;
   state.seeded = true;
 
   for (const seed of SEEDS) {
