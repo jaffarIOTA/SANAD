@@ -27,7 +27,8 @@ function tsconfigPaths(): Record<string, string> {
     if (!alias.startsWith('@sanad/')) continue;
     const target = targets[0];
     if (target === undefined) continue;
-    out[alias.replace(/\/\*$/, '')] = target.replace(/\/\*$/, '');
+    // Relative to tsconfig.json (written `./core/*` since baseUrl went: TypeScript 6 deprecates it).
+    out[alias.replace(/\/\*$/, '')] = target.replace(/\/\*$/, '').replace(/^\.\//, '');
   }
   return out;
 }

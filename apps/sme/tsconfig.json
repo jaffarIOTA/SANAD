@@ -21,8 +21,7 @@
       "@/*": ["./src/*"],
       "@sanad/products/*": ["../../products/*"]
     },
-    "esModuleInterop": true,
-    "baseUrl": "."
+    "esModuleInterop": true
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "next-env.d.ts", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]

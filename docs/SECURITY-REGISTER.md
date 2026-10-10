@@ -29,15 +29,15 @@ signing or tenant isolation (SEC-V10).
 
 | | Open | In remediation | Closed | Total |
 |---|---|---|---|---|
-| Critical | 1 | 0 | 0 | 1 |
+| Critical | 0 | 0 | 0 | 0 |
 | High | 0 | 1 | 0 | 1 |
 | Medium | 3 | 4 | 0 | 7 |
 | Low | 0 | 2 | 0 | 2 |
-| Closed (High 7, Medium 19, Low 11) | | | 37 | 37 |
-| **Total** | **4** | **7** | **37** | **48** |
+| Closed (Critical 1, High 7, Medium 19, Low 11) | | | 38 | 38 |
+| **Total** | **3** | **7** | **38** | **48** |
 
-**Release status: blocked.** One Critical (SR-001) is open and one High (SR-003) is in remediation, so
-SEC-C01 condition 1 is not met.
+**Release status: conditional.** No Critical is open (SR-001 rotated 2026-10-10). One High (SR-003) is in
+remediation: its code is released, and it closes when the applications connect as `sanad_runtime`.
 
 ---
 
@@ -54,7 +54,6 @@ required, and the test that proves the item closed.
 
 | ID | Title | Threat ref | Status | Raised | Due | Owner | Control or fix required | Test that proves it closed |
 |---|---|---|---|---|---|---|---|---|
-| SR-001 | Upstash Redis REST URL and token committed in `.env.example` in commit `485e57d`. The repository is **public**, so the token is exposed to the internet. Raised from High to Critical because the repository is public | SEC-TM10, SEC-D05 | Open | 2026-10-08 | 2026-10-09 | Product owner (rotation); Platform engineering (detection) | Revoke and rotate the token at the provider now. Confirm in the provider's access log that nobody else used it. Record the rotation, without the value, in this row. Rewriting history does not un-leak a secret; rotation is the fix. **Detection done 2026-10-09 (SR-023):** the custom rule finds both lines in full history; they are listed in `.gitleaksignore` as *not yet rotated*. **The rotation is still outstanding** | A custom gitleaks rule for the Upstash token shape, run over all refs (see SR-023), reports the historical commit as an allow-listed **rotated** finding. Evidence: the provider's revocation record |
 
 ### High
 
@@ -122,6 +121,7 @@ required, and the test that proves the item closed.
 | SR-008 | Hash-chain re-anchoring was untested. The contract-leg chain head was not anchored externally (`products/murabaha-scf/legs/leg.ts`), so a whole chain could be rebuilt consistently | SEC-TM06, SEC-TM07 | Medium | Closed | 2026-10-08 | 2026-10-10 | Platform engineering | `products/murabaha-scf/legs/anchor.ts`: each leg's RFC 3161 token is stamped over `legAnchorDigest(leg)`, which binds its content, its predecessor's hash, its place and its transaction, so the head's token anchors the chain. `verifyAnchoredChain` re-verifies every token at the authority (`TimestampAuthorityPort.verify(token, digest)`) and requires it to be the token, instant and authority the leg records. Recorded as M-4 in the module's INVARIANTS.md. The live TSA adapter (E-04) stamps that digest | `test/compliance/chain-migration.test.ts` (4 new), with an authority that signs its tokens: the executed chain verifies, also after a migration that renumbers rows; a chain rebuilt with fresh consistent hashes is refused (`ANCHOR_INVALID`) though `verifyChain` passes it; a rebuilt chain re-stamped today is refused (`ANCHOR_MISMATCH`); a missing or impostor-signed token is refused |
 | SR-016 | Rail responses and webhooks could not be authenticated beyond TLS. No inbound callback verification; ZATCA `stampValid` read from a response field; the `Sanad-Signature` signer declared but not implemented; no mTLS or pinning to rails | SEC-TM11 | Medium | Closed | 2026-10-08 | 2026-10-10 | Platform engineering | ZATCA: the stamp is verified from the invoice QR (hash, pinned authority key, ECDSA signature; `stamp.ts`), the response flag ignored, no pinned key means no valid stamp (deviation ZATCA-EINV-DEV-003 for the sandbox). Webhooks: `adapters/kernel/webhook-signature.ts` (HMAC-SHA256 over timestamp and raw body, 300-second tolerance, replay refused, rotation) and `webhook-delivery.ts`, a WebhooksPort that signs the exact bytes it sends, https only. Inbound: any callback route must call `verifyWebhook` before parsing. mTLS: `adapters/kernel/mutual-tls-transport.ts` presents the client certificate, trusts only the rail's CA and optionally pins its SPKI, on its own connection | `test/adapters/ksa-rails.test.ts`: a forged, unpinned, wrong-invoice or flag-only stamp is refused. `test/adapters/webhook-signature.test.ts` (7): unsigned, altered, wrong-secret, moved-timestamp, stale and replayed deliveries refused; outbound signatures verify. `test/architecture/inbound-callbacks.test.ts`. `test/adapters/mutual-tls-transport.test.ts` (4, real handshakes): no client certificate, a foreign CA and an unpinned key are refused |
 | SR-031 | No application-level rate limiting or anti-automation per principal or tenant. The gateway products deliberately carry no hard limit | SEC-O02 | Medium | Closed | 2026-10-08 | 2026-10-10 | Platform engineering | `core/ports/rate-limit.ts`; the origination service and the workbench's partner API count every authenticated request per credential (120/min) and per tenant (600/min) and answer the n+1th 429 with `Retry-After` and a bilingual problem. Counters are shared through Redis over REST (`IOTA_REDIS_URL`/`IOTA_REDIS_TOKEN`, verified live 2026-10-10) or per process when unset; a counter store that does not answer admits. The gateway's soft per-subscription plans stay the shock absorber. Tenant-specific limits move to configuration when a tenant needs them | `test/contract/rate-limit.test.ts` (5): the n+1th request answers 429 with `Retry-After` and `RATE_LIMITED` in both languages; another tenant is unaffected; the tenant limit binds a second credential; the window reopens; the REST store's pipeline, wait and failure handling |
+| SR-001 | Upstash Redis REST URL and token committed in `.env.example` in commit `485e57d`. The repository is **public**, so the token was exposed to the internet. Raised from High to Critical because the repository is public | SEC-TM10, SEC-D05 | Critical | Closed | 2026-10-08 | 2026-10-10 | Product owner (rotation); Platform engineering (detection) | **Rotated 2026-10-10 by the product owner:** the database's credentials were reset at the provider, so the committed token opens nothing; the new token lives only in the developer's untracked `.env.local` (and, if ever hosted, Key Vault), never in the repository. Detection (SR-023): the custom rule finds both lines in full history, now allow-listed as a *rotated* finding, reviewed yearly. The variables are now `IOTA_REDIS_URL`/`IOTA_REDIS_TOKEN`. Still recommended to the product owner: check the provider's access log for use of the old token between 2026-09 and the rotation | The custom gitleaks rule over all refs (`secrets-history` job) reports the historical commit only as the allow-listed rotated finding; `scripts/suppressions-check.mjs` holds the entries to an owner and an expiry. Evidence: the product owner's confirmation of the reset, 2026-10-10 |
 
 ---
 
