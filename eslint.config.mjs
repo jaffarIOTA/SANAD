@@ -24,6 +24,8 @@ export default tseslint.config(
       'supabase/**',
       'apps/ops/public/**',
       'adapters/nutrient/verification/samples/**',
+      // Other checkouts of this repository (agent worktrees); each is linted in its own right.
+      '.claude/**',
       // Compiled .js siblings emitted beside every .ts (see .gitignore)
       'core/**/*.js',
       'adapters/**/*.js',
