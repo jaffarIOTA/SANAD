@@ -32,6 +32,7 @@ import { money } from '../../core/kernel/money.ts';
 import { type Result, expectOk } from '../../core/kernel/result.ts';
 import { tsaInstant } from '../../core/time/tsa.ts';
 import { grantingLedger } from '../support/consents.ts';
+import { inMemoryAssertionReplayGuard } from '../../core/ports/assertion-replay.ts';
 
 class Credentials implements CredentialProvider {
   readonly refs: CredentialRef[] = [];
@@ -51,6 +52,7 @@ const config = (provider: RailAdapterConfig['provider']): RailAdapterConfig => (
   nowEpochSeconds: () => 1_800_000_000,
   baseUrl: 'https://rail.sandbox.example',
   consents: grantingLedger('sme-fund-ae'),
+  assertionReplay: inMemoryAssertionReplayGuard(),
 });
 const at = tsaInstant({ verified: true, genTimeEpochSeconds: 1_800_000_000n, tokenDigest: 't', authorityId: 'test' });
 const attest = () => Promise.resolve(at);
@@ -518,7 +520,8 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
             flow,
             assertionId: 'a',
             subjectRef: 's',
-            completedAt: 1,
+            // Within the step-up window of the adapter's clock; a 1970 completion is refused as stale (SR-007).
+            completedAt: 1_800_000_000,
           }),
         ),
       ).confirmAuthentication({ tenantId: 'sme-fund-ae', transactionRef: 'tx', correlationId: 'c' });

@@ -44,6 +44,7 @@ import { money } from '../../core/kernel/money.ts';
 import { expectOk } from '../../core/kernel/result.ts';
 import { tsaInstant } from '../../core/time/tsa.ts';
 import { grantingLedger } from '../support/consents.ts';
+import { inMemoryAssertionReplayGuard } from '../../core/ports/assertion-replay.ts';
 
 class Credentials implements CredentialProvider {
   async get(_ref: CredentialRef): Promise<SecretValue> {
@@ -61,6 +62,7 @@ const config = (provider: RailAdapterConfig['provider']): RailAdapterConfig => (
   nowEpochSeconds: () => 1_800_000_000,
   baseUrl: 'https://rail.sandbox.example',
   consents: grantingLedger('bank-a'),
+  assertionReplay: inMemoryAssertionReplayGuard(),
 });
 const at = tsaInstant({ verified: true, genTimeEpochSeconds: 1_800_000_000n, tokenDigest: 't', authorityId: 'test' });
 const attest = () => Promise.resolve(at);

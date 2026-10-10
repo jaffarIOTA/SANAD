@@ -12,6 +12,7 @@ import { type AdapterConfig, BaseAdapter } from '../../kernel/adapter.ts';
 import { CircuitOpenError } from '../../kernel/circuit-breaker.ts';
 import { type RailTransport, TransportError } from '../../kernel/http-transport.ts';
 import type { ConsentType } from '../../../core/consent/consent.ts';
+import type { AssertionReplayGuard } from '../../../core/ports/assertion-replay.ts';
 import type { ConsentLedger } from '../../../core/ports/consent-ledger.ts';
 import type { CredentialProvider } from '../../../core/ports/credentials.ts';
 import type { RailOutcome } from '../../../core/ports/rail.ts';
@@ -23,7 +24,14 @@ export interface RailAdapterConfig extends AdapterConfig {
   readonly credentialKeyName?: string;
   /** Where a consent-gated rail checks the consent it is given. Absent: every consent-gated call is refused. */
   readonly consents?: ConsentLedger;
+  /** Identity rails: each assertion is accepted once per tenant. Absent: every confirmation is refused (SR-007). */
+  readonly assertionReplay?: AssertionReplayGuard;
+  /** Identity rails: an assertion older than this is refused. Defaults to the 300-second step-up window. */
+  readonly maxAssertionAgeSeconds?: number;
 }
+
+/** How far ahead of this server's clock a provider's completion time may be, for clock skew. */
+const ASSERTION_CLOCK_SKEW_SECONDS = 120n;
 
 export type Body = Readonly<Record<string, unknown>>;
 
@@ -83,6 +91,25 @@ export abstract class RailAdapter extends BaseAdapter {
    * purpose, and for the tenant asking, which must be the tenant whose credentials this adapter holds. With no
    * ledger configured there is no way to tell, so every consent-gated call is refused.
    */
+  /**
+   * An identity assertion is accepted once, fresh, for this adapter's tenant (SR-007). Returns the refusal code,
+   * or undefined when it may be used. The assertion is consumed here, so a second confirmation of the same
+   * authentication is a replay.
+   */
+  protected async acceptAssertion(
+    tenantId: string,
+    assertionId: string,
+    authenticatedAtEpochSeconds: bigint,
+  ): Promise<string | undefined> {
+    if (tenantId !== this.config.tenantId) return 'TENANT_MISMATCH';
+    const now = BigInt(this.config.nowEpochSeconds());
+    if (authenticatedAtEpochSeconds > now + ASSERTION_CLOCK_SKEW_SECONDS) return 'ASSERTION_FROM_FUTURE';
+    if (now - authenticatedAtEpochSeconds > BigInt(this.config.maxAssertionAgeSeconds ?? 300)) return 'ASSERTION_STALE';
+    if (this.config.assertionReplay === undefined) return 'ASSERTION_REPLAY_UNCHECKABLE';
+    const use = await this.config.assertionReplay.consume({ tenantId, assertionId, authenticatedAtEpochSeconds });
+    return use === 'REPLAYED' ? 'ASSERTION_REPLAYED' : undefined;
+  }
+
   protected async requireConsent(tenantId: string, consentId: string, type: ConsentType): Promise<Result<true>> {
     if (consentId.trim().length === 0)
       return reject(
