@@ -28,7 +28,7 @@ import { type CredentialProvider, type CredentialRef, SecretValue } from '../../
 import { money } from '../../core/kernel/money.ts';
 import { expectOk } from '../../core/kernel/result.ts';
 import { buildLegRenderRequest } from '../../products/murabaha-scf/documents/render.ts';
-import { DISTRIBUTOR_CR, at, chain } from '../support/fixtures.ts';
+import { DISTRIBUTOR_CR, at, boardFor, chain } from '../support/fixtures.ts';
 
 /** Records every resolution, so a test can assert the value never escaped. */
 class RecordingCredentials implements CredentialProvider {
@@ -343,6 +343,7 @@ function renderRequest(mergeFields: Record<string, string>) {
       mergeFields,
       shariahApprovalId: 'SSB-A-2026-014',
       correlationId: 'cor-0001',
+      board: boardFor('bank-a'),
     }),
   );
 }

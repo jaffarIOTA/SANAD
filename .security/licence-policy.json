@@ -1,0 +1,47 @@
+{
+  "$comment": "Licences allowed in shipped (production) dependencies (SEC-D12, SR-032). Checked by scripts/licence-gate.mjs in CI. Copyleft is denied; an exception names its owner, reason and expiry, and an expired one fails the build (SEC-D14).",
+  "allowed": [
+    "MIT",
+    "MIT-0",
+    "ISC",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "0BSD",
+    "BlueOak-1.0.0",
+    "CC0-1.0",
+    "CC-BY-4.0",
+    "Unlicense",
+    "Python-2.0"
+  ],
+  "firstParty": ["sanad", "@sanad/"],
+  "declaredInLicenceFile": {
+    "unionfs": {
+      "licence": "Unlicense",
+      "evidence": "node_modules/unionfs/LICENSE: 'free and unencumbered software released into the public domain'; package.json has no licence field"
+    }
+  },
+  "exceptions": [
+    {
+      "package": "@img/sharp-libvips-",
+      "licence": "LGPL-3.0-or-later",
+      "owner": "Platform engineering",
+      "reason": "libvips, the image library sharp loads through Next.js image handling; dynamically linked, unmodified, replaceable, so LGPL obligations are met by notice. Revisit if Next image optimisation is removed.",
+      "expires": "2027-04-10"
+    },
+    {
+      "package": "@img/sharp-wasm32",
+      "licence": "Apache-2.0 AND LGPL-3.0-or-later AND MIT",
+      "owner": "Platform engineering",
+      "reason": "The WebAssembly build of sharp, bundling libvips under the same terms as above; installed only where no native build exists.",
+      "expires": "2027-04-10"
+    },
+    {
+      "package": "@nutrient-sdk/viewer",
+      "licence": "SEE LICENSE IN https://www.nutrient.io/legal/Nutrient_SDK_User_Evaluation_Subscription_Agreement",
+      "owner": "Product owner",
+      "reason": "Commercial document viewer under an evaluation subscription. Production use needs the licence scope decision (R-02); renew or remove by the expiry.",
+      "expires": "2026-12-31"
+    }
+  ]
+}

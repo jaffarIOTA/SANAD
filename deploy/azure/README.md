@@ -29,7 +29,8 @@ as a Container Apps Key Vault reference.
 | Secret | Read by | Source |
 |---|---|---|
 | `ops-session-secret`, `admin-session-secret`, `consumer-session-secret` | each app | 32 random bytes, generated in place |
-| `sanad-database-url` | all three | the Supabase connection string |
+| `sanad-database-url` | consumer, ops (and Admin until `adminOwnLogin`) | the `sanad_runtime` connection string |
+| `sanad-admin-database-url` | Admin, when `adminOwnLogin=true` | the `sanad_admin` connection string (SR-046) |
 
 Rotate a session secret: set a new version, then restart the app's revision (every session is
 signed out). Never print a value: `az keyvault secret set --value "$(openssl rand -hex 32)" -o none`.
@@ -42,7 +43,10 @@ signed out). Never print a value: `az keyvault secret set --value "$(openssl ran
    `set local role sanad_app` is refused until the migration grants it).
 3. **Apply new app settings** the release introduces. The pipeline swaps images only; it never
    applies `main.bicep`. Set them with `az containerapp update -g rg-sanad-hosted -n ca-sanad-<app>
-   --set-env-vars NAME=value`, or run the template (below).
+   --set-env-vars NAME=value`, or run the template (below). Phase 1 needs
+   `SANAD_DATA_CLASS=SYNTHETIC` on **consumer and ops**: without it the consumer demonstration
+   sign-in is refused (SR-005) and every action that attests an instant refuses to use the host
+   clock (SR-006), which stops both apps.
 4. Tag the merge commit on `prod`: `git tag v2026.10.09-1 origin/prod && git push origin v2026.10.09-1`.
 5. `.github/workflows/deploy-azure.yml` builds, scans with Trivy, pushes and rolls out each app.
    A tag whose commit is not on `prod` is refused.
@@ -68,7 +72,32 @@ unset pw
 ```
 
 Then restart each app's revision so it reads the new version. Migrations keep running as the
-owner (`npm run db:push`). Admin shares this login today; a separate Admin login is SR-046.
+owner (`npm run db:push`).
+
+## Admin database login
+
+Migration 0024 creates `sanad_admin`, bound like `sanad_runtime` but the only login that may
+propose, decide, set or revoke configuration (revisions, credentials, licences, the deployment's
+jurisdiction). From 0024 on, `sanad_runtime` cannot, so Admin needs its own login before any of
+those actions works under the runtime login (SR-046). Once, per database, as above:
+
+```sh
+pw="$(openssl rand -hex 24)"
+printf "alter role sanad_admin password '%s';\n" "$pw" | psql "$OWNER_URL" -q
+az keyvault secret set --vault-name <vault> -n sanad-admin-database-url -o none \
+  --value "postgresql://sanad_admin.<project ref>:$pw@<pooler host>:5432/postgres?sslmode=require"
+unset pw
+```
+
+Then deploy with `adminOwnLogin=true`, which points Admin's `SANAD_DATABASE_URL` at that secret.
+
+## Content-Security-Policy and a new identity provider
+
+Every app sends a strict Content-Security-Policy (`packages/auth/security-headers.ts`). Its
+`form-action` allows this origin and each tenant's staff identity provider from the checked-in
+configuration, because the browser applies it to the sign-in redirect. A provider approved later
+as an Admin configuration revision must also be listed in `SANAD_CSP_FORM_ACTION_ORIGINS`
+(comma-separated origins) on the ops and admin apps, or its sign-in is blocked by the browser.
 
 ## Changing the infrastructure
 

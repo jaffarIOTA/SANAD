@@ -60,7 +60,7 @@ export class SimahAdapter extends RailAdapter implements CreditBureauPort {
   }
 
   async request(req: BureauRequest): Promise<Result<BureauOutcome>> {
-    const consent = this.requireConsent(req.consentId);
+    const consent = await this.requireConsent(req.tenantId, req.consentId, 'CREDIT_BUREAU');
     if (!consent.ok) return consent;
     const r = await this.invoke(
       'bureau.enquiry',

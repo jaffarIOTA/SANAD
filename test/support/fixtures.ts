@@ -20,7 +20,8 @@ import { priceMurabaha } from '../../products/murabaha-scf/pricing/murabaha.ts';
 import type { TransactionCore } from '../../products/murabaha-scf/sequencing/state.ts';
 import type { ApplicantSnapshot } from '../../core/decisioning/snapshot.ts';
 import type { StructureDefinition } from '../../products/murabaha-scf/structures/definition.ts';
-import { type TenantCode, loadStructureDefinition } from '../../config/loader.ts';
+import { type TenantCode, loadBoardPositions, loadStructureDefinition } from '../../config/loader.ts';
+import type { BoardPositions, InvoiceLineGoods } from '../../products/murabaha-scf/structures/board-positions.ts';
 
 /** An attested instant. Seconds since the epoch; the value itself is arbitrary. */
 export function at(epochSeconds: number | bigint): TsaInstant {
@@ -44,6 +45,21 @@ export const TRANSACTION_ID = 'txn-0001';
 export function structureFor(tenant: TenantCode): StructureDefinition {
   return expectOk(loadStructureDefinition(tenant, 'MURABAHA_DISTRIBUTOR'));
 }
+
+/** The template version the document tests render against. */
+export const TEST_TEMPLATE_VERSION = 'tpl-v3';
+
+/** This tenant's board positions, with the test template version approved beside the board's own. */
+export function boardFor(tenant: TenantCode): BoardPositions {
+  const board = expectOk(loadBoardPositions(tenant));
+  return {
+    ...board,
+    approvedTemplates: [...board.approvedTemplates, { document: 'test', templateVersionId: TEST_TEMPLATE_VERSION }],
+  };
+}
+
+/** Invoice lines of goods no board excludes (HS 8471: computers). */
+export const PERMITTED_GOODS: readonly InvoiceLineGoods[] = [{ lineNo: 1, goodsClassificationCode: '8471' }];
 
 /** The Board-set interval this tenant's definition declares. */
 export function riskPeriodSecondsFor(tenant: TenantCode): number {

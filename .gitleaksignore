@@ -1,0 +1,10 @@
+# Known findings in history, each tracked in docs/SECURITY-REGISTER.md. Rewriting history does not
+# un-leak a secret; rotation is the fix. An entry here stops CI failing on a finding already
+# registered, and nothing else: any new finding, or this one in any other commit, still fails.
+#
+# SR-001 (Critical, OPEN): the Upstash Redis REST endpoint and token committed in .env.example.
+# NOT YET ROTATED. The repository is public, so the token is exposed whether or not this line
+# exists. Rotate it at the provider, record the rotation in SR-001, then keep these two lines as
+# the record of a rotated finding.
+485e57d9e1cb4959c30409a2337f3c68d8a2129b:.env.example:upstash-redis-rest-token:19
+485e57d9e1cb4959c30409a2337f3c68d8a2129b:.env.example:upstash-redis-rest-url:18

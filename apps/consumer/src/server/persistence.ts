@@ -14,7 +14,7 @@
 import type { Pool } from 'pg';
 
 import type { CheckoutSession } from '@sanad/core/checkout/session.ts';
-import { tsaInstant } from '@sanad/core/time/tsa.ts';
+import { restoreAttestedInstant } from '@sanad/core/time/tsa.ts';
 import { decodeJson, encodeJson } from '@sanad/origination/codec.ts';
 import { sharedPool, tenantUuidByCode } from '@sanad/origination/credentials.ts';
 import { type Scoped, inTenant } from '@sanad/origination/tenant-scope.ts';
@@ -88,9 +88,8 @@ async function readConsumerBook(db: Scoped, tenant: string): Promise<ConsumerBoo
       identityAssertionId: r.identity_assertion_id,
       localeShown: r.locale_shown,
       // Rebuilt through the one function allowed to establish an attested instant.
-      acceptedAt: tsaInstant({
-        verified: true,
-        genTimeEpochSeconds: BigInt(r.accepted_at_epoch),
+      acceptedAt: restoreAttestedInstant({
+        epochSeconds: BigInt(r.accepted_at_epoch),
         tokenDigest: r.accepted_tsa_digest,
         authorityId: r.accepted_tsa_authority,
       }),

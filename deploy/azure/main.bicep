@@ -32,7 +32,7 @@ param customDomainsLive bool = false
 @description('The Container Apps environment\'s default domain (pass 1 output environmentDefaultDomain). Fixed once the environment exists; a parameter because app definitions are evaluated before the environment\'s properties are known.')
 param environmentDomain string = ''
 
-@description('What data this deployment holds. SYNTHETIC (Phase 1, ADR 0004) lets the consumer demonstration sign-in run, and only while the database\'s config.deployment_profile also says it is not cleared for production data (SR-005). Phase 2 passes PRODUCTION.')
+@description('What data this deployment holds. SYNTHETIC (Phase 1, ADR 0004) lets the consumer demonstration sign-in run, only while the database\'s config.deployment_profile also says it is not cleared for production data (SR-005), and lets the host clock stand in for a timestamping authority on consumer and ops (SR-006). Phase 2 passes PRODUCTION, which needs the authority.')
 @allowed(['SYNTHETIC', 'PRODUCTION'])
 param dataClass string = 'SYNTHETIC'
 
@@ -44,6 +44,9 @@ param deployerObjectId string
 
 @description('GitHub repository allowed to deploy, as owner/name.')
 param githubRepository string = 'jaffarIOTA/SANAD'
+
+@description('Admin connects with its own login, sanad_admin (SR-046), whose connection string is the Key Vault secret sanad-admin-database-url. Set true once that secret exists (README, "Admin database login"); until then Admin shares sanad-database-url.')
+param adminOwnLogin bool = false
 
 var tags = {
   product: 'sanad'
@@ -216,6 +219,8 @@ var oidcTenants = ['BANK_A', 'FINTECH_B', 'SME_FUND_AE']
 var opsOidcEnv = [for t in oidcTenants: { name: 'OIDC_CLIENT_SECRET_${t}_OPS', secretRef: 'oidc-client-secret' }]
 var adminOidcEnv = [for t in oidcTenants: { name: 'OIDC_CLIENT_SECRET_${t}_ADMIN', secretRef: 'oidc-client-secret' }]
 
+var adminDatabaseSecret = adminOwnLogin ? 'sanad-admin-database-url' : 'sanad-database-url'
+
 // One entry per app. Secrets are Key Vault references read by the app identity;
 // no secret value passes through this template.
 var apps = [
@@ -240,6 +245,8 @@ var apps = [
         { name: 'OPS_SESSION_SECRET', secretRef: 'ops-session-secret' }
         { name: 'SANAD_DATABASE_URL', secretRef: 'sanad-database-url' }
         { name: 'OPS_PUBLIC_ORIGIN', value: origin.ops }
+        // The host clock stands in for a timestamping authority only on declared-synthetic hosting (SR-006).
+        { name: 'SANAD_DATA_CLASS', value: dataClass }
       ],
       opsOidcEnv
     )
@@ -248,11 +255,11 @@ var apps = [
   {
     app: 'admin'
     host: 'admin.${publicHost}'
-    secrets: ['admin-session-secret', 'sanad-database-url', 'oidc-client-secret']
+    secrets: ['admin-session-secret', adminDatabaseSecret, 'oidc-client-secret']
     env: concat(
       [
         { name: 'ADMIN_SESSION_SECRET', secretRef: 'admin-session-secret' }
-        { name: 'SANAD_DATABASE_URL', secretRef: 'sanad-database-url' }
+        { name: 'SANAD_DATABASE_URL', secretRef: adminDatabaseSecret }
         { name: 'ADMIN_PUBLIC_ORIGIN', value: origin.admin }
       ],
       adminOidcEnv

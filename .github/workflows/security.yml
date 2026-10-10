@@ -39,6 +39,8 @@ jobs:
     container: semgrep/semgrep:1.180.0@sha256:529ee8a277ec8adc5b534d7c74eea0a47e9de21d62852b6ba7ac6ba9566845c3
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      # The Sanad rules first match what they must and leave what they must not (.semgrep/sanad.ts, SR-033).
+      - run: semgrep --test --config .semgrep/sanad.yml .semgrep/sanad.ts
       # `semgrep scan`, not `semgrep ci`: ci rejects --error and expects a Semgrep App token; scan with
       # --error fails the job on any finding from these rule sets, which is the gate SEC-D03 asks for.
       - run: semgrep scan --config .semgrep/sanad.yml --config p/typescript --config p/owasp-top-ten --config p/secrets --metrics off --error
@@ -49,8 +51,19 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with: { fetch-depth: 0 }                  # a secret removed later is still leaked
-      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
-        env: { GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+      # The CLI over every ref, not the action's pushed range (SR-023), with Sanad's rules (.gitleaks.toml)
+      # and only registered findings ignored (.gitleaksignore).
+      - name: The scan catches a token removed in a later commit
+        run: scripts/gitleaks-selftest.sh docker run --rm $GIT_SAFE -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE"
+      - name: Scan the full history of every ref
+        run: |
+          git fetch --no-tags --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          docker run --rm $GIT_SAFE -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" git --log-opts=--all \
+            --config /repo/.gitleaks.toml --gitleaks-ignore-path /repo/.gitleaksignore --redact --no-banner -v /repo
+    env:
+      GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.28.0@sha256:cdbb7c955abce02001a9f6c9f602fb195b7fadc1e812065883f695d1eeaba854
+      # The container runs as root over the runner's checkout; git would refuse it as of dubious ownership.
+      GIT_SAFE: -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=*
 
   dependencies:                                   # SEC-D06
     name: SCA — dependencies
@@ -61,12 +74,63 @@ jobs:
         with: { node-version: '22', cache: npm }
       - run: npm ci
       - run: npm audit --audit-level=high
+      # Every shipped dependency under an allowed licence or an owned, unexpired exception (SEC-D12).
+      - name: Licence gate
+        run: node scripts/licence-gate.mjs
+      # Every suppressed finding registered with an owner and an expiry; an expired one fails (SEC-D14).
+      - name: Suppressions owned and in date
+        run: node scripts/suppressions-check.mjs
       # v2 takes its arguments one per line; '@v1' never existed as a ref of this action.
       - uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
         with:
           scan-args: |-
             --recursive
             ./
+
+  images:                                         # SEC-D09, SEC-D11 (SR-032)
+    name: Image scan and DAST (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [consumer, ops, admin]
+    env:
+      IMAGE: sanad-${{ matrix.app }}:ci
+      ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:stable@sha256:7aaa659b0d43078febd82e29bad112285c370727e86ab8340444220e17d9f0d2
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build the image the release would ship
+        run: docker build -f apps/Containerfile --build-arg APP=${{ matrix.app }} -t "$IMAGE" .
+      # The image, not just the filesystem: a fixable High or Critical in the base or a dependency fails (SEC-D09).
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+      # As a synthetic deployment: production mode, no database, throwaway secrets.
+      - name: Start it
+        run: |
+          set -euo pipefail
+          secret() { openssl rand -hex 32; }
+          docker run -d --name app -p 3000:3000 \
+            -e SANAD_DATA_CLASS=SYNTHETIC \
+            -e CONSUMER_SESSION_SECRET="$(secret)" -e OPS_SESSION_SECRET="$(secret)" -e ADMIN_SESSION_SECRET="$(secret)" \
+            -e OPS_PUBLIC_ORIGIN=http://localhost:3000 -e ADMIN_PUBLIC_ORIGIN=http://localhost:3000 \
+            -e CONSUMER_BASE_URL=http://localhost:3000 \
+            "$IMAGE"
+          for i in $(seq 1 60); do curl -fsS -o /dev/null http://localhost:3000/en && exit 0; sleep 2; done
+          docker logs app | tail -20; exit 1
+      # OWASP ZAP baseline (passive) against the running app; .zap/rules.tsv makes the SR-027 headers a FAIL (SEC-D11).
+      - name: DAST baseline
+        run: |
+          mkdir -p zap && cp .zap/rules.tsv zap/ && chmod -R a+rwx zap
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" "$ZAP_IMAGE" \
+            zap-baseline.py -t http://localhost:3000/en -c rules.tsv -I -r report.html
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with: { name: 'zap-${{ matrix.app }}', path: zap/report.html, retention-days: 30, if-no-files-found: ignore }
 
   dependency-review:                              # SEC-D07
     name: Dependency review

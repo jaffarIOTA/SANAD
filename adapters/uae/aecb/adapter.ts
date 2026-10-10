@@ -85,7 +85,7 @@ export class AecbAdapter extends RailAdapter implements CreditBureauPort {
 
   /** The commercial report. `commercialRegistration` carries the trade licence number (AECB-DEV-001). */
   async request(req: BureauRequest): Promise<Result<BureauOutcome>> {
-    const consent = this.requireConsent(req.consentId);
+    const consent = await this.requireConsent(req.tenantId, req.consentId, 'CREDIT_BUREAU');
     if (!consent.ok) return consent;
     return this.#enquire(
       'bureau.commercial',
@@ -102,7 +102,7 @@ export class AecbAdapter extends RailAdapter implements CreditBureauPort {
     readonly consentId: string;
     readonly correlationId: string;
   }): Promise<Result<BureauOutcome>> {
-    const consent = this.requireConsent(req.consentId);
+    const consent = await this.requireConsent(req.tenantId, req.consentId, 'CREDIT_BUREAU');
     if (!consent.ok) return consent;
     return this.#enquire(
       'bureau.individual',

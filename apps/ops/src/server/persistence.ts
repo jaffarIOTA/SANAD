@@ -16,7 +16,7 @@ import type { Pool } from 'pg';
 
 import type { PresentedDocument } from '@sanad/core/documents/checklist.ts';
 import type { OriginationRequest } from '@sanad/core/origination/request.ts';
-import { tsaInstant } from '@sanad/core/time/tsa.ts';
+import { restoreAttestedInstant } from '@sanad/core/time/tsa.ts';
 import { decodeRequest, encodeRequest } from '@sanad/origination/codec.ts';
 import { sharedPool, tenantUuidByCode } from '@sanad/origination/credentials.ts';
 import { type IdempotencyStore, inMemoryIdempotencyStore } from '@sanad/origination/idempotency.ts';
@@ -134,9 +134,8 @@ export async function loadDocuments(pool: Pool, tenantCode: string): Promise<rea
       documentType: r.document_type,
       validationStatus: r.validation_status,
       // Rebuilt through the one function allowed to establish an attested instant.
-      capturedAt: tsaInstant({
-        verified: true,
-        genTimeEpochSeconds: BigInt(r.captured_at_epoch),
+      capturedAt: restoreAttestedInstant({
+        epochSeconds: BigInt(r.captured_at_epoch),
         tokenDigest: r.captured_tsa_digest,
         authorityId: r.captured_tsa_authority,
       }),

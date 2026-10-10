@@ -28,6 +28,7 @@ import {
   store,
 } from '../../../server/credentials.ts';
 import { currentAdmin } from '../../../server/session.ts';
+import { configurableTenants } from '../../../server/tenant-scope.ts';
 
 const NOTICE: Readonly<Record<string, { en: string; ar: string; tone: 'settled' | 'blocked' | 'attention' }>> = {
   SAVED: {
@@ -72,10 +73,11 @@ export default async function CredentialsPage({
   const { tenant: tenantParam, notice } = await searchParams;
   const locale = localeFromSegment(segment);
   if (locale === undefined) notFound();
-  if ((await currentAdmin()) === undefined) redirect(`/${segment}`);
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${segment}`);
   const arabic = locale === 'ar-SA';
   const s = store();
-  const tenants = s.kind === 'READY' ? await listTenants(s.pool) : [];
+  const tenants = s.kind === 'READY' ? configurableTenants(admin, await listTenants(s.pool)) : [];
   const tenant = tenants.find((t) => t.code === tenantParam) ?? tenants[0];
   const rows = s.kind === 'READY' && tenant !== undefined ? await listCredentials(s.pool, tenant.code) : [];
   const n = notice === undefined ? undefined : NOTICE[notice];

@@ -287,3 +287,29 @@ describe('§4 — the credential store has no plaintext column', () => {
     expect(migrations).toMatch(/vault_secret_id/);
   });
 });
+
+describe('SR-034 — session secrets and development tokens', () => {
+  const UNITS = ['apps/admin', 'apps/ops', 'apps/consumer', 'apps/sme', 'services/origination', 'services/outbox'];
+
+  it('no development token variable is read by two apps: one token is one person in one app', () => {
+    const readers = new Map<string, Set<string>>();
+    for (const unit of UNITS)
+      for (const file of filesUnder(unit))
+        for (const m of readFileSync(file, 'utf8').matchAll(/['"`]([A-Z][A-Z0-9_]*_DEV_TOKEN[A-Z0-9_]*)['"`]/g)) {
+          const name = m[1] as string;
+          readers.set(name, (readers.get(name) ?? new Set()).add(unit));
+        }
+    expect(readers.size).toBeGreaterThan(5);
+    const shared = [...readers].filter(([, units]) => units.size > 1).map(([name, units]) => [name, [...units]]);
+    expect(shared).toEqual([]);
+  });
+
+  it('the hosted apps take every session master secret from Key Vault, never a literal value', () => {
+    const bicep = readFileSync(join(ROOT, 'deploy/azure/main.bicep'), 'utf8');
+    for (const name of ['ADMIN_SESSION_SECRET', 'OPS_SESSION_SECRET', 'CONSUMER_SESSION_SECRET']) {
+      expect(bicep, name).toMatch(new RegExp(`\\{ name: '${name}', secretRef: '[a-z-]+' \\}`));
+      expect(bicep, name).not.toMatch(new RegExp(`name: '${name}', value:`));
+    }
+    expect(bicep).toMatch(/keyVaultUrl: '\$\{vault\.properties\.vaultUri\}secrets\/\$\{s\}'/);
+  });
+});

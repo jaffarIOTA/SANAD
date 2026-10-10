@@ -147,7 +147,6 @@ create policy deployment_profile_runtime on config.deployment_profile for select
 -- serves every app today, and a separate Admin login is SR-046.
 grant execute on function config.effective_revision(uuid, text, timestamptz) to sanad_runtime;
 grant execute on function config.list_revisions(uuid, text) to sanad_runtime;
-grant execute on function config.revision_payload(uuid) to sanad_runtime;
 grant execute on function config.propose_revision(uuid, text, jsonb, text, timestamptz, text, uuid) to sanad_runtime;
 grant execute on function config.decide_revision(uuid, text, boolean, text, uuid) to sanad_runtime;
 grant execute on function config.get_integration_credential(uuid, text, text, text, uuid) to sanad_runtime;

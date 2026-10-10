@@ -76,12 +76,31 @@ rules:
 
   - id: sanad-no-tenant-id-from-client
     languages: [typescript, javascript]
-    severity: WARNING
+    severity: ERROR
+    # SR-033: request bodies and queries, form posts and address parameters alike. A tenant a request names is
+    # a request; only the authenticated principal binds it (apps/admin/src/server/tenant-scope.ts). Fixtures:
+    # .semgrep/sanad.ts, run by `npm run test:semgrep` and in CI.
     patterns:
       - pattern-either:
-          - pattern: $REQ.body.tenantId
-          - pattern: $REQ.body.tenant_id
-          - pattern: $REQ.query.tenantId
+          - patterns:
+              - pattern-either:
+                  - pattern: $REQ.body.$KEY
+                  - pattern: $REQ.query.$KEY
+              - metavariable-regex:
+                  metavariable: $KEY
+                  regex: (?i)^tenant
+          - patterns:
+              - pattern-either:
+                  - pattern: $SOURCE.get("$NAME")
+                  - pattern: $SOURCE.getAll("$NAME")
+                  - pattern: field($FORM, "$NAME")
+              - metavariable-regex:
+                  metavariable: $NAME
+                  # Anchored at the start by Semgrep, so the leading `.*`.
+                  regex: (?i).*tenant
+      - pattern-not-inside: configurableTenant($PRINCIPAL, ...)
     message: >-
       Tenant scope is derived from the authenticated principal, never accepted
-      from the client. Accepting it is cross-tenant access (SEC-TM08).
+      from the client. Accepting it is cross-tenant access (SEC-TM08). Where a
+      request may choose among the principal's own institutions, pass the
+      choice through configurableTenant(principal, requested).

@@ -1,0 +1,21 @@
+{
+  "$comment": "Every suppressed security finding, with its owner, reason and expiry (SEC-D14, SR-032). scripts/suppressions-check.mjs fails the build when a suppression in a tool file has no entry here, an entry suppresses nothing, or an entry has expired. Licence exceptions carry their own owner and expiry in licence-policy.json and are checked by the same script.",
+  "suppressions": [
+    {
+      "tool": "gitleaks",
+      "id": "485e57d9e1cb4959c30409a2337f3c68d8a2129b:.env.example:upstash-redis-rest-token:19",
+      "register": "SR-001",
+      "owner": "Product owner",
+      "reason": "The Upstash token committed in history. NOT YET ROTATED: this entry expires so the build fails until the token is rotated and this entry is renewed as a rotated finding.",
+      "expires": "2026-10-16"
+    },
+    {
+      "tool": "gitleaks",
+      "id": "485e57d9e1cb4959c30409a2337f3c68d8a2129b:.env.example:upstash-redis-rest-url:18",
+      "register": "SR-001",
+      "owner": "Product owner",
+      "reason": "The Upstash endpoint beside the token above; expires with it.",
+      "expires": "2026-10-16"
+    }
+  ]
+}

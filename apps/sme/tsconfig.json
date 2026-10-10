@@ -17,6 +17,7 @@
       "@sanad/core/*": ["../../core/*"],
       "@sanad/design/*": ["../../packages/design/*"],
       "@sanad/i18n/*": ["../../packages/i18n/*"],
+      "@sanad/auth/*": ["../../packages/auth/*"],
       "@/*": ["./src/*"],
       "@sanad/products/*": ["../../products/*"]
     },

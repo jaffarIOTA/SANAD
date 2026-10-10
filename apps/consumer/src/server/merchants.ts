@@ -17,6 +17,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { type Merchant, beginOnboarding, verify } from '@sanad/core/merchants/merchant.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
 import { loadMerchants, saveMerchant } from '@sanad/origination/merchants.ts';
+import { hostClockPermitted } from '@sanad/origination/host-clock.ts';
 import { deploymentProfile } from '@sanad/origination/profile.ts';
 
 import { persistencePool } from './persistence.ts';
@@ -75,7 +76,8 @@ function developmentMerchant(): Merchant {
 function initial(): State {
   const merchants = new Map<string, Merchant>();
   // Without a database the development merchant is seeded here; with one, `refreshMerchants()` reads it from there.
-  if (persistencePool() === undefined) merchants.set('mer-demo-01', developmentMerchant());
+  // Only where the host clock may attest it (SR-006): not in `next build`, which loads this in production mode.
+  if (persistencePool() === undefined && hostClockPermitted()) merchants.set('mer-demo-01', developmentMerchant());
   const tokens = new Map<string, MerchantPrincipal>();
   // A development credential: never recognised under a deployed profile (SR-004).
   const token = deploymentProfile() === 'DEVELOPMENT' ? process.env['MERCHANT_DEV_TOKEN'] : undefined;
@@ -94,7 +96,8 @@ export async function refreshMerchants(): Promise<void> {
   const pool = persistencePool();
   if (pool === undefined) return;
   let merchants = await loadMerchants(pool, TENANT_CODE);
-  if (merchants.length === 0 && state.seededDatabase !== true) {
+  // A real-data deployment's empty table stays empty: the development merchant is synthetic (SR-006).
+  if (merchants.length === 0 && state.seededDatabase !== true && hostClockPermitted()) {
     const demo = developmentMerchant();
     await saveMerchant(pool, TENANT_CODE, {
       merchant: demo,

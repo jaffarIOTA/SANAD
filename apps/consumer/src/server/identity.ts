@@ -62,7 +62,8 @@ function developmentIdentity(nowEpochSeconds: () => bigint): IdentityAuthenticat
           kind: 'ANSWERED',
           value: {
             assertionId: `asr-dev-${applicantRef}-${nowEpochSeconds().toString()}`,
-            identityRef: `idp-ref-${applicantRef}`,
+            // The stand-in vouches for whoever was typed, so the confirmed identity is that reference.
+            identityRef: applicantRef,
             authenticatedAtEpochSeconds: nowEpochSeconds(),
           },
         }),
