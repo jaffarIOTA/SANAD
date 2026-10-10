@@ -9,7 +9,7 @@ import type { CheckoutSession } from '@sanad/core/checkout/session.ts';
 import { problem, type Problem } from '@sanad/origination/problem.ts';
 import { compileContract, contractPath } from '@sanad/origination/contracts.ts';
 
-import { type MerchantPrincipal, authenticateMerchant } from '@/server/merchants.ts';
+import { type MerchantPrincipal, authenticateMerchant } from '../../../../server/merchants.ts';
 
 export const contract = compileContract(contractPath('checkout.v1.yaml'));
 

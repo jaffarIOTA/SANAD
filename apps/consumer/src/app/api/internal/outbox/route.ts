@@ -10,9 +10,9 @@ import { runOutboxPass } from '@sanad/core/outbox/store.ts';
 import { loadOriginationPolicy } from '@sanad/config/loader.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
 
-import { outboxStore } from '@/server/checkout-store.ts';
-import { syncConsumerStore } from '@/server/durable.ts';
-import { developmentAttestation } from '@/server/store.ts';
+import { outboxStore } from '../../../../server/checkout-store.ts';
+import { syncConsumerStore } from '../../../../server/durable.ts';
+import { developmentAttestation } from '../../../../server/store.ts';
 import {
   type DevelopmentDelivery,
   developmentDispatchPorts,

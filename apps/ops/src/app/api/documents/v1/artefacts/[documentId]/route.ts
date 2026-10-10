@@ -2,7 +2,7 @@
  * Serves a document's bytes to the viewer. Development: the synthetic samples
  * only, by id; nothing else on disk is reachable through this route.
  */
-import { findViewerDocument, readSampleBytes } from '@/server/documents.ts';
+import { findViewerDocument, readSampleBytes } from '../../../../../../server/documents.ts';
 
 export async function GET(
   _request: Request,
