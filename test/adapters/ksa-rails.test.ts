@@ -43,6 +43,7 @@ type OpenBankingPorts = AccountInformationPort & PaymentInitiationPort;
 import { money } from '../../core/kernel/money.ts';
 import { expectOk } from '../../core/kernel/result.ts';
 import { tsaInstant } from '../../core/time/tsa.ts';
+import { grantingLedger } from '../support/consents.ts';
 
 class Credentials implements CredentialProvider {
   async get(_ref: CredentialRef): Promise<SecretValue> {
@@ -59,6 +60,7 @@ const config = (provider: RailAdapterConfig['provider']): RailAdapterConfig => (
   breaker: { failureThreshold: 2, resetAfterSeconds: 30, successThreshold: 1 },
   nowEpochSeconds: () => 1_800_000_000,
   baseUrl: 'https://rail.sandbox.example',
+  consents: grantingLedger('bank-a'),
 });
 const at = tsaInstant({ verified: true, genTimeEpochSeconds: 1_800_000_000n, tokenDigest: 't', authorityId: 'test' });
 const attest = () => Promise.resolve(at);
@@ -88,7 +90,7 @@ describe('every rail: an unreachable rail is UNAVAILABLE, not an answer', () => 
     ) as IdentityAuthenticationPort;
     expect(
       expectOk(
-        await a.startAuthentication({ tenantId: 't', applicantRef: 'app', purpose: 'LOGIN', correlationId: 'c' }),
+        await a.startAuthentication({ tenantId: 'bank-a', applicantRef: 'app', purpose: 'LOGIN', correlationId: 'c' }),
       ).kind,
     ).toBe('UNAVAILABLE');
   });
@@ -102,7 +104,7 @@ describe('every rail: an unreachable rail is UNAVAILABLE, not an answer', () => 
     expect(
       expectOk(
         await a.request({
-          tenantId: 't',
+          tenantId: 'bank-a',
           counterpartyId: 'cp',
           commercialRegistration: '1010000002',
           consentId: 'cns',
@@ -120,7 +122,7 @@ describe('every rail: an unreachable rail is UNAVAILABLE, not an answer', () => 
     expect(
       expectOk(
         await a.disburse({
-          tenantId: 't',
+          tenantId: 'bank-a',
           beneficiaryRef: 'b',
           amount: money(1n),
           purposeCode: 'P',
@@ -147,7 +149,7 @@ describe('consent-gated rails refuse before any call', () => {
       'Yakeen',
       async (t: FixtureTransport) =>
         (new YakeenAdapter(config('IDENTITY_VERIFICATION'), new Credentials(), t) as IdentityVerificationPort).verify({
-          tenantId: 't',
+          tenantId: 'bank-a',
           applicantRef: 'a',
           consentId: '',
           correlationId: 'c',
@@ -159,7 +161,7 @@ describe('consent-gated rails refuse before any call', () => {
         (
           new TahaqoqAdapter(config('DOCUMENT_VERIFICATION'), new Credentials(), t) as DocumentVerificationPort
         ).verifyDocument({
-          tenantId: 't',
+          tenantId: 'bank-a',
           applicantRef: 'a',
           documentType: 'COMMERCIAL_REGISTRATION',
           documentRef: 'd',
@@ -172,13 +174,13 @@ describe('consent-gated rails refuse before any call', () => {
       async (t: FixtureTransport) =>
         (
           new GosiAdapter(config('EMPLOYMENT_VERIFICATION'), new Credentials(), t) as EmploymentVerificationPort
-        ).employment({ tenantId: 't', applicantRef: 'a', consentId: '', correlationId: 'c' }),
+        ).employment({ tenantId: 'bank-a', applicantRef: 'a', consentId: '', correlationId: 'c' }),
     ],
     [
       'Open Banking AIS',
       async (t: FixtureTransport) =>
         (new OpenBankingAdapter(config('OPEN_BANKING'), new Credentials(), t) as OpenBankingPorts).affordabilityFacts({
-          tenantId: 't',
+          tenantId: 'bank-a',
           applicantRef: 'a',
           consentId: '',
           months: 6,
@@ -189,7 +191,7 @@ describe('consent-gated rails refuse before any call', () => {
       'Bayan',
       async (t: FixtureTransport) =>
         (new BayanAdapter(config('CREDIT_BUREAU'), new Credentials(), t, attest) as CreditBureauPort).request({
-          tenantId: 't',
+          tenantId: 'bank-a',
           counterpartyId: 'cp',
           commercialRegistration: '1010000002',
           consentId: '',
@@ -222,7 +224,7 @@ describe('answers map to the port, and identifiers do not cross', () => {
     const r = expectOk(
       await (
         new YakeenAdapter(config('IDENTITY_VERIFICATION'), new Credentials(), t) as IdentityVerificationPort
-      ).verify({ tenantId: 't', applicantRef: 'app-1', consentId: 'cns-1', correlationId: 'c' }),
+      ).verify({ tenantId: 'bank-a', applicantRef: 'app-1', consentId: 'cns-1', correlationId: 'c' }),
     );
     expect(r).toEqual({
       kind: 'ANSWERED',
@@ -255,7 +257,7 @@ describe('answers map to the port, and identifiers do not cross', () => {
     });
     const r = expectOk(
       await (new SimahAdapter(config('CREDIT_BUREAU'), new Credentials(), t, attest) as CreditBureauPort).request({
-        tenantId: 't',
+        tenantId: 'bank-a',
         counterpartyId: 'cp',
         commercialRegistration: '1010000002',
         consentId: 'cns',
@@ -278,7 +280,7 @@ describe('answers map to the port, and identifiers do not cross', () => {
     });
     const r = expectOk(
       await (new SimahAdapter(config('CREDIT_BUREAU'), new Credentials(), t, attest) as CreditBureauPort).report({
-        tenantId: 't',
+        tenantId: 'bank-a',
         facilityRef: 'f-1',
         counterpartyId: 'cp',
         event: 'OPENED',
@@ -306,7 +308,9 @@ describe('answers map to the port, and identifiers do not cross', () => {
       },
     });
     const a = new WathqAdapter(config('BUSINESS_REGISTRY'), new Credentials(), t) as BusinessRegistryPort;
-    const r = expectOk(await a.lookup({ tenantId: 't', commercialRegistration: '1010000002', correlationId: 'c' }));
+    const r = expectOk(
+      await a.lookup({ tenantId: 'bank-a', commercialRegistration: '1010000002', correlationId: 'c' }),
+    );
     expect(r.kind).toBe('ANSWERED');
     if (r.kind === 'ANSWERED') {
       expect(r.value.signatoryRefs).toEqual(['sig-1']);
@@ -316,14 +320,15 @@ describe('answers map to the port, and identifiers do not cross', () => {
     expect(JSON.stringify(r, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v))).not.toContain(
       'SHOULD NOT CROSS',
     );
-    expect((await a.lookup({ tenantId: 't', commercialRegistration: '12', correlationId: 'c' })).ok).toBe(false);
+    expect((await a.lookup({ tenantId: 'bank-a', commercialRegistration: '12', correlationId: 'c' })).ok).toBe(false);
     const missing = new WathqAdapter(
       config('BUSINESS_REGISTRY'),
       new Credentials(),
       transport({ operation: 'registry.lookup', match: {}, response: {}, failsWith: 'x' }),
     ) as BusinessRegistryPort;
     expect(
-      expectOk(await missing.lookup({ tenantId: 't', commercialRegistration: '1010000002', correlationId: 'c' })).kind,
+      expectOk(await missing.lookup({ tenantId: 'bank-a', commercialRegistration: '1010000002', correlationId: 'c' }))
+        .kind,
     ).toBe('UNAVAILABLE');
   });
   it('ZATCA maps an unknown status to UNAVAILABLE, never VALID', async () => {
@@ -332,7 +337,7 @@ describe('answers map to the port, and identifiers do not cross', () => {
       expectOk(
         await (
           new ZatcaTaxAdapter(config('TAX_COMPLIANCE'), new Credentials(), t) as TaxCompliancePort
-        ).certificateStatus({ tenantId: 't', crNumber: '1010000002', correlationId: 'c' }),
+        ).certificateStatus({ tenantId: 'bank-a', crNumber: '1010000002', correlationId: 'c' }),
       ).kind,
     ).toBe('UNAVAILABLE');
   });
@@ -367,7 +372,7 @@ describe('answers map to the port, and identifiers do not cross', () => {
     expect(
       expectOk(
         await (new SadadAdapter(config('BILL_COLLECTION'), new Credentials(), sadad) as BillCollectionPort).present({
-          tenantId: 't',
+          tenantId: 'bank-a',
           obligationRef: 'o',
           payerRef: 'p',
           amount: money(100n),
@@ -385,7 +390,7 @@ describe('answers map to the port, and identifiers do not cross', () => {
     expect(
       expectOk(
         await (new OpenBankingAdapter(config('OPEN_BANKING'), new Credentials(), ob) as OpenBankingPorts).initiate({
-          tenantId: 't',
+          tenantId: 'bank-a',
           applicantRef: 'a',
           consentId: 'cns',
           amount: money(100n),
@@ -405,7 +410,7 @@ describe('answers map to the port, and identifiers do not cross', () => {
       await (
         new CommodityBrokerAdapter(config('COMMODITY_BROKER'), new Credentials(), broker) as CommodityBrokerPort
       ).purchase({
-        tenantId: 't',
+        tenantId: 'bank-a',
         brokerRef: 'br',
         commodityCode: 'LME-AL',
         amount: money(5_000_000n),
@@ -419,7 +424,7 @@ describe('answers map to the port, and identifiers do not cross', () => {
   it('the circuit opens after repeated failures and reports UNAVAILABLE without calling', async () => {
     const t = transport(down('employment.status'));
     const a = new GosiAdapter(config('EMPLOYMENT_VERIFICATION'), new Credentials(), t) as EmploymentVerificationPort;
-    const call = () => a.employment({ tenantId: 't', applicantRef: 'a', consentId: 'cns', correlationId: 'c' });
+    const call = () => a.employment({ tenantId: 'bank-a', applicantRef: 'a', consentId: 'cns', correlationId: 'c' });
     await call();
     await call();
     const third = expectOk(await call());

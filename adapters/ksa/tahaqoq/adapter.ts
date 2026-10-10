@@ -59,7 +59,7 @@ export class TahaqoqAdapter extends RailAdapter implements DocumentVerificationP
     readonly consentId: string;
     readonly correlationId: string;
   }) {
-    const consent = this.requireConsent(p.consentId);
+    const consent = await this.requireConsent(p.tenantId, p.consentId, 'DOCUMENT_VERIFICATION');
     if (!consent.ok) return consent;
     const vendorType = TahaqoqAdapter.DOCUMENT_TYPES[p.documentType];
     if (vendorType === undefined) return ok({ kind: 'REFUSED' as const, code: 'DOCUMENT_TYPE_UNSUPPORTED' });

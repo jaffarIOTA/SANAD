@@ -11,6 +11,8 @@
 import { type AdapterConfig, BaseAdapter } from '../../kernel/adapter.ts';
 import { CircuitOpenError } from '../../kernel/circuit-breaker.ts';
 import { type RailTransport, TransportError } from '../../kernel/http-transport.ts';
+import type { ConsentType } from '../../../core/consent/consent.ts';
+import type { ConsentLedger } from '../../../core/ports/consent-ledger.ts';
 import type { CredentialProvider } from '../../../core/ports/credentials.ts';
 import type { RailOutcome } from '../../../core/ports/rail.ts';
 import { type Result, reject, ok } from '../../../core/kernel/result.ts';
@@ -19,6 +21,8 @@ export interface RailAdapterConfig extends AdapterConfig {
   readonly baseUrl: string;
   /** The vault key name for this rail's credential. */
   readonly credentialKeyName?: string;
+  /** Where a consent-gated rail checks the consent it is given. Absent: every consent-gated call is refused. */
+  readonly consents?: ConsentLedger;
 }
 
 export type Body = Readonly<Record<string, unknown>>;
@@ -74,11 +78,24 @@ export abstract class RailAdapter extends BaseAdapter {
     }
   }
 
-  /** Consent-gated rails refuse before the call, not after. */
-  protected requireConsent(consentId: string): Result<true> {
-    return consentId.trim().length === 0
-      ? reject('OP-DETERMINACY', 'CONSENT_MISSING', 'This rail is called only under a recorded consent for its purpose')
-      : ok(true);
+  /**
+   * Consent-gated rails refuse before the call, not after (SR-026): the consent must be live, for this rail's
+   * purpose, and for the tenant asking, which must be the tenant whose credentials this adapter holds. With no
+   * ledger configured there is no way to tell, so every consent-gated call is refused.
+   */
+  protected async requireConsent(tenantId: string, consentId: string, type: ConsentType): Promise<Result<true>> {
+    if (consentId.trim().length === 0)
+      return reject(
+        'OP-DETERMINACY',
+        'CONSENT_MISSING',
+        'This rail is called only under a recorded consent for its purpose',
+      );
+    if (tenantId !== this.config.tenantId)
+      return reject('OP-DETERMINACY', 'TENANT_MISMATCH', 'This rail is configured for another institution');
+    if (this.config.consents === undefined)
+      return reject('OP-DETERMINACY', 'CONSENT_UNVERIFIABLE', 'No consent ledger is configured for this rail');
+    const live = await this.config.consents.live({ tenantId, consentId, type });
+    return live.ok ? ok(true) : live;
   }
 }
 
