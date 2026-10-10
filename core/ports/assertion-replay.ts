@@ -1,7 +1,7 @@
 /**
  * Assertion replay guard.
  *
- * An identity assertion (Nafath, UAE Pass) proves a person authenticated once.
+ * An identity assertion from the national digital identity rail proves a person authenticated once.
  * Accepted twice, it lets whoever captured it sign in or sign as that person
  * again. Each assertion is consumed once per tenant; the adapter is a
  * repository over a table whose primary key is the actual enforcement, so two
