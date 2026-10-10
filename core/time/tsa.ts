@@ -49,8 +49,11 @@ export interface VerifiedTimestamp {
 export interface TimestampAuthorityPort {
   /** Stamp a document digest and return the verified attestation. */
   stamp(messageDigest: string): Promise<VerifiedTimestamp>;
-  /** Re-verify a retained token, for audit replay. */
-  verify(token: Uint8Array): Promise<VerifiedTimestamp>;
+  /**
+   * Re-verify a retained token for audit replay: its signature and certificate chain, and that its message
+   * imprint is `messageDigest`. Undefined when any of those fails; the reason stays in the adapter (SR-008).
+   */
+  verify(token: Uint8Array, messageDigest: string): Promise<VerifiedTimestamp | undefined>;
 }
 
 /**

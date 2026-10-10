@@ -43,7 +43,9 @@ import type { TsaInstant } from '@sanad/core/time/tsa.ts';
 
 import { validatorFor, type Validator } from './contract.ts';
 import { statusCodeFor, type HealthService } from './health.ts';
-import { fromRejection, problem, type Problem } from './problem.ts';
+import { fromRejection, problem, rateLimitedProblem, type Problem } from './problem.ts';
+import { type PartnerRateLimits, admitPartner, inMemoryRateLimiter } from './rate-limit.ts';
+import type { RateLimitPort } from '@sanad/core/ports/rate-limit.ts';
 import { fingerprint, type IdempotencyStore, type StoredResponse } from './idempotency.ts';
 import { authenticate, hasScope, type CredentialRegistry, type PartnerPrincipal } from './principal.ts';
 import { eligibilityToWire, toWire, type EligibilityRequestBody, type RaiseRequestBody } from './representation.ts';
@@ -109,6 +111,9 @@ export interface ServiceDependencies {
    * licence (`licensing.ts`); a test substitutes one.
    */
   readonly newBusiness?: (act: NewBusinessAct) => Promise<Rejection | undefined>;
+  /** Shared counters between replicas (`configuredRateLimiter`); defaults to this process's (SR-031). */
+  readonly rateLimiter?: RateLimitPort;
+  readonly rateLimits?: PartnerRateLimits;
 }
 
 // -- Plumbing -----------------------------------------------------------------
@@ -133,6 +138,11 @@ const ok = (status: number, body: unknown, headers?: Record<string, string>): Re
 });
 
 const fail = (p: Problem): Reply => ({ status: p.status, body: p, problem: true });
+
+const rateLimited = (correlationId: string, retryAfterSeconds: number): Reply => ({
+  ...fail(rateLimitedProblem(correlationId, retryAfterSeconds)),
+  headers: { 'retry-after': String(retryAfterSeconds) },
+});
 
 function send(response: ServerResponse, reply: Reply, correlationId: string): void {
   const headers: Record<string, string> = {
@@ -174,6 +184,7 @@ function readBody(request: IncomingMessage): Promise<{ ok: true; raw: string } |
 export function createService(deps: ServiceDependencies): DrainableServer {
   const validateRaise: Validator = validatorFor('RaiseRequest');
   const validateEligibility: Validator = validatorFor('EligibilityRequest');
+  const limiter = deps.rateLimiter ?? inMemoryRateLimiter();
   let sequence = 0;
 
   /*
@@ -281,6 +292,13 @@ export function createService(deps: ServiceDependencies): DrainableServer {
       return;
     }
     const principal = auth.principal;
+
+    // 3. Rate limits, per credential and per tenant (SR-031). Keyed by the authenticated identity only.
+    const admitted = await admitPartner(limiter, principal, deps.rateLimits);
+    if (admitted.kind === 'LIMITED') {
+      send(response, rateLimited(correlationId, admitted.retryAfterSeconds), correlationId);
+      return;
+    }
 
     /*
      * The detailed report. Authenticated, and behind its own scope.

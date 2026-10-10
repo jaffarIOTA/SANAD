@@ -14,8 +14,10 @@ import {
   developmentRegistry,
   type PartnerPrincipal,
 } from '@sanad/origination/principal.ts';
-import { problem, type Problem } from '@sanad/origination/problem.ts';
+import { problem, rateLimitedProblem, type Problem } from '@sanad/origination/problem.ts';
 import { deploymentProfile } from '@sanad/origination/profile.ts';
+import { admitPartner, configuredRateLimiter } from '@sanad/origination/rate-limit.ts';
+import type { RateLimitPort } from '@sanad/core/ports/rate-limit.ts';
 
 /** Development tokens in development; deployed, nothing is recognised until the vault-backed registry exists (SR-004). */
 const registry = () =>
@@ -48,10 +50,28 @@ export function correlation(request: Request): string {
   return supplied !== null && /^[0-9a-f-]{36}$/i.test(supplied) ? supplied : randomUUID();
 }
 
-/** The authenticated partner, or the 401 to send instead. */
-export function principalOr401(request: Request, correlationId: string): PartnerPrincipal | Response {
+const limiter: { port?: RateLimitPort } = ((
+  globalThis as { __sanadOpsRateLimiter?: { port?: RateLimitPort } }
+).__sanadOpsRateLimiter ??= {});
+
+/** Replace the counters (tests). */
+export function setRateLimiter(port: RateLimitPort): void {
+  limiter.port = port;
+}
+
+/**
+ * The authenticated partner, or the response to send instead: 401 without a
+ * recognised credential, 429 with Retry-After past its rate limits (SR-031).
+ */
+export async function principalOr401(request: Request, correlationId: string): Promise<PartnerPrincipal | Response> {
   const auth = authenticate(request.headers.get('authorization') ?? undefined, registry());
-  if (auth.ok) return auth.principal;
+  if (auth.ok) {
+    limiter.port ??= configuredRateLimiter();
+    const admitted = await admitPartner(limiter.port, auth.principal);
+    if (admitted.kind !== 'LIMITED') return auth.principal;
+    const p = rateLimitedProblem(correlationId, admitted.retryAfterSeconds);
+    return json(p.status, p, correlationId, { 'retry-after': String(admitted.retryAfterSeconds) });
+  }
   return refuse(
     problem({
       status: 401,

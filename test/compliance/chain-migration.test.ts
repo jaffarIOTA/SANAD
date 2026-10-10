@@ -24,10 +24,13 @@
  * the things a migration does.
  */
 
+import { createHash, generateKeyPairSync, sign, verify } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
+import { legAnchorDigest, verifyAnchoredChain } from '../../products/murabaha-scf/legs/anchor.ts';
 import { appendLeg, verifyChain, type ContractLeg } from '../../products/murabaha-scf/legs/leg.ts';
-import { tsaInstant, type TsaInstant } from '../../core/time/tsa.ts';
+import { tsaInstant, type TsaInstant, type VerifiedTimestamp } from '../../core/time/tsa.ts';
 import { expectOk } from '../../core/kernel/result.ts';
 
 const at = (epochSeconds: number): TsaInstant =>
@@ -256,5 +259,107 @@ describe('SH-07 — a moved chain still refuses what it refused before', () => {
 
     expect(moved.map((l) => l.tsaTokenDigest)).toEqual(original.map((l) => l.tsaTokenDigest));
     expect(moved.map((l) => l.executedAt.epochSeconds)).toEqual(original.map((l) => l.executedAt.epochSeconds));
+  });
+});
+
+/*
+ * SR-008: the chain is anchored outside ourselves. Each leg's timestamp token
+ * is stamped over its anchor digest, which binds its content and its
+ * predecessor's hash, so a whole chain rebuilt with fresh, consistent hashes
+ * still verifies internally and is refused here: its retained tokens do not
+ * attest it. The stand-in authority signs its tokens with its own key, as an
+ * RFC 3161 authority does; Sanad holds only the public half.
+ */
+describe('the anchored chain (SR-008)', () => {
+  const authorityKeys = generateKeyPairSync('ed25519');
+  const sha256 = (b: Uint8Array | string): string => createHash('sha256').update(b).digest('hex');
+
+  /** Stamps a digest at a time the authority chooses; verifies a token over an expected digest. */
+  const authority = {
+    stampAt(messageDigest: string, genTime: number): Uint8Array {
+      const body = JSON.stringify({ imprint: messageDigest, genTime, authority: 'accredited-authority' });
+      const signature = sign(null, Buffer.from(body), authorityKeys.privateKey).toString('base64');
+      return new Uint8Array(Buffer.from(JSON.stringify({ body, signature })));
+    },
+    verify(token: Uint8Array, messageDigest: string): Promise<VerifiedTimestamp | undefined> {
+      const { body, signature } = JSON.parse(Buffer.from(token).toString('utf8')) as {
+        body: string;
+        signature: string;
+      };
+      if (!verify(null, Buffer.from(body), authorityKeys.publicKey, Buffer.from(signature, 'base64')))
+        return Promise.resolve(undefined);
+      const claim = JSON.parse(body) as { imprint: string; genTime: number; authority: string };
+      if (claim.imprint !== messageDigest) return Promise.resolve(undefined);
+      return Promise.resolve({
+        verified: true,
+        genTimeEpochSeconds: BigInt(claim.genTime),
+        tokenDigest: sha256(token),
+        authorityId: claim.authority,
+      });
+    },
+  };
+
+  /** Execute a chain: each leg stamped over its anchor digest, its instant the authority's genTime. */
+  function anchoredChain(hashes: readonly string[], firstGenTime: number) {
+    const tokens = new Map<string, Uint8Array>();
+    let chain: readonly ContractLeg[] = [];
+    for (const [i, contentHash] of hashes.entries()) {
+      const draft = leg({ n: i + 1, contentHash, ...(i === 0 ? {} : { prevLegHash: hashes[i - 1] }) });
+      const token = authority.stampAt(legAnchorDigest(draft), firstGenTime + i * 60);
+      const digest = sha256(token);
+      tokens.set(digest, token);
+      const executedAt = tsaInstant({
+        verified: true,
+        genTimeEpochSeconds: BigInt(firstGenTime + i * 60),
+        tokenDigest: digest,
+        authorityId: 'accredited-authority',
+      });
+      chain = expectOk(appendLeg(chain, { ...draft, executedAt, tsaTokenDigest: digest }));
+    }
+    return { chain, retained: (l: ContractLeg) => Promise.resolve(tokens.get(l.tsaTokenDigest)) };
+  }
+
+  const reason = (r: { ok: boolean; error?: { reason: string } }): string => (r.ok ? 'OK' : (r.error?.reason ?? ''));
+
+  it('verifies the chain as executed, and after a migration that renumbers its rows', async () => {
+    const { chain, retained } = anchoredChain(['h-waad', 'h-purchase', 'h-offer', 'h-acceptance'], 2_000);
+    expect(await verifyAnchoredChain(chain, retained, authority)).toEqual({ ok: true, value: true });
+    expect((await verifyAnchoredChain(migrate(chain, { reassignIds: true }), retained, authority)).ok).toBe(true);
+  });
+
+  it('refuses a chain rebuilt with fresh, consistent hashes over the original tokens', async () => {
+    const { chain, retained } = anchoredChain(['h-waad', 'h-purchase', 'h-offer', 'h-acceptance'], 2_000);
+    const fresh = ['x-waad', 'x-purchase', 'x-offer', 'x-acceptance'];
+    let rebuilt: readonly ContractLeg[] = [];
+    for (const [i, l] of chain.entries()) {
+      const { prevLegHash: _dropped, ...rest } = l;
+      rebuilt = expectOk(
+        appendLeg(rebuilt, { ...rest, contentHash: fresh[i]!, ...(i === 0 ? {} : { prevLegHash: fresh[i - 1]! }) }),
+      );
+    }
+    // Internally consistent: the old check alone would pass it.
+    expect(verifyChain(rebuilt).ok).toBe(true);
+    expect(reason(await verifyAnchoredChain(rebuilt, retained, authority))).toBe('ANCHOR_INVALID');
+  });
+
+  it('refuses a rebuilt chain re-stamped today that keeps the instants it claims', async () => {
+    const { chain } = anchoredChain(['h-waad', 'h-purchase', 'h-offer', 'h-acceptance'], 2_000);
+    // Fresh tokens over the rebuilt legs: the authority gives today's time, not the one the legs record.
+    const today = anchoredChain(['x-waad', 'x-purchase', 'x-offer', 'x-acceptance'], 9_000);
+    const forged = today.chain.map((l, i) => ({ ...l, executedAt: chain[i]!.executedAt }));
+    expect(reason(await verifyAnchoredChain(forged, today.retained, authority))).toBe('ANCHOR_MISMATCH');
+  });
+
+  it('refuses a leg whose token is missing, or signed by someone else', async () => {
+    const { chain, retained } = anchoredChain(['h-waad', 'h-purchase'], 2_000);
+    const lost = (l: ContractLeg) => (l.sequenceNo === 2 ? Promise.resolve(undefined) : retained(l));
+    expect(reason(await verifyAnchoredChain(chain, lost, authority))).toBe('ANCHOR_MISSING');
+    const impostor = generateKeyPairSync('ed25519');
+    const forgedToken = async (l: ContractLeg) => {
+      const original = JSON.parse(Buffer.from((await retained(l))!).toString('utf8')) as { body: string };
+      const signature = sign(null, Buffer.from(original.body), impostor.privateKey).toString('base64');
+      return new Uint8Array(Buffer.from(JSON.stringify({ body: original.body, signature })));
+    };
+    expect(reason(await verifyAnchoredChain(chain, forgedToken, authority))).toBe('ANCHOR_INVALID');
   });
 });

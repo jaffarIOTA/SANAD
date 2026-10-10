@@ -57,7 +57,7 @@ interface HandoverBody {
 
 export async function POST(request: Request): Promise<Response> {
   const correlationId = correlation(request);
-  const principal = principalOr401(request, correlationId);
+  const principal = await principalOr401(request, correlationId);
   if (principal instanceof Response) return principal;
   const tenant = await businessTenantOr403(principal, 'business:write', correlationId);
   if (tenant instanceof Response) return tenant;
