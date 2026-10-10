@@ -37,8 +37,11 @@ RUN mkdir -p /out && cp -r "apps/$APP/.next/standalone/." /out/ \
 FROM ${NODE_RUN}
 ARG APP
 WORKDIR /opt/app-root/src
-# Root only to set group ownership; the image runs as 1001 (or OpenShift's assigned UID).
+# Root only to apply errata and set group ownership; the image runs as 1001 (or OpenShift's assigned UID).
 USER 0
+# The pinned base may lag Red Hat's errata (e.g. CVE-2026-84782 in openssl): apply what is released, so a fixable
+# High or Critical never ships. The image scan in security.yml and deploy-azure.yml fails the build otherwise.
+RUN microdnf -y upgrade --refresh --nodocs --setopt=install_weak_deps=0 && microdnf clean all
 COPY --from=build --chown=0:0 /out ./
 RUN mkdir -p "apps/$APP/.next/cache" && chgrp -R 0 /opt/app-root && chmod -R g=u /opt/app-root
 USER 1001
