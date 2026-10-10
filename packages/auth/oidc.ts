@@ -167,7 +167,9 @@ export function authorizationUrl(metadata: ProviderMetadata, r: AuthorizationReq
     nonce: r.nonce,
     code_challenge: pkceChallenge(r.codeVerifier),
     code_challenge_method: 'S256',
-    ...(r.forceAuthentication === true ? { prompt: 'login' } : {}),
+    // A step-up: prompt=login asks for a fresh authentication, and max_age makes auth_time a required claim
+    // (OIDC Core §3.1.2.1), so freshness is the provider's statement rather than the token's issue time (SR-044).
+    ...(r.forceAuthentication === true ? { prompt: 'login', max_age: '0' } : {}),
   };
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   return url.toString();

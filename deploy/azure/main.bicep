@@ -45,6 +45,9 @@ param deployerObjectId string
 @description('GitHub repository allowed to deploy, as owner/name.')
 param githubRepository string = 'jaffarIOTA/SANAD'
 
+@description('Admin connects with its own login, sanad_admin (SR-046), whose connection string is the Key Vault secret sanad-admin-database-url. Set true once that secret exists (README, "Admin database login"); until then Admin shares sanad-database-url.')
+param adminOwnLogin bool = false
+
 var tags = {
   product: 'sanad'
   phase: '1-synthetic'
@@ -216,6 +219,8 @@ var oidcTenants = ['BANK_A', 'FINTECH_B', 'SME_FUND_AE']
 var opsOidcEnv = [for t in oidcTenants: { name: 'OIDC_CLIENT_SECRET_${t}_OPS', secretRef: 'oidc-client-secret' }]
 var adminOidcEnv = [for t in oidcTenants: { name: 'OIDC_CLIENT_SECRET_${t}_ADMIN', secretRef: 'oidc-client-secret' }]
 
+var adminDatabaseSecret = adminOwnLogin ? 'sanad-admin-database-url' : 'sanad-database-url'
+
 // One entry per app. Secrets are Key Vault references read by the app identity;
 // no secret value passes through this template.
 var apps = [
@@ -250,11 +255,11 @@ var apps = [
   {
     app: 'admin'
     host: 'admin.${publicHost}'
-    secrets: ['admin-session-secret', 'sanad-database-url', 'oidc-client-secret']
+    secrets: ['admin-session-secret', adminDatabaseSecret, 'oidc-client-secret']
     env: concat(
       [
         { name: 'ADMIN_SESSION_SECRET', secretRef: 'admin-session-secret' }
-        { name: 'SANAD_DATABASE_URL', secretRef: 'sanad-database-url' }
+        { name: 'SANAD_DATABASE_URL', secretRef: adminDatabaseSecret }
         { name: 'ADMIN_PUBLIC_ORIGIN', value: origin.admin }
       ],
       adminOidcEnv

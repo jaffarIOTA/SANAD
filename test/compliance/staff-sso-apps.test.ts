@@ -54,7 +54,11 @@ vi.mock('@sanad/origination/staff-identity.ts', async (importOriginal) => {
   const { loadTenantOnboarding } = await import('@sanad/config/loader.ts');
   type Tenant = 'bank-a' | 'fintech-b' | 'sme-fund-ae';
   const resolveStaffIdentity = (tenant: Tenant) =>
-    Promise.resolve({ identity: { ok: true, value: support.filledIdentity(tenant) }, source: 'FILE', profile: 'DEPLOYED' });
+    Promise.resolve({
+      identity: { ok: true, value: support.filledIdentity(tenant) },
+      source: 'FILE',
+      profile: 'DEPLOYED',
+    });
   return {
     ...original,
     resolveStaffIdentity,
@@ -156,7 +160,9 @@ describe('workbench single sign-on', () => {
   it('the callback issues the session for the sealed tenant, ignores a tenant in the query, and clears the state cookie', async () => {
     const state = await beginOps('bank-a');
     idp.respondWith((n) => idp.mint(standardClaims(n, { roles: ['sanad.bank-a.makers', 'sanad.fintech-b.checkers'] })));
-    const res = await completeSingleSignOn(callbackRequest('https://ops.sanad.test', state, { tenant: 'fintech-b', tenantId: 'fintech-b' }));
+    const res = await completeSingleSignOn(
+      callbackRequest('https://ops.sanad.test', state, { tenant: 'fintech-b', tenantId: 'fintech-b' }),
+    );
     expect(res.status).toBe(200);
     expect(res.headers.get('referrer-policy')).toBe('no-referrer');
     expect(res.headers.get('cache-control')).toBe('no-store');
@@ -170,7 +176,13 @@ describe('workbench single sign-on', () => {
     expect(opened.method).toBe('OIDC');
     expect(opened.authenticatedAtEpochSeconds).toBe(BigInt(NOW - 5));
     expect(opened.displayName).toBe('Test Person');
-    expect(jar.options.get(STAFF_SESSION_COOKIE)).toMatchObject({ httpOnly: true, sameSite: 'strict', secure: true, path: '/', maxAge: 1800 });
+    expect(jar.options.get(STAFF_SESSION_COOKIE)).toMatchObject({
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: true,
+      path: '/',
+      maxAge: 1800,
+    });
   });
 
   it('groups that map to nothing in the chosen tenant: refused with the same reason as an unknown token, no session', async () => {
@@ -216,7 +228,9 @@ describe('workbench single sign-on', () => {
     const t = epochNow();
     jar.values.set(
       STAFF_SESSION_COOKIE,
-      issueStaffSession({ principalId: 'oidc:abc', tenantId: 'bank-a', authorities: ['MAKER'] }, 1_800n, t, { method: 'OIDC' }).token,
+      issueStaffSession({ principalId: 'oidc:abc', tenantId: 'bank-a', authorities: ['MAKER'] }, 1_800n, t, {
+        method: 'OIDC',
+      }).token,
     );
     const to = await redirectOf(signOutAction(form({ locale: 'en' })));
     expect(to.startsWith(`${END_SESSION}?`)).toBe(true);
@@ -263,18 +277,32 @@ describe('Admin single sign-on', () => {
 
   it('a person the institution maps to PLATFORM_ADMIN is signed in, with the institution recorded', async () => {
     const state = await beginAdmin('bank-a');
-    expect(jar.options.get(adminSso.ADMIN_SSO_STATE_COOKIE)).toMatchObject({ path: '/sign-in/callback', sameSite: 'lax', httpOnly: true, secure: true });
+    expect(jar.options.get(adminSso.ADMIN_SSO_STATE_COOKIE)).toMatchObject({
+      path: '/sign-in/callback',
+      sameSite: 'lax',
+      httpOnly: true,
+      secure: true,
+    });
     idp.respondWith((n) => idp.mint(standardClaims(n, { roles: ['sanad.bank-a.platform-admins'] })));
-    const res = await adminSso.completeSingleSignOn(callbackRequest('https://admin.sanad.test', state, { tenant: 'fintech-b' }));
+    const res = await adminSso.completeSingleSignOn(
+      callbackRequest('https://admin.sanad.test', state, { tenant: 'fintech-b' }),
+    );
     expect(res.status).toBe(200);
     expect(await res.text()).toContain('url=/en/credentials"');
     const admin = await currentAdmin();
-    expect(admin).toMatchObject({ role: 'PLATFORM_ADMIN', method: 'OIDC', tenantId: 'bank-a', principalId: 'oidc:AAAAAAAAAAAAAAAAAAAAAIkzqFVrSaSaFHy782bbtaQ' });
+    expect(admin).toMatchObject({
+      role: 'PLATFORM_ADMIN',
+      method: 'OIDC',
+      tenantId: 'bank-a',
+      principalId: 'oidc:AAAAAAAAAAAAAAAAAAAAAIkzqFVrSaSaFHy782bbtaQ',
+    });
   });
 
   it('a checker (any authority but PLATFORM_ADMIN) is refused, and so is another tenant’s administrator', async () => {
     const s1 = await beginAdmin('bank-a');
-    idp.respondWith((n) => idp.mint(standardClaims(n, { roles: ['sanad.bank-a.checkers', 'sanad.bank-a.senior-checkers'] })));
+    idp.respondWith((n) =>
+      idp.mint(standardClaims(n, { roles: ['sanad.bank-a.checkers', 'sanad.bank-a.senior-checkers'] })),
+    );
     const r1 = await adminSso.completeSingleSignOn(callbackRequest('https://admin.sanad.test', s1));
     expect(r1.headers.get('location')).toBe('/en?notice=SIGN_IN_REFUSED');
     const s2 = await beginAdmin('bank-a');
@@ -299,9 +327,9 @@ describe('Admin single sign-on', () => {
   });
 
   it('a development token names no administrator in production', async () => {
-    process.env['PLATFORM_OPS_DEV_TOKEN'] = 'dev-token-platform-0001';
-    expect(developmentPrincipalFor('dev-token-platform-0001')).toBeUndefined();
-    delete process.env['PLATFORM_OPS_DEV_TOKEN'];
+    process.env['ADMIN_DEV_TOKEN_01'] = 'dev-token-admin-0001';
+    expect(developmentPrincipalFor('dev-token-admin-0001')).toBeUndefined();
+    delete process.env['ADMIN_DEV_TOKEN_01'];
     expect(await currentAdmin()).toBeUndefined();
   });
 });

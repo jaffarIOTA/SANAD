@@ -49,8 +49,10 @@ export async function signInAction(form: FormData): Promise<void> {
       : undefined;
   if (confirmed === undefined || !confirmed.ok || confirmed.value.kind !== 'ANSWERED')
     return fail(`/${locale}`, 'IDENTITY_UNAVAILABLE', 'OP-DETERMINACY');
+  // The applicant is whom the provider confirmed, never what the form named: the form only starts the
+  // authentication (SR-045). The demonstration stand-in confirms whoever was typed (SR-005's exception).
   await startSession({
-    applicantRef,
+    applicantRef: confirmed.value.value.identityRef,
     identityAssertionId: confirmed.value.value.assertionId,
     identityRef: confirmed.value.value.identityRef,
     authenticatedAtEpochSeconds: confirmed.value.value.authenticatedAtEpochSeconds,

@@ -29,7 +29,8 @@ as a Container Apps Key Vault reference.
 | Secret | Read by | Source |
 |---|---|---|
 | `ops-session-secret`, `admin-session-secret`, `consumer-session-secret` | each app | 32 random bytes, generated in place |
-| `sanad-database-url` | all three | the Supabase connection string |
+| `sanad-database-url` | consumer, ops (and Admin until `adminOwnLogin`) | the `sanad_runtime` connection string |
+| `sanad-admin-database-url` | Admin, when `adminOwnLogin=true` | the `sanad_admin` connection string (SR-046) |
 
 Rotate a session secret: set a new version, then restart the app's revision (every session is
 signed out). Never print a value: `az keyvault secret set --value "$(openssl rand -hex 32)" -o none`.
@@ -71,7 +72,24 @@ unset pw
 ```
 
 Then restart each app's revision so it reads the new version. Migrations keep running as the
-owner (`npm run db:push`). Admin shares this login today; a separate Admin login is SR-046.
+owner (`npm run db:push`).
+
+## Admin database login
+
+Migration 0024 creates `sanad_admin`, bound like `sanad_runtime` but the only login that may
+propose, decide, set or revoke configuration (revisions, credentials, licences, the deployment's
+jurisdiction). From 0024 on, `sanad_runtime` cannot, so Admin needs its own login before any of
+those actions works under the runtime login (SR-046). Once, per database, as above:
+
+```sh
+pw="$(openssl rand -hex 24)"
+printf "alter role sanad_admin password '%s';\n" "$pw" | psql "$OWNER_URL" -q
+az keyvault secret set --vault-name <vault> -n sanad-admin-database-url -o none \
+  --value "postgresql://sanad_admin.<project ref>:$pw@<pooler host>:5432/postgres?sslmode=require"
+unset pw
+```
+
+Then deploy with `adminOwnLogin=true`, which points Admin's `SANAD_DATABASE_URL` at that secret.
 
 ## Content-Security-Policy and a new identity provider
 
