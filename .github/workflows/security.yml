@@ -39,6 +39,8 @@ jobs:
     container: semgrep/semgrep:1.180.0@sha256:529ee8a277ec8adc5b534d7c74eea0a47e9de21d62852b6ba7ac6ba9566845c3
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      # The Sanad rules first match what they must and leave what they must not (.semgrep/sanad.ts, SR-033).
+      - run: semgrep --test --config .semgrep/sanad.yml .semgrep/sanad.ts
       # `semgrep scan`, not `semgrep ci`: ci rejects --error and expects a Semgrep App token; scan with
       # --error fails the job on any finding from these rule sets, which is the gate SEC-D03 asks for.
       - run: semgrep scan --config .semgrep/sanad.yml --config p/typescript --config p/owasp-top-ten --config p/secrets --metrics off --error

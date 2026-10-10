@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:compliance": "vitest run test/compliance",
+    "test:semgrep": "semgrep --test --config .semgrep/sanad.yml .semgrep/sanad.ts",
     "verify": "npm run build:apic && npm run typecheck && npm run test",
     "dev": "next dev apps/sme",
     "build:sme": "next build apps/sme",
