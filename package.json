@@ -33,6 +33,7 @@
     "db:connect": "bash scripts/set-database-url.sh",
     "db:push": "bash scripts/db-push.sh",
     "db:start": "npx --yes supabase start",
+    "audit:verify": "node --experimental-strip-types --no-warnings services/origination/src/audit-verify-cli.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
