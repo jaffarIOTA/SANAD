@@ -25,13 +25,12 @@ import { LANGUAGE_NAME, otherSegment, type LocaleSegment } from '@sanad/i18n/str
 /**
  * The Sanad mark.
  *
- * Two interlocking angular hooks around a square void, reading as an S.
- * Traced from the supplied raster: the geometry is straight edges and
- * 45-degree diagonals, so this is close — but it is still a trace, and the
- * original vector should replace it before anything is printed or sent
- * outside the team.
+ * Four quarter-discs in a square, two by two, reading as an S. Interim: the
+ * symbol of a purchased logo pack (docs/brand/README.md), taken from its
+ * vector original unchanged, until the product owner licenses a mark of its
+ * own. Not for print or trademark filing.
  *
- * Drawn in `currentColor` rather than a fixed fill, so the same mark serves
+ * Drawn in the tone's colour rather than a fixed fill, so the same mark serves
  * the orange and the mono lockups without a second copy.
  */
 export function BrandMark({
@@ -51,12 +50,13 @@ export function BrandMark({
       role="img"
       aria-label="Sanad"
       fill={colour}
-      data-placeholder="traced from raster; awaiting original vector"
+      data-interim="licensed logo pack; to be replaced by an owned mark"
     >
-      {/* Upper hook: top bar, chamfered at the top right, turning down the left. */}
-      <path d="M6 6 H70 L94 30 H64 V36 H36 V64 H6 Z" />
-      {/* Lower hook: the same form rotated about the centre. */}
-      <path d="M94 94 H30 L6 70 H36 V64 H64 V36 H94 Z" />
+      {/* Top left, bottom left, then the right column: each a square with one quarter-disc edge. */}
+      <path d="M50 0L0 0L0 50C27.61 50 50 27.61 50 0Z" />
+      <path d="M50 50L0 50L0 100C27.61 100 50 77.61 50 50Z" />
+      <path d="M50 50L100 50L100 0C72.38 0 50 22.39 50 50Z" />
+      <path d="M50 100L100 100L100 50C72.38 50 50 72.38 50 100Z" />
     </svg>
   );
 }
