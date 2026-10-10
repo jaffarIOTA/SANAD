@@ -17,6 +17,12 @@ import { openTransaction } from './origination/open-transaction.ts';
 import { type MurabahaPricing, priceMurabaha } from './pricing/murabaha.ts';
 import type { Draft, TransactionCore } from './sequencing/state.ts';
 import type { StructureCode, StructureDefinition } from './structures/definition.ts';
+import {
+  type BoardPositions,
+  type InvoiceLineGoods,
+  screenGoods,
+  structureWithinBoard,
+} from './structures/board-positions.ts';
 
 export interface MurabahaTerms {
   readonly instalments: 'BULLET' | { readonly count: number };
@@ -29,10 +35,14 @@ export interface MurabahaQuote extends Quote {
   readonly pricing: MurabahaPricing;
 }
 
-/** What the host must supply to open the transaction: the board's structure and the calendar facts. */
+/** What the host must supply to open the transaction: the board's structure and positions, the goods, the calendar facts. */
 export interface MurabahaExecutionContext {
   readonly transactionId: string;
   readonly structure: StructureDefinition;
+  /** The board's standing positions in force (SR-025): the structure, the interval and the goods are held to them. */
+  readonly board: BoardPositions;
+  /** The cleared invoice's lines, by goods classification, screened against the board's register (SH-11). */
+  readonly invoiceLines: readonly InvoiceLineGoods[];
   readonly riskPeriodRequiredSeconds: number;
   readonly maturityDateGregorian: string;
   readonly maturityDateHijri: string;
@@ -128,6 +138,21 @@ export const murabahaScf: ProductModule<MurabahaTerms, MurabahaQuote, MurabahaEx
   },
 
   execute(terms, approved: Approved, quote, context): Result<Draft> {
+    // The board's positions bind before anything opens (SR-025).
+    const structure = structureWithinBoard(context.structure, context.board);
+    if (!structure.ok) return structure;
+    if (context.riskPeriodRequiredSeconds < context.board.minimumRiskPeriodSeconds)
+      return reject(
+        'SH-06',
+        'RISK_PERIOD_BELOW_BOARD_FLOOR',
+        'The risk-holding interval is shorter than the board accepts',
+        {
+          riskPeriodRequiredSeconds: context.riskPeriodRequiredSeconds,
+          boardFloor: context.board.minimumRiskPeriodSeconds,
+        },
+      );
+    const goods = screenGoods(context.invoiceLines, context.board);
+    if (!goods.ok) return goods;
     const core: TransactionCore = {
       transactionId: context.transactionId,
       tenantId: approved.core.tenantId,

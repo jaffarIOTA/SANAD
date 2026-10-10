@@ -1,0 +1,23 @@
+{
+  "$comment": "ILLUSTRATIVE until the board confirms: the Shariah board's standing positions for this institution (SR-025). Changed only through a maker-checker configuration revision (area BOARD_POSITIONS). The excluded goods are HS headings; the floor is the board's minimum risk-holding interval.",
+  "shariahApprovalRef": "SSB-A-2026-014",
+  "minimumRiskPeriodSeconds": 3600,
+  "excludedGoods": [
+    { "code": "0203", "description": "Meat of swine" },
+    { "code": "0206", "description": "Edible offal of swine" },
+    { "code": "2203", "description": "Beer made from malt" },
+    { "code": "2204", "description": "Wine of fresh grapes" },
+    { "code": "2205", "description": "Vermouth and other flavoured wine" },
+    { "code": "2206", "description": "Other fermented beverages" },
+    { "code": "2208", "description": "Spirits, liqueurs and other spirituous beverages" },
+    { "code": "2402", "description": "Cigars, cigarettes and tobacco products" },
+    { "code": "9301", "description": "Military weapons" },
+    { "code": "9306", "description": "Munitions of war" }
+  ],
+  "approvedTemplates": [
+    { "document": "waad_promise", "templateVersionId": "waad_promise@3" },
+    { "document": "purchase_contract", "templateVersionId": "purchase_contract@3" },
+    { "document": "murabaha_offer", "templateVersionId": "murabaha_offer@3" },
+    { "document": "murabaha_acceptance", "templateVersionId": "murabaha_acceptance@3" }
+  ]
+}

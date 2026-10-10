@@ -37,7 +37,7 @@ import {
   type FinancedInvoiceRegistryPort,
   assertNotPreviouslyFinanced,
 } from '../../products/murabaha-scf/trade/financed-invoice-registry.ts';
-import { ANCHOR_CR, DISTRIBUTOR_CR, at, chain, structureFor } from '../support/fixtures.ts';
+import { ANCHOR_CR, DISTRIBUTOR_CR, at, boardFor, chain, structureFor } from '../support/fixtures.ts';
 
 // -- SH-10: duplicate financing ------------------------------------------------
 
@@ -287,6 +287,7 @@ describe('adversarial: separation of contracts (SH-07)', () => {
     mergeFields: {},
     shariahApprovalId: 'SSB-A-2026-014',
     correlationId: 'cor-0001',
+    board: boardFor('bank-a'),
   };
 
   it('refuses to render two legs into one instrument', () => {
