@@ -21,9 +21,10 @@ import { CALLBACK_PATH, SIGNED_OUT_PATH } from '@sanad/auth/staff-oidc.ts';
 
 import { STAFF_SESSION_COOKIE, epochNow, openStaffSession } from './server/staff-session.ts';
 
-// Everything but Next's build assets, so API responses carry the security headers too; the front door passes /api.
+// Every path, so API responses and Next's static assets carry the security headers too (ZAP, SR-032); the
+// front door passes /api, /_next and static files without asking for a session.
 export const config = {
-  matcher: ['/((?!_next/static/|_next/image|favicon\\.ico$).*)'],
+  matcher: ['/:path*'],
   runtime: 'nodejs',
 };
 

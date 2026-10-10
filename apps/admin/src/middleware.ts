@@ -9,7 +9,8 @@ import type { NextRequest, NextResponse } from 'next/server';
 import { isDevelopment, staffFormActionOrigins, withSecurityHeaders } from '@sanad/auth/next-security.ts';
 
 export const config = {
-  matcher: ['/((?!_next/static/|_next/image|favicon\\.ico$).*)'],
+  // Every path, Next's static assets included: they need nosniff and the rest as much as pages do (ZAP, SR-032).
+  matcher: ['/:path*'],
   runtime: 'nodejs',
 };
 

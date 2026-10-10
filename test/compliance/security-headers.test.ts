@@ -41,7 +41,7 @@ const directives = (policy: string): Map<string, string> =>
 
 describe('browser security headers on every app (SR-027)', () => {
   for (const [app, load] of Object.entries(APPS)) {
-    for (const path of ['/en', '/en/sign-in', '/api/anything']) {
+    for (const path of ['/en', '/en/sign-in', '/api/anything', '/_next/static/chunks/main-app.js']) {
       it(`${app} ${path}`, async () => {
         const { middleware } = await load();
         const request = new NextRequest(`https://${app}.sanad.test${path}`);
@@ -93,6 +93,16 @@ describe('browser security headers on every app (SR-027)', () => {
   it('allows unsafe-eval and websockets only in development, and HSTS only outside it', () => {
     expect(contentSecurityPolicy('n', { development: true })).toMatch(/'unsafe-eval'.*connect-src 'self' ws: wss:/);
     expect(contentSecurityPolicy('n', { development: false })).not.toMatch(/unsafe-eval|ws:/);
+  });
+
+  it('runs on every path, static assets included, and the framework does not announce itself', async () => {
+    const { readFileSync } = await import('node:fs');
+    for (const app of Object.keys(APPS)) {
+      const { config } = (await APPS[app as keyof typeof APPS]()) as { config: { matcher: string[] } };
+      expect(config.matcher, app).toEqual(['/:path*']);
+      const nextConfig = readFileSync(new URL(`../../apps/${app}/next.config.mjs`, import.meta.url), 'utf8');
+      expect(nextConfig, app).toMatch(/poweredByHeader:\s*false/);
+    }
   });
 
   it('takes only https origins from the configured issuers and the override', () => {
