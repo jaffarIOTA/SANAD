@@ -15,7 +15,7 @@ export async function GET(
   context: { params: Promise<{ applicationId: string }> },
 ): Promise<Response> {
   const correlationId = correlation(request);
-  const principal = principalOr401(request, correlationId);
+  const principal = await principalOr401(request, correlationId);
   if (principal instanceof Response) return principal;
   const tenant = await businessTenantOr403(principal, 'business:read', correlationId);
   if (tenant instanceof Response) return tenant;

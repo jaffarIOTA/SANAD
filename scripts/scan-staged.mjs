@@ -24,7 +24,7 @@ if (staged.length === 0) process.exit(0);
 const findings = [];
 
 for (const path of staged) {
-  let content = '';
+  let content;
   try {
     // From the index, not the working tree.
     content = git(['show', `:${path}`]);

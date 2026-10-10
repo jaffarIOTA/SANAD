@@ -21,14 +21,15 @@ import {
   beginStaffSignIn,
   completeStaffSignIn,
   continuePage,
-  inMemoryReplayGuard,
   providerSignOutUrl,
   signInLocale,
+  stateReplayGuard,
 } from '@sanad/auth/staff-oidc.ts';
 import { deploymentJurisdiction } from '@sanad/origination/jurisdiction.ts';
 import { resolveStaffIdentity, singleSignOnInstitutions } from '@sanad/origination/staff-identity.ts';
 
 import { adminStateSealKey, now, startAdminSession } from './session.ts';
+import { spentTokens } from './spent-tokens.ts';
 
 export const ADMIN_SSO_STATE_COOKIE = 'sanad_admin_sso';
 
@@ -52,7 +53,7 @@ export function ssoClient(): OidcClient {
   return shared.client;
 }
 export function ssoReplayGuard(): StateReplayGuard {
-  shared.replay ??= inMemoryReplayGuard();
+  shared.replay ??= stateReplayGuard(spentTokens(), 'ADMIN');
   return shared.replay;
 }
 export function setSsoDependencies(d: { readonly client?: OidcClient; readonly replay?: StateReplayGuard }): void {
@@ -74,8 +75,7 @@ async function active(tenant: string): Promise<boolean> {
 }
 
 export type BeginResult =
-  | { readonly ok: true; readonly location: string }
-  | { readonly ok: false; readonly notice: AdminSignInNotice };
+  { readonly ok: true; readonly location: string } | { readonly ok: false; readonly notice: AdminSignInNotice };
 
 export async function beginSingleSignOn(tenantChoice: string, locale: string): Promise<BeginResult> {
   const listed = await singleSignOnInstitutions(now());

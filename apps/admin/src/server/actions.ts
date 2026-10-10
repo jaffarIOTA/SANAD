@@ -13,21 +13,22 @@ import {
   type Environment,
   VAULT_PROVIDERS,
   type VaultProvider,
+  listCredentials,
   revokeCredential,
   saveCredential,
   store,
 } from './credentials.ts';
 import { catalogueWithAddition, catalogueWithChange, checkProposal, resolveProductCatalogue } from './products.ts';
-import { decideRevision, proposeRevision } from './revisions.ts';
+import { decideRevision, listRevisions, proposeRevision } from './revisions.ts';
 import { railsWithChange, resolveRailsConfiguration } from './rails.ts';
 import { parseRailsConfiguration } from '@sanad/core/config/rails.ts';
 import { ADAPTER_CATALOGUE } from '@sanad/adapters/catalogue.ts';
-import { proposeRevision as proposePure } from '@sanad/core/config/revision.ts';
+import { type RevisionArea, proposeRevision as proposePure } from '@sanad/core/config/revision.ts';
 import { deploymentProfile, identityFromForm, resolveStaffIdentity } from './identity.ts';
 import { parseStaffIdentity } from '@sanad/core/config/staff-identity.ts';
 import { policyWithPartner, resolveOriginationPolicy } from './partners.ts';
 import { parseOriginationPolicy } from '@sanad/core/origination/policy.ts';
-import { catalogueForTenant, isTenantCode, loadProductCatalogue } from '@sanad/config/loader.ts';
+import { catalogueForTenant, loadProductCatalogue } from '@sanad/config/loader.ts';
 import { randomUUID } from 'node:crypto';
 import {
   currentAdmin,
@@ -37,6 +38,7 @@ import {
   startAdminSession,
 } from './session.ts';
 import { beginSingleSignOn, providerSignOut } from './single-sign-on.ts';
+import { configurableTenant } from './tenant-scope.ts';
 import { decideDeploymentJurisdiction, proposeDeploymentJurisdiction } from '@sanad/origination/jurisdiction.ts';
 import { decideLicenceInstall, proposeLicenceInstall } from '@sanad/origination/licensing.ts';
 
@@ -86,9 +88,11 @@ export async function signOutAction(form: FormData): Promise<void> {
 
 export async function saveCredentialAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
-  const tenantCode = field(form, 'tenant');
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${locale}`);
+  const tenantCode = configurableTenant(admin, field(form, 'tenant'));
+  if (tenantCode === undefined) return back(`/${locale}/credentials`, 'TENANT_UNKNOWN');
   const to = `/${locale}/credentials?tenant=${encodeURIComponent(tenantCode)}`;
-  if ((await currentAdmin()) === undefined) redirect(`/${locale}`);
   const s = store();
   if (s.kind !== 'READY') back(to, 'NO_DATABASE');
   const provider = field(form, 'provider');
@@ -119,15 +123,19 @@ export async function saveCredentialAction(form: FormData): Promise<void> {
 
 export async function revokeCredentialAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
-  const tenantCode = field(form, 'tenant');
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${locale}`);
+  const tenantCode = configurableTenant(admin, field(form, 'tenant'));
+  if (tenantCode === undefined) return back(`/${locale}/credentials`, 'TENANT_UNKNOWN');
   const to = `/${locale}/credentials?tenant=${encodeURIComponent(tenantCode)}`;
-  if ((await currentAdmin()) === undefined) redirect(`/${locale}`);
   const s = store();
   if (s.kind !== 'READY') back(to, 'NO_DATABASE');
   const id = field(form, 'credentialId');
   if (!/^[0-9a-f-]{36}$/i.test(id)) back(to, 'CREDENTIAL_ID_MALFORMED');
   if (field(form, 'confirm') !== 'yes') back(to, 'CONFIRMATION_REQUIRED');
   if (s.kind !== 'READY') return;
+  // Only this institution's credential: another's identifier is absent here.
+  if (!(await listCredentials(s.pool, tenantCode)).some((c) => c.id === id)) return back(to, 'REVOKE_FAILED');
   try {
     await revokeCredential(s.pool, id);
   } catch {
@@ -140,11 +148,11 @@ const nowEpoch = (): bigint => BigInt(Math.floor(Date.now() / 1000));
 
 export async function proposeProductChangeAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
-  const tenant = field(form, 'tenant');
-  const to = `/${locale}/products?tenant=${encodeURIComponent(tenant)}`;
   const admin = await currentAdmin();
   if (admin === undefined) redirect(`/${locale}`);
-  if (!isTenantCode(tenant)) return back(to, 'TENANT_UNKNOWN');
+  const tenant = configurableTenant(admin, field(form, 'tenant'));
+  if (tenant === undefined) return back(`/${locale}/products`, 'TENANT_UNKNOWN');
+  const to = `/${locale}/products?tenant=${encodeURIComponent(tenant)}`;
   const s = store();
   if (s.kind !== 'READY') return back(to, 'NO_DATABASE');
   const now = nowEpoch();
@@ -192,11 +200,11 @@ export async function proposeProductChangeAction(form: FormData): Promise<void> 
 /** Propose adding a shipped product module to the catalogue, from the tenant's checked-in term sheet. A second administrator approves it. */
 export async function proposeProductAdditionAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
-  const tenant = field(form, 'tenant');
-  const to = `/${locale}/products?tenant=${encodeURIComponent(tenant)}`;
   const admin = await currentAdmin();
   if (admin === undefined) redirect(`/${locale}`);
-  if (!isTenantCode(tenant)) return back(to, 'TENANT_UNKNOWN');
+  const tenant = configurableTenant(admin, field(form, 'tenant'));
+  if (tenant === undefined) return back(`/${locale}/products`, 'TENANT_UNKNOWN');
+  const to = `/${locale}/products?tenant=${encodeURIComponent(tenant)}`;
   const s = store();
   if (s.kind !== 'READY') return back(to, 'NO_DATABASE');
   const now = nowEpoch();
@@ -296,18 +304,29 @@ export async function decideJurisdictionAction(form: FormData): Promise<void> {
   back(to, approve ? 'APPROVED' : 'REJECTED');
 }
 
+const REVISION_AREA_OF_SCREEN = {
+  products: 'PRODUCTS',
+  rails: 'RAILS',
+  identity: 'STAFF_IDENTITY',
+  partners: 'ORIGINATION_POLICY',
+} as const satisfies Record<string, RevisionArea>;
+
 export async function decideRevisionAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
-  const tenant = field(form, 'tenant');
   const areaField = field(form, 'area');
   const area = areaField === 'rails' || areaField === 'identity' || areaField === 'partners' ? areaField : 'products';
-  const to = `/${locale}/${area}?tenant=${encodeURIComponent(tenant)}`;
   const admin = await currentAdmin();
   if (admin === undefined) redirect(`/${locale}`);
+  const tenant = configurableTenant(admin, field(form, 'tenant'));
+  if (tenant === undefined) return back(`/${locale}/${area}`, 'TENANT_UNKNOWN');
+  const to = `/${locale}/${area}?tenant=${encodeURIComponent(tenant)}`;
   const s = store();
   if (s.kind !== 'READY') return back(to, 'NO_DATABASE');
   const id = field(form, 'revisionId');
   if (!/^[0-9a-f-]{36}$/i.test(id)) return back(to, 'REVISION_ID_MALFORMED');
+  // Only this institution's revision, in this screen's area: another's identifier is absent here.
+  const revisionArea = REVISION_AREA_OF_SCREEN[area];
+  if (!(await listRevisions(s.pool, tenant, revisionArea)).some((r) => r.id === id)) return back(to, 'DECIDE_FAILED');
   const approve = field(form, 'decision') === 'approve';
   const reason = field(form, 'reason');
   if (!approve && reason.length < 3) return back(to, 'REJECTION_REASON_REQUIRED');
@@ -332,11 +351,11 @@ export async function decideRevisionAction(form: FormData): Promise<void> {
 
 export async function proposeRailChangeAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
-  const tenant = field(form, 'tenant');
-  const to = `/${locale}/rails?tenant=${encodeURIComponent(tenant)}`;
   const admin = await currentAdmin();
   if (admin === undefined) redirect(`/${locale}`);
-  if (!isTenantCode(tenant)) return back(to, 'TENANT_UNKNOWN');
+  const tenant = configurableTenant(admin, field(form, 'tenant'));
+  if (tenant === undefined) return back(`/${locale}/rails`, 'TENANT_UNKNOWN');
+  const to = `/${locale}/rails?tenant=${encodeURIComponent(tenant)}`;
   const s = store();
   if (s.kind !== 'READY') return back(to, 'NO_DATABASE');
   const now = nowEpoch();
@@ -400,11 +419,11 @@ export async function proposeRailChangeAction(form: FormData): Promise<void> {
 
 export async function proposeIdentityChangeAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
-  const tenant = field(form, 'tenant');
-  const to = `/${locale}/identity?tenant=${encodeURIComponent(tenant)}`;
   const admin = await currentAdmin();
   if (admin === undefined) redirect(`/${locale}`);
-  if (!isTenantCode(tenant)) return back(to, 'TENANT_UNKNOWN');
+  const tenant = configurableTenant(admin, field(form, 'tenant'));
+  if (tenant === undefined) return back(`/${locale}/identity`, 'TENANT_UNKNOWN');
+  const to = `/${locale}/identity?tenant=${encodeURIComponent(tenant)}`;
   const s = store();
   if (s.kind !== 'READY') return back(to, 'NO_DATABASE');
   const now = nowEpoch();
@@ -467,11 +486,11 @@ export async function proposeIdentityChangeAction(form: FormData): Promise<void>
 
 export async function proposePartnerChangeAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
-  const tenant = field(form, 'tenant');
-  const to = `/${locale}/partners?tenant=${encodeURIComponent(tenant)}`;
   const admin = await currentAdmin();
   if (admin === undefined) redirect(`/${locale}`);
-  if (!isTenantCode(tenant)) return back(to, 'TENANT_UNKNOWN');
+  const tenant = configurableTenant(admin, field(form, 'tenant'));
+  if (tenant === undefined) return back(`/${locale}/partners`, 'TENANT_UNKNOWN');
+  const to = `/${locale}/partners?tenant=${encodeURIComponent(tenant)}`;
   const s = store();
   if (s.kind !== 'READY') return back(to, 'NO_DATABASE');
   const now = nowEpoch();

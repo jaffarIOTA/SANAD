@@ -17,11 +17,11 @@
       "@sanad/core/*": ["../../core/*"],
       "@sanad/design/*": ["../../packages/design/*"],
       "@sanad/i18n/*": ["../../packages/i18n/*"],
+      "@sanad/auth/*": ["../../packages/auth/*"],
       "@/*": ["./src/*"],
       "@sanad/products/*": ["../../products/*"]
     },
-    "esModuleInterop": true,
-    "baseUrl": "."
+    "esModuleInterop": true
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "next-env.d.ts", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]

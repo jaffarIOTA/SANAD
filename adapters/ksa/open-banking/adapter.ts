@@ -54,7 +54,7 @@ export class OpenBankingAdapter extends RailAdapter implements AccountInformatio
     readonly months: number;
     readonly correlationId: string;
   }) {
-    const consent = this.requireConsent(p.consentId);
+    const consent = await this.requireConsent(p.tenantId, p.consentId, 'ACCOUNT_INFORMATION');
     if (!consent.ok) return consent;
     const r = await this.invoke(
       'ais.affordability',
@@ -104,7 +104,7 @@ export class OpenBankingAdapter extends RailAdapter implements AccountInformatio
     readonly idempotencyKey: string;
     readonly correlationId: string;
   }) {
-    const consent = this.requireConsent(p.consentId);
+    const consent = await this.requireConsent(p.tenantId, p.consentId, 'PAYMENT_INITIATION');
     if (!consent.ok) return consent;
     const r = await this.invoke(
       'pis.initiate',

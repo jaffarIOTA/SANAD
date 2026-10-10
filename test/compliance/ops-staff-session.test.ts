@@ -263,6 +263,8 @@ describe('sign-in and sign-out', () => {
     jar.values.clear();
     jar.options.clear();
     for (const [k, v] of Object.entries(TOKENS)) if (k !== 'NODE_ENV') vi.stubEnv(k, v);
+    // In memory: the deployment's jurisdiction would otherwise come from a configured test database.
+    vi.stubEnv('SANAD_TEST_DATABASE_URL', '');
     vi.stubEnv('SANAD_JURISDICTION', 'AE');
   });
 

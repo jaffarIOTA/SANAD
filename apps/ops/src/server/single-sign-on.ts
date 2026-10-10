@@ -29,13 +29,14 @@ import {
   beginStaffSignIn,
   completeStaffSignIn,
   continuePage,
-  inMemoryReplayGuard,
   providerSignOutUrl,
   signInLocale,
+  stateReplayGuard,
 } from '@sanad/auth/staff-oidc.ts';
 import { resolveStaffIdentity, singleSignOnInstitutions } from '@sanad/origination/staff-identity.ts';
 
 import type { SignInReason } from './session.ts';
+import { spentTokens } from './spent-tokens.ts';
 import { STAFF_SESSION_COOKIE, epochNow, issueStaffSession, staffStateSealKey } from './staff-session.ts';
 import { deploymentJurisdiction } from '@sanad/origination/jurisdiction.ts';
 
@@ -53,7 +54,7 @@ export function ssoClient(): OidcClient {
   return shared.client;
 }
 export function ssoReplayGuard(): StateReplayGuard {
-  shared.replay ??= inMemoryReplayGuard();
+  shared.replay ??= stateReplayGuard(spentTokens(), 'OPS');
   return shared.replay;
 }
 export function setSsoDependencies(d: { readonly client?: OidcClient; readonly replay?: StateReplayGuard }): void {

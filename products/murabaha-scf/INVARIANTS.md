@@ -49,6 +49,11 @@ Each contractual leg is a separate instrument, separately executed and timestamp
 hash-chained to its predecessor. `documents/render.ts` cannot express two legs in one
 request; the database holds a uniqueness constraint on the document reference.
 
+Each leg's timestamp token is stamped over `legAnchorDigest(leg)` (`legs/anchor.ts`), which
+binds its content, its predecessor's hash and its place in the sequence, so the chain is
+anchored at a third party: `verifyAnchoredChain` refuses a chain rebuilt with fresh hashes
+(SR-008). A timestamping adapter stamps that digest, never the document digest alone.
+
 ## M-5 Duplicate financing is impossible
 
 The financed-invoice registry is unique on `(tenant_id, invoice_uuid)`. No

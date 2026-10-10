@@ -9,6 +9,8 @@
 const config = {
   outputFileTracingRoot: new URL('../..', import.meta.url).pathname,
   reactStrictMode: true,
+  // No X-Powered-By: the framework is nobody's business (ZAP 10037).
+  poweredByHeader: false,
   eslint: { ignoreDuringBuilds: true },
 
   // Arabic is the default, so the bare root goes there. Not permanent: the

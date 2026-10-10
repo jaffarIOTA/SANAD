@@ -24,8 +24,7 @@
       "@sanad/products/*": ["../../products/*"],
       "@sanad/adapters/*": ["../../adapters/*"],
       "@sanad/auth/*": ["../../packages/auth/*"]
-    },
-    "baseUrl": "."
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "next-env.d.ts", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]

@@ -52,9 +52,15 @@ export async function listRevisions(
   }));
 }
 
-export async function revisionPayload(pool: Pool, id: string): Promise<unknown> {
-  return (await pool.query<{ payload: unknown }>('select config.revision_payload($1::uuid) as payload', [id])).rows[0]
-    ?.payload;
+/** One revision's payload, of this tenant only: another tenant's revision is absent (SR-029). */
+export async function revisionPayload(pool: Pool, tenantCode: string, id: string): Promise<unknown> {
+  const tenant = await tenantUuidByCode(pool, tenantCode);
+  return (
+    await pool.query<{ payload: unknown }>('select config.revision_payload($1::uuid, $2::uuid) as payload', [
+      tenant,
+      id,
+    ])
+  ).rows[0]?.payload;
 }
 
 export async function proposeRevision(

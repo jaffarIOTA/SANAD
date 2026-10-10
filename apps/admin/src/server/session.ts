@@ -19,6 +19,9 @@ import { cookies } from 'next/headers';
 
 import { type SealKey, deriveSealKey, ephemeralMasterSecret, open, seal } from '@sanad/auth/sealed-token.ts';
 
+import { spentTokens } from './spent-tokens.ts';
+import { deploymentProfile } from '@sanad/origination/profile.ts';
+
 export type AdminSignInMethod = 'DEVELOPMENT' | 'OIDC';
 
 export interface AdminPrincipal {
@@ -71,18 +74,20 @@ export const now = (): bigint => BigInt(Math.floor(Date.now() / 1000));
 const digest = (s: string): Buffer => createHash('sha256').update(s, 'utf8').digest();
 
 /** Development tokens are a development stand-in; production authenticates through the institution's single sign-on. */
-export const developmentSignInPermitted = (): boolean => process.env['NODE_ENV'] !== 'production';
+export const developmentSignInPermitted = (): boolean => deploymentProfile() === 'DEVELOPMENT';
 
 /**
  * Development sign-in: the presented token is compared, in constant time, to
  * the two development tokens, each mapped to one administrator. Two, so four
- * eyes can be exercised locally: what one proposes the other decides.
+ * eyes can be exercised locally: what one proposes the other decides. Admin's
+ * own variables: no other app reads them, so a token is one person in one app
+ * (SR-034).
  */
 export function developmentPrincipalFor(presented: string): string | undefined {
   if (!developmentSignInPermitted()) return undefined;
   const candidates: readonly [string | undefined, string][] = [
-    [process.env['PLATFORM_OPS_DEV_TOKEN'], 'adm-dev-01'],
-    [process.env['STAFF_DEV_TOKEN_SENIOR'], 'adm-dev-02'],
+    [process.env['ADMIN_DEV_TOKEN_01'], 'adm-dev-01'],
+    [process.env['ADMIN_DEV_TOKEN_02'], 'adm-dev-02'],
   ];
   const presentedDigest = digest(presented);
   let found: string | undefined;
@@ -119,6 +124,8 @@ export async function currentAdmin(): Promise<AdminPrincipal | undefined> {
   if (raw === undefined || raw.length > 4096) return undefined;
   const opened = open(raw, sealKey(), now(), ADMIN_SESSION_CEILING, isPayload);
   if (opened.kind !== 'VALID') return undefined;
+  // Signed out: a copy of the cookie is no session (SR-030).
+  if (await spentTokens().isSpent('ADMIN_SESSION', raw)) return undefined;
   const { p, t, at, m, n } = opened.value.payload;
   const authenticatedAt = at === undefined ? opened.value.issuedAtEpochSeconds : BigInt(at);
   if (authenticatedAt > opened.value.issuedAtEpochSeconds) return undefined;
@@ -181,5 +188,9 @@ export async function startAdminSession(
 
 export async function endAdminSession(): Promise<void> {
   const jar = await cookies();
+  const raw = jar.get(COOKIE)?.value;
+  // Spent until it could no longer open anyway: no session outlives issue plus the ceiling.
+  if (raw !== undefined && raw.length <= 4096)
+    await spentTokens().spend('ADMIN_SESSION', raw, now() + ADMIN_SESSION_CEILING);
   jar.delete(COOKIE);
 }

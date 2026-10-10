@@ -38,7 +38,8 @@ export const metadata = { title: 'Sanad — Operations', description: 'Originati
  * Every workbench page reads live state per request — the request book, the
  * deployment jurisdiction, the vault. Nothing here may be pre-rendered at build
  * time: a build has no database, and a credential or a tenant's book baked into
- * a static page would be served to whoever asks.
+ * a static page would be served to whoever asks. Rendering per request also
+ * gives every page the request's CSP nonce (SR-027).
  */
 export const dynamic = 'force-dynamic';
 

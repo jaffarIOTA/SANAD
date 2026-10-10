@@ -8,7 +8,6 @@
 
 import { notFound, redirect } from 'next/navigation';
 
-import { type TenantCode, isTenantCode } from '@sanad/config/loader.ts';
 import {
   BUTTON_DANGER,
   BUTTON_PRIMARY,
@@ -27,6 +26,7 @@ import { listTenants, store } from '../../../server/credentials.ts';
 import { ADAPTER_CATALOGUE, CAPABILITY_LABELS, resolveRailsConfiguration } from '../../../server/rails.ts';
 import { listRevisions } from '../../../server/revisions.ts';
 import { currentAdmin } from '../../../server/session.ts';
+import { configurableTenants, displayedTenant } from '../../../server/tenant-scope.ts';
 
 const NOTICE: Readonly<Record<string, { en: string; ar: string; tone: 'settled' | 'blocked' }>> = {
   PROPOSED: {
@@ -74,8 +74,9 @@ export default async function RailsAdminPage({
   if (admin === undefined) redirect(`/${segment}`);
   const arabic = locale === 'ar-SA';
   const s = store();
-  const tenants = s.kind === 'READY' ? await listTenants(s.pool) : [];
-  const tenantCode: TenantCode = tenantParam !== undefined && isTenantCode(tenantParam) ? tenantParam : 'bank-a';
+  const tenants = s.kind === 'READY' ? configurableTenants(admin, await listTenants(s.pool)) : [];
+  const tenantCode = displayedTenant(admin, tenantParam, 'bank-a');
+  if (tenantCode === undefined) notFound();
   const now = BigInt(Math.floor(Date.now() / 1000));
   const resolved = await resolveRailsConfiguration(tenantCode, now);
   const rails = resolved.rails.ok ? resolved.rails.value.rails : [];

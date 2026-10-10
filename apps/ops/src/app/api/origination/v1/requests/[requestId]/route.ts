@@ -6,7 +6,7 @@ import { correlation, principalOr401 } from '../../shared.ts';
 
 export async function GET(request: Request, context: { params: Promise<{ requestId: string }> }): Promise<Response> {
   const correlationId = correlation(request);
-  const principal = principalOr401(request, correlationId);
+  const principal = await principalOr401(request, correlationId);
   if (principal instanceof Response) return principal;
 
   const { requestId } = await context.params;

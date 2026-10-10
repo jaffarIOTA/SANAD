@@ -16,7 +16,15 @@
 import { type Result, ok, reject } from '../kernel/result.ts';
 
 export type RevisionArea =
-  'PRODUCTS' | 'RAILS' | 'STAFF_IDENTITY' | 'PARTNERS' | 'CREDIT_POLICY' | 'ORIGINATION_POLICY';
+  | 'PRODUCTS'
+  | 'RAILS'
+  | 'STAFF_IDENTITY'
+  | 'PARTNERS'
+  | 'CREDIT_POLICY'
+  | 'ORIGINATION_POLICY'
+  // Shariah parameters, under the same four eyes (SR-025).
+  | 'STRUCTURES'
+  | 'BOARD_POSITIONS';
 export type RevisionStatus = 'PROPOSED' | 'APPROVED' | 'REJECTED';
 
 export interface Revision<T = unknown> {

@@ -16,7 +16,18 @@
 import { type Result, ok, reject } from '../kernel/result.ts';
 import type { TsaInstant } from '../time/tsa.ts';
 
-export const CONSENT_TYPES = ['CREDIT_BUREAU', 'SCREENING', 'DATA_SHARING_WITH_PARTNER', 'NOTIFICATIONS'] as const;
+/** What a consent permits. Each consent-gated rail asks for its own (CLAUDE.md §5, PDPL purpose limitation). */
+export const CONSENT_TYPES = [
+  'CREDIT_BUREAU',
+  'SCREENING',
+  'DATA_SHARING_WITH_PARTNER',
+  'NOTIFICATIONS',
+  'IDENTITY_VERIFICATION',
+  'DOCUMENT_VERIFICATION',
+  'EMPLOYMENT_VERIFICATION',
+  'ACCOUNT_INFORMATION',
+  'PAYMENT_INITIATION',
+] as const;
 export type ConsentType = (typeof CONSENT_TYPES)[number];
 
 export type ConsentChannel = 'PORTAL' | 'BRANCH' | 'PARTNER_API' | 'AGENT' | 'SIGNED_DOCUMENT';

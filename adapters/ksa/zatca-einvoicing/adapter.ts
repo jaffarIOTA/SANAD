@@ -7,6 +7,8 @@
  * valid stamp is refused, and a drawdown does not proceed on it.
  */
 
+import type { KeyObject } from 'node:crypto';
+
 import type { CredentialProvider } from '../../../core/ports/credentials.ts';
 import type {
   ClearanceStatus,
@@ -21,7 +23,9 @@ import { type Result, ok, reject } from '../../../core/kernel/result.ts';
 import { money } from '../../../core/kernel/money.ts';
 import type { KnownDeviation } from '../../kernel/adapter.ts';
 import type { RailTransport } from '../../kernel/http-transport.ts';
-import { RailAdapter, type RailAdapterConfig, bool, decimalToMinor, int, str } from '../kernel/rail-adapter.ts';
+import { RailAdapter, type RailAdapterConfig, decimalToMinor, int, str } from '../kernel/rail-adapter.ts';
+
+import { stampVerifies } from './stamp.ts';
 
 export const ZATCA_EINVOICING_DEVIATIONS: readonly KnownDeviation[] = [
   {
@@ -39,7 +43,20 @@ export const ZATCA_EINVOICING_DEVIATIONS: readonly KnownDeviation[] = [
       'Anything not literally CLEARED or REPORTED maps to REJECTED or NOT_FOUND; an unknown status never validates an invoice.',
     verificationRef: 'KSA-RAIL-ZATCA-01',
   },
+  {
+    id: 'ZATCA-EINV-DEV-003',
+    summary:
+      'The stamp is verified from the invoice QR code (tags 6–8) against the authority keys the institution pins; the tag layout on the read path and the stamping certificate are to be confirmed.',
+    containment:
+      'A response’s own stamp flag is never read. No pinned key, an unpinned signer, a hash for another invoice or a signature that fails: the stamp is invalid and the invoice validates nothing (SR-016).',
+    verificationRef: 'KSA-RAIL-ZATCA-01',
+  },
 ];
+
+/** The institution's pinned authority stamp keys. None configured: no stamp is ever valid. */
+export interface ZatcaStampTrust {
+  readonly authorityKeys: readonly KeyObject[];
+}
 
 const STATUS: Readonly<Record<string, ClearanceStatus>> = {
   CLEARED: 'CLEARED',
@@ -53,8 +70,16 @@ export class ZatcaEInvoicingAdapter extends RailAdapter implements EInvoicingPro
   readonly capabilities = ['E_INVOICING'] as const;
   readonly deviations = ZATCA_EINVOICING_DEVIATIONS;
 
-  constructor(config: RailAdapterConfig, credentials: CredentialProvider, transport: RailTransport) {
+  readonly #stampTrust: ZatcaStampTrust;
+
+  constructor(
+    config: RailAdapterConfig,
+    credentials: CredentialProvider,
+    transport: RailTransport,
+    stampTrust: ZatcaStampTrust = { authorityKeys: [] },
+  ) {
     super(config, credentials, transport);
+    this.#stampTrust = stampTrust;
   }
 
   async validateInvoice(_tenantId: string, ref: InvoiceRef, correlationId: string): Promise<Result<InvoiceValidation>> {
@@ -87,7 +112,8 @@ export class ZatcaEInvoicingAdapter extends RailAdapter implements EInvoicingPro
           });
     const v = r.value;
     const status = STATUS[String(v['clearanceStatus'])] ?? 'REJECTED';
-    const stampValid = bool(v['stampValid']) ?? false;
+    // Verified, never taken from the response (SR-016).
+    const stampValid = stampVerifies(v['qrCode'], ref.invoiceHash, this.#stampTrust.authorityKeys);
     const issuerCr = str(v['sellerCr']);
     const recipientCr = str(v['buyerCr']);
     const total = decimalToMinor(v['totalAmount']);

@@ -29,6 +29,8 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 
 import type { OriginationChannel } from '@sanad/core/origination/channel.ts';
 
+import { refuseUnderDeployedProfile } from './profile.ts';
+
 export type Scope =
   | 'origination:read'
   | 'origination:write'
@@ -66,6 +68,12 @@ export interface CredentialRegistry {
   findByTokenDigest(digest: string): PartnerPrincipal | undefined;
 }
 
+/**
+ * A deployed process's registry until `config.integration_credential` backs
+ * one: no credential is recognised, so every caller gets the ordinary 401.
+ */
+export const NO_CREDENTIALS_REGISTERED: CredentialRegistry = { findByTokenDigest: () => undefined };
+
 const digestOf = (token: string): string => createHash('sha256').update(token, 'utf8').digest('hex');
 
 /**
@@ -76,6 +84,7 @@ const digestOf = (token: string): string => createHash('sha256').update(token, '
  * `config.integration_credential`, and every resolution is audited (§4).
  */
 export function developmentRegistry(env: NodeJS.ProcessEnv): CredentialRegistry {
+  refuseUnderDeployedProfile('developmentRegistry', env);
   const entries = new Map<string, PartnerPrincipal>();
 
   const add = (token: string | undefined, principal: PartnerPrincipal): void => {

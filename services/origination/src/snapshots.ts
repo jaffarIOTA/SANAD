@@ -18,7 +18,12 @@ import { ok } from '@sanad/core/kernel/result.ts';
 import type { ApplicantSnapshotPort, SnapshotRequest } from '@sanad/core/ports/applicant-snapshot.ts';
 import { type SnapshotSources, assembleSnapshot } from '@sanad/core/decisioning/assemble.ts';
 
-export function developmentSnapshots(): ApplicantSnapshotPort {
+import { refuseUnderDeployedProfile } from './profile.ts';
+
+export function developmentSnapshots(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): ApplicantSnapshotPort {
+  refuseUnderDeployedProfile('developmentSnapshots', env);
   return {
     assemble(request: SnapshotRequest) {
       return Promise.resolve(ok(developmentSnapshot(request)));

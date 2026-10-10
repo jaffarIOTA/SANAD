@@ -7,10 +7,10 @@ import { fromRejection, problem } from '@sanad/origination/problem.ts';
 import { newBusinessRefusal } from '@sanad/origination/licensing.ts';
 
 import { consumerBaseUrl, contract, correlation, json, merchantOr401, refuse, toWire } from '../shared.ts';
-import { merchantById, refreshMerchants } from '@/server/merchants.ts';
-import { findSession, rememberIdempotency, saveSession, sessionIdFor } from '@/server/checkout-store.ts';
-import { flushConsumerStore, syncConsumerStore } from '@/server/durable.ts';
-import { developmentAttestation } from '@/server/store.ts';
+import { merchantById, refreshMerchants } from '../../../../../server/merchants.ts';
+import { findSession, rememberIdempotency, saveSession, sessionIdFor } from '../../../../../server/checkout-store.ts';
+import { flushConsumerStore, syncConsumerStore } from '../../../../../server/durable.ts';
+import { developmentAttestation } from '../../../../../server/store.ts';
 
 const validate = contract.validatorFor('CreateCheckoutSession');
 const SESSION_TTL_SECONDS = 1_800n;

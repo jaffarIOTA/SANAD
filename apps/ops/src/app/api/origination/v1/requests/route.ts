@@ -47,7 +47,7 @@ const idempotency: IdempotencyStore = ((globalThis as Record<symbol, Idempotency
 
 export async function POST(request: Request): Promise<Response> {
   const correlationId = correlation(request);
-  const principal = principalOr401(request, correlationId);
+  const principal = await principalOr401(request, correlationId);
   if (principal instanceof Response) return principal;
   if (!hasScope(principal, 'origination:write')) {
     return refuse(
@@ -213,7 +213,7 @@ export async function POST(request: Request): Promise<Response> {
 
 export async function GET(request: Request): Promise<Response> {
   const correlationId = correlation(request);
-  const principal = principalOr401(request, correlationId);
+  const principal = await principalOr401(request, correlationId);
   if (principal instanceof Response) return principal;
 
   await syncStore();

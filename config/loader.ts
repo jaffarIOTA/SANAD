@@ -14,6 +14,8 @@
 
 import bankAStructure from './tenants/bank-a/structures/murabaha-distributor.json' with { type: 'json' };
 import fintechBStructure from './tenants/fintech-b/structures/murabaha-distributor.json' with { type: 'json' };
+import bankABoard from './tenants/bank-a/shariah/board-positions.json' with { type: 'json' };
+import fintechBBoard from './tenants/fintech-b/shariah/board-positions.json' with { type: 'json' };
 import bankAPolicyV1 from './tenants/bank-a/credit-policy/wasl-distributor-v1.json' with { type: 'json' };
 import fintechBPolicyV1 from './tenants/fintech-b/credit-policy/wasl-distributor-v1.json' with { type: 'json' };
 import bankAOrigination from './tenants/bank-a/origination/policy.json' with { type: 'json' };
@@ -47,6 +49,11 @@ import fundAeChecklistFounders from './tenants/sme-fund-ae/documents/sme-ae-firs
 import fundAeChecklistAdvancedTech from './tenants/sme-fund-ae/documents/sme-ae-advanced-tech.json' with { type: 'json' };
 
 import { type StructureDefinition, parseStructureDefinition } from '../products/murabaha-scf/structures/definition.ts';
+import {
+  type BoardPositions,
+  parseBoardPositions,
+  structureWithinBoard,
+} from '../products/murabaha-scf/structures/board-positions.ts';
 import { type CreditPolicy, parseCreditPolicy } from '../core/decisioning/policy.ts';
 import {
   type AdapterCatalogue,
@@ -131,6 +138,22 @@ const STRUCTURES: Readonly<Record<TenantCode, readonly unknown[]>> = {
   // The UAE fund does not offer Murabaha supply-chain finance.
   'sme-fund-ae': [],
 };
+
+/** Each board's standing positions (SR-025). A tenant with structures must have them; without, none load. */
+const BOARD_POSITIONS: Readonly<Record<TenantCode, unknown>> = {
+  'bank-a': bankABoard,
+  'fintech-b': fintechBBoard,
+  'sme-fund-ae': undefined,
+};
+
+export function loadBoardPositions(tenant: TenantCode): Result<BoardPositions> {
+  const raw = BOARD_POSITIONS[tenant];
+  if (raw === undefined)
+    return reject('SH-17', 'BOARD_POSITIONS_NOT_FOUND', 'No Shariah board positions are configured for this tenant', {
+      tenant,
+    });
+  return parseBoardPositions(raw);
+}
 
 const CREDIT_POLICIES: Readonly<Record<TenantCode, readonly unknown[]>> = {
   'bank-a': [bankAPolicyV1],
@@ -269,7 +292,10 @@ export function loadStructureDefinition(tenant: TenantCode, definitionId: string
   for (const candidate of STRUCTURES[tenant]) {
     const parsed = parseStructureDefinition(candidate);
     if (!parsed.ok) return parsed;
-    if (parsed.value.definitionId === definitionId) return parsed;
+    if (parsed.value.definitionId !== definitionId) continue;
+    // In force only under the board's approval and at or above its risk floor (SR-025).
+    const board = loadBoardPositions(tenant);
+    return board.ok ? structureWithinBoard(parsed.value, board.value) : board;
   }
   return reject(
     'SH-17',
@@ -307,7 +333,12 @@ export function loadAllForTenant(tenant: TenantCode): Result<{
   for (const candidate of STRUCTURES[tenant]) {
     const parsed = parseStructureDefinition(candidate);
     if (!parsed.ok) return parsed;
-    structures.push(parsed.value);
+    // Every structure is held to the board's positions (SR-025).
+    const board = loadBoardPositions(tenant);
+    if (!board.ok) return board;
+    const within = structureWithinBoard(parsed.value, board.value);
+    if (!within.ok) return within;
+    structures.push(within.value);
   }
 
   const creditPolicies: CreditPolicy[] = [];

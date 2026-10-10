@@ -12,6 +12,7 @@
  */
 
 import type { ContractLeg } from '../legs/leg.ts';
+import { type BoardPositions, templateApproved } from '../structures/board-positions.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import type { DocumentRenderRequest, RenderLocale } from '@sanad/core/ports/documents.ts';
 
@@ -40,6 +41,8 @@ export function buildLegRenderRequest(
   legs: readonly ContractLeg[],
   params: Omit<LegRenderRequest, 'leg' | 'governingLocale' | 'subject' | 'approvalRef'> & {
     readonly governingLocale?: 'ar-SA';
+    /** The board's positions in force: only a template version it approved renders (SR-025). */
+    readonly board: BoardPositions;
   },
 ): Result<LegRenderRequest> {
   if (legs.length === 0) {
@@ -65,6 +68,12 @@ export function buildLegRenderRequest(
       'TEMPLATE_VERSION_UNRESOLVED',
       'Rendering is always against an explicit approved template version',
     );
+  }
+  // Approved by the board, not merely named (SR-025).
+  if (!templateApproved(params.board, params.templateVersionId)) {
+    return reject('SH-17', 'TEMPLATE_VERSION_NOT_APPROVED', 'This template version is not one the board approved', {
+      templateVersionId: params.templateVersionId,
+    });
   }
 
   return ok({

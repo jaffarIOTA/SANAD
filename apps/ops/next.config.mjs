@@ -12,6 +12,8 @@ const config = {
   // A self-contained server for the container image (apps/ops/Containerfile).
   output: 'standalone',
   reactStrictMode: true,
+  // No X-Powered-By: the framework is nobody's business (ZAP 10037).
+  poweredByHeader: false,
   eslint: { ignoreDuringBuilds: true },
   async redirects() {
     return [{ source: '/', destination: '/en', permanent: false }];

@@ -1,0 +1,18 @@
+# Semgrep's default ignores; a .semgrepignore replaces them, so they are restated.
+:include .gitignore
+node_modules/
+build/
+dist/
+vendor/
+.env/
+.venv/
+.tox/
+*.min.js
+.npm/
+.yarn/
+test/
+tests/
+.semgrep_logs/
+
+# The rules' own fixtures (SR-033) match by design; `npm run test:semgrep` checks them.
+.semgrep/*.ts

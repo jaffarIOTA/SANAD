@@ -2,11 +2,18 @@ name: Sync Discovered API with APIConnect
 
 on: [push, pull_request, workflow_dispatch]
 
+# Read the repository; nothing else (SR-022).
+permissions:
+  contents: read
+
 env:
   API_HOST: ap-south-a.apiconnect.automation.ibm.com
   PLATFORM_API_PREFIX: platform-api
   PROVIDER_ORG: iota-api-dev
-  API_FILES: health_1.0.0.yaml
+  # Repository paths: the action matches them against the changed files. test/architecture/gateway-workflow.test.ts
+  # keeps every one pointing at an API definition that exists.
+  API_FILES: gateway/ibm/health-api_1.0.0.yaml,gateway/ibm/origination-api_1.0.0.yaml
+  API_FOLDERS: gateway/ibm
 
 jobs:
   run-discovery:
@@ -16,10 +23,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      # What changed: against the pull request's base, or the previous commit of a push. Without either (a new
+      # branch, a manual run), every gateway file counts as changed. The refs reach the script as environment
+      # variables, never interpolated into it.
       - name: Difference
         id: difference-output
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
-          echo "action_updates=$(git diff --name-only --diff-filter=ACMRT ${{ github.event.before }} ${{ github.sha }} | xargs)" >> $GITHUB_OUTPUT
+          if [ -n "$BASE" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            changed="$(git diff --name-only --diff-filter=ACMRT "$BASE" "$GITHUB_SHA" | xargs)"
+          else
+            changed="$(git ls-files gateway/ibm | xargs)"
+          fi
+          echo "action_updates=$changed" >> "$GITHUB_OUTPUT"
 
       - uses: ibm-apiconnect/apic-discovery-action@3fd5f3cc644f98b6b92844a13ce939ec7d172d37 # main as of 2026-10-08 (SEC-D17)
         id: discover-apis
@@ -29,9 +46,12 @@ jobs:
           provider_org: ${{ env.PROVIDER_ORG }}
           api_key: ${{ secrets.apicApikey }}
           api_files: ${{ env.API_FILES }}
+          api_folders: ${{ env.API_FOLDERS }}
           resync_check: ${{ true }}
           git_diff: ${{ steps.difference-output.outputs.action_updates }}
 
       - name: Display the action-result
+        env:
+          RESULT: ${{ steps.discover-apis.outputs.action-result }}
         run: |
-          echo "Result of the action: ${{ steps.discover-apis.outputs.action-result }}"
+          echo "Result of the action: $RESULT"
