@@ -27,10 +27,17 @@ param deployApps bool = false
 param publicHost string = 'sanad.iotatechnologies.io'
 
 @description('True once the custom domains are bound with certificates; until then each app\'s public origin is its Container Apps address.')
-param customDomainsLive bool = false
+param customDomainsLive bool = true
 
 @description('The Container Apps environment\'s default domain (pass 1 output environmentDefaultDomain). Fixed once the environment exists; a parameter because app definitions are evaluated before the environment\'s properties are known.')
-param environmentDomain string = ''
+param environmentDomain string = 'salmondesert-8c7ace86.uaenorth.azurecontainerapps.io'
+
+@description('Managed certificate per app, issued by `az containerapp hostname bind` (README, Custom domains). Declared here so a template deployment keeps the bindings instead of removing them.')
+param managedCertificates object = {
+  consumer: 'mc-cae-sanad-sanad-iotatechno-7678'
+  ops: 'mc-cae-sanad-ops-sanad-iotate-8749'
+  admin: 'mc-cae-sanad-admin-sanad-iota-3634'
+}
 
 @description('What data this deployment holds. SYNTHETIC (Phase 1, ADR 0004) lets the consumer demonstration sign-in run, only while the database\'s config.deployment_profile also says it is not cleared for production data (SR-005), and lets the host clock stand in for a timestamping authority on consumer and ops (SR-006). Phase 2 passes PRODUCTION, which needs the authority.')
 @allowed(['SYNTHETIC', 'PRODUCTION'])
@@ -42,8 +49,8 @@ param adminAllowedCidrs array
 @description('Object ID of the person running the deployment; granted rights to set secrets and create the licence signing key.')
 param deployerObjectId string
 
-@description('GitHub repository allowed to deploy, as owner/name.')
-param githubRepository string = 'jaffarIOTA/SANAD'
+@description('The GitHub repository allowed to deploy, as GitHub names it in OIDC token subjects: owner@ownerId/repo@repoId (immutable IDs, so a renamed or re-created repository cannot inherit the federation). Find the IDs with `gh api repos/<owner>/<repo> --jq ".owner.id, .id"`.')
+param githubOidcRepository string = 'jaffarIOTA@216283503/SANAD@1379562991'
 
 @description('Admin connects with its own login, sanad_admin (SR-046), whose connection string is the Key Vault secret sanad-admin-database-url. Set true once that secret exists (README, "Admin database login"); until then Admin shares sanad-database-url.')
 param adminOwnLogin bool = false
@@ -123,7 +130,7 @@ resource deployFederation 'Microsoft.ManagedIdentity/userAssignedIdentities/fede
   name: 'github-production'
   properties: {
     issuer: 'https://token.actions.githubusercontent.com'
-    subject: 'repo:${githubRepository}:environment:production'
+    subject: 'repo:${githubOidcRepository}:environment:production'
     audiences: ['api://AzureADTokenExchange']
   }
 }
@@ -297,6 +304,15 @@ resource containerApps 'Microsoft.App/containerApps@2024-03-01' = [
           transport: 'auto'
           allowInsecure: false
           ipSecurityRestrictions: a.restricted ? adminRestrictions : []
+          customDomains: customDomainsLive
+            ? [
+                {
+                  name: a.host
+                  bindingType: 'SniEnabled'
+                  certificateId: '${environment.id}/managedCertificates/${managedCertificates[a.app]}'
+                }
+              ]
+            : []
         }
         registries: [{ server: registry.properties.loginServer, identity: appIdentity.id }]
         secrets: [
