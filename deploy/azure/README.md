@@ -42,7 +42,10 @@ signed out). Never print a value: `az keyvault secret set --value "$(openssl ran
    `set local role sanad_app` is refused until the migration grants it).
 3. **Apply new app settings** the release introduces. The pipeline swaps images only; it never
    applies `main.bicep`. Set them with `az containerapp update -g rg-sanad-hosted -n ca-sanad-<app>
-   --set-env-vars NAME=value`, or run the template (below).
+   --set-env-vars NAME=value`, or run the template (below). Phase 1 needs
+   `SANAD_DATA_CLASS=SYNTHETIC` on **consumer and ops**: without it the consumer demonstration
+   sign-in is refused (SR-005) and every action that attests an instant refuses to use the host
+   clock (SR-006), which stops both apps.
 4. Tag the merge commit on `prod`: `git tag v2026.10.09-1 origin/prod && git push origin v2026.10.09-1`.
 5. `.github/workflows/deploy-azure.yml` builds, scans with Trivy, pushes and rolls out each app.
    A tag whose commit is not on `prod` is refused.

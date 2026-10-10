@@ -28,7 +28,8 @@ import {
 import type { OriginationChannel } from '@sanad/core/origination/channel.ts';
 import { money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
-import { type TsaInstant, tsaInstant } from '@sanad/core/time/tsa.ts';
+import type { TsaInstant } from '@sanad/core/time/tsa.ts';
+import { hostClockInstant } from '@sanad/origination/host-clock.ts';
 import {
   expire,
   provideInformation as provideInformationTransition,
@@ -100,15 +101,11 @@ export async function syncOriginationPolicy(atEpochSeconds: bigint): Promise<voi
  * produce an attested instant in production. This is the development
  * substitute, and it is named so that it is obvious in a diff. Nothing here
  * feeds a sequencing gate — gate timing comes from the TSA adapter and from
- * nowhere else (SH-06).
+ * nowhere else (SH-06). It is the host clock (`host-clock.ts`), refused outside
+ * development and declared-synthetic hosting (SR-006).
  */
 export function developmentAttestation(): TsaInstant {
-  return tsaInstant({
-    verified: true,
-    genTimeEpochSeconds: BigInt(Math.floor(Date.now() / 1000)),
-    tokenDigest: 'development-substitute',
-    authorityId: 'development',
-  });
+  return hostClockInstant();
 }
 
 /**

@@ -39,7 +39,7 @@ import { preCheck } from '@sanad/core/decisioning/eligibility.ts';
 import type { CreditPolicy } from '@sanad/core/decisioning/policy.ts';
 import type { Rejection, Result } from '@sanad/core/kernel/result.ts';
 import type { ApplicantSnapshotPort } from '@sanad/core/ports/applicant-snapshot.ts';
-import { type TsaInstant, tsaInstant } from '@sanad/core/time/tsa.ts';
+import type { TsaInstant } from '@sanad/core/time/tsa.ts';
 
 import { validatorFor, type Validator } from './contract.ts';
 import { statusCodeFor, type HealthService } from './health.ts';
@@ -49,6 +49,7 @@ import { authenticate, hasScope, type CredentialRegistry, type PartnerPrincipal 
 import { eligibilityToWire, toWire, type EligibilityRequestBody, type RaiseRequestBody } from './representation.ts';
 import type { RequestRepository, StoredRequest } from './repository.ts';
 import { type NewBusinessAct, newBusinessRefusal } from './licensing.ts';
+import { hostClockInstant } from './host-clock.ts';
 import { refuseUnderDeployedProfile } from './profile.ts';
 
 /** The product a partner request originates: the trade-first Murabaha SCF journey is the only one this API raises. */
@@ -76,14 +77,7 @@ export function developmentTimestamps(env: Readonly<Record<string, string | unde
   refuseUnderDeployedProfile('developmentTimestamps', env);
   return {
     attest(): Promise<TsaInstant> {
-      return Promise.resolve(
-        tsaInstant({
-          verified: true,
-          genTimeEpochSeconds: BigInt(Math.floor(Date.now() / 1000)),
-          tokenDigest: 'development-substitute',
-          authorityId: 'development',
-        }),
-      );
+      return Promise.resolve(hostClockInstant(undefined, env));
     },
   };
 }

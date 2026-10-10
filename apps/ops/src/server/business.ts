@@ -115,7 +115,8 @@ import { resolvePricingInputs } from '@sanad/core/pricing/quotation.ts';
 import type { RateBasis, RatePeriod } from '@sanad/core/pricing/rate.ts';
 import type { ProductCatalogue } from '@sanad/core/products/catalogue.ts';
 import { buildOffer } from '@sanad/core/products/offer.ts';
-import { type TsaInstant, tsaInstant } from '@sanad/core/time/tsa.ts';
+import { type TsaInstant, restoreAttestedInstant } from '@sanad/core/time/tsa.ts';
+import { hostClockInstant } from '@sanad/origination/host-clock.ts';
 import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
 import { tenantUuidByCode } from '@sanad/origination/credentials.ts';
 import { type NewBusinessAct, newBusinessRefusal } from '@sanad/origination/licensing.ts';
@@ -1001,9 +1002,8 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
         documentType: d['documentType'] ?? '',
         documentRef: d['documentRef'] ?? '',
         validationStatus: (d['validationStatus'] ?? 'PENDING') as BusinessDocument['validationStatus'],
-        capturedAt: tsaInstant({
-          verified: true,
-          genTimeEpochSeconds: BigInt(d['capturedAtEpoch'] ?? '0'),
+        capturedAt: restoreAttestedInstant({
+          epochSeconds: BigInt(d['capturedAtEpoch'] ?? '0'),
           tokenDigest: d['capturedTokenDigest'] ?? '',
           authorityId: d['capturedAuthority'] ?? '',
         }),
@@ -3260,13 +3260,8 @@ const SEEDS: readonly SeedSpec[] = [
   },
 ];
 
-const seedInstant = (epochSeconds: bigint): TsaInstant =>
-  tsaInstant({
-    verified: true,
-    genTimeEpochSeconds: epochSeconds,
-    tokenDigest: 'development-substitute',
-    authorityId: 'development',
-  });
+// The illustrative seed's instants are the host clock's, written only where the seed itself is permitted.
+const seedInstant = (epochSeconds: bigint): TsaInstant => hostClockInstant(epochSeconds);
 
 async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
   const now = developmentAttestation().epochSeconds;

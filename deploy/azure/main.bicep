@@ -32,7 +32,7 @@ param customDomainsLive bool = false
 @description('The Container Apps environment\'s default domain (pass 1 output environmentDefaultDomain). Fixed once the environment exists; a parameter because app definitions are evaluated before the environment\'s properties are known.')
 param environmentDomain string = ''
 
-@description('What data this deployment holds. SYNTHETIC (Phase 1, ADR 0004) lets the consumer demonstration sign-in run, and only while the database\'s config.deployment_profile also says it is not cleared for production data (SR-005). Phase 2 passes PRODUCTION.')
+@description('What data this deployment holds. SYNTHETIC (Phase 1, ADR 0004) lets the consumer demonstration sign-in run, only while the database\'s config.deployment_profile also says it is not cleared for production data (SR-005), and lets the host clock stand in for a timestamping authority on consumer and ops (SR-006). Phase 2 passes PRODUCTION, which needs the authority.')
 @allowed(['SYNTHETIC', 'PRODUCTION'])
 param dataClass string = 'SYNTHETIC'
 
@@ -240,6 +240,8 @@ var apps = [
         { name: 'OPS_SESSION_SECRET', secretRef: 'ops-session-secret' }
         { name: 'SANAD_DATABASE_URL', secretRef: 'sanad-database-url' }
         { name: 'OPS_PUBLIC_ORIGIN', value: origin.ops }
+        // The host clock stands in for a timestamping authority only on declared-synthetic hosting (SR-006).
+        { name: 'SANAD_DATA_CLASS', value: dataClass }
       ],
       opsOidcEnv
     )
