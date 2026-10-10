@@ -5,12 +5,12 @@
  * amount and every attested instant) and the brand on `TsaInstant`, which is
  * a symbol key. Amounts are tagged on the way out and restored on the way
  * in; an attested instant is recognised by its three fields and rebuilt
- * through `tsaInstant()` so the brand — and the guarantee it carries — is
- * re-established by the one function allowed to establish it.
+ * through `restoreAttestedInstant()` so the brand — and the guarantee it
+ * carries — is re-established only from the evidence it was recorded with.
  */
 
 import type { OriginationRequest } from '@sanad/core/origination/request.ts';
-import { tsaInstant } from '@sanad/core/time/tsa.ts';
+import { restoreAttestedInstant } from '@sanad/core/time/tsa.ts';
 
 const BIGINT_TAG = '$bigint';
 
@@ -35,9 +35,8 @@ function revive(value: unknown): unknown {
     typeof record['authorityId'] === 'string' &&
     Object.keys(record).length === 3
   ) {
-    return tsaInstant({
-      verified: true,
-      genTimeEpochSeconds: record['epochSeconds'],
+    return restoreAttestedInstant({
+      epochSeconds: record['epochSeconds'],
       tokenDigest: record['tokenDigest'],
       authorityId: record['authorityId'],
     });

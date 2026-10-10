@@ -30,6 +30,7 @@ const PORTS = [
   'payment-initiation',
   'bill-collection',
   'payments',
+  'limit-reservation',
 ];
 const src = (p: string) => readFileSync(`${ROOT}core/ports/${p}.ts`, 'utf8');
 const fields = (s: string) => [...s.matchAll(/^\s*readonly\s+(\w+)\??:/gm)].map((m) => m[1] ?? '');

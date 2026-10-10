@@ -100,10 +100,10 @@ export class UaePassAdapter extends RailAdapter implements IdentityAuthenticatio
     const assertionId = str(v['assertionId']);
     const identityRef = str(v['subjectRef']);
     const at = epoch(v['completedAt']);
-    return ok(
-      assertionId === undefined || identityRef === undefined || at === undefined
-        ? malformed()
-        : { kind: 'ANSWERED' as const, value: { assertionId, identityRef, authenticatedAtEpochSeconds: at } },
-    );
+    if (assertionId === undefined || identityRef === undefined || at === undefined) return ok(malformed());
+    // Once, fresh, for this tenant: a captured assertion signs no one in twice (SR-007).
+    const refused = await this.acceptAssertion(p.tenantId, assertionId, at);
+    if (refused !== undefined) return ok({ kind: 'REFUSED' as const, code: refused });
+    return ok({ kind: 'ANSWERED' as const, value: { assertionId, identityRef, authenticatedAtEpochSeconds: at } });
   }
 }

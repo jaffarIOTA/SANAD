@@ -34,6 +34,7 @@ import {
 
 import { type OidcClient, type OidcRefusal, authorizationUrl, endSessionUrl, randomToken } from './oidc.ts';
 import { type SealKey, open, seal } from './sealed-token.ts';
+import { type SpentTokens, inMemorySpentTokens } from './spent-tokens.ts';
 
 export type StaffApp = 'OPS' | 'ADMIN';
 type Env = Readonly<Record<string, string | undefined>>;
@@ -146,26 +147,19 @@ const isStatePayload = (p: Readonly<Record<string, unknown>>): p is StatePayload
 
 /**
  * Consumed states, so a state cookie (copied, or replayed by a browser) opens
- * exactly once. In-process: on several instances each refuses its own replays,
- * and the provider's single-use code refuses the rest.
+ * exactly once. Over spent tokens shared by every replica (SR-043); in memory,
+ * one process's.
  */
 export interface StateReplayGuard {
   /** True the first time a state is presented before it expires; false ever after. */
-  consume(state: string, expiresAtEpochSeconds: bigint, nowEpochSeconds: bigint): boolean;
+  consume(state: string, expiresAtEpochSeconds: bigint): Promise<boolean>;
 }
 
-export function inMemoryReplayGuard(): StateReplayGuard {
-  const seen = new Map<string, bigint>();
-  return {
-    consume(state, expiresAt, now) {
-      for (const [k, exp] of seen) if (exp <= now) seen.delete(k);
-      const key = createHash('sha256').update(state, 'utf8').digest('base64url');
-      if (seen.has(key)) return false;
-      seen.set(key, expiresAt);
-      return true;
-    },
-  };
-}
+export const stateReplayGuard = (spent: SpentTokens, app: StaffApp): StateReplayGuard => ({
+  consume: (state, expiresAt) => spent.spend(app === 'ADMIN' ? 'ADMIN_OIDC_STATE' : 'OPS_OIDC_STATE', state, expiresAt),
+});
+
+export const inMemoryReplayGuard = (): StateReplayGuard => stateReplayGuard(inMemorySpentTokens(), 'OPS');
 
 // -- Begin -------------------------------------------------------------------------------
 
@@ -289,7 +283,7 @@ export async function completeStaffSignIn(i: CompleteInput): Promise<CompleteOut
   const sealed = opened.value.payload;
   const locale = sealed.l;
   const no = (reason: StaffSignInRefusal): CompleteOutcome => ({ ok: false, locale, reason });
-  if (!i.replay.consume(sealed.s, opened.value.expiresAtEpochSeconds, i.nowEpochSeconds)) return no('STATE_REPLAYED');
+  if (!(await i.replay.consume(sealed.s, opened.value.expiresAtEpochSeconds))) return no('STATE_REPLAYED');
   const presentedState = i.query.get('state') ?? '';
   if (presentedState !== sealed.s) return no('STATE_MISMATCH');
   if (i.query.get('error') !== null) return no('PROVIDER_ERROR');
@@ -332,6 +326,9 @@ export async function completeStaffSignIn(i: CompleteInput): Promise<CompleteOut
   const authorities = authoritiesFor(groupsFrom(verified.value.claims, p.groupsClaim), identity.value);
   if (authorities.length === 0) return no('NO_AUTHORITY');
   if (!(await i.tenantActive(tenant))) return no('TENANT_NOT_ACTIVE');
+  // A step-up asked for max_age, so the provider owes auth_time: without it the token's issue time would say
+  // only when a token was minted, perhaps from an old sign-in, and freshness cannot be established (SR-044).
+  if (sealed.u === '1' && verified.value.authTimeEpochSeconds === undefined) return no('STEP_UP_NOT_FRESH');
   const authenticatedAt = BigInt(verified.value.authTimeEpochSeconds ?? verified.value.issuedAtEpochSeconds);
   if (sealed.u === '1' && i.nowEpochSeconds - authenticatedAt > STEP_UP_FRESH_SECONDS) return no('STEP_UP_NOT_FRESH');
   const displayName = displayNameFrom(verified.value.claims);

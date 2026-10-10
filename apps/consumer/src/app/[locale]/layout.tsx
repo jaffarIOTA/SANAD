@@ -21,6 +21,9 @@ export function generateStaticParams(): { locale: LocaleSegment }[] {
   return LOCALE_SEGMENTS.map((locale) => ({ locale }));
 }
 
+// Rendered per request, so every page carries the request's CSP nonce (SR-027).
+export const dynamic = 'force-dynamic';
+
 export default async function ConsumerLayout({
   children,
   params,

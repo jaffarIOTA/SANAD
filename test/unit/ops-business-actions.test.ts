@@ -120,6 +120,8 @@ async function handOverTestApplication(): Promise<void> {
 }
 
 beforeAll(() => {
+  // In memory: the deployment's jurisdiction would otherwise come from a configured test database.
+  vi.stubEnv('SANAD_TEST_DATABASE_URL', '');
   process.env['SANAD_JURISDICTION'] = 'AE';
 });
 

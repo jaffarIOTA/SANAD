@@ -21,6 +21,7 @@ import { developmentSnapshots } from './snapshots.ts';
 import { isTenantCode, loadAllForTenant } from '@sanad/config/loader.ts';
 import { reject } from '@sanad/core/kernel/result.ts';
 import { developmentRegistry } from './principal.ts';
+import { configuredRateLimiter } from './rate-limit.ts';
 
 const port = Number.parseInt(process.env['PORT'] ?? '3002', 10);
 
@@ -87,6 +88,7 @@ const server = createService({
     },
   },
   timestamps: developmentTimestamps(),
+  rateLimiter: configuredRateLimiter(),
 });
 
 server.listen(port, () => {

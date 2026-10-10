@@ -34,6 +34,10 @@ const EXPLANATIONS: Readonly<Record<string, { readonly ar: string; readonly en: 
     ar: 'خدمة الهوية الوطنية غير متاحة الآن. حاول لاحقاً.',
     en: 'The national identity service is not available right now. Please try again later.',
   },
+  IDENTITY_PROVIDER_NOT_CONFIGURED: {
+    ar: 'لا يمكن تسجيل الدخول هنا بعد: الربط بخدمة الهوية الوطنية الرقمية لم يُفعَّل في هذه البيئة. لم يُسجَّل عليك أي شيء.',
+    en: 'Sign-in is not available here yet: the national digital identity service is not connected in this environment. Nothing has been recorded against you.',
+  },
   APPLICANT_REF_MALFORMED: {
     ar: 'أدخل مرجع المتقدّم بالصيغة الصحيحة.',
     en: 'Enter the applicant reference in the expected form.',

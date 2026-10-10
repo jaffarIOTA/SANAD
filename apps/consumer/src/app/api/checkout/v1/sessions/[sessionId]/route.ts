@@ -1,8 +1,8 @@
 import { problem } from '@sanad/origination/problem.ts';
 
 import { consumerBaseUrl, correlation, json, merchantOr401, refuse, toWire } from '../../shared.ts';
-import { findSession } from '@/server/checkout-store.ts';
-import { syncConsumerStore } from '@/server/durable.ts';
+import { findSession } from '../../../../../../server/checkout-store.ts';
+import { syncConsumerStore } from '../../../../../../server/durable.ts';
 
 export async function GET(
   request: Request,

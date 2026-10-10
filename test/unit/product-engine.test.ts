@@ -15,7 +15,7 @@ import { tsaInstant } from '@sanad/core/time/tsa.ts';
 import { murabahaScf } from '@sanad/products/murabaha-scf/index.ts';
 import { loadOriginationPolicy } from '@sanad/config/loader.ts';
 import { approve, raise, submitForReview, type Approved, type Principal } from '@sanad/core/origination/request.ts';
-import { transactionCore, structureFor, riskPeriodSecondsFor } from '../support/fixtures.ts';
+import { PERMITTED_GOODS, boardFor, transactionCore, structureFor, riskPeriodSecondsFor } from '../support/fixtures.ts';
 
 const at = tsaInstant({ verified: true, genTimeEpochSeconds: 1_790_000_000n, tokenDigest: 't', authorityId: 'test' });
 const trade = {
@@ -227,6 +227,8 @@ describe('the Murabaha module through the ProductModule interface', () => {
       murabahaScf.execute(terms, approved, q, {
         transactionId: core.transactionId,
         structure: structureFor('bank-a'),
+        board: boardFor('bank-a'),
+        invoiceLines: PERMITTED_GOODS,
         riskPeriodRequiredSeconds: riskPeriodSecondsFor('bank-a'),
         maturityDateGregorian: core.maturityDateGregorian,
         maturityDateHijri: core.maturityDateHijri,
@@ -237,6 +239,38 @@ describe('the Murabaha module through the ProductModule interface', () => {
     );
     expect(draft.state).toBe('DRAFT');
     expect(draft.core.pricing.salePriceAmount.minorUnits).toBe(18_962_500n);
+  });
+  it('execute() opens nothing outside the board positions: excluded goods, a short interval, another approval (SR-025)', () => {
+    const q = expectOk(
+      murabahaScf.quote(terms, { ...base, tradeReference: trade, pricing: { profitAmount: money(462_500n) } }),
+    );
+    const core = transactionCore('bank-a');
+    const board = boardFor('bank-a');
+    const open = (o: Partial<Parameters<typeof murabahaScf.execute>[3]>) =>
+      murabahaScf.execute(terms, approvedRequest(), q, {
+        transactionId: core.transactionId,
+        structure: structureFor('bank-a'),
+        board,
+        invoiceLines: PERMITTED_GOODS,
+        riskPeriodRequiredSeconds: riskPeriodSecondsFor('bank-a'),
+        maturityDateGregorian: core.maturityDateGregorian,
+        maturityDateHijri: core.maturityDateHijri,
+        decisionId: 'dec-1',
+        creditPolicyVersion: '1.0.0',
+        correlationId: 'c',
+        ...o,
+      });
+    const reason = (r: ReturnType<typeof open>) => (r.ok ? 'OPENED' : `${r.error.control} ${r.error.reason}`);
+    expect(reason(open({ invoiceLines: [{ lineNo: 1, goodsClassificationCode: '2208' }] }))).toBe(
+      'SH-11 GOODS_EXCLUDED',
+    );
+    expect(reason(open({ riskPeriodRequiredSeconds: board.minimumRiskPeriodSeconds - 1 }))).toBe(
+      'SH-06 RISK_PERIOD_BELOW_BOARD_FLOOR',
+    );
+    expect(reason(open({ structure: { ...structureFor('bank-a'), shariahApprovalRef: 'SSB-OTHER-1' } }))).toBe(
+      'SH-06 STRUCTURE_NOT_UNDER_BOARD_APPROVAL',
+    );
+    expect(reason(open({}))).toBe('OPENED');
   });
 });
 

@@ -97,6 +97,7 @@ const ARABIC: Readonly<Record<string, string>> = {
   LICENCE_NOT_ACTIVE: 'ترخيص النظام لا يسمح ببدء أعمال جديدة الآن. تستمر العقود القائمة والسداد والتحصيل كالمعتاد.',
 
   // Transport-level refusals raised by this service
+  RATE_LIMITED: 'تجاوزت عدد الطلبات المسموح به في هذه الفترة. أعد المحاولة بعد المدة المذكورة.',
   MALFORMED_JSON: 'تعذّرت قراءة محتوى الطلب كبيانات JSON صحيحة.',
   UNKNOWN_PROPERTY: 'حقل غير معروف. يُعبَّر عن العائد بمبلغ ربح يُضاف إلى تكلفة مُفصح عنها، لا بنسبة.',
   SCHEMA_VALIDATION_FAILED: 'محتوى الطلب لا يطابق العقد المنشور.',
@@ -164,6 +165,17 @@ export function problem(params: {
     ...(params.context === undefined ? {} : { context: params.context }),
   };
 }
+
+/** Too many requests in the window (SR-031): 429, with the wait in the problem as well as in Retry-After. */
+export const rateLimitedProblem = (correlationId: string, retryAfterSeconds: number): Problem =>
+  problem({
+    status: 429,
+    title: 'Too many requests',
+    detail: `Too many requests in this window. Retry after ${String(retryAfterSeconds)} seconds.`,
+    reason: 'RATE_LIMITED',
+    correlationId,
+    context: { retryAfterSeconds },
+  });
 
 /**
  * A domain refusal, as a problem.

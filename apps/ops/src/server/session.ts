@@ -32,7 +32,9 @@ import {
   freshEnough,
   issueStaffSession,
   openStaffSession,
+  STAFF_SESSION_CEILING_SECONDS,
 } from './staff-session.ts';
+import { spentTokens } from './spent-tokens.ts';
 
 export type { StaffPrincipal } from './staff.ts';
 
@@ -57,8 +59,11 @@ export type CurrentSession = Extract<OpenedStaffSession, { readonly kind: 'VALID
 /** The signed-in session (principal, how and when they authenticated), or undefined. */
 export async function currentStaffSession(): Promise<CurrentSession | undefined> {
   const jar = await cookies();
-  const opened = openStaffSession(jar.get(STAFF_SESSION_COOKIE)?.value, epochNow());
-  return opened.kind === 'VALID' ? opened : undefined;
+  const raw = jar.get(STAFF_SESSION_COOKIE)?.value;
+  const opened = openStaffSession(raw, epochNow());
+  if (opened.kind !== 'VALID' || raw === undefined) return undefined;
+  // Signed out: a copy of the cookie is no session (SR-030).
+  return (await spentTokens().isSpent('OPS_SESSION', raw)) ? undefined : opened;
 }
 
 /** The signed-in principal, or undefined. A forged, tampered or expired cookie is no session. */
@@ -81,6 +86,10 @@ export async function startStaffSession(principal: StaffPrincipal, lifetimeSecon
 
 export async function endStaffSession(): Promise<void> {
   const jar = await cookies();
+  const raw = jar.get(STAFF_SESSION_COOKIE)?.value;
+  // Spent until it could no longer open anyway: no session outlives issue plus the ceiling.
+  if (raw !== undefined && raw.length <= 4096)
+    await spentTokens().spend('OPS_SESSION', raw, epochNow() + STAFF_SESSION_CEILING_SECONDS);
   jar.delete(STAFF_SESSION_COOKIE);
 }
 

@@ -2,9 +2,9 @@ import { cancel } from '@sanad/core/checkout/session.ts';
 import { problem } from '@sanad/origination/problem.ts';
 
 import { consumerBaseUrl, correlation, json, merchantOr401, refuse, toWire } from '../../../shared.ts';
-import { findSession, saveSession } from '@/server/checkout-store.ts';
-import { flushConsumerStore, syncConsumerStore } from '@/server/durable.ts';
-import { developmentAttestation } from '@/server/store.ts';
+import { findSession, saveSession } from '../../../../../../../server/checkout-store.ts';
+import { flushConsumerStore, syncConsumerStore } from '../../../../../../../server/durable.ts';
+import { developmentAttestation } from '../../../../../../../server/store.ts';
 
 export async function PUT(
   request: Request,

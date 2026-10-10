@@ -9,7 +9,8 @@
  */
 
 import type { Offer } from '@sanad/core/products/offer.ts';
-import { type TsaInstant, tsaInstant } from '@sanad/core/time/tsa.ts';
+import type { TsaInstant } from '@sanad/core/time/tsa.ts';
+import { hostClockInstant } from '@sanad/origination/host-clock.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 
 export interface StoredOffer {
@@ -48,21 +49,18 @@ const scope = globalThis as unknown as Record<symbol, State | undefined>;
 const state: State = (scope[KEY] ??= { offers: new Map(), acceptances: new Map(), sequence: 0, lastAttested: 0n });
 
 /**
- * Development stand-in for the timestamping authority. Reads the host clock;
- * production attests. Strictly monotonic, as an authority's genTime is: two
+ * The host clock standing in for the timestamping authority (`host-clock.ts`, SR-006): refused outside
+ * development and declared-synthetic hosting. Strictly monotonic, as an authority's genTime is: two
  * acts inside one second (accept, then book) get distinct, ordered instants.
  */
 export function developmentAttestation(): TsaInstant {
   const now = BigInt(Math.floor(Date.now() / 1000));
   // A store kept across hot reloads may predate this field.
   const last = state.lastAttested ?? 0n;
-  state.lastAttested = now > last ? now : last + 1n;
-  return tsaInstant({
-    verified: true,
-    genTimeEpochSeconds: state.lastAttested,
-    tokenDigest: `development-substitute-${state.lastAttested.toString()}`,
-    authorityId: 'development',
-  });
+  const next = now > last ? now : last + 1n;
+  const instant = hostClockInstant(next);
+  state.lastAttested = next;
+  return instant;
 }
 
 export function nextId(prefix: string): string {

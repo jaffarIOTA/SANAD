@@ -31,6 +31,8 @@ import type { PaymentsPort } from '../../core/ports/payments.ts';
 import { money } from '../../core/kernel/money.ts';
 import { type Result, expectOk } from '../../core/kernel/result.ts';
 import { tsaInstant } from '../../core/time/tsa.ts';
+import { grantingLedger } from '../support/consents.ts';
+import { inMemoryAssertionReplayGuard } from '../../core/ports/assertion-replay.ts';
 
 class Credentials implements CredentialProvider {
   readonly refs: CredentialRef[] = [];
@@ -49,6 +51,8 @@ const config = (provider: RailAdapterConfig['provider']): RailAdapterConfig => (
   breaker: { failureThreshold: 2, resetAfterSeconds: 30, successThreshold: 1 },
   nowEpochSeconds: () => 1_800_000_000,
   baseUrl: 'https://rail.sandbox.example',
+  consents: grantingLedger('sme-fund-ae'),
+  assertionReplay: inMemoryAssertionReplayGuard(),
 });
 const at = tsaInstant({ verified: true, genTimeEpochSeconds: 1_800_000_000n, tokenDigest: 't', authorityId: 'test' });
 const attest = () => Promise.resolve(at);
@@ -121,7 +125,7 @@ describe('every UAE rail: an unreachable rail is UNAVAILABLE, not an answer', ()
       'UAE Pass',
       () =>
         uaePass(transport(down('identity.start'))).startAuthentication({
-          tenantId: 't',
+          tenantId: 'sme-fund-ae',
           applicantRef: 'a',
           purpose: 'LOGIN',
           correlationId: 'c',
@@ -131,7 +135,7 @@ describe('every UAE rail: an unreachable rail is UNAVAILABLE, not an answer', ()
       'ICP',
       () =>
         icp(transport(down('identity.verify'))).verify({
-          tenantId: 't',
+          tenantId: 'sme-fund-ae',
           applicantRef: 'a',
           consentId: 'cns',
           correlationId: 'c',
@@ -141,7 +145,7 @@ describe('every UAE rail: an unreachable rail is UNAVAILABLE, not an answer', ()
       'NER',
       () =>
         ner(transport(down('registry.lookup'))).lookup({
-          tenantId: 't',
+          tenantId: 'sme-fund-ae',
           commercialRegistration: LICENCE,
           correlationId: 'c',
         }),
@@ -150,7 +154,7 @@ describe('every UAE rail: an unreachable rail is UNAVAILABLE, not an answer', ()
       'MOHRE',
       () =>
         mohre(transport(down('employment.wps'))).employment({
-          tenantId: 't',
+          tenantId: 'sme-fund-ae',
           applicantRef: 'a',
           consentId: 'cns',
           correlationId: 'c',
@@ -160,7 +164,7 @@ describe('every UAE rail: an unreachable rail is UNAVAILABLE, not an answer', ()
       'FTA',
       () =>
         fta(transport(down('tax.registration'))).certificateStatus({
-          tenantId: 't',
+          tenantId: 'sme-fund-ae',
           crNumber: '100123456700003',
           correlationId: 'c',
         }),
@@ -169,7 +173,7 @@ describe('every UAE rail: an unreachable rail is UNAVAILABLE, not an answer', ()
       'Partner bank',
       () =>
         bank(transport(down('payments.disburse'))).disburse({
-          tenantId: 't',
+          tenantId: 'sme-fund-ae',
           beneficiaryRef: 'b',
           amount: money(100n, 'AED'),
           purposeCode: 'LOA',
@@ -189,7 +193,8 @@ describe('every UAE rail: an unreachable rail is UNAVAILABLE, not an answer', ()
   it('the circuit opens after repeated failures and reports UNAVAILABLE without calling', async () => {
     const t = transport(down('employment.wps'));
     const a = mohre(t);
-    const call = () => a.employment({ tenantId: 't', applicantRef: 'a', consentId: 'cns', correlationId: 'c' });
+    const call = () =>
+      a.employment({ tenantId: 'sme-fund-ae', applicantRef: 'a', consentId: 'cns', correlationId: 'c' });
     await call();
     await call();
     const third = expectOk(await call());
@@ -205,16 +210,22 @@ describe('consent-gated UAE rails refuse before any call', () => {
     [
       'AECB individual',
       (t: FixtureTransport) =>
-        aecb(t).requestIndividual({ tenantId: 't', applicantRef: 'owner-1', consentId: '  ', correlationId: 'c' }),
+        aecb(t).requestIndividual({
+          tenantId: 'sme-fund-ae',
+          applicantRef: 'owner-1',
+          consentId: '  ',
+          correlationId: 'c',
+        }),
     ],
     [
       'ICP',
-      (t: FixtureTransport) => icp(t).verify({ tenantId: 't', applicantRef: 'a', consentId: '', correlationId: 'c' }),
+      (t: FixtureTransport) =>
+        icp(t).verify({ tenantId: 'sme-fund-ae', applicantRef: 'a', consentId: '', correlationId: 'c' }),
     ],
     [
       'MOHRE',
       (t: FixtureTransport) =>
-        mohre(t).employment({ tenantId: 't', applicantRef: 'a', consentId: ' ', correlationId: 'c' }),
+        mohre(t).employment({ tenantId: 'sme-fund-ae', applicantRef: 'a', consentId: ' ', correlationId: 'c' }),
     ],
   ] as const)('%s', async (_name, call) => {
     const t = transport();
@@ -298,7 +309,7 @@ describe('a malformed answer fails closed', () => {
               completedAt: 1,
             }),
           ),
-        ).confirmAuthentication({ tenantId: 't', transactionRef: 'tx', correlationId: 'c' }),
+        ).confirmAuthentication({ tenantId: 'sme-fund-ae', transactionRef: 'tx', correlationId: 'c' }),
     ],
     [
       'ICP with an unknown card status',
@@ -307,7 +318,7 @@ describe('a malformed answer fails closed', () => {
           transport(
             answer('identity.verify', { matched: true, cardStatus: 'toString', verificationId: 'v', verifiedAt: 1 }),
           ),
-        ).verify({ tenantId: 't', applicantRef: 'a', consentId: 'cns', correlationId: 'c' }),
+        ).verify({ tenantId: 'sme-fund-ae', applicantRef: 'a', consentId: 'cns', correlationId: 'c' }),
     ],
     [
       'NER with an unknown licence status',
@@ -322,7 +333,7 @@ describe('a malformed answer fails closed', () => {
               asOf: 1,
             }),
           ),
-        ).lookup({ tenantId: 't', commercialRegistration: LICENCE, correlationId: 'c' }),
+        ).lookup({ tenantId: 'sme-fund-ae', commercialRegistration: LICENCE, correlationId: 'c' }),
     ],
     [
       'MOHRE with an unreadable month',
@@ -339,13 +350,13 @@ describe('a malformed answer fails closed', () => {
               ],
             }),
           ),
-        ).employment({ tenantId: 't', applicantRef: 'a', consentId: 'cns', correlationId: 'c' }),
+        ).employment({ tenantId: 'sme-fund-ae', applicantRef: 'a', consentId: 'cns', correlationId: 'c' }),
     ],
     [
       'FTA with an unknown status',
       () =>
         fta(transport(answer('tax.registration', { registrationStatus: 'SOMETHING_NEW', asOf: 1 }))).certificateStatus({
-          tenantId: 't',
+          tenantId: 'sme-fund-ae',
           crNumber: '100123456700003',
           correlationId: 'c',
         }),
@@ -356,7 +367,7 @@ describe('a malformed answer fails closed', () => {
         bank(
           transport(answer('payments.disburse', { paymentId: 'p', status: 'PROBABLY_PAID', acceptedAt: 1 })),
         ).disburse({
-          tenantId: 't',
+          tenantId: 'sme-fund-ae',
           beneficiaryRef: 'b',
           amount: money(100n, 'AED'),
           purposeCode: 'LOA',
@@ -427,7 +438,12 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
       ),
     );
     const r = expectOk(
-      await aecb(t).requestIndividual({ tenantId: 't', applicantRef: 'owner-1', consentId: 'cns', correlationId: 'c' }),
+      await aecb(t).requestIndividual({
+        tenantId: 'sme-fund-ae',
+        applicantRef: 'owner-1',
+        consentId: 'cns',
+        correlationId: 'c',
+      }),
     );
     expect(r.kind).toBe('REPORT');
     if (r.kind === 'REPORT') expect(r.summary.totalExposure.currency).toBe('AED');
@@ -441,7 +457,7 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
       ),
     );
     const rep = {
-      tenantId: 't',
+      tenantId: 'sme-fund-ae',
       facilityRef: 'f-1',
       counterpartyId: 'cp',
       event: 'OPENED' as const,
@@ -466,7 +482,7 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
     expect(
       expectOk(
         await uaePass(start).startAuthentication({
-          tenantId: 't',
+          tenantId: 'sme-fund-ae',
           applicantRef: 'app-1',
           purpose: 'SIGNATURE_INTENT',
           correlationId: 'c',
@@ -486,7 +502,7 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
       }),
     );
     const r = expectOk(
-      await uaePass(t).confirmAuthentication({ tenantId: 't', transactionRef: 'tx-1', correlationId: 'c' }),
+      await uaePass(t).confirmAuthentication({ tenantId: 'sme-fund-ae', transactionRef: 'tx-1', correlationId: 'c' }),
     );
     expect(r).toEqual({
       kind: 'ANSWERED',
@@ -504,10 +520,11 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
             flow,
             assertionId: 'a',
             subjectRef: 's',
-            completedAt: 1,
+            // Within the step-up window of the adapter's clock; a 1970 completion is refused as stale (SR-007).
+            completedAt: 1_800_000_000,
           }),
         ),
-      ).confirmAuthentication({ tenantId: 't', transactionRef: 'tx', correlationId: 'c' });
+      ).confirmAuthentication({ tenantId: 'sme-fund-ae', transactionRef: 'tx', correlationId: 'c' });
     expect(expectOk(await confirm('AUTHENTICATE')).kind).toBe('ANSWERED');
     expect(expectOk(await confirm('SIGN'))).toEqual({ kind: 'REFUSED', code: 'ASSURANCE_INSUFFICIENT' });
     expect(expectOk(await confirm('AUTHENTICATE_STEP_UP'))).toEqual({
@@ -516,7 +533,9 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
     });
     const pending = uaePass(transport(answer('identity.confirm', { status: 'PENDING' })));
     expect(
-      expectOk(await pending.confirmAuthentication({ tenantId: 't', transactionRef: 'tx', correlationId: 'c' })),
+      expectOk(
+        await pending.confirmAuthentication({ tenantId: 'sme-fund-ae', transactionRef: 'tx', correlationId: 'c' }),
+      ),
     ).toEqual({ kind: 'REFUSED', code: 'STATUS_PENDING' });
   });
   it('ICP: a matching but expired card is not verified, and attributes never cross', async () => {
@@ -536,7 +555,7 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
       ),
     );
     const r = expectOk(
-      await icp(t).verify({ tenantId: 't', applicantRef: 'app-1', consentId: 'cns-1', correlationId: 'c' }),
+      await icp(t).verify({ tenantId: 'sme-fund-ae', applicantRef: 'app-1', consentId: 'cns-1', correlationId: 'c' }),
     );
     expect(r).toEqual({
       kind: 'ANSWERED',
@@ -552,7 +571,7 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
       answer('identity.verify', { matched: true, cardStatus: 'VALID', verificationId: 'v-2', verifiedAt: 1 }),
     );
     const ok2 = expectOk(
-      await icp(valid).verify({ tenantId: 't', applicantRef: 'a', consentId: 'cns', correlationId: 'c' }),
+      await icp(valid).verify({ tenantId: 'sme-fund-ae', applicantRef: 'a', consentId: 'cns', correlationId: 'c' }),
     );
     expect(ok2.kind === 'ANSWERED' && ok2.value.verified).toBe(true);
   });
@@ -577,7 +596,9 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
         { url: `https://rail.sandbox.example/v1/trade-licences/${LICENCE}` },
       ),
     );
-    const r = expectOk(await ner(t).lookup({ tenantId: 't', commercialRegistration: LICENCE, correlationId: 'c' }));
+    const r = expectOk(
+      await ner(t).lookup({ tenantId: 'sme-fund-ae', commercialRegistration: LICENCE, correlationId: 'c' }),
+    );
     expect(r.kind).toBe('ANSWERED');
     if (r.kind === 'ANSWERED') {
       expect(r.value.signatoryRefs).toEqual(['own-1', 'mgr-2']);
@@ -589,10 +610,11 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
     expect(json(r)).not.toContain('SHOULD NOT CROSS');
     const missing = ner(transport({ operation: 'registry.lookup', match: {}, response: {}, failsWith: 'x' }));
     expect(
-      expectOk(await missing.lookup({ tenantId: 't', commercialRegistration: LICENCE, correlationId: 'c' })).kind,
+      expectOk(await missing.lookup({ tenantId: 'sme-fund-ae', commercialRegistration: LICENCE, correlationId: 'c' }))
+        .kind,
     ).toBe('UNAVAILABLE');
     const none = transport();
-    const bad = await ner(none).lookup({ tenantId: 't', commercialRegistration: '../x', correlationId: 'c' });
+    const bad = await ner(none).lookup({ tenantId: 'sme-fund-ae', commercialRegistration: '../x', correlationId: 'c' });
     expect(bad.ok).toBe(false);
     expect(none.calls).toHaveLength(0);
   });
@@ -608,7 +630,9 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
         capitalCurrency: 'USD',
       }),
     );
-    const r = expectOk(await ner(t).lookup({ tenantId: 't', commercialRegistration: LICENCE, correlationId: 'c' }));
+    const r = expectOk(
+      await ner(t).lookup({ tenantId: 'sme-fund-ae', commercialRegistration: LICENCE, correlationId: 'c' }),
+    );
     expect(r.kind).toBe('ANSWERED');
     if (r.kind === 'ANSWERED') {
       expect(r.value).not.toHaveProperty('paidCapitalMinorUnits');
@@ -636,7 +660,12 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
       ),
     );
     const r = expectOk(
-      await mohre(t).employment({ tenantId: 't', applicantRef: 'app-1', consentId: 'cns-1', correlationId: 'c' }),
+      await mohre(t).employment({
+        tenantId: 'sme-fund-ae',
+        applicantRef: 'app-1',
+        consentId: 'cns-1',
+        correlationId: 'c',
+      }),
     );
     expect(r).toEqual({
       kind: 'ANSWERED',
@@ -665,7 +694,13 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
       ),
     );
     expect(
-      expectOk(await fta(byTrn).certificateStatus({ tenantId: 't', crNumber: '100123456700003', correlationId: 'c' })),
+      expectOk(
+        await fta(byTrn).certificateStatus({
+          tenantId: 'sme-fund-ae',
+          crNumber: '100123456700003',
+          correlationId: 'c',
+        }),
+      ),
     ).toEqual({
       kind: 'ANSWERED',
       value: {
@@ -683,11 +718,13 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
       ),
     );
     const nf = expectOk(
-      await fta(byLicence).certificateStatus({ tenantId: 't', crNumber: LICENCE, correlationId: 'c' }),
+      await fta(byLicence).certificateStatus({ tenantId: 'sme-fund-ae', crNumber: LICENCE, correlationId: 'c' }),
     );
     expect(nf.kind === 'ANSWERED' && nf.value.status).toBe('NOT_FOUND');
     const none = transport();
-    expect((await fta(none).certificateStatus({ tenantId: 't', crNumber: '!', correlationId: 'c' })).ok).toBe(false);
+    expect((await fta(none).certificateStatus({ tenantId: 'sme-fund-ae', crNumber: '!', correlationId: 'c' })).ok).toBe(
+      false,
+    );
     expect(none.calls).toHaveLength(0);
   });
   it('Partner bank: AED in minor units with the idempotency key; another currency or a non-positive amount never calls', async () => {
@@ -699,7 +736,7 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
       ),
     );
     const d = {
-      tenantId: 't',
+      tenantId: 'sme-fund-ae',
       beneficiaryRef: 'ben-1',
       amount: money(50_000_000n, 'AED'),
       purposeCode: 'LOA',
@@ -720,7 +757,7 @@ describe('answers map to the port in AED, and identifiers do not cross', () => {
     );
     const col = expectOk(
       await bank(c).collect({
-        tenantId: 't',
+        tenantId: 'sme-fund-ae',
         payerRef: 'p',
         amount: money(1_000_00n, 'AED'),
         reference: 'inst-1',

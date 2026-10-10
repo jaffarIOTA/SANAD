@@ -14,6 +14,7 @@ import { Pool, type PoolConfig } from 'pg';
 
 import { decodeRequest, encodeRequest } from './codec.ts';
 import type { Page, RequestRepository, StoredRequest } from './repository.ts';
+import { inTenant } from './tenant-scope.ts';
 
 interface Row {
   readonly request_id: string;
@@ -44,8 +45,9 @@ export function postgresRequestRepository(config: PoolConfig | Pool): RequestRep
     },
 
     async save(record): Promise<void> {
-      await pool.query(
-        `insert into core.origination_request
+      await inTenant(pool, record.tenantId, (db) =>
+        db.query(
+          `insert into core.origination_request
            (tenant_id, request_id, partner_id, state, request, partner_reference, correlation_id, created_by)
          values ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)
          on conflict (tenant_id, request_id) do update
@@ -53,25 +55,28 @@ export function postgresRequestRepository(config: PoolConfig | Pool): RequestRep
                request = excluded.request,
                partner_reference = excluded.partner_reference,
                updated_at = now()`,
-        [
-          record.tenantId,
-          record.requestId,
-          record.partnerId,
-          record.request.state,
-          encodeRequest(record.request),
-          record.partnerReference ?? null,
-          record.request.core.correlationId,
-          record.partnerId,
-        ],
+          [
+            record.tenantId,
+            record.requestId,
+            record.partnerId,
+            record.request.state,
+            encodeRequest(record.request),
+            record.partnerReference ?? null,
+            record.request.core.correlationId,
+            record.partnerId,
+          ],
+        ),
       );
     },
 
     async find(tenantId, partnerId, requestId): Promise<StoredRequest | undefined> {
-      const { rows } = await pool.query<Row>(
-        `select request_id, tenant_id, partner_id, request, partner_reference, sequence::text
-           from core.origination_request
-          where tenant_id = $1 and partner_id = $2 and request_id = $3`,
-        [tenantId, partnerId, requestId],
+      const { rows } = await inTenant(pool, tenantId, (db) =>
+        db.query<Row>(
+          `select request_id, tenant_id, partner_id, request, partner_reference, sequence::text
+             from core.origination_request
+            where tenant_id = $1 and partner_id = $2 and request_id = $3`,
+          [tenantId, partnerId, requestId],
+        ),
       );
       const row = rows[0];
       return row === undefined ? undefined : toRecord(row);
@@ -79,18 +84,20 @@ export function postgresRequestRepository(config: PoolConfig | Pool): RequestRep
 
     async list({ tenantId, partnerId, states, cursor, limit }): Promise<Page> {
       const before = cursor === undefined ? null : Number.parseInt(cursor, 10);
-      const { rows } = await pool.query<Row>(
-        // The ORDER BY names the table's column. A bare `sequence` there resolves to the
-        // output column, which is the text cast, and text sorts '8' above '23': the feed
-        // came back out of order from the tenth row on.
-        `select r.request_id, r.tenant_id, r.partner_id, r.request, r.partner_reference, r.sequence::text as sequence
+      const { rows } = await inTenant(pool, tenantId, (db) =>
+        db.query<Row>(
+          // The ORDER BY names the table's column. A bare `sequence` there resolves to the
+          // output column, which is the text cast, and text sorts '8' above '23': the feed
+          // came back out of order from the tenth row on.
+          `select r.request_id, r.tenant_id, r.partner_id, r.request, r.partner_reference, r.sequence::text as sequence
            from core.origination_request r
           where r.tenant_id = $1 and r.partner_id = $2
             and ($3::text[] is null or r.state = any($3::text[]))
             and ($4::bigint is null or r.sequence < $4::bigint)
           order by r.sequence desc
           limit $5`,
-        [tenantId, partnerId, states ?? null, Number.isFinite(before) ? before : null, limit + 1],
+          [tenantId, partnerId, states ?? null, Number.isFinite(before) ? before : null, limit + 1],
+        ),
       );
       const items = rows.slice(0, limit).map(toRecord);
       const last = items[items.length - 1];

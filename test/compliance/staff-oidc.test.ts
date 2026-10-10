@@ -76,7 +76,11 @@ interface Harness {
 }
 async function harness(): Promise<Harness> {
   const idp = await testProvider(SECRET);
-  return { idp, client: createOidcClient({ fetch: idp.fetch, nowMs: () => NOW * 1000 }), replay: inMemoryReplayGuard() };
+  return {
+    idp,
+    client: createOidcClient({ fetch: idp.fetch, nowMs: () => NOW * 1000 }),
+    replay: inMemoryReplayGuard(),
+  };
 }
 
 async function begin(h: Harness, tenant: string, opts: { stepUp?: boolean; env?: Record<string, string> } = {}) {
@@ -96,13 +100,17 @@ async function begin(h: Harness, tenant: string, opts: { stepUp?: boolean; env?:
   return { ...r, state, nonce };
 }
 
-function complete(h: Harness, over: Partial<CompleteInput> & { query: URLSearchParams; stateCookie: string | undefined }) {
+function complete(
+  h: Harness,
+  over: Partial<CompleteInput> & { query: URLSearchParams; stateCookie: string | undefined },
+) {
   return completeStaffSignIn({
     app: 'OPS',
     stateKey: STATE_KEY,
     replay: h.replay,
     nowEpochSeconds: T,
-    resolveIdentity: (t) => Promise.resolve(IDENTITIES[t] === undefined ? { ok: false } : { ok: true, value: IDENTITIES[t] }),
+    resolveIdentity: (t) =>
+      Promise.resolve(IDENTITIES[t] === undefined ? { ok: false } : { ok: true, value: IDENTITIES[t] }),
     tenantActive: () => Promise.resolve(true),
     env: ENV,
     client: h.client,
@@ -127,7 +135,9 @@ describe('staff OIDC: the happy path, so the negatives below are meaningful', ()
     const h = await harness();
     const b = await begin(h, 'bank-a');
     const url = new URL(b.location);
-    expect(url.origin + url.pathname).toBe('https://login.microsoftonline.com/00000000-0000-0000-0000-000000000001/oauth2/v2.0/authorize');
+    expect(url.origin + url.pathname).toBe(
+      'https://login.microsoftonline.com/00000000-0000-0000-0000-000000000001/oauth2/v2.0/authorize',
+    );
     expect(url.searchParams.get('response_type')).toBe('code');
     expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     expect(url.searchParams.get('redirect_uri')).toBe(`https://ops.sanad.test${CALLBACK_PATH}`);
@@ -237,9 +247,9 @@ describe('staff OIDC: state and its cookie', () => {
     const q = new URLSearchParams({ state: b1.state, error: 'access_denied', error_description: 'x' });
     expect(reasonOf(await complete(h, { query: q, stateCookie: b1.stateCookie }))).toBe('PROVIDER_ERROR');
     const b2 = await begin(h, 'bank-a');
-    expect(reasonOf(await complete(h, { query: new URLSearchParams({ state: b2.state }), stateCookie: b2.stateCookie }))).toBe(
-      'CODE_MISSING',
-    );
+    expect(
+      reasonOf(await complete(h, { query: new URLSearchParams({ state: b2.state }), stateCookie: b2.stateCookie })),
+    ).toBe('CODE_MISSING');
   });
 });
 
@@ -248,13 +258,17 @@ describe('staff OIDC: the ID token', () => {
     const h = await harness();
     const { nonce: _drop, ...noNonce } = standardClaims('x');
     expect(reasonOf(await roundTrip(h, 'bank-a', () => h.idp.mint(noNonce)))).toBe('ID_TOKEN_NONCE');
-    expect(reasonOf(await roundTrip(h, 'bank-a', () => h.idp.mint(standardClaims('B'.repeat(43)))))).toBe('ID_TOKEN_NONCE');
+    expect(reasonOf(await roundTrip(h, 'bank-a', () => h.idp.mint(standardClaims('B'.repeat(43)))))).toBe(
+      'ID_TOKEN_NONCE',
+    );
   });
 
   it('a wrong issuer is refused — including a sibling tenant of the same provider', async () => {
     const h = await harness();
     const other = 'https://login.microsoftonline.com/00000000-0000-0000-0000-00000000000f/v2.0';
-    expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { iss: other }))))).toBe('ID_TOKEN_ISSUER');
+    expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { iss: other }))))).toBe(
+      'ID_TOKEN_ISSUER',
+    );
     expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { iss: `${ISSUER}/` }))))).toBe(
       'ID_TOKEN_ISSUER',
     );
@@ -262,30 +276,42 @@ describe('staff OIDC: the ID token', () => {
 
   it('a wrong audience is refused, and a shared audience needs azp to be this client', async () => {
     const h = await harness();
-    expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { aud: 'another-client' }))))).toBe(
-      'ID_TOKEN_AUDIENCE',
-    );
-    expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { aud: [CLIENT_ID, 'other'] }))))).toBe(
-      'ID_TOKEN_AZP',
-    );
     expect(
-      reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { aud: [CLIENT_ID, 'other'], azp: 'other' })))),
+      reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { aud: 'another-client' })))),
+    ).toBe('ID_TOKEN_AUDIENCE');
+    expect(
+      reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { aud: [CLIENT_ID, 'other'] })))),
     ).toBe('ID_TOKEN_AZP');
     expect(
-      reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { aud: [CLIENT_ID, 'other'], azp: CLIENT_ID })))),
+      reasonOf(
+        await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { aud: [CLIENT_ID, 'other'], azp: 'other' }))),
+      ),
+    ).toBe('ID_TOKEN_AZP');
+    expect(
+      reasonOf(
+        await roundTrip(h, 'bank-a', (n) =>
+          h.idp.mint(standardClaims(n, { aud: [CLIENT_ID, 'other'], azp: CLIENT_ID })),
+        ),
+      ),
     ).toBe('OK');
   });
 
   it('an expired token is refused beyond the bounded skew; one from the future is refused too', async () => {
     const h = await harness();
-    expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { exp: NOW - 61 }))))).toBe('ID_TOKEN_EXPIRED');
+    expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { exp: NOW - 61 }))))).toBe(
+      'ID_TOKEN_EXPIRED',
+    );
     expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { nbf: NOW + 120 }))))).toBe(
       'ID_TOKEN_NOT_YET_VALID',
     );
-    expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { iat: NOW + 120 }))))).toBe('ID_TOKEN_IAT');
+    expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { iat: NOW + 120 }))))).toBe(
+      'ID_TOKEN_IAT',
+    );
     // Issued long ago but claiming a long life: refused by age (too old counts as expired).
     expect(
-      reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { iat: NOW - 3_600, nbf: NOW - 3_600 })))),
+      reasonOf(
+        await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { iat: NOW - 3_600, nbf: NOW - 3_600 }))),
+      ),
     ).toBe('ID_TOKEN_EXPIRED');
   });
 
@@ -301,7 +327,9 @@ describe('staff OIDC: the ID token', () => {
   it('an HMAC-signed token is refused, even keyed with the client secret or the public key', async () => {
     const h = await harness();
     const hs = (n: string): Promise<string> =>
-      new SignJWT(standardClaims(n)).setProtectedHeader({ alg: 'HS256', kid: 'k1' }).sign(new TextEncoder().encode(SECRET.repeat(4)));
+      new SignJWT(standardClaims(n))
+        .setProtectedHeader({ alg: 'HS256', kid: 'k1' })
+        .sign(new TextEncoder().encode(SECRET.repeat(4)));
     expect(reasonOf(await roundTrip(h, 'bank-a', hs))).toBe('ID_TOKEN_ALG_REFUSED');
   });
 
@@ -309,10 +337,14 @@ describe('staff OIDC: the ID token', () => {
     const h = await harness();
     const before = h.idp.calls.get(JWKS) ?? 0;
     const kid = await h.idp.rotate(false);
-    expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n), { kid })))).toBe('ID_TOKEN_KEY_UNKNOWN');
+    expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n), { kid })))).toBe(
+      'ID_TOKEN_KEY_UNKNOWN',
+    );
     expect((h.idp.calls.get(JWKS) ?? 0) - before).toBe(2); // the first fetch, and exactly one refetch
     // A spray of unknown kids does not hammer the provider: no further refetch inside the interval.
-    expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n), { kid })))).toBe('ID_TOKEN_KEY_UNKNOWN');
+    expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n), { kid })))).toBe(
+      'ID_TOKEN_KEY_UNKNOWN',
+    );
     expect((h.idp.calls.get(JWKS) ?? 0) - before).toBe(2);
   });
 
@@ -334,16 +366,40 @@ describe('staff OIDC: the ID token', () => {
   });
 
   it('a discovery document for another issuer is refused, and every endpoint must be https', () => {
-    expect(parseDiscovery({ issuer: 'https://evil.example', authorization_endpoint: 'https://a', token_endpoint: 'https://t', jwks_uri: 'https://j' }, ISSUER)).toEqual({
+    expect(
+      parseDiscovery(
+        {
+          issuer: 'https://evil.example',
+          authorization_endpoint: 'https://a',
+          token_endpoint: 'https://t',
+          jwks_uri: 'https://j',
+        },
+        ISSUER,
+      ),
+    ).toEqual({
       ok: false,
       reason: 'DISCOVERY_ISSUER_MISMATCH',
     });
     expect(
-      parseDiscovery({ issuer: ISSUER, authorization_endpoint: 'https://a.example/x', token_endpoint: 'http://t.example/x', jwks_uri: 'https://j.example/x' }, ISSUER),
+      parseDiscovery(
+        {
+          issuer: ISSUER,
+          authorization_endpoint: 'https://a.example/x',
+          token_endpoint: 'http://t.example/x',
+          jwks_uri: 'https://j.example/x',
+        },
+        ISSUER,
+      ),
     ).toEqual({ ok: false, reason: 'ENDPOINT_NOT_HTTPS' });
     expect(
       parseDiscovery(
-        { issuer: ISSUER, authorization_endpoint: 'https://a.example/x', token_endpoint: 'https://t.example/x', jwks_uri: 'https://j.example/x', code_challenge_methods_supported: ['plain'] },
+        {
+          issuer: ISSUER,
+          authorization_endpoint: 'https://a.example/x',
+          token_endpoint: 'https://t.example/x',
+          jwks_uri: 'https://j.example/x',
+          code_challenge_methods_supported: ['plain'],
+        },
         ISSUER,
       ),
     ).toEqual({ ok: false, reason: 'DISCOVERY_UNSUPPORTED' });
@@ -370,14 +426,18 @@ describe('staff OIDC: the ID token', () => {
 describe('staff OIDC: tenant and authority', () => {
   it('a person who holds only tenant A’s groups, signing in having chosen tenant B, is refused (shared issuer and client)', async () => {
     const h = await harness();
-    const o = await roundTrip(h, 'fintech-b', (n) => h.idp.mint(standardClaims(n, { roles: ['sanad.bank-a.checkers'] })));
+    const o = await roundTrip(h, 'fintech-b', (n) =>
+      h.idp.mint(standardClaims(n, { roles: ['sanad.bank-a.checkers'] })),
+    );
     expect(reasonOf(o)).toBe('NO_AUTHORITY');
   });
 
   it('the tenant is the one sealed before the redirect: a tenant named in the callback is never read', async () => {
     const h = await harness();
     const b = await begin(h, 'bank-a');
-    h.idp.respondWith((n) => h.idp.mint(standardClaims(n, { roles: ['sanad.bank-a.checkers', 'sanad.fintech-b.platform-admins'] })));
+    h.idp.respondWith((n) =>
+      h.idp.mint(standardClaims(n, { roles: ['sanad.bank-a.checkers', 'sanad.fintech-b.platform-admins'] })),
+    );
     const o = await complete(h, {
       query: callback(b.state, { tenant: 'fintech-b', tenantId: 'fintech-b', institution: 'fintech-b' }),
       stateCookie: b.stateCookie,
@@ -394,22 +454,30 @@ describe('staff OIDC: tenant and authority', () => {
     const a = await begin(h, 'bank-a');
     const bFlow = await begin(h, 'fintech-b');
     h.idp.respondWith((n) => h.idp.mint(standardClaims(n)));
-    expect(reasonOf(await complete(h, { query: callback(a.state), stateCookie: bFlow.stateCookie }))).toBe('STATE_MISMATCH');
+    expect(reasonOf(await complete(h, { query: callback(a.state), stateCookie: bFlow.stateCookie }))).toBe(
+      'STATE_MISMATCH',
+    );
   });
 
   it('groups that map to nothing, a missing groups claim, or a malformed one sign nobody in', async () => {
     const h = await harness();
-    expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { roles: ['Everyone', 'sanad-makers'] }))))).toBe(
-      'NO_AUTHORITY',
-    );
+    expect(
+      reasonOf(
+        await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { roles: ['Everyone', 'sanad-makers'] }))),
+      ),
+    ).toBe('NO_AUTHORITY');
     const { roles: _r, ...noRoles } = standardClaims('x');
     expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint({ ...noRoles, nonce: n })))).toBe('NO_AUTHORITY');
-    expect(reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { roles: { MAKER: true } }))))).toBe(
-      'NO_AUTHORITY',
-    );
+    expect(
+      reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint(standardClaims(n, { roles: { MAKER: true } })))),
+    ).toBe('NO_AUTHORITY');
     // The groups claim is the configured one (`roles`); `groups` grants nothing.
     expect(
-      reasonOf(await roundTrip(h, 'bank-a', (n) => h.idp.mint({ ...standardClaims(n, { groups: ['sanad.bank-a.makers'] }), roles: [] }))),
+      reasonOf(
+        await roundTrip(h, 'bank-a', (n) =>
+          h.idp.mint({ ...standardClaims(n, { groups: ['sanad.bank-a.makers'] }), roles: [] }),
+        ),
+      ),
     ).toBe('NO_AUTHORITY');
   });
 
@@ -430,11 +498,28 @@ describe('staff OIDC: tenant and authority', () => {
     const b = await begin(h, 'bank-a', { stepUp: true });
     expect(new URL(b.location).searchParams.get('prompt')).toBe('login');
     h.idp.respondWith((n) => h.idp.mint(standardClaims(n, { auth_time: NOW - 3_000 })));
-    expect(reasonOf(await complete(h, { query: callback(b.state), stateCookie: b.stateCookie }))).toBe('STEP_UP_NOT_FRESH');
+    expect(reasonOf(await complete(h, { query: callback(b.state), stateCookie: b.stateCookie }))).toBe(
+      'STEP_UP_NOT_FRESH',
+    );
     const b2 = await begin(h, 'bank-a', { stepUp: true });
     h.idp.respondWith((n) => h.idp.mint(standardClaims(n, { auth_time: NOW - 10 })));
     const ok = await complete(h, { query: callback(b2.state), stateCookie: b2.stateCookie });
     expect(ok.ok && ok.staff.authenticatedAtEpochSeconds).toBe(T - 10n);
+  });
+
+  it('SR-044: a step-up asks for auth_time, and a token without it is refused however recent its iat', async () => {
+    const h = await harness();
+    const b = await begin(h, 'bank-a', { stepUp: true });
+    expect(new URL(b.location).searchParams.get('max_age')).toBe('0');
+    h.idp.respondWith((n) => h.idp.mint(standardClaims(n)));
+    expect(reasonOf(await complete(h, { query: callback(b.state), stateCookie: b.stateCookie }))).toBe(
+      'STEP_UP_NOT_FRESH',
+    );
+    // An ordinary sign-in neither asks for it nor needs it.
+    const plain = await begin(h, 'bank-a');
+    expect(new URL(plain.location).searchParams.has('max_age')).toBe(false);
+    h.idp.respondWith((n) => h.idp.mint(standardClaims(n)));
+    expect((await complete(h, { query: callback(plain.state), stateCookie: plain.stateCookie })).ok).toBe(true);
   });
 });
 
@@ -457,7 +542,10 @@ describe('staff OIDC: configuration and secrets', () => {
     expect(await without(noSecret)).toEqual({ ok: false, reason: 'NOT_CONFIGURED' });
     const { OPS_PUBLIC_ORIGIN: _o, ...noOrigin } = ENV;
     expect(await without(noOrigin)).toEqual({ ok: false, reason: 'NOT_CONFIGURED' });
-    expect(await without({ ...ENV, OPS_PUBLIC_ORIGIN: 'http://ops.sanad.test' })).toEqual({ ok: false, reason: 'NOT_CONFIGURED' });
+    expect(await without({ ...ENV, OPS_PUBLIC_ORIGIN: 'http://ops.sanad.test' })).toEqual({
+      ok: false,
+      reason: 'NOT_CONFIGURED',
+    });
     // Admin uses its own secret: the workbench's does not serve it.
     const admin = await beginStaffSignIn({
       app: 'ADMIN',
@@ -488,14 +576,24 @@ describe('staff OIDC: configuration and secrets', () => {
     expect(publicOrigin('OPS', { OPS_PUBLIC_ORIGIN: 'https://ops.example/' })).toBe('https://ops.example');
     expect(publicOrigin('OPS', { OPS_PUBLIC_ORIGIN: 'https://ops.example/app' })).toBeUndefined();
     expect(publicOrigin('OPS', { OPS_PUBLIC_ORIGIN: 'https://u:p@ops.example' })).toBeUndefined();
-    expect(publicOrigin('OPS', { OPS_PUBLIC_ORIGIN: 'http://localhost:3001', NODE_ENV: 'development' })).toBe('http://localhost:3001');
-    expect(redirectUriFor('ADMIN', { ADMIN_PUBLIC_ORIGIN: 'https://admin.example' })).toBe('https://admin.example/sign-in/callback');
+    expect(publicOrigin('OPS', { OPS_PUBLIC_ORIGIN: 'http://localhost:3001', NODE_ENV: 'development' })).toBe(
+      'http://localhost:3001',
+    );
+    expect(redirectUriFor('ADMIN', { ADMIN_PUBLIC_ORIGIN: 'https://admin.example' })).toBe(
+      'https://admin.example/sign-in/callback',
+    );
     expect(clientSecretVariable('sme-fund-ae', 'ADMIN')).toBe('OIDC_CLIENT_SECRET_SME_FUND_AE_ADMIN');
   });
 
   it('RP-initiated logout goes to the provider’s end-session endpoint with a registered return', async () => {
     const h = await harness();
-    const url = await providerSignOutUrl({ app: 'OPS', locale: 'en', identity: IDENTITIES['bank-a']!, env: ENV, client: h.client });
+    const url = await providerSignOutUrl({
+      app: 'OPS',
+      locale: 'en',
+      identity: IDENTITIES['bank-a']!,
+      env: ENV,
+      client: h.client,
+    });
     expect(url).toBeDefined();
     const u = new URL(url ?? '');
     expect(`${u.origin}${u.pathname}`).toBe(END_SESSION);
@@ -524,7 +622,9 @@ describe('staff OIDC: the small pieces', () => {
     expect(displayNameFrom({})).toBeUndefined();
   });
   it('PKCE S256 matches RFC 7636 appendix B', () => {
-    expect(pkceChallenge('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk')).toBe('E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM');
+    expect(pkceChallenge('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk')).toBe(
+      'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
+    );
   });
   it('the continue page carries no script and only a same-site path', () => {
     const html = continuePage('/en"><script>x</script>', 'en');

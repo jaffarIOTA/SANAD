@@ -10,7 +10,9 @@
 
 import { cookies } from 'next/headers';
 
+import { spentTokens } from './spent-tokens.ts';
 import {
+  SESSION_LIFETIME_SECONDS,
   type ConsumerSession,
   type SessionKey,
   deriveSessionKey,
@@ -54,7 +56,9 @@ export async function currentSession(): Promise<ConsumerSession | undefined> {
   const raw = jar.get(COOKIE)?.value;
   if (raw === undefined) return undefined;
   const opened = openSession(raw, sessionKey(), now());
-  return opened.kind === 'VALID' ? opened.session : undefined;
+  if (opened.kind !== 'VALID') return undefined;
+  // Signed out: a copy of the cookie is no session (SR-030).
+  return (await spentTokens().isSpent('CONSUMER_SESSION', raw)) ? undefined : opened.session;
 }
 
 /** Called by the identity step only, with the rail's confirmed assertion. */
@@ -79,5 +83,9 @@ export async function startSession(p: {
 
 export async function clearSession(): Promise<void> {
   const jar = await cookies();
+  const raw = jar.get(COOKIE)?.value;
+  // Spent until it could no longer open anyway: no session outlives issue plus its lifetime.
+  if (raw !== undefined && raw.length <= 4096)
+    await spentTokens().spend('CONSUMER_SESSION', raw, now() + SESSION_LIFETIME_SECONDS);
   jar.delete(COOKIE);
 }

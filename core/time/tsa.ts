@@ -49,11 +49,37 @@ export interface VerifiedTimestamp {
 export interface TimestampAuthorityPort {
   /** Stamp a document digest and return the verified attestation. */
   stamp(messageDigest: string): Promise<VerifiedTimestamp>;
-  /** Re-verify a retained token, for audit replay. */
-  verify(token: Uint8Array): Promise<VerifiedTimestamp>;
+  /**
+   * Re-verify a retained token for audit replay: its signature and certificate chain, and that its message
+   * imprint is `messageDigest`. Undefined when any of those fails; the reason stays in the adapter (SR-008).
+   */
+  verify(token: Uint8Array, messageDigest: string): Promise<VerifiedTimestamp | undefined>;
 }
 
-/** The single constructor. Takes an attestation, never a clock. */
+/**
+ * An instant attested earlier, restored from where it was stored: the three fields it was recorded with,
+ * nothing invented. A record without its evidence is refused rather than restored as if attested (SR-006).
+ */
+export function restoreAttestedInstant(stored: {
+  readonly epochSeconds: bigint;
+  readonly tokenDigest: string;
+  readonly authorityId: string;
+}): TsaInstant {
+  if (stored.tokenDigest.length === 0 || stored.authorityId.length === 0)
+    throw new Error('an attested instant cannot be restored without its token digest and authority');
+  return tsaInstant({
+    verified: true,
+    genTimeEpochSeconds: stored.epochSeconds,
+    tokenDigest: stored.tokenDigest,
+    authorityId: stored.authorityId,
+  });
+}
+
+/**
+ * The constructor from an attestation, never a clock. Only the timestamping adapter, the host-clock
+ * source (`services/origination/src/host-clock.ts`) and `restoreAttestedInstant` call it; an
+ * architecture test keeps it that way (SR-006).
+ */
 export function tsaInstant(v: VerifiedTimestamp): TsaInstant {
   return {
     epochSeconds: v.genTimeEpochSeconds,

@@ -19,7 +19,6 @@ import { redirect } from 'next/navigation';
 
 import type { ServicingOutcome } from '@sanad/core/origination/request.ts';
 import type { OriginationChannel } from '@sanad/core/origination/channel.ts';
-import { tsaInstant } from '@sanad/core/time/tsa.ts';
 
 import { licenceRefusalText } from '@sanad/core/licensing/explain.ts';
 import { newBusinessPermitted } from '@sanad/origination/licensing.ts';
@@ -27,9 +26,9 @@ import { newBusinessPermitted } from '@sanad/origination/licensing.ts';
 import { authorise, localeSegmentOf } from './session.ts';
 import { requestPrincipal } from './staff.ts';
 import { findClearedInvoice, unavailableReason } from './invoices.ts';
-import { tsaInstant as attest } from '@sanad/core/time/tsa.ts';
 import {
   applyServicingOutcome,
+  developmentAttestation,
   attachDocument,
   discardDraft,
   expireOverdue,
@@ -92,12 +91,7 @@ export async function servicingRespondAction(form: FormData): Promise<void> {
     decision,
     reference: `svc_${requestId}`,
     ...(reasonCode === '' ? {} : { reasonCode }),
-    respondedAt: tsaInstant({
-      verified: true,
-      genTimeEpochSeconds: BigInt(Math.floor(Date.now() / 1000)),
-      tokenDigest: 'development-substitute',
-      authorityId: 'development',
-    }),
+    respondedAt: developmentAttestation(),
   };
 
   const result = applyServicingOutcome(requestId, outcome);
@@ -306,14 +300,7 @@ export async function submitDraftAction(form: FormData): Promise<void> {
 export async function expireOverdueAction(form: FormData): Promise<void> {
   const locale = localeOf(form);
   await authorise(locale, 'REVIEW', `/${locale}/queue`);
-  const expired = expireOverdue(
-    attest({
-      verified: true,
-      genTimeEpochSeconds: BigInt(Math.floor(Date.now() / 1000)),
-      tokenDigest: 'development-substitute',
-      authorityId: 'development',
-    }),
-  );
+  const expired = expireOverdue(developmentAttestation());
   await settle(locale);
   redirect(`/${locale}/queue?show=${expired.length > 0 ? 'decided' : 'breached'}&expired=${String(expired.length)}`);
 }

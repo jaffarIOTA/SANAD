@@ -1,0 +1,47 @@
+# Secret scanning (SEC-D05, SR-023). The CI job runs the gitleaks CLI over every
+# ref (`--log-opts=--all`), not just the pushed range, with these rules on top
+# of gitleaks' defaults: the defaults do not know the key shapes of the services
+# Sanad uses, which is how SR-001 passed.
+
+title = "Sanad"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "upstash-redis-rest-token"
+description = "Upstash Redis REST token"
+regex = '''(?i)upstash[a-z_]*token[\s"'`]*[:=][\s"'`]*([A-Za-z0-9_=+/-]{32,})'''
+secretGroup = 1
+keywords = ["upstash"]
+
+[[rules]]
+id = "upstash-redis-rest-url"
+description = "Upstash Redis REST endpoint (names the database the token opens)"
+regex = '''https://[a-z0-9-]+\.upstash\.io'''
+keywords = ["upstash.io"]
+
+[[rules]]
+id = "supabase-secret-key"
+description = "Supabase secret API key"
+regex = '''\bsb_secret_[A-Za-z0-9_-]{20,}'''
+keywords = ["sb_secret_"]
+
+[[rules]]
+id = "supabase-access-token"
+description = "Supabase personal access token"
+regex = '''\bsbp_[a-f0-9]{40}\b'''
+keywords = ["sbp_"]
+
+[[rules]]
+id = "supabase-service-role-key"
+description = "Supabase service_role key (a JWT next to its name)"
+regex = '''(?i)service_role[a-z_]*[\s"'`]*[:=][\s"'`]*(eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})'''
+secretGroup = 1
+keywords = ["service_role"]
+
+# Named test tokens in test files only: values that announce themselves as test tokens.
+[[allowlists]]
+description = "Named test tokens in the test suites"
+paths = ['''^test/''']
+regexes = ['''test-tok(en)?-[a-z0-9-]+''']

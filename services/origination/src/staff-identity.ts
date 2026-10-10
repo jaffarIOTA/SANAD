@@ -15,12 +15,9 @@ import type { Result } from '../../../core/kernel/result.ts';
 
 import { databaseUrlFromEnvironment, sharedPool, tenantUuidByCode } from './credentials.ts';
 import { deploymentJurisdiction } from './jurisdiction.ts';
+import { deploymentProfile } from './profile.ts';
 
-export function deploymentProfile(env: Readonly<Record<string, string | undefined>> = process.env): DeploymentProfile {
-  return env['NODE_ENV'] === 'production' || env['SANAD_DEPLOYMENT_PROFILE'] === 'DEPLOYED'
-    ? 'DEPLOYED'
-    : 'DEVELOPMENT';
-}
+export { deploymentProfile };
 
 export interface ResolvedStaffIdentity {
   readonly identity: Result<StaffIdentityConfiguration>;

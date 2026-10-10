@@ -66,12 +66,19 @@ describe.skipIf(url === undefined)('configuration revisions in the database (SAN
   });
   it('wrote a chained audit event for the proposal and the decision', async () => {
     const rows = (
-      await pool.query<{ event_type: string; prev_hash: string | null; content_hash: string }>(
-        'select event_type, prev_hash, content_hash from audit.audit_event where subject_id = $1::uuid order by id',
+      await pool.query<{ event_type: string; tenant_id: string; prev_hash: string | null }>(
+        'select event_type, tenant_id::text, prev_hash from audit.audit_event where subject_id = $1::uuid order by id',
         [id],
       )
     ).rows;
     expect(rows.map((r) => r.event_type)).toEqual(['REVISION_PROPOSED', 'REVISION_APPROVED']);
-    expect(rows[1]?.prev_hash).toBe(rows[0]?.content_hash);
+    // Other acts of the same tenant may fall between the two; what matters is that both are links of
+    // one chain that verifies end to end (SR-011).
+    expect(rows[1]?.prev_hash).not.toBeNull();
+    const verified = await pool.query<{ first_broken_id: string | null }>(
+      'select first_broken_id from audit.verify_chain($1::uuid)',
+      [rows[0]?.tenant_id],
+    );
+    expect(verified.rows[0]?.first_broken_id).toBeNull();
   });
 });
