@@ -16,12 +16,14 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 
+import { isDevelopment, staffFormActionOrigins, withSecurityHeaders } from '@sanad/auth/next-security.ts';
 import { CALLBACK_PATH, SIGNED_OUT_PATH } from '@sanad/auth/staff-oidc.ts';
 
 import { STAFF_SESSION_COOKIE, epochNow, openStaffSession } from './server/staff-session.ts';
 
+// Everything but Next's build assets, so API responses carry the security headers too; the front door passes /api.
 export const config = {
-  matcher: ['/((?!api/|api$|_next/|favicon\\.ico$).*)'],
+  matcher: ['/((?!_next/static/|_next/image|favicon\\.ico$).*)'],
   runtime: 'nodejs',
 };
 
@@ -56,10 +58,15 @@ export function frontDoor(pathname: string, cookieValue: string | undefined, now
   };
 }
 
+/** Every response carries the security headers (SR-027); a staff sign-in form may lead to the identity provider. */
+const SECURITY = { formActionOrigins: staffFormActionOrigins(), development: isDevelopment() } as const;
+
 export function middleware(request: NextRequest): NextResponse {
-  const decision = frontDoor(request.nextUrl.pathname, request.cookies.get(STAFF_SESSION_COOKIE)?.value, epochNow());
-  if (decision.kind === 'PASS') return NextResponse.next();
-  const response = NextResponse.redirect(new URL(decision.location, request.url), 303);
-  if (decision.clearCookie) response.cookies.delete(STAFF_SESSION_COOKIE);
-  return response;
+  return withSecurityHeaders(request, SECURITY, (pass) => {
+    const decision = frontDoor(request.nextUrl.pathname, request.cookies.get(STAFF_SESSION_COOKIE)?.value, epochNow());
+    if (decision.kind === 'PASS') return pass();
+    const response = NextResponse.redirect(new URL(decision.location, request.url), 303);
+    if (decision.clearCookie) response.cookies.delete(STAFF_SESSION_COOKIE);
+    return response;
+  });
 }

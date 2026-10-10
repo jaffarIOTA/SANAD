@@ -70,6 +70,14 @@ unset pw
 Then restart each app's revision so it reads the new version. Migrations keep running as the
 owner (`npm run db:push`). Admin shares this login today; a separate Admin login is SR-046.
 
+## Content-Security-Policy and a new identity provider
+
+Every app sends a strict Content-Security-Policy (`packages/auth/security-headers.ts`). Its
+`form-action` allows this origin and each tenant's staff identity provider from the checked-in
+configuration, because the browser applies it to the sign-in redirect. A provider approved later
+as an Admin configuration revision must also be listed in `SANAD_CSP_FORM_ACTION_ORIGINS`
+(comma-separated origins) on the ops and admin apps, or its sign-in is blocked by the browser.
+
 ## Changing the infrastructure
 
 ```sh
