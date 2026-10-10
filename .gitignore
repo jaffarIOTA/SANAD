@@ -54,3 +54,6 @@ adapters/*/verification/findings/
 
 # Claude Code agent worktrees (temporary checkouts, never committed)
 .claude/worktrees/
+
+# scripts/gitleaks-selftest.sh scratch repository
+.gitleaks-selftest/

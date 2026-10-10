@@ -49,8 +49,19 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with: { fetch-depth: 0 }                  # a secret removed later is still leaked
-      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
-        env: { GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+      # The CLI over every ref, not the action's pushed range (SR-023), with Sanad's rules (.gitleaks.toml)
+      # and only registered findings ignored (.gitleaksignore).
+      - name: The scan catches a token removed in a later commit
+        run: scripts/gitleaks-selftest.sh docker run --rm $GIT_SAFE -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE"
+      - name: Scan the full history of every ref
+        run: |
+          git fetch --no-tags --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          docker run --rm $GIT_SAFE -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" git --log-opts=--all \
+            --config /repo/.gitleaks.toml --gitleaks-ignore-path /repo/.gitleaksignore --redact --no-banner -v /repo
+    env:
+      GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.28.0@sha256:cdbb7c955abce02001a9f6c9f602fb195b7fadc1e812065883f695d1eeaba854
+      # The container runs as root over the runner's checkout; git would refuse it as of dubious ownership.
+      GIT_SAFE: -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=*
 
   dependencies:                                   # SEC-D06
     name: SCA — dependencies
