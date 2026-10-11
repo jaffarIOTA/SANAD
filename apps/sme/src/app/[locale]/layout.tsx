@@ -11,7 +11,7 @@
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 
-import { BrandMark, LanguageSwitch } from '@sanad/design/primitives.tsx';
+import { BrandName, LanguageSwitch } from '@sanad/design/primitives.tsx';
 import {
   LOCALE_SEGMENTS,
   STRINGS,
@@ -52,8 +52,10 @@ export default async function LocaleLayout({
       <body className="min-h-dvh bg-page text-ink antialiased">
         <header className="border-b border-line bg-surface">
           <div className="mx-auto flex max-w-screen-sm items-center gap-3 px-4 py-3">
-            <BrandMark size={28} />
-            <span className="text-lg font-semibold">{t.appName}</span>
+            <BrandName />
+            <span className="rounded-pill bg-brand-wash px-2.5 py-1 text-xs font-semibold text-brand-deep">
+              {t.appName}
+            </span>
             <div className="ms-auto">
               <LanguageSwitch current={segment as LocaleSegment} />
             </div>

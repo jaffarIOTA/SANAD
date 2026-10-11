@@ -80,7 +80,7 @@ export function SideNav({
   return (
     <nav
       aria-label={arabic ? 'مناطق الإدارة' : 'Administration areas'}
-      className="hidden w-[250px] shrink-0 border-e border-line bg-surface pt-6 lg:block"
+      className="hidden w-[248px] shrink-0 border-e border-line bg-surface pt-4 lg:block"
     >
       <h2 className="ps-[30px] pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
         {arabic ? 'الإعدادات' : 'Configuration'}

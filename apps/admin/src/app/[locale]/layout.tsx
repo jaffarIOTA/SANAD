@@ -7,7 +7,7 @@
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 
-import { BrandMark, LanguageSwitch } from '@sanad/design/primitives.tsx';
+import { BrandName, LanguageSwitch } from '@sanad/design/primitives.tsx';
 import { LicenceBanner } from '@sanad/design/LicenceBanner.tsx';
 import { licenceBanner } from '@sanad/core/licensing/explain.ts';
 import { currentLicence } from '@sanad/origination/licensing.ts';
@@ -46,24 +46,21 @@ export default async function AdminLayout({
     <html lang={htmlLang(locale)} dir={isRtl(locale) ? 'rtl' : 'ltr'}>
       <body className="min-h-dvh bg-page text-ink antialiased">
         <header className="sticky top-0 z-10 border-b border-line bg-surface">
-          <div className="flex h-[70px] items-center gap-4 px-4 lg:h-[100px] lg:px-0">
-            <a href={`/${segment}`} className="flex w-auto items-center gap-3 lg:w-[250px] lg:ps-[38px]">
-              <BrandMark size={36} />
-              <span className="text-[25px] font-black tracking-tight text-heading">
-                Sanad<span className="text-brand">.</span>
-              </span>
+          <div className="flex h-16 items-center gap-4 px-4 lg:px-0">
+            <a href={`/${segment}`} className="flex w-auto items-center gap-2.5 lg:w-[248px] lg:ps-6">
+              <BrandName />
             </a>
-            <h1 className="hidden text-h1 font-semibold text-heading lg:block lg:ps-10">
+            <h1 className="hidden text-[14px] font-medium text-ink-quiet lg:block lg:ps-8">
               {arabic ? 'الإدارة' : 'Administration'}
             </h1>
-            <div className="ms-auto flex items-center gap-3 lg:gap-[30px] lg:pe-10">
+            <div className="ms-auto flex items-center gap-2 lg:gap-3 lg:pe-8">
               <LanguageSwitch current={segment as LocaleSegment} />
               {admin !== undefined ? (
                 <form action={signOutAction} className="flex items-center gap-3">
                   <input type="hidden" name="locale" value={segment} />
                   <span
                     aria-hidden
-                    className="inline-flex size-[44px] items-center justify-center rounded-full bg-brand-wash text-xs font-bold text-brand lg:size-[60px]"
+                    className="inline-flex size-9 items-center justify-center rounded-full bg-brand-wash text-xs font-bold text-brand"
                   >
                     ADM
                   </span>
@@ -102,7 +99,7 @@ export default async function AdminLayout({
           </div>
         </header>
         <LicenceBanner banner={banner} arabic={arabic} href={`/${segment}/licence`} />
-        <div className="flex min-h-[calc(100dvh-100px)]">
+        <div className="flex min-h-[calc(100dvh-4rem)]">
           <SideNav segment={segment} arabic={arabic} signedIn={admin !== undefined} />
           <main className="min-w-0 flex-1 overflow-x-clip px-4 pb-10 pt-6 lg:px-10">{children}</main>
         </div>
