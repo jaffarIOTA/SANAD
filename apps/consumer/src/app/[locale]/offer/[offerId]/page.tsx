@@ -33,15 +33,16 @@ export default async function OfferPage({
   if (acceptanceFor(offerId) !== undefined) redirect(`/${segment}/offer/${offerId}/accepted`);
 
   return (
-    <div className="flex flex-col gap-5">
-      <div>
+    <div className="flex flex-col gap-8">
+      <header className="flex flex-col gap-2">
+        <p className="text-sm font-medium text-brand-strong">{arabic ? 'الخطوة ٢ من ٢' : 'Step 2 of 2'}</p>
         <h1 className="text-h1 font-semibold text-heading">{arabic ? 'عرضك' : 'Your offer'}</h1>
-        <p className="mt-2 text-[15px] text-ink-quiet">
+        <p className="text-lede text-ink-quiet">
           {arabic
-            ? 'هذا ما ستدفعه، بالضبط. لا شيء يُضاف لاحقاً.'
-            : 'This is what you will pay, exactly. Nothing is added later.'}
+            ? 'راجع الأرقام أدناه. العرض محجوز لك سبعة أيام.'
+            : 'Check the figures below. We hold this offer for seven days.'}
         </p>
-      </div>
+      </header>
       {refused !== undefined ? (
         <ControlRejection
           control={control ?? 'OP-DETERMINACY'}
@@ -51,37 +52,57 @@ export default async function OfferPage({
       ) : null}
       <Disclosure offer={stored.offer} locale={locale} />
       <Card>
-        <p className="text-sm text-ink-quiet">{arabic ? 'تاريخ الاستحقاق الأخير' : 'Final due date'}</p>
-        <div className="mt-1 text-base text-ink">
-          <DualDate gregorian={stored.maturityDateGregorian} hijri={stored.maturityDateHijri} locale={locale} />
-        </div>
-        <p className="mt-2 text-xs text-ink-quiet">
-          <span className="identifier">{stored.productCode}</span> ·{' '}
-          {arabic ? 'صالح لسبعة أيام' : 'valid for seven days'}
-        </p>
+        <dl className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <dt className="text-sm text-ink-quiet">{arabic ? 'آخر قسط مستحق في' : 'Final payment due'}</dt>
+            <dd>
+              <DualDate gregorian={stored.maturityDateGregorian} hijri={stored.maturityDateHijri} locale={locale} />
+            </dd>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <dt className="text-sm text-ink-quiet">{arabic ? 'المنتج' : 'Product'}</dt>
+            <dd className="identifier text-sm text-ink">{stored.productCode}</dd>
+          </div>
+        </dl>
       </Card>
       <Card>
-        <form action={acceptAction} className="flex flex-col gap-4">
+        <form action={acceptAction} className="flex flex-col gap-5">
           <input type="hidden" name="locale" value={segment} />
           <input type="hidden" name="offerId" value={offerId} />
           <input type="hidden" name="disclosureVersion" value={stored.offer.disclosureVersion} />
-          <label className="flex items-start gap-3 text-sm text-ink">
-            <input type="checkbox" name="confirm" value="yes" className="mt-1 size-5 accent-brand" />
+          <label className="flex cursor-pointer items-start gap-3 text-base text-ink">
+            <input
+              type="checkbox"
+              name="confirm"
+              value="yes"
+              required
+              className="mt-0.5 size-5 shrink-0 accent-brand"
+            />
             <span>
               {arabic
                 ? 'قرأت الإفصاح أعلاه وأفهم إجمالي المبلغ المستحق ومعدل النسبة السنوي.'
                 : 'I have read the disclosure above and understand the total amount payable and the APR.'}
             </span>
           </label>
-          <button
-            type="submit"
-            className="press inline-flex min-h-tap items-center justify-center rounded-pill bg-brand px-6 text-base font-semibold text-white hover:bg-brand-deep"
-          >
-            {arabic ? 'أقبل العرض' : 'Accept the offer'}
-          </button>
-          <a href={`/${segment}/apply`} className="text-center text-sm text-brand">
-            {arabic ? 'تغيير المبلغ أو المدة' : 'Change the amount or term'}
-          </a>
+          <div className="flex flex-col gap-3">
+            <button
+              type="submit"
+              className="press inline-flex h-14 w-full items-center justify-center rounded-pill bg-brand px-6 text-base font-semibold text-white hover:bg-brand-deep"
+            >
+              {arabic ? 'أقبل العرض' : 'Accept offer'}
+            </button>
+            <a
+              href={`/${segment}/apply`}
+              className="press inline-flex h-12 w-full items-center justify-center rounded-pill border border-line-strong px-6 text-base font-medium text-brand-strong hover:bg-brand-wash"
+            >
+              {arabic ? 'تغيير المبلغ أو المدة' : 'Change amount or term'}
+            </a>
+          </div>
+          <p className="text-center text-sm text-ink-quiet">
+            {arabic
+              ? 'نحتفظ بسجل للإفصاح الذي عُرض عليك بالضبط.'
+              : 'We keep a record of exactly the disclosure you were shown.'}
+          </p>
         </form>
       </Card>
     </div>
