@@ -191,6 +191,16 @@ html[lang='en'] body {
   unicode-bidi: isolate;
 }
 
+/*
+ * The accept button reads as inactive until the acknowledgement is ticked.
+ * It stays clickable: a click before ticking gets the browser's own "tick this
+ * box" message on the `required` checkbox, which says why, where a dead button
+ * would not. Pure CSS, so it holds without client JavaScript.
+ */
+.accept-bar:not(:has(input[name='confirm']:checked)) .accept-submit {
+  opacity: 0.45;
+}
+
 /* Visible focus that follows reading direction, in both themes. */
 :where(a, button, [role='button'], input, select, textarea):focus-visible {
   outline: 2px solid var(--color-brand-strong);

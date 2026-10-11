@@ -7,15 +7,17 @@
  * the page on the kit's pale neutral field. Below the desktop breakpoint the
  * sidebar becomes a bottom bar and the search drops under the header.
  *
- * Fonts are self-hosted by Next.js at build time, so a staff browser never
- * calls a font CDN at run time.
+ * Fonts are files in this repository (`../fonts`, SIL OFL 1.1), so neither a
+ * staff browser at run time nor the build calls a font CDN. Fetching them from
+ * Google at build time failed the 2026-10-11 release twice on the CI runner,
+ * and a build that needs the internet cannot run in an isolated environment.
  *
  * Composed in logical properties: Arabic is the design default and English
  * is the mirror. The Figma frames are LTR; this is their RTL composition.
  */
 
 import type { ReactNode } from 'react';
-import { DM_Sans, Noto_Kufi_Arabic } from 'next/font/google';
+import localFont from 'next/font/local';
 import { notFound } from 'next/navigation';
 
 import { BrandMark, LanguageSwitch } from '@sanad/design/primitives.tsx';
@@ -43,15 +45,16 @@ export const metadata = { title: 'Sanad — Operations', description: 'Originati
  */
 export const dynamic = 'force-dynamic';
 
-const dmSans = DM_Sans({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
+// Variable fonts: one file spans every weight the workbench uses.
+const dmSans = localFont({
+  src: '../fonts/dm-sans-latin.woff2',
+  weight: '300 700',
   variable: '--font-dm-sans',
   display: 'swap',
 });
-const notoKufi = Noto_Kufi_Arabic({
-  subsets: ['arabic'],
-  weight: ['400', '500', '600', '700'],
+const notoKufi = localFont({
+  src: '../fonts/noto-kufi-arabic.woff2',
+  weight: '400 700',
   variable: '--font-noto-kufi',
   display: 'swap',
 });
