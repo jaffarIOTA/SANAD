@@ -64,7 +64,12 @@ import {
   toBusinessFacts,
   verifyFigure as verifyFigureCore,
 } from '@sanad/core/applicant/financials.ts';
-import { type SmeAssessment, type SmeAssessmentFacts, assessSme } from '@sanad/core/decisioning/sme-assessment.ts';
+import {
+  type SmeAssessment,
+  type SmeAssessmentFacts,
+  assessSme,
+  committeeApprovalsRequired,
+} from '@sanad/core/decisioning/sme-assessment.ts';
 import {
   type DocumentChecklist,
   type ItemReport,
@@ -91,6 +96,7 @@ import {
   type BusinessApplicant,
   type BusinessApplication,
   type BusinessStage,
+  type CommitteeApproval,
   type OfferDatePolicy,
   type StageEvent,
   type Transition,
@@ -101,6 +107,7 @@ import {
   defaultApprovedTerms,
   receiveHandover,
   recordAssessment,
+  recordCreditNotes as recordCreditNotesCore,
   recordDisbursed as recordDisbursedCore,
   recordOfferSent,
   recordSigned as recordSignedCore,
@@ -2322,6 +2329,17 @@ export interface CommitteeApprovalDefaults {
   readonly amount: Money;
   readonly tenorMonths: number;
   readonly limits: ApprovalLimits;
+  /** The tenant's delegation of authority for these terms: how many different members must approve. */
+  readonly approvalsRequired: number;
+  /** Approvals already recorded; when there are any, the terms above are theirs and a further approval concurs. */
+  readonly approvals: readonly CommitteeApproval[];
+}
+
+/** How many approvals the tenant's delegation of authority needs for `amount` in `riskLevel`; a policy that does not load is the policy's refusal. */
+function approvalsRequiredFor(tenant: TenantCode, amount: Money, riskLevel: string): Result<number> {
+  const policy = loadSmeAssessmentPolicy(tenant);
+  if (!policy.ok) return policy;
+  return ok(committeeApprovalsRequired(policy.value.delegationOfAuthority, amount, riskLevel));
 }
 
 /**
@@ -2339,7 +2357,15 @@ export async function committeeApprovalDefaults(
   if (r === undefined || r.application.status !== 'IN_COMMITTEE') return undefined;
   const limits = await approvalLimitsFor(tenant, r, developmentAttestation());
   if (!limits.ok || limits.value === undefined) return undefined;
-  return { ...defaultApprovedTerms(r.application, limits.value), limits: limits.value };
+  const approvals = r.application.committeeApprovals ?? [];
+  const first = approvals[0];
+  const terms =
+    first === undefined
+      ? defaultApprovedTerms(r.application, limits.value)
+      : { amount: first.amount, tenorMonths: first.tenorMonths };
+  const required = approvalsRequiredFor(tenant, terms.amount, limits.value.riskLevel);
+  if (!required.ok) return undefined;
+  return { ...terms, limits: limits.value, approvalsRequired: required.value, approvals };
 }
 
 async function decideAt(
@@ -2355,12 +2381,23 @@ async function decideAt(
   if (r === undefined) return notFound(applicationId);
   // A decline needs no limits; an approval is checked against them (in the domain, after four eyes and the reason).
   let limits: ApprovalLimits | undefined;
+  let approvalsRequired: number | undefined;
+  const currency = ctx.value.currency;
   if (decision.approved && r.application.status === 'IN_COMMITTEE') {
     const found = await approvalLimitsFor(tenant, r, at);
     if (!found.ok) return found;
     limits = found.value;
+    if (limits !== undefined) {
+      // The quorum for the amount being approved: the member's figure, else the default the domain will take.
+      const amount =
+        decision.approvedAmountMinorUnits === undefined
+          ? defaultApprovedTerms(r.application, limits).amount
+          : money(decision.approvedAmountMinorUnits, currency);
+      const required = approvalsRequiredFor(tenant, amount, limits.riskLevel);
+      if (!required.ok) return required;
+      approvalsRequired = required.value;
+    }
   }
-  const currency = ctx.value.currency;
   const t = decideInCommitteeCore(
     r.application,
     {
@@ -2375,11 +2412,45 @@ async function decideAt(
       },
     },
     at.epochSeconds,
-    { tenantCurrency: currency, ...(limits === undefined ? {} : { limits }) },
+    {
+      tenantCurrency: currency,
+      ...(limits === undefined ? {} : { limits }),
+      ...(approvalsRequired === undefined ? {} : { approvalsRequired }),
+    },
   );
   if (!t.ok) return t;
   apply(book, r, t.value);
   return ok(view(r, currency));
+}
+
+async function recordCreditNotesAt(
+  tenant: TenantCode,
+  applicationId: string,
+  recordedBy: string,
+  text: string,
+  at: TsaInstant,
+): Promise<Result<BusinessApplicationView>> {
+  const book = await hydrate(tenant);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  const t = recordCreditNotesCore(r.application, { recordedBy, text }, at.epochSeconds);
+  if (!t.ok) return t;
+  apply(book, r, t.value);
+  return ok(view(r, ctx.value.currency));
+}
+
+/** The analyst's credit report notes for the committee; each version is kept in the event log. */
+export async function recordCreditNotes(
+  tenant: TenantCode,
+  applicationId: string,
+  recordedBy: string,
+  text: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    recordCreditNotesAt(tenant, applicationId, recordedBy, text, developmentAttestation()),
+  );
 }
 
 /**
