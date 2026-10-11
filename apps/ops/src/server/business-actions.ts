@@ -39,6 +39,7 @@ import type { WorkbenchAct } from './authority.ts';
 import {
   approveStraightThrough,
   decideInCommittee,
+  recordCreditNotes,
   generateOffer,
   mutateBusiness,
   presentDocument,
@@ -92,7 +93,11 @@ async function contextOf(form: FormData, act: WorkbenchAct): Promise<Context> {
  * (STALE_APPLICATION, PERSISTENCE_FAILED: nothing was written) — goes back
  * with its codes only; the domain's detail stays on the server.
  */
-async function finish(ctx: Context, change: () => Promise<Result<unknown>>, notice: string): Promise<never> {
+async function finish<T>(
+  ctx: Context,
+  change: () => Promise<Result<T>>,
+  notice: string | ((value: T) => string),
+): Promise<never> {
   const result = await mutateBusiness(ctx.tenant, change);
   revalidatePath(`/${ctx.locale}/business`);
   if (ctx.applicationId !== '') revalidatePath(ctx.path);
@@ -103,7 +108,8 @@ async function finish(ctx: Context, change: () => Promise<Result<unknown>>, noti
       result.error.control === 'OP-LICENCE' && typeof why === 'string' ? `LICENCE_${why}` : result.error.reason;
     redirect(`${ctx.path}?${refusalQuery(result.error.control, reason)}`);
   }
-  redirect(`${ctx.path}?${new URLSearchParams({ notice }).toString()}`);
+  const said = typeof notice === 'string' ? notice : notice(result.value);
+  redirect(`${ctx.path}?${new URLSearchParams({ notice: said }).toString()}`);
 }
 
 /** A refusal made here, before the service is called: the reason code is what travels; the detail never leaves the server. */
@@ -300,7 +306,23 @@ export async function committeeDecisionAction(form: FormData): Promise<void> {
         ...(amount === undefined ? {} : { approvedAmountMinorUnits: amount }),
         ...(rawTenor === '' ? {} : { approvedTenorMonths: Number.parseInt(rawTenor, 10) }),
       }),
-    approved ? 'COMMITTEE_APPROVED' : 'COMMITTEE_DECLINED',
+    // An approval short of the delegation of authority's quorum is recorded, not yet a decision.
+    (v) =>
+      !approved
+        ? 'COMMITTEE_DECLINED'
+        : v.application.status === 'APPROVED'
+          ? 'COMMITTEE_APPROVED'
+          : 'COMMITTEE_APPROVAL_RECORDED',
+  );
+}
+
+/** The analyst's credit report notes for the committee. */
+export async function creditNotesAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_CREDIT_NOTES');
+  return finish(
+    ctx,
+    () => recordCreditNotes(ctx.tenant, ctx.applicationId, ctx.actor, field(form, 'creditNotes')),
+    'CREDIT_NOTES_RECORDED',
   );
 }
 

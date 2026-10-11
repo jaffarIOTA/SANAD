@@ -6,7 +6,6 @@
   "source": "TENANT_CREDIT_POLICY",
   "policyRef": "ILLUSTRATIVE — SME direct-lending assessment as shown in the core-banking partner's prototype screens (2026-10); not an approved policy of any fund",
   "notes": "Every threshold, weight and band below is ILLUSTRATIVE. The knock-outs, section split (applicant 40%, project 60%), criteria list, straight-through conditions and the LOW band's AED 2,000,000 / 20% terms are taken from the partner's prototype; the remaining bands and band scores were chosen by us as plausible placeholders and are marked ILLUSTRATIVE-BANDS. Ratios are per ten thousand: 14000 = 1.40x, 388 = 3.88%. Amounts are AED fils. The fund's Credit function owns and replaces every figure here before any real use.",
-
   "facts": {
     "bureauScore": "INTEGER",
     "dscrPerTenThousand": "INTEGER",
@@ -26,14 +25,16 @@
     "failedFilesRatePerTenThousand": "INTEGER",
     "collateralCoveragePerTenThousand": "INTEGER"
   },
-
   "knockouts": [
     {
       "code": "KO_BUREAU_SCORE",
       "fact": "bureauScore",
       "operator": "GTE",
       "threshold": 650,
-      "label": { "en": "Credit bureau score at least 650", "ar": "درجة المكتب الائتماني 650 على الأقل" },
+      "label": {
+        "en": "Credit bureau score at least 650",
+        "ar": "درجة المكتب الائتماني 650 على الأقل"
+      },
       "policyRef": "ILLUSTRATIVE — partner prototype knock-out: bureau score >= 650"
     },
     {
@@ -41,7 +42,10 @@
       "fact": "dscrPerTenThousand",
       "operator": "GTE",
       "threshold": 14000,
-      "label": { "en": "Debt service coverage ratio at least 1.40", "ar": "نسبة تغطية خدمة الدين 1.40 على الأقل" },
+      "label": {
+        "en": "Debt service coverage ratio at least 1.40",
+        "ar": "نسبة تغطية خدمة الدين 1.40 على الأقل"
+      },
       "policyRef": "ILLUSTRATIVE — partner prototype knock-out: DSCR >= 1.40"
     },
     {
@@ -49,7 +53,10 @@
       "fact": "currentRatioPerTenThousand",
       "operator": "GTE",
       "threshold": 13000,
-      "label": { "en": "Current ratio at least 1.30", "ar": "نسبة التداول 1.30 على الأقل" },
+      "label": {
+        "en": "Current ratio at least 1.30",
+        "ar": "نسبة التداول 1.30 على الأقل"
+      },
       "policyRef": "ILLUSTRATIVE — partner prototype knock-out: current ratio >= 1.30"
     },
     {
@@ -57,7 +64,10 @@
       "fact": "salesGrowthPerTenThousand",
       "operator": "GTE",
       "threshold": 200,
-      "label": { "en": "Sales growth at least 2%", "ar": "نمو المبيعات 2% على الأقل" },
+      "label": {
+        "en": "Sales growth at least 2%",
+        "ar": "نمو المبيعات 2% على الأقل"
+      },
       "policyRef": "ILLUSTRATIVE — partner prototype knock-out: sales growth >= 2%"
     },
     {
@@ -65,22 +75,30 @@
       "fact": "ownerDbrPerTenThousand",
       "operator": "LTE",
       "threshold": 5000,
-      "label": { "en": "Owner debt burden ratio at most 50%", "ar": "نسبة عبء الدين على المالك 50% كحد أقصى" },
+      "label": {
+        "en": "Owner debt burden ratio at most 50%",
+        "ar": "نسبة عبء الدين على المالك 50% كحد أقصى"
+      },
       "policyRef": "ILLUSTRATIVE — partner prototype knock-out: owner DBR <= 50%"
     }
   ],
-
   "sections": [
     {
       "code": "APPLICANT",
       "weightPerTenThousand": 4000,
-      "label": { "en": "Applicant", "ar": "مقدم الطلب" },
+      "label": {
+        "en": "Applicant",
+        "ar": "مقدم الطلب"
+      },
       "criteria": [
         {
           "code": "BUREAU_SCORE",
           "fact": "bureauScore",
           "weightPerTenThousand": 3000,
-          "label": { "en": "Credit bureau score", "ar": "درجة المكتب الائتماني" },
+          "label": {
+            "en": "Credit bureau score",
+            "ar": "درجة المكتب الائتماني"
+          },
           "policyRef": "ILLUSTRATIVE-BANDS — criterion from partner prototype; weight and bands placeholder",
           "bands": [
             {
@@ -88,27 +106,39 @@
               "threshold": 750,
               "scorePerTenThousand": 10000,
               "risk": "LOW",
-              "label": { "en": "750 and above", "ar": "750 فأكثر" }
+              "label": {
+                "en": "750 and above",
+                "ar": "750 فأكثر"
+              }
             },
             {
               "operator": "GTE",
               "threshold": 700,
               "scorePerTenThousand": 7500,
               "risk": "LOW",
-              "label": { "en": "700 to 749", "ar": "من 700 إلى 749" }
+              "label": {
+                "en": "700 to 749",
+                "ar": "من 700 إلى 749"
+              }
             },
             {
               "operator": "GTE",
               "threshold": 650,
               "scorePerTenThousand": 5000,
               "risk": "MODERATE",
-              "label": { "en": "650 to 699", "ar": "من 650 إلى 699" }
+              "label": {
+                "en": "650 to 699",
+                "ar": "من 650 إلى 699"
+              }
             },
             {
               "operator": "ANY",
               "scorePerTenThousand": 0,
               "risk": "HIGH",
-              "label": { "en": "Below 650", "ar": "أقل من 650" }
+              "label": {
+                "en": "Below 650",
+                "ar": "أقل من 650"
+              }
             }
           ]
         },
@@ -116,7 +146,10 @@
           "code": "DBR_BEFORE_LOAN",
           "fact": "dbrBeforeLoanPerTenThousand",
           "weightPerTenThousand": 2500,
-          "label": { "en": "Debt burden ratio before this loan", "ar": "نسبة عبء الدين قبل هذا التمويل" },
+          "label": {
+            "en": "Debt burden ratio before this loan",
+            "ar": "نسبة عبء الدين قبل هذا التمويل"
+          },
           "policyRef": "ILLUSTRATIVE-BANDS — criterion from partner prototype; weight and bands placeholder",
           "bands": [
             {
@@ -124,27 +157,39 @@
               "threshold": 1000,
               "scorePerTenThousand": 10000,
               "risk": "LOW",
-              "label": { "en": "10% or less", "ar": "10% أو أقل" }
+              "label": {
+                "en": "10% or less",
+                "ar": "10% أو أقل"
+              }
             },
             {
               "operator": "LTE",
               "threshold": 2500,
               "scorePerTenThousand": 7000,
               "risk": "LOW",
-              "label": { "en": "Over 10% to 25%", "ar": "أكثر من 10% حتى 25%" }
+              "label": {
+                "en": "Over 10% to 25%",
+                "ar": "أكثر من 10% حتى 25%"
+              }
             },
             {
               "operator": "LTE",
               "threshold": 4000,
               "scorePerTenThousand": 4000,
               "risk": "MODERATE",
-              "label": { "en": "Over 25% to 40%", "ar": "أكثر من 25% حتى 40%" }
+              "label": {
+                "en": "Over 25% to 40%",
+                "ar": "أكثر من 25% حتى 40%"
+              }
             },
             {
               "operator": "ANY",
               "scorePerTenThousand": 0,
               "risk": "HIGH",
-              "label": { "en": "Over 40%", "ar": "أكثر من 40%" }
+              "label": {
+                "en": "Over 40%",
+                "ar": "أكثر من 40%"
+              }
             }
           ]
         },
@@ -152,7 +197,10 @@
           "code": "RELEVANT_EXPERIENCE",
           "fact": "relevantExperienceYears",
           "weightPerTenThousand": 2000,
-          "label": { "en": "Relevant experience (years)", "ar": "الخبرة ذات الصلة (سنوات)" },
+          "label": {
+            "en": "Relevant experience (years)",
+            "ar": "الخبرة ذات الصلة (سنوات)"
+          },
           "policyRef": "ILLUSTRATIVE-BANDS — criterion from partner prototype; weight and bands placeholder",
           "bands": [
             {
@@ -160,20 +208,29 @@
               "threshold": 4,
               "scorePerTenThousand": 10000,
               "risk": "LOW",
-              "label": { "en": "4 years or more", "ar": "4 سنوات فأكثر" }
+              "label": {
+                "en": "4 years or more",
+                "ar": "4 سنوات فأكثر"
+              }
             },
             {
               "operator": "GTE",
               "threshold": 2,
               "scorePerTenThousand": 6000,
               "risk": "MODERATE",
-              "label": { "en": "2 to 3 years", "ar": "من سنتين إلى 3 سنوات" }
+              "label": {
+                "en": "2 to 3 years",
+                "ar": "من سنتين إلى 3 سنوات"
+              }
             },
             {
               "operator": "ANY",
               "scorePerTenThousand": 2000,
               "risk": "HIGH",
-              "label": { "en": "Under 2 years", "ar": "أقل من سنتين" }
+              "label": {
+                "en": "Under 2 years",
+                "ar": "أقل من سنتين"
+              }
             }
           ]
         },
@@ -181,7 +238,10 @@
           "code": "EQUITY_CONTRIBUTION",
           "fact": "equityContributionPerTenThousand",
           "weightPerTenThousand": 2500,
-          "label": { "en": "Total equity contribution", "ar": "إجمالي المساهمة الذاتية" },
+          "label": {
+            "en": "Total equity contribution",
+            "ar": "إجمالي المساهمة الذاتية"
+          },
           "policyRef": "ILLUSTRATIVE-BANDS — criterion from partner prototype; weight and bands placeholder",
           "bands": [
             {
@@ -189,27 +249,39 @@
               "threshold": 3000,
               "scorePerTenThousand": 10000,
               "risk": "LOW",
-              "label": { "en": "30% or more", "ar": "30% فأكثر" }
+              "label": {
+                "en": "30% or more",
+                "ar": "30% فأكثر"
+              }
             },
             {
               "operator": "GTE",
               "threshold": 2000,
               "scorePerTenThousand": 7000,
               "risk": "LOW",
-              "label": { "en": "20% to under 30%", "ar": "من 20% إلى أقل من 30%" }
+              "label": {
+                "en": "20% to under 30%",
+                "ar": "من 20% إلى أقل من 30%"
+              }
             },
             {
               "operator": "GTE",
               "threshold": 1000,
               "scorePerTenThousand": 4000,
               "risk": "MODERATE",
-              "label": { "en": "10% to under 20%", "ar": "من 10% إلى أقل من 20%" }
+              "label": {
+                "en": "10% to under 20%",
+                "ar": "من 10% إلى أقل من 20%"
+              }
             },
             {
               "operator": "ANY",
               "scorePerTenThousand": 0,
               "risk": "HIGH",
-              "label": { "en": "Under 10%", "ar": "أقل من 10%" }
+              "label": {
+                "en": "Under 10%",
+                "ar": "أقل من 10%"
+              }
             }
           ]
         }
@@ -218,13 +290,19 @@
     {
       "code": "PROJECT",
       "weightPerTenThousand": 6000,
-      "label": { "en": "Project", "ar": "المشروع" },
+      "label": {
+        "en": "Project",
+        "ar": "المشروع"
+      },
       "criteria": [
         {
           "code": "SECTOR_PRIORITY",
           "fact": "sectorPriority",
           "weightPerTenThousand": 1000,
-          "label": { "en": "Sector priority", "ar": "أولوية القطاع" },
+          "label": {
+            "en": "Sector priority",
+            "ar": "أولوية القطاع"
+          },
           "policyRef": "ILLUSTRATIVE-BANDS — criterion from partner prototype; weight and bands placeholder",
           "bands": [
             {
@@ -232,13 +310,19 @@
               "threshold": "PRIORITY",
               "scorePerTenThousand": 10000,
               "risk": "LOW",
-              "label": { "en": "Priority sector", "ar": "قطاع ذو أولوية" }
+              "label": {
+                "en": "Priority sector",
+                "ar": "قطاع ذو أولوية"
+              }
             },
             {
               "operator": "ANY",
               "scorePerTenThousand": 5000,
               "risk": "MODERATE",
-              "label": { "en": "Non-priority sector", "ar": "قطاع غير ذي أولوية" }
+              "label": {
+                "en": "Non-priority sector",
+                "ar": "قطاع غير ذي أولوية"
+              }
             }
           ]
         },
@@ -246,7 +330,10 @@
           "code": "PROFITABILITY",
           "fact": "profitable",
           "weightPerTenThousand": 1500,
-          "label": { "en": "Profitability", "ar": "الربحية" },
+          "label": {
+            "en": "Profitability",
+            "ar": "الربحية"
+          },
           "policyRef": "ILLUSTRATIVE-BANDS — criterion from partner prototype; weight and bands placeholder",
           "bands": [
             {
@@ -254,13 +341,19 @@
               "threshold": true,
               "scorePerTenThousand": 10000,
               "risk": "LOW",
-              "label": { "en": "Profitable", "ar": "رابحة" }
+              "label": {
+                "en": "Profitable",
+                "ar": "رابحة"
+              }
             },
             {
               "operator": "ANY",
               "scorePerTenThousand": 0,
               "risk": "HIGH",
-              "label": { "en": "Not profitable", "ar": "غير رابحة" }
+              "label": {
+                "en": "Not profitable",
+                "ar": "غير رابحة"
+              }
             }
           ]
         },
@@ -268,7 +361,10 @@
           "code": "AUDITED_FINANCIALS",
           "fact": "auditedFinancialsAvailable",
           "weightPerTenThousand": 1000,
-          "label": { "en": "Audited financial statements available", "ar": "توفر قوائم مالية مدققة" },
+          "label": {
+            "en": "Audited financial statements available",
+            "ar": "توفر قوائم مالية مدققة"
+          },
           "policyRef": "ILLUSTRATIVE-BANDS — criterion from partner prototype; weight and bands placeholder",
           "bands": [
             {
@@ -276,13 +372,19 @@
               "threshold": true,
               "scorePerTenThousand": 10000,
               "risk": "LOW",
-              "label": { "en": "Available", "ar": "متوفرة" }
+              "label": {
+                "en": "Available",
+                "ar": "متوفرة"
+              }
             },
             {
               "operator": "ANY",
               "scorePerTenThousand": 3000,
               "risk": "HIGH",
-              "label": { "en": "Not available", "ar": "غير متوفرة" }
+              "label": {
+                "en": "Not available",
+                "ar": "غير متوفرة"
+              }
             }
           ]
         },
@@ -290,7 +392,10 @@
           "code": "YEARS_OF_OPERATION",
           "fact": "yearsInOperation",
           "weightPerTenThousand": 1500,
-          "label": { "en": "Years of operation", "ar": "سنوات التشغيل" },
+          "label": {
+            "en": "Years of operation",
+            "ar": "سنوات التشغيل"
+          },
           "policyRef": "ILLUSTRATIVE-BANDS — criterion from partner prototype; weight and bands placeholder",
           "bands": [
             {
@@ -298,20 +403,29 @@
               "threshold": 4,
               "scorePerTenThousand": 10000,
               "risk": "LOW",
-              "label": { "en": "4 years or more", "ar": "4 سنوات فأكثر" }
+              "label": {
+                "en": "4 years or more",
+                "ar": "4 سنوات فأكثر"
+              }
             },
             {
               "operator": "GTE",
               "threshold": 2,
               "scorePerTenThousand": 6000,
               "risk": "MODERATE",
-              "label": { "en": "2 to 3 years", "ar": "من سنتين إلى 3 سنوات" }
+              "label": {
+                "en": "2 to 3 years",
+                "ar": "من سنتين إلى 3 سنوات"
+              }
             },
             {
               "operator": "ANY",
               "scorePerTenThousand": 2000,
               "risk": "HIGH",
-              "label": { "en": "Under 2 years", "ar": "أقل من سنتين" }
+              "label": {
+                "en": "Under 2 years",
+                "ar": "أقل من سنتين"
+              }
             }
           ]
         },
@@ -319,7 +433,10 @@
           "code": "COMMITMENT_ASSESSMENT",
           "fact": "commitmentRatioPerTenThousand",
           "weightPerTenThousand": 1000,
-          "label": { "en": "Commitment assessment", "ar": "تقييم الالتزام" },
+          "label": {
+            "en": "Commitment assessment",
+            "ar": "تقييم الالتزام"
+          },
           "policyRef": "ILLUSTRATIVE-BANDS — criterion from partner prototype; weight and bands placeholder",
           "bands": [
             {
@@ -327,27 +444,39 @@
               "threshold": 12000,
               "scorePerTenThousand": 10000,
               "risk": "LOW",
-              "label": { "en": "1.20 or more", "ar": "1.20 فأكثر" }
+              "label": {
+                "en": "1.20 or more",
+                "ar": "1.20 فأكثر"
+              }
             },
             {
               "operator": "GTE",
               "threshold": 10000,
               "scorePerTenThousand": 7000,
               "risk": "LOW",
-              "label": { "en": "1.00 to under 1.20", "ar": "من 1.00 إلى أقل من 1.20" }
+              "label": {
+                "en": "1.00 to under 1.20",
+                "ar": "من 1.00 إلى أقل من 1.20"
+              }
             },
             {
               "operator": "GTE",
               "threshold": 8000,
               "scorePerTenThousand": 4000,
               "risk": "MODERATE",
-              "label": { "en": "0.80 to under 1.00", "ar": "من 0.80 إلى أقل من 1.00" }
+              "label": {
+                "en": "0.80 to under 1.00",
+                "ar": "من 0.80 إلى أقل من 1.00"
+              }
             },
             {
               "operator": "ANY",
               "scorePerTenThousand": 0,
               "risk": "HIGH",
-              "label": { "en": "Under 0.80", "ar": "أقل من 0.80" }
+              "label": {
+                "en": "Under 0.80",
+                "ar": "أقل من 0.80"
+              }
             }
           ]
         },
@@ -355,7 +484,10 @@
           "code": "RISK_ANALYSIS",
           "fact": "riskAnalysisScorePerTenThousand",
           "weightPerTenThousand": 1500,
-          "label": { "en": "Risk analysis score", "ar": "درجة تحليل المخاطر" },
+          "label": {
+            "en": "Risk analysis score",
+            "ar": "درجة تحليل المخاطر"
+          },
           "policyRef": "ILLUSTRATIVE-BANDS — criterion from partner prototype (score out of 10, held per ten thousand: 5.77/10 = 5770); weight and bands placeholder",
           "bands": [
             {
@@ -363,27 +495,39 @@
               "threshold": 7500,
               "scorePerTenThousand": 10000,
               "risk": "LOW",
-              "label": { "en": "7.5 out of 10 or more", "ar": "7.5 من 10 فأكثر" }
+              "label": {
+                "en": "7.5 out of 10 or more",
+                "ar": "7.5 من 10 فأكثر"
+              }
             },
             {
               "operator": "GTE",
               "threshold": 5000,
               "scorePerTenThousand": 6000,
               "risk": "MODERATE",
-              "label": { "en": "5.0 to under 7.5", "ar": "من 5.0 إلى أقل من 7.5" }
+              "label": {
+                "en": "5.0 to under 7.5",
+                "ar": "من 5.0 إلى أقل من 7.5"
+              }
             },
             {
               "operator": "GTE",
               "threshold": 3000,
               "scorePerTenThousand": 3000,
               "risk": "HIGH",
-              "label": { "en": "3.0 to under 5.0", "ar": "من 3.0 إلى أقل من 5.0" }
+              "label": {
+                "en": "3.0 to under 5.0",
+                "ar": "من 3.0 إلى أقل من 5.0"
+              }
             },
             {
               "operator": "ANY",
               "scorePerTenThousand": 0,
               "risk": "HIGH",
-              "label": { "en": "Under 3.0", "ar": "أقل من 3.0" }
+              "label": {
+                "en": "Under 3.0",
+                "ar": "أقل من 3.0"
+              }
             }
           ]
         },
@@ -391,7 +535,10 @@
           "code": "PORTFOLIO_REPAYMENT",
           "fact": "portfolioRepaymentPerTenThousand",
           "weightPerTenThousand": 1500,
-          "label": { "en": "Portfolio repayment percentage", "ar": "نسبة السداد في المحفظة" },
+          "label": {
+            "en": "Portfolio repayment percentage",
+            "ar": "نسبة السداد في المحفظة"
+          },
           "policyRef": "ILLUSTRATIVE-BANDS — criterion from partner prototype; weight and bands placeholder",
           "bands": [
             {
@@ -399,27 +546,39 @@
               "threshold": 9000,
               "scorePerTenThousand": 10000,
               "risk": "LOW",
-              "label": { "en": "90% or more", "ar": "90% فأكثر" }
+              "label": {
+                "en": "90% or more",
+                "ar": "90% فأكثر"
+              }
             },
             {
               "operator": "GTE",
               "threshold": 7500,
               "scorePerTenThousand": 7000,
               "risk": "LOW",
-              "label": { "en": "75% to under 90%", "ar": "من 75% إلى أقل من 90%" }
+              "label": {
+                "en": "75% to under 90%",
+                "ar": "من 75% إلى أقل من 90%"
+              }
             },
             {
               "operator": "GTE",
               "threshold": 5000,
               "scorePerTenThousand": 4000,
               "risk": "MODERATE",
-              "label": { "en": "50% to under 75%", "ar": "من 50% إلى أقل من 75%" }
+              "label": {
+                "en": "50% to under 75%",
+                "ar": "من 50% إلى أقل من 75%"
+              }
             },
             {
               "operator": "ANY",
               "scorePerTenThousand": 0,
               "risk": "HIGH",
-              "label": { "en": "Under 50%", "ar": "أقل من 50%" }
+              "label": {
+                "en": "Under 50%",
+                "ar": "أقل من 50%"
+              }
             }
           ]
         },
@@ -427,7 +586,10 @@
           "code": "FAILED_FILES_RATE",
           "fact": "failedFilesRatePerTenThousand",
           "weightPerTenThousand": 1000,
-          "label": { "en": "Failed files rate", "ar": "نسبة الملفات المتعثرة" },
+          "label": {
+            "en": "Failed files rate",
+            "ar": "نسبة الملفات المتعثرة"
+          },
           "policyRef": "ILLUSTRATIVE-BANDS — criterion from partner prototype; weight and bands placeholder",
           "bands": [
             {
@@ -435,39 +597,53 @@
               "threshold": 500,
               "scorePerTenThousand": 10000,
               "risk": "LOW",
-              "label": { "en": "5% or less", "ar": "5% أو أقل" }
+              "label": {
+                "en": "5% or less",
+                "ar": "5% أو أقل"
+              }
             },
             {
               "operator": "LTE",
               "threshold": 1500,
               "scorePerTenThousand": 6000,
               "risk": "MODERATE",
-              "label": { "en": "Over 5% to 15%", "ar": "أكثر من 5% حتى 15%" }
+              "label": {
+                "en": "Over 5% to 15%",
+                "ar": "أكثر من 5% حتى 15%"
+              }
             },
             {
               "operator": "LTE",
               "threshold": 3000,
               "scorePerTenThousand": 3000,
               "risk": "HIGH",
-              "label": { "en": "Over 15% to 30%", "ar": "أكثر من 15% حتى 30%" }
+              "label": {
+                "en": "Over 15% to 30%",
+                "ar": "أكثر من 15% حتى 30%"
+              }
             },
             {
               "operator": "ANY",
               "scorePerTenThousand": 0,
               "risk": "HIGH",
-              "label": { "en": "Over 30%", "ar": "أكثر من 30%" }
+              "label": {
+                "en": "Over 30%",
+                "ar": "أكثر من 30%"
+              }
             }
           ]
         }
       ]
     }
   ],
-
   "riskBands": [
     {
       "level": "VERY_LOW",
       "minScorePerTenThousand": 8500,
-      "label": { "en": "Very low risk", "ar": "مخاطر منخفضة جداً" },
+      "label": {
+        "en": "Very low risk",
+        "ar": "مخاطر منخفضة جداً"
+      },
       "terms": {
         "maxFinancingMinorUnits": "300000000",
         "minEquityContributionPerTenThousand": 1500,
@@ -478,7 +654,10 @@
     {
       "level": "LOW",
       "minScorePerTenThousand": 7000,
-      "label": { "en": "Low risk", "ar": "مخاطر منخفضة" },
+      "label": {
+        "en": "Low risk",
+        "ar": "مخاطر منخفضة"
+      },
       "terms": {
         "maxFinancingMinorUnits": "200000000",
         "minEquityContributionPerTenThousand": 2000,
@@ -489,7 +668,10 @@
     {
       "level": "MEDIUM",
       "minScorePerTenThousand": 5500,
-      "label": { "en": "Medium risk", "ar": "مخاطر متوسطة" },
+      "label": {
+        "en": "Medium risk",
+        "ar": "مخاطر متوسطة"
+      },
       "terms": {
         "maxFinancingMinorUnits": "100000000",
         "minEquityContributionPerTenThousand": 2500,
@@ -500,7 +682,10 @@
     {
       "level": "HIGH",
       "minScorePerTenThousand": 4000,
-      "label": { "en": "High risk", "ar": "مخاطر مرتفعة" },
+      "label": {
+        "en": "High risk",
+        "ar": "مخاطر مرتفعة"
+      },
       "terms": {
         "maxFinancingMinorUnits": "50000000",
         "minEquityContributionPerTenThousand": 3000,
@@ -512,12 +697,26 @@
   "belowFloorOutcome": "DECLINE",
   "equityContributionFact": "equityContributionPerTenThousand",
   "outsideRiskAlignedTerms": "COMMITTEE",
-
   "straightThrough": {
     "maxFinancingMinorUnits": "50000000",
     "allowedRiskLevels": ["VERY_LOW", "LOW"],
     "minCollateralCoveragePerTenThousand": 12000,
     "collateralCoverageFact": "collateralCoveragePerTenThousand",
     "policyRef": "ILLUSTRATIVE — partner prototype: straight-through when amount <= AED 500,000, risk VERY_LOW or LOW, collateral coverage >= 120%"
+  },
+  "delegationOfAuthority": {
+    "tiers": [
+      {
+        "upToMinorUnits": "200000000",
+        "approvalsRequired": 1
+      },
+      {
+        "approvalsRequired": 2
+      }
+    ],
+    "additionalApprovalsByRiskLevel": {
+      "HIGH": 1
+    },
+    "policyRef": "ILLUSTRATIVE — delegation of authority as a committee quorum: one approval up to AED 2,000,000, two above; one more for HIGH risk. The partner’s screen says \"per DoA\" without the tiers (traceability T-08-11, question 14)."
   }
 }
