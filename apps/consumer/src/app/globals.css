@@ -55,7 +55,10 @@
 
   /* -- Text ---------------------------------------------------------------- */
   --color-ink: #232323;
-  --color-ink-quiet: #718ebf;
+  /* The kit's #718EBF measures 3.3:1 on white, below the 4.5:1 body text needs
+     (NFR-09), and this colour carries helper text, hints and disclosure labels.
+     Same hue, darker: 5.4:1 on white, 4.6:1 on the brand wash. */
+  --color-ink-quiet: #4f6a99;
   --color-ink-faint: #b1b1b1; /* inactive navigation */
   --color-on-brand: #ffffff;
 
@@ -76,8 +79,13 @@
   --font-arabic: 'Noto Kufi Arabic', 'Segoe UI', system-ui, sans-serif;
   --font-latin: 'Inter', system-ui, -apple-system, sans-serif;
 
+  /* One figure per screen is the hero: the amount being asked for. */
+  --text-display: 2.5rem;
+  --text-display--line-height: 3rem;
   --text-amount: 1.5rem;
   --text-amount--line-height: 2rem;
+  --text-lede: 1rem; /* the line under a page title */
+  --text-lede--line-height: 1.5rem;
   --text-h1: 1.75rem; /* Heading one Semibold 28 */
   --text-h2: 1.375rem; /* Heading two Semibold 22 */
   --text-h3: 1.125rem; /* Heading three Medium 18 */
