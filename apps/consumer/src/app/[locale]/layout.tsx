@@ -8,7 +8,7 @@
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 
-import { BrandMark, LanguageSwitch } from '@sanad/design/primitives.tsx';
+import { BrandName, LanguageSwitch } from '@sanad/design/primitives.tsx';
 import { LOCALE_SEGMENTS, htmlLang, isRtl, localeFromSegment, type LocaleSegment } from '@sanad/i18n/strings.ts';
 import { currentSession } from '../../server/session.ts';
 import { signOutAction } from '../../server/actions.ts';
@@ -44,10 +44,7 @@ export default async function ConsumerLayout({
       <body className="min-h-dvh bg-page text-ink antialiased">
         <header className="border-b border-line bg-surface">
           <div className="mx-auto flex max-w-screen-sm items-center gap-3 px-4 py-3">
-            <BrandMark size={30} />
-            <span className="text-[22px] font-black tracking-tight text-heading">
-              Sanad<span className="text-brand">.</span>
-            </span>
+            <BrandName />
             <div className="ms-auto flex items-center gap-2">
               {session !== undefined ? (
                 <form action={signOutAction}>

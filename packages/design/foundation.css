@@ -1,0 +1,320 @@
+/*
+ * The Sanad design foundation: one typeface pair, one palette, one type scale,
+ * one set of radii and motion, shared by every surface (consumer, ops, admin,
+ * sme). Each app's globals.css imports Tailwind, names its sources, imports
+ * this file, and adds only what is its own.
+ *
+ * Before 2026-10-11 each app carried its own copy, and they had drifted: three
+ * Latin faces (Inter never loaded, DM Sans, a system fallback), two brand blues
+ * and two corner radii. One file is how they stay the same.
+ *
+ * Client branding is a token override, never a component fork: an institution
+ * redefines tokens after importing this file and changes nothing else
+ * (SDD §7.6).
+ */
+
+/* -- Typefaces -----------------------------------------------------------------
+ * Inter for Latin, Noto Sans Arabic for Arabic: both variable (100–900), both
+ * SIL OFL 1.1 (licences beside the files), both with every digit the same
+ * width, so amounts align in columns in either script. Noto Sans Arabic replaced
+ * Noto Kufi, a display face, because body text and figures are read here, not
+ * admired. Self-hosted: no browser and no build calls a font service.
+ * The unicode ranges route each script to its face within one stack, so an
+ * Arabic page sets Latin identifiers in Inter and an English page sets an
+ * Arabic name in Noto Sans Arabic without either asking.
+ */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/inter-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Noto Sans Arabic';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/noto-sans-arabic.woff2') format('woff2');
+  unicode-range:
+    U+0600-06FF, U+0750-077F, U+0870-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FEFC;
+}
+
+@theme static {
+  /* -- Brand ------------------------------------------------------------------ */
+  --color-brand: #2d60ff; /* White on it measures 5.0:1 */
+  --color-brand-strong: #2d60ff; /* interactive */
+  --color-brand-deep: #1f4ae0; /* pressed, hover */
+  --color-brand-wash: #e9efff; /* tinted surface, active navigation, icon discs */
+  --color-heading: #343c6a; /* the wordmark colour in docs/brand/logo */
+  --color-mark-mono: #4d4d4d;
+
+  /* -- Chart series. Series colours never carry text. ------------------------- */
+  --color-series-1: #2d60ff;
+  --color-series-2: #16b8ad;
+  --color-slice-1: #343c6a;
+  --color-slice-2: #fc7900;
+  --color-slice-3: #c026d3;
+  --color-slice-4: #2d60ff;
+  --color-area-line: #2d60ff;
+
+  /* -- Ordinal ramp for stage charts: one hue, monotone lightness. ------------ */
+  --color-stage-1: #c7d4ff;
+  --color-stage-2: #93abff;
+  --color-stage-3: #5f85ff;
+  --color-stage-4: #2d60ff;
+  --color-stage-5: #1a3fc2;
+
+  /* -- Surface ---------------------------------------------------------------- */
+  --color-page: #f5f7fb;
+  --color-surface: #ffffff;
+  --color-sunken: #f5f7fb;
+  --color-line: #e5e9f2;
+  --color-line-strong: #d5dbe8;
+  --color-field: #eef2f8; /* input fills */
+
+  /* -- Text ------------------------------------------------------------------- */
+  --color-ink: #1d2233;
+  /* Helper text, hints and labels: 5.4:1 on white, 4.6:1 on the brand wash (NFR-09). */
+  --color-ink-quiet: #4f6a99;
+  --color-ink-faint: #a3abbd; /* inactive navigation */
+  --color-on-brand: #ffffff;
+
+  /* -- Meaning. Marks are decorative; text uses the darker value (NFR-09). ---- */
+  --color-positive: #178f6b;
+  --color-positive-mark: #41d4a8;
+  --color-positive-wash: #dcf5ea;
+  --color-attention: #b45309;
+  --color-attention-mark: #fc7900;
+  --color-attention-wash: #fdf0dc;
+  --color-blocked: #d93a53;
+  --color-blocked-mark: #fe5c73;
+  --color-blocked-wash: #ffe8ec;
+  --color-disc-yellow: #fff5d9;
+  --color-disc-blue: #e9efff;
+  --color-disc-teal: #dcfaf8;
+
+  /* -- Type ------------------------------------------------------------------- */
+  --font-sans: 'Inter', 'Noto Sans Arabic', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Kept for the code that names a script; both are the one stack above. */
+  --font-latin: var(--font-sans);
+  --font-arabic: var(--font-sans);
+
+  --text-display: 2.25rem; /* the one hero figure on a screen */
+  --text-display--line-height: 2.75rem;
+  --text-amount: 1.5rem;
+  --text-amount--line-height: 2rem;
+  --text-h1: 1.75rem;
+  --text-h1--line-height: 2.25rem;
+  --text-h2: 1.25rem;
+  --text-h2--line-height: 1.75rem;
+  --text-h3: 1.125rem;
+  --text-h3--line-height: 1.5rem;
+  --text-lede: 1rem; /* the line under a page title */
+  --text-lede--line-height: 1.5rem;
+
+  /* -- Shape ------------------------------------------------------------------ */
+  --radius-card: 1rem;
+  --radius-tile: 0.75rem;
+  --radius-pill: 2.5rem;
+  --shadow-card: 0 1px 2px rgb(29 34 51 / 0.04), 0 2px 8px rgb(29 34 51 / 0.05);
+
+  /* Sized for a mid-range phone, not a desktop pointer (NFR-10, FP-05). */
+  --spacing-tap: 2.75rem;
+}
+
+/* Dark: the same blue, lifted for the dark surface — never a different hue. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-page: #0f1424;
+    --color-surface: #171d33;
+    --color-sunken: #121829;
+    --color-line: #26304d;
+    --color-line-strong: #34406a;
+    --color-field: #1f2742;
+    --color-ink: #eef1f8;
+    --color-ink-quiet: #9fb0d8;
+    --color-ink-faint: #6b7590;
+    --color-heading: #eef1f8;
+    --color-brand: #6d8dff;
+    --color-brand-strong: #6d8dff;
+    --color-brand-deep: #9db1ff;
+    --color-brand-wash: #22305e;
+    --color-mark-mono: #b8b6b3;
+    --color-stage-1: #2a3a7a;
+    --color-stage-2: #3b52b3;
+    --color-stage-3: #5570e6;
+    --color-stage-4: #7d95ff;
+    --color-stage-5: #b3c2ff;
+    --color-positive: #55d3a5;
+    --color-positive-wash: #173d2c;
+    --color-attention: #f0a45c;
+    --color-attention-wash: #3d3020;
+    --color-blocked: #ff8a9b;
+    --color-blocked-wash: #3a1a22;
+    --color-disc-yellow: #3d3520;
+    --color-disc-blue: #22305e;
+    --color-disc-teal: #163a37;
+    --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.04);
+  }
+}
+
+:root[data-theme='dark'] {
+  --color-page: #0f1424;
+  --color-surface: #171d33;
+  --color-sunken: #121829;
+  --color-line: #26304d;
+  --color-line-strong: #34406a;
+  --color-field: #1f2742;
+  --color-ink: #eef1f8;
+  --color-ink-quiet: #9fb0d8;
+  --color-ink-faint: #6b7590;
+  --color-heading: #eef1f8;
+  --color-brand: #6d8dff;
+  --color-brand-strong: #6d8dff;
+  --color-brand-deep: #9db1ff;
+  --color-brand-wash: #22305e;
+  --color-mark-mono: #b8b6b3;
+  --color-stage-1: #2a3a7a;
+  --color-stage-2: #3b52b3;
+  --color-stage-3: #5570e6;
+  --color-stage-4: #7d95ff;
+  --color-stage-5: #b3c2ff;
+  --color-positive: #55d3a5;
+  --color-positive-wash: #173d2c;
+  --color-attention: #f0a45c;
+  --color-attention-wash: #3d3020;
+  --color-blocked: #ff8a9b;
+  --color-blocked-wash: #3a1a22;
+  --color-disc-yellow: #3d3520;
+  --color-disc-blue: #22305e;
+  --color-disc-teal: #163a37;
+  --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.04);
+}
+
+html {
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+/*
+ * Machine-readable identifiers always render in Latin digits regardless of the
+ * numeral preference, because they get copied, quoted and read down a phone
+ * line (SDD §7.5).
+ */
+.identifier {
+  font-variant-numeric: tabular-nums;
+  font-family: 'Inter', system-ui, sans-serif;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Visible focus that follows reading direction, in both themes. */
+:where(a, button, [role='button'], input, select, textarea):focus-visible {
+  outline: 2px solid var(--color-brand-strong);
+  outline-offset: 2px;
+}
+
+/*
+ * Motion: a small set, every one a transform or opacity, every one short, and
+ * every one removed under prefers-reduced-motion.
+ */
+.nav-indicator {
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 160ms ease;
+}
+.card-lift {
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 2px 4px rgb(29 34 51 / 0.05),
+    0 8px 20px rgb(29 34 51 / 0.07);
+}
+.press {
+  transition:
+    transform 120ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+}
+.press:active {
+  transform: scale(0.97);
+}
+@keyframes grow-y {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.grow-y {
+  transform-origin: bottom;
+  animation: grow-y 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes draw {
+  from {
+    stroke-dashoffset: var(--draw-length, 2000);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.draw {
+  stroke-dasharray: var(--draw-length, 2000);
+  animation: draw 1100ms ease-out both;
+}
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fade-up {
+  animation: fade-up 360ms ease-out both;
+}
+@keyframes slice-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.slice-in {
+  transform-origin: center;
+  animation: slice-in 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-indicator,
+  .card-lift,
+  .press {
+    transition: none;
+  }
+  .card-lift:hover {
+    transform: none;
+  }
+  .grow-y,
+  .draw,
+  .fade-up,
+  .slice-in {
+    animation: none;
+  }
+  .draw {
+    stroke-dasharray: none;
+  }
+}
