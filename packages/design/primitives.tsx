@@ -62,11 +62,38 @@ export function BrandMark({
 }
 
 /**
+ * The wordmark: "Sanad." in Inter Black, the full stop in the brand colour —
+ * the same lettering as the logo files in docs/brand/logo. The product's name
+ * is Latin in both languages; in Arabic the mark sits on the reading side.
+ */
+export function Wordmark({ className = 'text-[1.25rem]' }: { readonly className?: string }): ReactElement {
+  return (
+    // <bdi> isolates the name and takes its direction from the "S", so on an
+    // Arabic page the full stop stays after "Sanad" instead of moving before it.
+    <bdi lang="en" className={`font-black leading-none tracking-[-0.02em] text-heading ${className}`}>
+      Sanad<span className="text-brand">.</span>
+    </bdi>
+  );
+}
+
+/**
+ * The header lockup: mark and wordmark, one size everywhere, so every Sanad
+ * surface introduces itself identically. Headers use this and nothing else.
+ */
+export function BrandName(): ReactElement {
+  return (
+    <span className="inline-flex items-center gap-2.5" data-testid="brand-name">
+      <BrandMark size={28} />
+      <Wordmark />
+    </span>
+  );
+}
+
+/**
  * The full lockup: mark, wordmark, and the endorsement rule beneath it.
  *
  * Used where the product introduces itself — a sign-in screen, an exported
- * audit pack cover. The header uses the mark alone, because a wordmark
- * repeated on every screen is noise rather than branding.
+ * audit pack cover.
  */
 export function BrandLockup({
   size = 96,
@@ -78,8 +105,8 @@ export function BrandLockup({
   return (
     <div className="flex flex-col items-center gap-4">
       <BrandMark size={size} tone={tone} />
-      <div className="flex flex-col items-center gap-1">
-        <span className="text-2xl font-light tracking-[0.35em] text-ink-quiet">SANAD</span>
+      <div className="flex flex-col items-center gap-2">
+        <Wordmark className="text-3xl" />
         <span className="flex items-center gap-3 text-[0.625rem] tracking-[0.2em] text-ink-quiet">
           <span aria-hidden className="h-px w-8 bg-line-strong" />
           AN IOTA PRODUCT

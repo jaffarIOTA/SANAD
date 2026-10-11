@@ -7,20 +7,18 @@
  * the page on the kit's pale neutral field. Below the desktop breakpoint the
  * sidebar becomes a bottom bar and the search drops under the header.
  *
- * Fonts are files in this repository (`../fonts`, SIL OFL 1.1), so neither a
- * staff browser at run time nor the build calls a font CDN. Fetching them from
- * Google at build time failed the 2026-10-11 release twice on the CI runner,
- * and a build that needs the internet cannot run in an isolated environment.
+ * Typefaces come from the shared foundation (packages/design/foundation.css):
+ * files in this repository, so neither a staff browser nor the build calls a
+ * font service.
  *
  * Composed in logical properties: Arabic is the design default and English
  * is the mirror. The Figma frames are LTR; this is their RTL composition.
  */
 
 import type { ReactNode } from 'react';
-import localFont from 'next/font/local';
 import { notFound } from 'next/navigation';
 
-import { BrandMark, LanguageSwitch } from '@sanad/design/primitives.tsx';
+import { BrandName, LanguageSwitch } from '@sanad/design/primitives.tsx';
 import { Icon } from '@sanad/design/icons.tsx';
 import { LicenceBanner } from '@sanad/design/LicenceBanner.tsx';
 import { licenceBanner } from '@sanad/core/licensing/explain.ts';
@@ -45,20 +43,6 @@ export const metadata = { title: 'Sanad — Operations', description: 'Originati
  */
 export const dynamic = 'force-dynamic';
 
-// Variable fonts: one file spans every weight the workbench uses.
-const dmSans = localFont({
-  src: '../fonts/dm-sans-latin.woff2',
-  weight: '300 700',
-  variable: '--font-dm-sans',
-  display: 'swap',
-});
-const notoKufi = localFont({
-  src: '../fonts/noto-kufi-arabic.woff2',
-  weight: '400 700',
-  variable: '--font-noto-kufi',
-  display: 'swap',
-});
-
 export function generateStaticParams(): { locale: LocaleSegment }[] {
   return LOCALE_SEGMENTS.map((locale) => ({ locale }));
 }
@@ -78,18 +62,11 @@ export default async function OpsLayout({
   const staff = await currentStaff();
   if (staff === undefined) {
     return (
-      <html
-        lang={htmlLang(locale)}
-        dir={isRtl(locale) ? 'rtl' : 'ltr'}
-        className={`${dmSans.variable} ${notoKufi.variable}`}
-      >
+      <html lang={htmlLang(locale)} dir={isRtl(locale) ? 'rtl' : 'ltr'}>
         <body className="min-h-dvh bg-page text-ink antialiased">
           <header className="sticky top-0 z-10 border-b border-line bg-surface">
             <div className="flex h-16 items-center gap-4 px-4 lg:px-6">
-              <span className="flex items-center gap-2.5">
-                <BrandMark size={30} />
-                <span className="text-[20px] font-bold tracking-tight text-heading">Sanad</span>
-              </span>
+              <BrandName />
               <div className="ms-auto">
                 <LanguageSwitch current={segment as LocaleSegment} />
               </div>
@@ -126,17 +103,12 @@ export default async function OpsLayout({
   );
 
   return (
-    <html
-      lang={htmlLang(locale)}
-      dir={isRtl(locale) ? 'rtl' : 'ltr'}
-      className={`${dmSans.variable} ${notoKufi.variable}`}
-    >
+    <html lang={htmlLang(locale)} dir={isRtl(locale) ? 'rtl' : 'ltr'}>
       <body className="min-h-dvh bg-page text-ink antialiased">
         <header className="sticky top-0 z-10 border-b border-line bg-surface">
           <div className="flex h-16 items-center gap-4 px-4 lg:px-0">
             <a href={`/${segment}`} className="flex w-auto items-center gap-2.5 lg:w-[248px] lg:ps-6">
-              <BrandMark size={30} />
-              <span className="text-[20px] font-bold tracking-tight text-heading">Sanad</span>
+              <BrandName />
             </a>
             <p className="hidden text-[14px] font-medium text-ink-quiet lg:block lg:ps-8">
               <HeaderTitle arabic={arabic} />
