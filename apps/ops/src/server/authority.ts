@@ -32,6 +32,8 @@ export const ACT_REQUIREMENTS = {
   /** Verify a keyed or read figure; validate a presented document. */
   BUSINESS_VERIFY: ['CHECKER'],
   BUSINESS_ASSESS: ['CHECKER'],
+  /** Write the credit report notes the committee reads: the analyst, who is a checker. */
+  BUSINESS_CREDIT_NOTES: ['CHECKER'],
   BUSINESS_APPROVE: ['CHECKER', 'SENIOR_CHECKER'],
   BUSINESS_COMMITTEE: ['CREDIT_COMMITTEE'],
   BUSINESS_DISBURSE: ['FINANCE'],

@@ -44,16 +44,16 @@ values the screens imply but do not show).
 
 | Status | Count |
 |---|---|
-| ✅ matches | 67 |
+| ✅ matches | 68 |
 | 🟡 partial / differs | 49 |
-| 🧪 built, illustrative value awaiting the fund | 22 |
+| 🧪 built, illustrative value awaiting the fund | 23 |
 | ➖ out of Sanad's scope (stages 1–4, 8–9) | 11 |
-| ❌ missing | 7 |
+| ❌ missing | 5 |
 
 Read the 🟡 rows as the real work list: most are things built to a different shape (a manual
 step where the screen shows an integration, a reference where the screen shows a file, a fixed
-value where the screen shows a dropdown). The ❌ rows are: LMS loan reference, the second contract with the partner bank, "Awaiting bank KYC", DoA tiers,
-credit report notes, "Back to Tuum CIF".
+value where the screen shows a dropdown). The ❌ rows are: LMS loan reference, the second contract with the partner bank, "Awaiting bank KYC",
+"Back to Tuum CIF". DoA tiers and credit report notes were closed on 2026-10-11 (T-08-11, T-08-12).
 
 ### 1.2 The schedule
 
@@ -97,8 +97,8 @@ Smaller differences worth naming in the walkthrough: documents are not transferr
 hand-over (T-03-03); the document grouping and the Arabic labels differ (T-05-02, T-05-16); the
 Fixed Assets rental contract is optional in our checklist and has no ADREC check (T-05-14); the
 DBR breakdown lacks the card-limit, outstanding-balance and net-disposable-income lines (T-04-11);
-no credit report notes, "Save draft", "Back to Tuum CIF" or "Send to MCC queue" actions; the
-committee is one decision-maker with no DoA tiers (T-08-11).
+no "Save draft" button (every entry is saved as it is made, and the page says so), "Back to Tuum CIF" or
+"Send to MCC queue" actions. Credit report notes and DoA tiers exist since 2026-10-11 (T-08-11, T-08-12).
 
 ### 1.4 Questions for Tuum and the fund
 
@@ -220,7 +220,7 @@ committee is one decision-maker with no DoA tiers (T-08-11).
 | T-04-08 | Purpose dropdown ("CAPEX + OPEX Mix") | 03, 04 | variant `purposes`; `CAPEX_OPEX` on `EXPANSION` only (`catalogue` line 154) | `test/compliance/sme-variants.test.ts` purpose refusal cases | 🧪 | Purpose lists are ours, illustrative. The screen pairs CAPEX + OPEX with Fixed Assets, which our Fixed Assets would refuse (`PURPOSE_NOT_ALLOWED`). ❓ Q6, Q17. |
 | T-04-09 | Info box: "Expansion Loan: Max AED 5M · Tenor ≤72m · Grace ≤12m · Min 2 yrs operation · Contribution 20–40% (CAPEX). Risk-aligned terms auto-set from credit scoring." | 03, 04 | `catalogue` `EXPANSION`: `maxGraceMonths` 12, `minYearsInOperation` 2, contribution 2000–4000 per ten thousand; enforced `products/sme-term-conventional/variants.ts:261-303`; variant limits line `[app]/page.tsx:310` | `test/compliance/sme-variants.test.ts` "each variant carries…" and refusals (grace above, contribution 4001, years 1) | ✅ | "(CAPEX)" qualifier on the contribution is not modelled. Risk-aligned terms: T-08-07. |
 | T-04-10 | Other products' minimum tenor, grace, contribution, years, purposes, collateral; product minimum amount | — (not shown) | `catalogue` notes per variant; `minAmountMinorUnits` 5000000 (AED 50,000) | `test/compliance/sme-variants.test.ts` "an amount below the product minimum" | 🧪 | Every value the screens do not show is marked ILLUSTRATIVE in the variant's `note`. Working Capital grace 3 months is cited to the screens in its note but is not visible on these 11 screens. ❓ Q17. |
-| T-03-12 | Buttons "Save Draft" and "Submit to Credit Assessment →" | 03, 04, 05 | Submit: `app.ts:262` `submitForAssessment`, `business.ts:2042`; `[app]/page.tsx:720-757`. No draft concept | `test/compliance/business-application.test.ts` "needs every figure verified and every mandatory document" | 🟡 | Submit ✅. "Save draft" absent: every action is saved as it is taken. |
+| T-03-12 | Buttons "Save Draft" and "Submit to Credit Assessment →" | 03, 04, 05 | Submit: `app.ts:262` `submitForAssessment`, `business.ts:2042`; `[app]/page.tsx:720-757`. No draft concept | `test/compliance/business-application.test.ts` "needs every figure verified and every mandatory document" | 🟡 | Submit ✅. No "Save draft" button: every figure and document is saved as it is entered, and since 2026-10-11 the page says so (`data-saved-as-you-go`), so there is no unsaved draft to keep. |
 | T-05-01 | "← Back to Tuum CIF" | 05 | none (only `withdraw` `app.ts:442`) | none | ❌ | ❓ Should stage 5 return an application to stage 4 (and what does Tuum CIF expect back)? |
 
 ## 5. Stage 5 — financial analysis, ratios and DBR (screens 03, 04, 06)
@@ -282,8 +282,8 @@ except DBR, whose band score is the same).
 | T-08-08 | Two approval paths (per DoA): ① STP auto-approve when amount ≤500K, risk Low / Very Low, collateral ≥120% | 08 | `assessment.json` `straightThrough` (lines 516-522); `app.ts:325` `approveStraightThrough` | `test/compliance/sme-assessment.test.ts` "routes an AED 400,000 LOW-risk request with 130% collateral STRAIGHT_THROUGH", "refuses straight-through when collateral coverage is below 120%", "refuses straight-through at MEDIUM risk even for a small amount" | 🟡 | Conditions match (values illustrative). Not "auto-approve": a checker who is not the submitting officer approves (four eyes). ❓ Must STP be fully automatic? |
 | T-08-09 | ② MCC workflow for this application (amount AED 2M, score 88.4%) | 08 | `app.ts:335` `decideInCommittee` (member ≠ submitter, reason required) | `test/compliance/business-application.test.ts` "a committee case cannot be decided by the officer who submitted it" | 🟡 | One committee decision by one principal; no MCC queue, quorum or minutes. ❓ Q14. |
 | T-08-10 | Collateral coverage ≥120% as an input | 08 | fact `collateralCoveragePerTenThousand` = collateral value ÷ requested, floor `business.ts:2131`; officer input `collateralValue` | as T-08-08 | ✅ | |
-| T-08-11 | "per DoA" (delegation of authority) | 08 | only the single STP limit | none | ❌ | No approval tiers by amount or risk. ❓ Q14. |
-| T-08-12 | "Credit Report Notes": analyst's free-text summary | 08 | none | none | ❌ | Only committee and withdrawal reasons are free text. |
+| T-08-11 | "per DoA" (delegation of authority) | 08 | `delegationOfAuthority` in `assessment.json` (tiers by approved amount, add-ons by risk level), parsed by `parseSmeAssessmentPolicy` and applied by `committeeApprovalsRequired` (`core/decisioning/sme-assessment.ts`); quorum in `decideInCommittee` (`app.ts`): different members, one set of terms, APPROVED only at the quorum; the committee screen shows "n of m" | `test/compliance/business-delegation-and-notes.test.ts` "delegation of authority — the committee quorum", "— the tenant policy" | 🧪 | Built as a quorum of credit-committee members, not as authority levels: the tiers (1 approval up to AED 2,000,000, 2 above, +1 for HIGH) are ours, ILLUSTRATIVE. A decline by one member is final. ❓ Q14: MCC composition, quorum and tiers. |
+| T-08-12 | "Credit Report Notes": analyst's free-text summary | 08 | `recordCreditNotes` (`app.ts`), `CREDIT_NOTES_RECORDED` event per version; written by a checker while ASSESSED or IN_COMMITTEE, read by the committee on the assessment screen | `test/compliance/business-delegation-and-notes.test.ts` "credit report notes" | ✅ | Up to 4,000 characters; an identity number is refused as in every free-text field. |
 | T-08-13 | Buttons "Send to MCC Queue" and "Generate Offer →" | 08 | committee route is automatic from the assessment; Generate offer only after APPROVED `business.ts:2304` | `test/unit/ops-business-service.test.ts` full journey | 🟡 | No explicit "send to queue" action; the offer cannot be generated before the committee approves. |
 
 ## 8. Stage 5 — document checklist, Fixed Assets (screen 05)

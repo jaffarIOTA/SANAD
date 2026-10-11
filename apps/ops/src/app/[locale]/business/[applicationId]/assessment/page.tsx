@@ -28,6 +28,7 @@ import { localeFromSegment } from '@sanad/i18n/strings.ts';
 import {
   approveStraightThroughAction,
   committeeDecisionAction,
+  creditNotesAction,
   generateOfferAction,
   recordAssessmentInputsAction,
   runAssessmentAction,
@@ -38,6 +39,7 @@ import {
   getApplication,
   syncBusiness,
 } from '../../../../../server/business.ts';
+import { permits } from '../../../../../server/authority.ts';
 import { pageStaff } from '../../../../../server/session.ts';
 import type { StaffPrincipal } from '../../../../../server/staff.ts';
 import { Gate } from '../../../Gate.tsx';
@@ -558,6 +560,7 @@ export default async function CreditAssessmentPage({
             </div>
           </SectionCard>
 
+          <CreditNotesCard segment={segment} view={view} staff={staff} f={f} />
           <DecisionCard segment={segment} view={view} staff={staff} f={f} approvalDefaults={approvalDefaults} />
         </>
       )}
@@ -913,6 +916,8 @@ function ApprovedTermsInputs({
   const { t } = f;
   const a = view.application;
   const l = defaults?.limits;
+  // Once a member has approved, every further approval concurs with those terms: the server refuses others.
+  const locked = (defaults?.approvals.length ?? 0) > 0;
   return (
     <fieldset className="flex flex-col gap-3 rounded-tile border border-line px-4 py-3">
       <legend className="px-1 text-[13px] font-semibold text-heading">
@@ -946,7 +951,8 @@ function ApprovedTermsInputs({
             dir="ltr"
             autoComplete="off"
             defaultValue={defaults === undefined ? '' : inputAmount(defaults.amount.minorUnits)}
-            className={`${INPUT} text-end tabular-nums`}
+            readOnly={locked}
+            className={`${INPUT} text-end tabular-nums read-only:bg-sunken`}
           />
         </label>
         <label className="flex flex-col gap-1 text-[12px] text-ink-quiet">
@@ -958,17 +964,131 @@ function ApprovedTermsInputs({
             dir="ltr"
             autoComplete="off"
             defaultValue={defaults === undefined ? '' : String(defaults.tenorMonths)}
-            className={`${INPUT} text-end tabular-nums`}
+            readOnly={locked}
+            className={`${INPUT} text-end tabular-nums read-only:bg-sunken`}
           />
         </label>
       </div>
       <p className="text-[12px] text-ink-quiet">
-        {t(
-          'Pre-filled with the lower of the request and the risk level’s maximum, and the lower of the requested tenor and the variant’s maximum. The server checks the figures; the request itself is kept as submitted.',
-          'مُعبّأة مسبقاً بالأقل من المبلغ المطلوب والحد الأقصى لفئة المخاطر، وبالأقل من المدة المطلوبة والحد الأقصى لمدة الفئة. يتحقق الخادم من الأرقام، ويبقى الطلب نفسه كما قُدِّم.',
-        )}
+        {locked
+          ? t(
+              'These are the terms already approved. A further approval agrees to them; to approve different terms, decline with your reason.',
+              'هذه هي الشروط المعتمدة سابقاً، والموافقة الإضافية تكون عليها. لاعتماد شروط مختلفة ارفض مع ذكر السبب.',
+            )
+          : t(
+              'Pre-filled with the lower of the request and the risk level’s maximum, and the lower of the requested tenor and the variant’s maximum. The server checks the figures; the request itself is kept as submitted.',
+              'مُعبّأة مسبقاً بالأقل من المبلغ المطلوب والحد الأقصى لفئة المخاطر، وبالأقل من المدة المطلوبة والحد الأقصى لمدة الفئة. يتحقق الخادم من الأرقام، ويبقى الطلب نفسه كما قُدِّم.',
+            )}
       </p>
     </fieldset>
+  );
+}
+
+/** The delegation of authority's quorum for the terms on screen, and who has approved so far. */
+function QuorumLine({
+  defaults,
+  f,
+}: {
+  readonly defaults: CommitteeApprovalDefaults;
+  readonly f: Formatters;
+}): ReactElement {
+  const { t } = f;
+  const done = defaults.approvals.length;
+  const need = defaults.approvalsRequired;
+  return (
+    <div
+      className="flex flex-col gap-1.5 rounded-tile bg-brand-wash px-4 py-3"
+      data-quorum={`${String(done)}/${String(need)}`}
+    >
+      <p className="text-[13px] font-semibold text-heading">
+        {t(
+          `Delegation of authority: ${f.n(need)} ${need === 1 ? 'approval' : 'approvals'} required · ${f.n(done)} recorded`,
+          `صلاحيات الاعتماد: ${need === 1 ? 'موافقة واحدة مطلوبة' : `الموافقات المطلوبة ${f.n(need)}`} · المسجّل ${f.n(done)}`,
+        )}
+      </p>
+      {done === 0 ? null : (
+        <ul className="flex flex-col gap-1 text-[12px] text-ink-quiet">
+          {defaults.approvals.map((x) => (
+            <li key={x.decidedBy}>
+              {t('Approved by', 'وافق')} <Id>{x.decidedBy}</Id>: {x.reason}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The analyst's credit report notes: written while the case is assessed or in
+ * committee, read by the committee beside its decision, kept read-only after.
+ */
+function CreditNotesCard({
+  segment,
+  view,
+  staff,
+  f,
+}: {
+  readonly segment: string;
+  readonly view: NonNullable<Awaited<ReturnType<typeof getApplication>>>;
+  readonly staff: StaffPrincipal;
+  readonly f: Formatters;
+}): ReactElement | null {
+  const { t } = f;
+  const a = view.application;
+  const notes = a.creditNotes;
+  const open = a.status === 'ASSESSED' || a.status === 'IN_COMMITTEE';
+  // The committee reads the notes; only the analyst writes them, so anyone else sees the text, not a locked editor.
+  const writable = open && permits(staff, 'BUSINESS_CREDIT_NOTES').allowed;
+  if (!open && notes === undefined) return null;
+  const saved =
+    notes === undefined ? null : (
+      <p className="text-[12px] text-ink-quiet">
+        {t('Last saved by', 'آخر حفظ بواسطة')} <Id>{notes.recordedBy}</Id>
+      </p>
+    );
+  return (
+    <SectionCard
+      title={t('Credit report notes', 'ملاحظات التقرير الائتماني')}
+      note={t(
+        'The analyst’s summary for the committee. Every saved version is kept in the application’s history.',
+        'ملخص المحلل للجنة. تُحفظ كل نسخة في سجل الطلب.',
+      )}
+    >
+      <div className="px-5 py-4">
+        {open && (writable || notes === undefined) ? (
+          <Gate staff={staff} act="BUSINESS_CREDIT_NOTES" arabic={f.arabic}>
+            <form action={creditNotesAction} className="flex flex-col gap-3">
+              <FormContext segment={segment} applicationId={a.applicationId} screen="assessment" />
+              <textarea
+                name="creditNotes"
+                required
+                minLength={3}
+                maxLength={4000}
+                rows={5}
+                defaultValue={notes?.text ?? ''}
+                aria-label={t('Credit report notes', 'ملاحظات التقرير الائتماني')}
+                className="w-full rounded-tile border border-line-strong bg-surface px-3 py-2 text-[14px] leading-6 text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                {saved ?? <span />}
+                <button type="submit" className={BTN_SECONDARY}>
+                  {t('Save notes', 'حفظ الملاحظات')}
+                </button>
+              </div>
+            </form>
+          </Gate>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <p className="whitespace-pre-line text-[14px] leading-6 text-ink">
+              {/* The analyst may write in either language; <bdi> lets the note take its own direction. */}
+              <bdi>{notes?.text}</bdi>
+            </p>
+            {saved}
+          </div>
+        )}
+      </div>
+    </SectionCard>
   );
 }
 
@@ -1015,9 +1135,18 @@ function DecisionCard({
     );
   } else if (a.status === 'IN_COMMITTEE') {
     body = (
-      <Gate staff={staff} act="BUSINESS_COMMITTEE" arabic={f.arabic} ownWork={a.submittedBy === staff.principalId}>
+      <Gate
+        staff={staff}
+        act="BUSINESS_COMMITTEE"
+        arabic={f.arabic}
+        ownWork={
+          a.submittedBy === staff.principalId ||
+          (a.committeeApprovals ?? []).some((x) => x.decidedBy === staff.principalId)
+        }
+      >
         <form action={committeeDecisionAction} className="flex flex-col gap-3">
           <FormContext segment={segment} applicationId={a.applicationId} screen="assessment" />
+          {approvalDefaults === undefined ? null : <QuorumLine defaults={approvalDefaults} f={f} />}
           <p className="text-[13px] text-ink-quiet">
             {f.arabic ? (
               <>

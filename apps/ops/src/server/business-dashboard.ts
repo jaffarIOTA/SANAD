@@ -450,6 +450,11 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
   APPROVED: { en: 'Approved straight through by the checker.', ar: 'اعتمده المراجِع مباشرةً.' },
   COMMITTEE_APPROVED: { en: 'Approved by the credit committee.', ar: 'اعتمدته لجنة الائتمان.' },
   COMMITTEE_DECLINED: { en: 'Declined by the credit committee.', ar: 'رفضته لجنة الائتمان.' },
+  COMMITTEE_APPROVAL_RECORDED: {
+    en: 'Your approval is recorded. The delegation of authority needs another committee member to approve before the application is approved.',
+    ar: 'سُجّلت موافقتك. تتطلب صلاحيات الاعتماد موافقة عضو آخر في اللجنة قبل اعتماد الطلب.',
+  },
+  CREDIT_NOTES_RECORDED: { en: 'Credit report notes saved.', ar: 'حُفظت ملاحظات التقرير الائتماني.' },
   OFFER_GENERATED: { en: 'Offer letter generated.', ar: 'أُعدّ خطاب العرض.' },
   OFFER_SENT: {
     en: 'Offer sent: the notification is queued on the outbox.',
@@ -690,6 +695,26 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
   COMMITTEE_REASON_REQUIRED: {
     en: 'A committee decision is recorded with its reason.',
     ar: 'يُسجَّل قرار اللجنة مع سببه.',
+  },
+  COMMITTEE_MEMBER_ALREADY_APPROVED: {
+    en: 'You have already approved this application. Your approval counts once; another committee member approves next.',
+    ar: 'سبق أن وافقت على هذا الطلب. تُحتسب موافقتك مرة واحدة؛ يوافق عضو آخر في اللجنة بعدك.',
+  },
+  COMMITTEE_TERMS_DIFFER: {
+    en: 'A further approval agrees to the amount and tenor already approved. To approve different terms, decline with your reason so the case can be re-presented.',
+    ar: 'الموافقة الإضافية تكون على المبلغ والمدة المعتمدين سابقاً. لاعتماد شروط مختلفة ارفض مع ذكر السبب ليُعاد عرض الحالة.',
+  },
+  APPROVALS_REQUIRED_INVALID: {
+    en: 'The delegation of authority could not be read for this approval. Nothing was recorded; ask an administrator to check the credit policy.',
+    ar: 'تعذّرت قراءة صلاحيات الاعتماد لهذه الموافقة. لم يُسجَّل شيء؛ اطلب من المسؤول مراجعة السياسة الائتمانية.',
+  },
+  CREDIT_NOTES_REQUIRED: {
+    en: 'Write the credit report notes before saving them.',
+    ar: 'اكتب ملاحظات التقرير الائتماني قبل حفظها.',
+  },
+  CREDIT_NOTES_TOO_LONG: {
+    en: 'Credit report notes are a summary of up to four thousand characters. Shorten them and save again.',
+    ar: 'ملاحظات التقرير الائتماني ملخص لا يتجاوز أربعة آلاف حرف. اختصرها واحفظها مجدداً.',
   },
   // The committee's approved terms. Nothing was recorded on any of these; the member corrects the figure and decides again.
   APPROVED_AMOUNT_MALFORMED: {

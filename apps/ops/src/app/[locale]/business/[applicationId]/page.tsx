@@ -733,7 +733,14 @@ export default async function LoanApplicationPage({
                 {t(
                   'Scoring runs on the verified figures and the bureau snapshot.',
                   'يجري التقييم على الأرقام المتحقق منها ونتيجة المكتب الائتماني.',
-                )}
+                )}{' '}
+                {/* There is no draft to save: each figure and document is recorded the moment it is entered (T-05 "Save draft"). */}
+                <span data-saved-as-you-go>
+                  {t(
+                    'Everything entered on this page is saved as you go; you can leave and return before submitting.',
+                    'يُحفظ كل ما يُدخل في هذه الصفحة أولاً بأول؛ يمكنك المغادرة والعودة قبل الإحالة.',
+                  )}
+                </span>
               </>
             ) : a.submittedAtEpochSeconds === undefined ? (
               t('This application is not open for submission.', 'هذا الطلب غير متاح للإحالة.')

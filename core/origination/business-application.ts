@@ -95,6 +95,13 @@ export interface BusinessApplication {
     readonly atEpochSeconds: bigint;
   };
   /**
+   * The committee approvals recorded so far, toward the quorum the tenant's
+   * delegation of authority requires. Kept after the decision as its record.
+   */
+  readonly committeeApprovals?: readonly CommitteeApproval[];
+  /** The analyst's credit report notes: the latest version; every version is in the event log. */
+  readonly creditNotes?: CreditNotes;
+  /**
    * What was approved, recorded by the decision that approved it: the amount
    * and tenor the offer is quoted on. `requested` and `tenorMonths` are never
    * overwritten — they stay the applicant's request. Absent on a record
@@ -113,6 +120,24 @@ export interface BusinessApplication {
 }
 
 export type AssessmentOutcome = 'STRAIGHT_THROUGH' | 'COMMITTEE' | 'DECLINE' | 'REFER';
+
+/** One committee member's approval, on the terms every approval of the application shares. */
+export interface CommitteeApproval {
+  readonly decidedBy: string;
+  readonly reason: string;
+  readonly amount: Money;
+  readonly tenorMonths: number;
+  readonly atEpochSeconds: bigint;
+}
+
+export interface CreditNotes {
+  readonly text: string;
+  readonly recordedBy: string;
+  readonly atEpochSeconds: bigint;
+}
+
+/** The longest credit report note accepted: a summary, not a report pasted whole. */
+export const CREDIT_NOTES_MAX_LENGTH = 4000;
 
 /**
  * How the approved terms came to be:
@@ -160,6 +185,12 @@ export interface ProposedTerms {
 export interface ApprovalContext {
   readonly tenantCurrency: CurrencyCode;
   readonly limits?: ApprovalLimits;
+  /**
+   * How many different members must approve these terms: the tenant's
+   * delegation of authority for the approved amount and risk band, worked out
+   * by the caller from its credit policy. Absent, one approval decides.
+   */
+  readonly approvalsRequired?: number;
 }
 
 export interface StageEvent {
@@ -587,11 +618,100 @@ export function decideInCommittee(
     approval.tenantCurrency,
   );
   if (!checked.ok) return checked;
-  return ok(
-    move(app, 'APPROVED', { committee, approvedTerms: checked.value }, 'COMMITTEE_APPROVED', decision.decidedBy, at, {
+
+  // Delegation of authority: approvals by different members, on one set of terms, until the quorum is met.
+  const required = approval.approvalsRequired ?? 1;
+  if (!Number.isInteger(required) || required < 1)
+    return bad('APPROVALS_REQUIRED_INVALID', 'The approvals required is a whole number of at least one');
+  const prior = app.committeeApprovals ?? [];
+  if (prior.some((a) => a.decidedBy === decision.decidedBy))
+    return reject(
+      'OP-DETERMINACY',
+      'COMMITTEE_MEMBER_ALREADY_APPROVED',
+      'A member’s approval counts once; another member must approve',
+    );
+  const first = prior[0];
+  if (
+    first !== undefined &&
+    (first.amount.minorUnits !== checked.value.amount.minorUnits || first.tenorMonths !== checked.value.tenorMonths)
+  )
+    return bad('COMMITTEE_TERMS_DIFFER', 'A further approval concurs with the terms already approved', {
+      approvedMinorUnits: first.amount.minorUnits.toString(),
+      approvedTenorMonths: String(first.tenorMonths),
+    });
+  const approvals: readonly CommitteeApproval[] = [
+    ...prior,
+    {
+      decidedBy: decision.decidedBy,
       reason: decision.reason,
-      ...approvedDetail(app, checked.value),
-    }),
+      amount: checked.value.amount,
+      tenorMonths: checked.value.tenorMonths,
+      atEpochSeconds: at,
+    },
+  ];
+  const quorum = {
+    approvalsRecorded: String(approvals.length),
+    approvalsRequired: String(required),
+  };
+  if (approvals.length < required)
+    return ok(
+      move(
+        app,
+        'IN_COMMITTEE',
+        { committeeApprovals: approvals },
+        'COMMITTEE_APPROVAL_RECORDED',
+        decision.decidedBy,
+        at,
+        { reason: decision.reason, ...quorum, ...approvedDetail(app, checked.value) },
+      ),
+    );
+  return ok(
+    move(
+      app,
+      'APPROVED',
+      { committee, approvedTerms: checked.value, committeeApprovals: approvals },
+      'COMMITTEE_APPROVED',
+      decision.decidedBy,
+      at,
+      { reason: decision.reason, ...quorum, ...approvedDetail(app, checked.value) },
+    ),
+  );
+}
+
+/**
+ * The analyst's credit report notes: a free-text summary for the committee,
+ * recorded while the application is assessed or in committee, revisable until
+ * it is decided. Each version is an event; the record keeps the latest. An
+ * identity number is refused, as in every free-text field.
+ */
+export function recordCreditNotes(
+  app: BusinessApplication,
+  notes: { readonly recordedBy: string; readonly text: string },
+  at: bigint,
+): Result<Transition> {
+  const e = expect(app, ['ASSESSED', 'IN_COMMITTEE'], 'Record credit report notes');
+  if (!e.ok) return e;
+  const text = notes.text.trim();
+  if (text.length < 3) return bad('CREDIT_NOTES_REQUIRED', 'Credit report notes say something');
+  if (text.length > CREDIT_NOTES_MAX_LENGTH)
+    return bad('CREDIT_NOTES_TOO_LONG', 'Credit report notes are a summary', {
+      maxLength: String(CREDIT_NOTES_MAX_LENGTH),
+    });
+  if (containsIdentityNumber(text))
+    return bad(
+      'IDENTITY_NUMBER_IN_PAYLOAD',
+      'An identity number does not belong in credit report notes; refer to the party by reference',
+    );
+  return ok(
+    move(
+      app,
+      app.status,
+      { creditNotes: { text, recordedBy: notes.recordedBy, atEpochSeconds: at } },
+      'CREDIT_NOTES_RECORDED',
+      notes.recordedBy,
+      at,
+      { text },
+    ),
   );
 }
 

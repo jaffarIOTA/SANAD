@@ -126,6 +126,40 @@ export interface SmeAssessmentPolicy {
   /** What happens when the request is outside its risk band's terms. */
   readonly outsideRiskAlignedTerms: 'DECLINE' | 'COMMITTEE';
   readonly straightThrough: StraightThroughRule;
+  /** How many different committee members must approve; absent, one approval decides (as before DoA existed). */
+  readonly delegationOfAuthority?: DelegationOfAuthority;
+}
+
+/**
+ * Delegation of authority as a quorum: how many different credit committee
+ * members must approve before an application is approved, by the approved
+ * amount and the risk band. A tier applies up to and including its amount; the
+ * last tier has no amount and takes everything above. A risk level may add
+ * approvals on top of the tier. Who sits on the committee is the tenant's staff
+ * identity configuration; this says only how many of them.
+ */
+export interface DelegationTier {
+  /** Absent on the last tier: no upper bound. */
+  readonly upTo?: Money;
+  readonly approvalsRequired: number;
+}
+
+export interface DelegationOfAuthority {
+  readonly tiers: readonly DelegationTier[];
+  readonly additionalApprovalsByRiskLevel: Readonly<Record<string, number>>;
+  readonly policyRef: string;
+}
+
+/** The approvals an approval of `amount` in `riskLevel` needs: one where the policy has no delegation of authority. */
+export function committeeApprovalsRequired(
+  doa: DelegationOfAuthority | undefined,
+  amount: Money,
+  riskLevel: string,
+): number {
+  if (doa === undefined) return 1;
+  const tier = doa.tiers.find((t) => t.upTo === undefined || amount.minorUnits <= t.upTo.minorUnits);
+  // The parser guarantees an unbounded last tier, so a tier is always found.
+  return (tier?.approvalsRequired ?? 1) + (doa.additionalApprovalsByRiskLevel[riskLevel] ?? 0);
 }
 
 // ------------------------------------------------------------------- trace
@@ -386,6 +420,65 @@ function parseMinorUnits(raw: unknown, currency: CurrencyCode, where: string): R
   return ok(money(BigInt(raw), currency));
 }
 
+const isApprovalCount = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 9;
+
+/**
+ * The delegation of authority, refused rather than defaulted when malformed:
+ * tiers in ascending amount order, every one but the last bounded, the last
+ * unbounded, each needing one to nine approvals; risk add-ons only for the
+ * policy's own risk levels, zero to five each.
+ */
+function parseDelegation(
+  raw: unknown,
+  currency: CurrencyCode,
+  riskLevels: readonly string[],
+): Result<DelegationOfAuthority> {
+  const where = 'delegationOfAuthority';
+  if (!isRecord(raw)) return bad('SME_ASSESSMENT_DOA', 'delegationOfAuthority is an object');
+  const extra = unknownKeys(raw, ['tiers', 'additionalApprovalsByRiskLevel', 'policyRef'], where);
+  if (extra) return extra;
+  const rawTiers = raw['tiers'];
+  if (!Array.isArray(rawTiers) || rawTiers.length === 0)
+    return bad('SME_ASSESSMENT_DOA', 'delegationOfAuthority.tiers lists one or more tiers');
+  const tiers: DelegationTier[] = [];
+  for (const [i, t] of rawTiers.entries()) {
+    const at = `${where}.tiers[${String(i)}]`;
+    if (!isRecord(t)) return bad('SME_ASSESSMENT_DOA', 'A tier is an object', { where: at });
+    const extraT = unknownKeys(t, ['upToMinorUnits', 'approvalsRequired'], at);
+    if (extraT) return extraT;
+    if (!isApprovalCount(t['approvalsRequired']))
+      return bad('SME_ASSESSMENT_DOA', 'approvalsRequired is a whole number from 1 to 9', { where: at });
+    const last = i === rawTiers.length - 1;
+    if (last) {
+      if (t['upToMinorUnits'] !== undefined)
+        return bad('SME_ASSESSMENT_DOA', 'The last tier has no upper amount: it takes everything above', { where: at });
+      tiers.push({ approvalsRequired: t['approvalsRequired'] });
+      continue;
+    }
+    const upTo = parseMinorUnits(t['upToMinorUnits'], currency, at);
+    if (!upTo.ok) return upTo;
+    const previous = tiers[tiers.length - 1]?.upTo;
+    if (previous !== undefined && upTo.value.minorUnits <= previous.minorUnits)
+      return bad('SME_ASSESSMENT_DOA', 'Tiers are in ascending amount order', { where: at });
+    tiers.push({ upTo: upTo.value, approvalsRequired: t['approvalsRequired'] });
+  }
+  const rawAdd = raw['additionalApprovalsByRiskLevel'] ?? {};
+  if (!isRecord(rawAdd)) return bad('SME_ASSESSMENT_DOA', 'additionalApprovalsByRiskLevel is an object');
+  const additional: Record<string, number> = {};
+  for (const [level, n] of Object.entries(rawAdd)) {
+    if (!riskLevels.includes(level))
+      return bad('SME_ASSESSMENT_DOA', 'additionalApprovalsByRiskLevel names one of the policy’s risk levels', {
+        level,
+      });
+    if (typeof n !== 'number' || !Number.isInteger(n) || n < 0 || n > 5)
+      return bad('SME_ASSESSMENT_DOA', 'An additional approval count is a whole number from 0 to 5', { level });
+    additional[level] = n;
+  }
+  if (!isPolicyRef(raw['policyRef']))
+    return bad('SME_ASSESSMENT_POLICY_REF', 'The delegation of authority names the policy it comes from');
+  return ok({ tiers, additionalApprovalsByRiskLevel: additional, policyRef: raw['policyRef'] });
+}
+
 function parseRiskBand(raw: unknown, currency: CurrencyCode, i: number): Result<RiskBand> {
   const where = `riskBands[${String(i)}]`;
   if (!isRecord(raw)) return bad('SME_ASSESSMENT_RISK_BAND', 'A risk band is an object', { where });
@@ -451,6 +544,7 @@ export function parseSmeAssessmentPolicy(raw: unknown): Result<SmeAssessmentPoli
       'equityContributionFact',
       'outsideRiskAlignedTerms',
       'straightThrough',
+      'delegationOfAuthority',
     ],
     'the policy',
   );
@@ -572,6 +666,16 @@ export function parseSmeAssessmentPolicy(raw: unknown): Result<SmeAssessmentPoli
     return bad('SME_ASSESSMENT_UNDECLARED_FACT', 'collateralCoverageFact names a declared INTEGER fact');
   if (!isPolicyRef(stp['policyRef']))
     return bad('SME_ASSESSMENT_POLICY_REF', 'The straight-through rule names the policy it comes from');
+  let delegation: DelegationOfAuthority | undefined;
+  if (raw['delegationOfAuthority'] !== undefined) {
+    const parsed = parseDelegation(
+      raw['delegationOfAuthority'],
+      currency as CurrencyCode,
+      riskBands.map((b) => b.level),
+    );
+    if (!parsed.ok) return parsed;
+    delegation = parsed.value;
+  }
 
   return ok({
     policyId: raw['policyId'],
@@ -594,6 +698,7 @@ export function parseSmeAssessmentPolicy(raw: unknown): Result<SmeAssessmentPoli
       collateralCoverageFact: coverFact,
       policyRef: stp['policyRef'],
     },
+    ...(delegation === undefined ? {} : { delegationOfAuthority: delegation }),
   });
 }
 
