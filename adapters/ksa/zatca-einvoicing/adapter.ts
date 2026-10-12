@@ -5,6 +5,15 @@
  * invoice, and a counterparty's cleared-invoice history for decisioning.
  * Fail closed: an invoice the authority does not confirm as CLEARED with a
  * valid stamp is refused, and a drawdown does not proceed on it.
+ *
+ * Contract: the outcome fields are Fatoora's PUBLISHED clearance / reporting
+ * response — `validationResults{infoMessages, warningMessages, errorMessages,
+ * status: PASS | WARNING | ERROR}` with rule codes such as BR-KSA-F-06,
+ * `clearanceStatus: CLEARED | NOT_CLEARED`, `reportingStatus: REPORTED |
+ * NOT_REPORTED`. Fatoora publishes no lookup of an invoice by UUID, so the
+ * path, and the `invoice` block (content decoded from the cleared UBL
+ * document, UBL element names) are assumptions — see README.md. The trade
+ * history call has no public analogue at all and speaks Sanad's vocabulary.
  */
 
 import type { KeyObject } from 'node:crypto';
@@ -23,7 +32,17 @@ import { type Result, ok, reject } from '../../../core/kernel/result.ts';
 import { money } from '../../../core/kernel/money.ts';
 import type { KnownDeviation } from '../../kernel/adapter.ts';
 import type { RailTransport } from '../../kernel/http-transport.ts';
-import { RailAdapter, type RailAdapterConfig, decimalToMinor, int, str } from '../kernel/rail-adapter.ts';
+import {
+  RailAdapter,
+  type RailAdapterConfig,
+  arr,
+  decimalToMinor,
+  idStr,
+  int,
+  obj,
+  own,
+  str,
+} from '../kernel/rail-adapter.ts';
 
 import { stampVerifies } from './stamp.ts';
 
@@ -40,7 +59,7 @@ export const ZATCA_EINVOICING_DEVIATIONS: readonly KnownDeviation[] = [
     summary:
       'The authority’s clearance vocabulary and stamp-verification fields are to be confirmed against the production schema.',
     containment:
-      'Anything not literally CLEARED or REPORTED maps to REJECTED or NOT_FOUND; an unknown status never validates an invoice.',
+      'Only clearanceStatus CLEARED (or, for a simplified invoice, reportingStatus REPORTED) under a validation status of PASS or WARNING with no error message validates; anything else is REJECTED, and an unknown invoice is NOT_FOUND.',
     verificationRef: 'KSA-RAIL-ZATCA-01',
   },
   {
@@ -58,12 +77,34 @@ export interface ZatcaStampTrust {
   readonly authorityKeys: readonly KeyObject[];
 }
 
-const STATUS: Readonly<Record<string, ClearanceStatus>> = {
-  CLEARED: 'CLEARED',
-  REPORTED: 'REPORTED',
-  REJECTED: 'REJECTED',
-  NOT_FOUND: 'NOT_FOUND',
-};
+/** Fatoora `validationResults.status` values under which an invoice can stand. ERROR never can. */
+const VALIDATION_PASSES: Readonly<Record<string, boolean>> = { PASS: true, WARNING: true, ERROR: false };
+
+/**
+ * The published Fatoora outcome to the port. `clearanceStatus` (standard, B2B invoices) is
+ * CLEARED | NOT_CLEARED; `reportingStatus` (simplified invoices) is REPORTED | NOT_REPORTED.
+ * Anything else, or a validation status of ERROR, or any error message, is REJECTED.
+ */
+export function clearanceOutcome(v: Readonly<Record<string, unknown>>): ClearanceStatus {
+  const results = obj(v['validationResults']);
+  const passes = own(VALIDATION_PASSES, results?.['status']);
+  const errors = arr(results?.['errorMessages']) ?? [];
+  if (passes !== true || errors.length > 0) return 'REJECTED';
+  if (v['clearanceStatus'] === 'CLEARED') return 'CLEARED';
+  if (v['clearanceStatus'] === undefined && v['reportingStatus'] === 'REPORTED') return 'REPORTED';
+  return 'REJECTED';
+}
+
+/** The rule codes Fatoora returned (BR-KSA-…, BR-…), for the audit trail; never shown as a decision. */
+export function ruleCodes(v: Readonly<Record<string, unknown>>): readonly string[] {
+  const results = obj(v['validationResults']);
+  return ['errorMessages', 'warningMessages', 'infoMessages'].flatMap((k) =>
+    (arr(results?.[k]) ?? []).flatMap((m) => {
+      const code = str(obj(m)?.['code']);
+      return code === undefined ? [] : [code];
+    }),
+  );
+}
 
 export class ZatcaEInvoicingAdapter extends RailAdapter implements EInvoicingProvider {
   readonly vendorName = 'ZATCA';
@@ -111,32 +152,34 @@ export class ZatcaEInvoicingAdapter extends RailAdapter implements EInvoicingPro
             code: r.code,
           });
     const v = r.value;
-    const status = STATUS[String(v['clearanceStatus'])] ?? 'REJECTED';
+    const status = clearanceOutcome(v);
+    // The invoice content, as decoded from the cleared UBL document (field names unconfirmed).
+    const invoice = obj(v['invoice']) ?? {};
     // Verified, never taken from the response (SR-016).
-    const stampValid = stampVerifies(v['qrCode'], ref.invoiceHash, this.#stampTrust.authorityKeys);
-    const issuerCr = str(v['sellerCr']);
-    const recipientCr = str(v['buyerCr']);
-    const total = decimalToMinor(v['totalAmount']);
-    const issued = str(v['issueDate']);
+    const stampValid = stampVerifies(invoice['qrCode'], ref.invoiceHash, this.#stampTrust.authorityKeys);
+    const issuerCr = idStr(obj(invoice['seller'])?.['crNumber']);
+    const recipientCr = idStr(obj(invoice['buyer'])?.['crNumber']);
+    const total = decimalToMinor(invoice['taxInclusiveAmount']);
+    const issued = str(invoice['issueDate']);
     if (issuerCr === undefined || recipientCr === undefined || total === undefined || issued === undefined)
       return reject('OP-DETERMINACY', 'EINVOICE_RESPONSE_MALFORMED', 'The invoice response was not understood');
     const lines: InvoiceLineItem[] = [];
-    for (const raw of Array.isArray(v['lines']) ? (v['lines'] as unknown[]) : []) {
-      const rec = raw as Record<string, unknown>;
-      const lineNo = int(rec['lineNo']);
-      const amount = decimalToMinor(rec['amount']);
-      const code = str(rec['classificationCode']);
+    for (const raw of arr(invoice['invoiceLines']) ?? []) {
+      const rec = obj(raw) ?? {};
+      const lineNo = int(rec['id']);
+      const amount = decimalToMinor(rec['lineExtensionAmount']);
+      const code = idStr(rec['itemClassificationCode']);
       if (lineNo === undefined || amount === undefined || code === undefined)
         return reject('OP-DETERMINACY', 'EINVOICE_LINE_MALFORMED', 'An invoice line was not understood', {
-          lineNo: String(rec['lineNo']),
+          lineNo: String(rec['id']),
         });
       lines.push({
         lineNo,
-        descriptionAr: str(rec['descriptionAr']) ?? '',
-        descriptionEn: str(rec['descriptionEn']) ?? '',
+        descriptionAr: str(rec['itemNameAr']) ?? '',
+        descriptionEn: str(rec['itemName']) ?? '',
         goodsClassificationCode: code,
-        quantity: str(rec['quantity']) ?? '1',
-        unitOfMeasure: str(rec['unit']) ?? 'EA',
+        quantity: str(rec['invoicedQuantity']) ?? '1',
+        unitOfMeasure: str(rec['unitCode']) ?? 'EA',
         lineAmount: money(amount),
       });
     }

@@ -2,8 +2,17 @@
  * Wathq — business registry adapter (CLAUDE.md §5).
  *
  * Implements the business-registry port: a lookup by commercial registration
- * against the Ministry of Commerce data. Signatory identifiers are dropped at
- * this boundary; the record carries references only.
+ * against the Ministry of Commerce data.
+ *
+ * Assumed contract (third-party summary of the Wathq sandbox specification
+ * v6.7.0 and the Lean Technologies wrapper — unconfirmed, see README.md):
+ * `GET /v5/commercialregistration/fullinfo/{id}` answers `crNationalNumber`,
+ * `crNumber`, `name`, `status{id,name}`, `entityType{...}`, `parties[]`,
+ * `management.managers[]` and `activities[]`. Published errors: 400.1.1–400.1.7
+ * and 404.2.1 (not found). Only status id 1 "Active" is published.
+ *
+ * Party and manager identifiers are dropped at this boundary; the record
+ * carries opaque references only.
  */
 
 import type { CredentialProvider } from '../../../core/ports/credentials.ts';
@@ -12,22 +21,44 @@ import type { RailOutcome } from '../../../core/ports/rail.ts';
 import { type Result, ok, reject } from '../../../core/kernel/result.ts';
 import type { KnownDeviation } from '../../kernel/adapter.ts';
 import type { RailTransport } from '../../kernel/http-transport.ts';
-import { RailAdapter, type RailAdapterConfig, decimalToMinor, epoch, malformed, str } from '../kernel/rail-adapter.ts';
+import {
+  RailAdapter,
+  type RailAdapterConfig,
+  arr,
+  idStr,
+  isoToEpoch,
+  malformed,
+  obj,
+  own,
+  str,
+} from '../kernel/rail-adapter.ts';
+import { sar } from '../kernel/riyal.ts';
 
 export const WATHQ_DEVIATIONS: readonly KnownDeviation[] = [
   {
     id: 'WATHQ-DEV-002',
-    summary: 'The registry returns the signatories’ national identifiers.',
-    containment: 'Identifiers are dropped at this boundary; the record carries opaque signatory references only.',
+    summary: 'The registry returns the parties’ and managers’ national identifiers.',
+    containment:
+      'Identifiers are dropped at this boundary; each manager becomes an opaque reference by its position in this lookup.',
+    verificationRef: 'KSA-RAIL-WATHQ-01',
+  },
+  {
+    id: 'WATHQ-DEV-003',
+    summary: 'Only status id 1 ("Active") is published; ids 2–4 are assumptions.',
+    containment: 'A status id not in the table — including any inherited object key — is UNAVAILABLE, never ACTIVE.',
     verificationRef: 'KSA-RAIL-WATHQ-01',
   },
 ];
 
-const STATUS: Readonly<Record<string, RegistrationRecord['status']>> = {
-  ACTIVE: 'ACTIVE',
-  EXPIRED: 'EXPIRED',
-  SUSPENDED: 'SUSPENDED',
-  CANCELLED: 'CANCELLED',
+/**
+ * Wathq `status.id` to the port. Only 1 is published; 2, 3 and 4 are this adapter's assumptions
+ * and the verification item (README.md).
+ */
+export const WATHQ_STATUS: Readonly<Record<string, RegistrationRecord['status']>> = {
+  '1': 'ACTIVE',
+  '2': 'SUSPENDED',
+  '3': 'CANCELLED',
+  '4': 'EXPIRED',
 };
 
 export class WathqAdapter extends RailAdapter implements BusinessRegistryPort {
@@ -48,54 +79,56 @@ export class WathqAdapter extends RailAdapter implements BusinessRegistryPort {
       return reject('OP-DETERMINACY', 'CR_MALFORMED', 'A commercial registration number is ten digits');
     const r = await this.invoke(
       'registry.lookup',
-      { method: 'GET', path: `/v1/commercial-registrations/${p.commercialRegistration}` },
+      { method: 'GET', path: `/v5/commercialregistration/fullinfo/${p.commercialRegistration}` },
       p.correlationId,
     );
+    // 404.2.1: no registration under this number.
     if (r.kind === 'REFUSED' && r.code === 'HTTP_404') return ok({ kind: 'REFUSED', code: 'NOT_FOUND' });
     if (r.kind !== 'ANSWERED') return ok(r);
     const v = r.value;
-    const nameAr = str(v['nameAr']);
-    const nameEn = str(v['nameEn']);
-    const legalForm = str(v['legalForm']);
-    const status = STATUS[String(v['status'])];
-    const lookupRef = str(v['lookupId']) ?? `wathq-${p.commercialRegistration}`;
-    const at = epoch(v['asOf']);
-    if (
-      nameAr === undefined ||
-      nameEn === undefined ||
-      legalForm === undefined ||
-      status === undefined ||
-      at === undefined
-    )
-      return ok(malformed());
-    const signatoryRefs = Array.isArray(v['signatories'])
-      ? (v['signatories'] as unknown[]).flatMap((s) => {
-          const ref = str((s as Record<string, unknown>)['ref']);
-          return ref === undefined ? [] : [ref];
-        })
-      : [];
-    const activityCodes = Array.isArray(v['activities'])
-      ? (v['activities'] as unknown[]).flatMap((a) => {
-          const code = str((a as Record<string, unknown>)['code']);
-          return code === undefined ? [] : [code];
-        })
-      : [];
-    const capital = decimalToMinor(v['paidCapital']);
-    const registered = str(v['registeredAt']);
+    const nationalNumber = idStr(v['crNationalNumber']);
+    const crNumber = idStr(v['crNumber']);
+    // The answer must be about the registration asked for, by either of its numbers.
+    if (nationalNumber !== p.commercialRegistration && crNumber !== p.commercialRegistration) return ok(malformed());
+    const nameAr = str(v['name']);
+    const entityType = obj(v['entityType']);
+    const legalForm = str(entityType?.['formName']) ?? str(entityType?.['name']);
+    // Own keys only: a status of "constructor" is not understood, not Object.prototype.constructor.
+    const status = own(WATHQ_STATUS, obj(v['status'])?.['id']);
+    if (nameAr === undefined || legalForm === undefined || status === undefined) return ok(malformed());
+
+    const managers = arr(obj(v['management'])?.['managers']) ?? [];
+    const activities = arr(v['activities']) ?? [];
+    const activityCodes: string[] = [];
+    for (const a of activities) {
+      const code = idStr(obj(a)?.['id']);
+      if (code === undefined) return ok(malformed());
+      activityCodes.push(code);
+    }
+    const now = BigInt(this.config.nowEpochSeconds());
+    const lookupRef = `wathq:${nationalNumber ?? p.commercialRegistration}:${now.toString()}`;
+    const capital = sar(obj(obj(v['capital'])?.['stockCapital'])?.['paidAmount'] ?? obj(v['capital'])?.['paidAmount']);
+    const registered = str(v['issueDateGregorian']);
     return ok({
       kind: 'ANSWERED',
       value: {
         commercialRegistration: p.commercialRegistration,
         legalNameAr: nameAr,
-        legalNameEn: nameEn,
+        // An English trade name is optional on a Saudi CR; the Arabic name is the legal name.
+        legalNameEn: str(v['nameEn']) ?? nameAr,
         legalForm,
         status,
         activityCodes,
-        signatoryRefs,
+        // Opaque, positional references: no manager's identifier leaves this adapter.
+        signatoryRefs: managers.map(
+          (_m, i) => `wathq:${nationalNumber ?? p.commercialRegistration}:manager:${String(i + 1)}`,
+        ),
         lookupRef,
-        retrievedAtEpochSeconds: at,
-        ...(capital === undefined ? {} : { paidCapitalMinorUnits: capital }),
-        ...(registered === undefined ? {} : { registeredAtGregorian: registered }),
+        retrievedAtEpochSeconds: now,
+        ...(capital === undefined ? {} : { paidCapitalMinorUnits: capital.minorUnits }),
+        ...(registered === undefined || isoToEpoch(registered) === undefined
+          ? {}
+          : { registeredAtGregorian: registered }),
       },
     });
   }

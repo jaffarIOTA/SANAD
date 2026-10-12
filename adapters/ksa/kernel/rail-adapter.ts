@@ -46,7 +46,13 @@ export abstract class RailAdapter extends BaseAdapter {
 
   protected async invoke(
     operation: string,
-    request: { readonly method: 'GET' | 'POST' | 'PUT'; readonly path: string; readonly body?: Body },
+    request: {
+      readonly method: 'GET' | 'POST' | 'PUT';
+      readonly path: string;
+      readonly body?: Body;
+      /** Rail-specific headers (a standard's interaction id, a consent binding). They never replace the credential or the correlation id. */
+      readonly headers?: Readonly<Record<string, string>>;
+    },
     correlationId: string,
   ): Promise<RailOutcome<Body>> {
     let secret;
@@ -62,7 +68,16 @@ export abstract class RailAdapter extends BaseAdapter {
           url: `${this.config.baseUrl}${request.path}`,
           ...(request.body === undefined ? {} : { body: request.body }),
           // The secret is exposed here and nowhere else in the adapter.
-          headers: { authorization: `Bearer ${secret.expose()}`, 'x-correlation-id': correlationId },
+          headers: {
+            // Only x- headers, and never the correlation id: a rail header cannot stand in for the credential.
+            ...Object.fromEntries(
+              Object.entries(request.headers ?? {}).filter(
+                ([k]) => /^x-/i.test(k) && k.toLowerCase() !== 'x-correlation-id',
+              ),
+            ),
+            authorization: `Bearer ${secret.expose()}`,
+            'x-correlation-id': correlationId,
+          },
         }),
       );
       return { kind: 'ANSWERED', value };
@@ -129,6 +144,9 @@ export abstract class RailAdapter extends BaseAdapter {
 // -- Mapping helpers: vendor JSON to our integers, without a float ----------------
 
 export const str = (v: unknown): string | undefined => (typeof v === 'string' && v.length > 0 ? v : undefined);
+/** An identifier a rail may send as a string or as a whole JSON number; either way a string here. */
+export const idStr = (v: unknown): string | undefined =>
+  typeof v === 'number' && Number.isSafeInteger(v) ? String(v) : str(v);
 export const bool = (v: unknown): boolean | undefined => (typeof v === 'boolean' ? v : undefined);
 export const int = (v: unknown): number | undefined =>
   typeof v === 'number' && Number.isInteger(v)
@@ -151,6 +169,57 @@ export function decimalToMinor(v: unknown): bigint | undefined {
   if (m === null) return undefined;
   const minor = BigInt(m[2] ?? '0') * 100n + BigInt((m[3] ?? '').padEnd(2, '0'));
   return m[1] === '-' ? -minor : minor;
+}
+
+/** 123456n → "1234.56": an amount the platform sends to a rail that speaks decimal strings. */
+export function minorToDecimal(minor: bigint): string {
+  const negative = minor < 0n;
+  const abs = negative ? -minor : minor;
+  const fraction = (abs % 100n).toString().padStart(2, '0');
+  return `${negative ? '-' : ''}${(abs / 100n).toString()}.${fraction}`;
+}
+
+/**
+ * A vendor vocabulary lookup that only finds the table's own keys. A plain `table[value]` finds
+ * `constructor`, `toString` and the rest of Object.prototype, so a vendor answer of "constructor"
+ * would resolve to a function rather than to "not understood".
+ */
+export function own<T>(table: Readonly<Record<string, T>>, key: unknown): T | undefined {
+  if (typeof key !== 'string' && typeof key !== 'number') return undefined;
+  const k = String(key);
+  return Object.hasOwn(table, k) ? table[k] : undefined;
+}
+
+/** A JSON object, or undefined for anything else (arrays and null included). */
+export const obj = (v: unknown): Readonly<Record<string, unknown>> | undefined =>
+  typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Readonly<Record<string, unknown>>) : undefined;
+
+/** A JSON array, or undefined. */
+export const arr = (v: unknown): readonly unknown[] | undefined => (Array.isArray(v) ? (v as unknown[]) : undefined);
+
+/**
+ * An ISO 8601 date ("2026-04-30") or date-time ("2026-04-30T10:15:00Z", "…+03:00") to epoch
+ * seconds, by integer arithmetic. A date without a zone is read as UTC midnight; anything else
+ * (a Hijri date, a locale format) is undefined rather than guessed.
+ */
+export function isoToEpoch(v: unknown): bigint | undefined {
+  if (typeof v !== 'string') return undefined;
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|([+-])(\d{2}):?(\d{2}))?)?$/.exec(
+    v.trim(),
+  );
+  if (m === null) return undefined;
+  const [y, mo, d, h, mi, s] = [m[1], m[2], m[3], m[4] ?? '0', m[5] ?? '0', m[6] ?? '0'].map((x) =>
+    Number.parseInt(x ?? '0', 10),
+  ) as [number, number, number, number, number, number];
+  if (mo < 1 || mo > 12 || d < 1 || d > 31 || h > 23 || mi > 59 || s > 59) return undefined;
+  const ms = Date.UTC(y, mo - 1, d, h, mi, s);
+  // Date.UTC rolls 2026-02-31 into March; a date that does not exist is not a date.
+  if (new Date(ms).getUTCDate() !== d) return undefined;
+  const offset =
+    m[8] === undefined
+      ? 0
+      : (m[8] === '-' ? -1 : 1) * (Number.parseInt(m[9] ?? '0', 10) * 3600 + Number.parseInt(m[10] ?? '0', 10) * 60);
+  return BigInt(ms / 1000 - offset);
 }
 
 /** Fail closed on a response we do not understand. Typed so it fits any port's outcome. */

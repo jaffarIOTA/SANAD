@@ -11,19 +11,47 @@ here.
 
 **UAE-RAIL-ICP-01** — what only a sandbox call can answer:
 
-- the access route available to the institution (direct ICP integration, the
-  card-reader / NFC verification toolkit, or a licensed intermediary) and which
-  of them returns a register match rather than only a card read;
+- the access route available to the institution (direct ICP integration
+  through the ICA Validation Gateway, the card-reader / NFC verification
+  toolkit, or a licensed intermediary) and which of them returns a register
+  match rather than only a card read;
+- the real response field names (everything below is an assumed contract);
 - the card status vocabulary (valid, expired, cancelled, lost) and its codes;
 - which attributes can be matched and how a mismatch is reported;
 - the consent artefact the authority expects and its reference format.
 
+## Demonstration and assumed contract
+
+The authority's gateway is contract-gated and publishes no specification. The
+public route to a register-verified Emirates ID is UAE Pass, so the attribute
+names are those **UAE Pass publishes for its userinfo claims** —
+<https://docs.uaepass.ae/> (attributes list): `idn`, `fullnameEN`, `fullnameAR`,
+`firstnameEN`, `lastnameEN`, `nationalityEN`, `gender`, `idType`, `userType`.
+The envelope around them is Sanad's assumption:
+
+```
+POST /v1/identity-verifications   { applicantRef, consentRef }
+→ { verification: { reference, verified_at (ISO 8601), outcome: MATCH | PARTIAL_MATCH | NO_MATCH,
+                    mismatched_attributes: [UAE Pass attribute names] },
+    card:    { idType, status: VALID | EXPIRED | CANCELLED | LOST },
+    subject: { idn, fullnameEN, fullnameAR, nationalityEN, gender, … } }   ← dropped whole
+```
+
+**These field names are not ICP's published specification** (there is none);
+they remain the verification item. The demonstration transport answers in this
+shape: cast parties match a valid card; a reference containing `mismatch` does
+not match (name), one containing `expired` matches an expired card; the
+reference is `icp-demo-<applicantRef>`.
+
 ## What is settled without the sandbox
 
 - Consent-gated: no consent id, no call (`CONSENT_MISSING`).
-- The verification is true only when the attributes match **and** the card is
-  valid; an invalid card adds the mismatch `card_status`; an unknown card
-  status is malformed, never valid.
-- Attribute values (name, nationality, date of birth, card expiry) are dropped
-  at this boundary; only the result, mismatched field names and the reference
-  are stored.
+- The verification is true only when the outcome is `MATCH` **and** the card is
+  valid; an invalid card adds the mismatch `card_status`; an unknown outcome or
+  card status is malformed, never valid.
+- Mismatched attributes are renamed to Sanad's vocabulary (`name`,
+  `nationality`, `gender`, `date_of_birth`, `id_number`, `id_type`, else
+  `other`).
+- The Emirates ID number and every attribute value are dropped at this
+  boundary; only the result, mismatched field names and the reference are
+  stored.

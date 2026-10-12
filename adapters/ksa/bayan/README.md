@@ -10,6 +10,25 @@ egress) has made a verified sandbox call and the findings are written here.
 
 KSA-RAIL-BAYAN-01 — the same items as SIMAH; the tenant chooses primary and fallback by configuration.
 
+## Demonstration and assumed contract
+
+**Source: none published.** Bayan Credit Bureau's public pages describe commercial credit
+reports for businesses; no schema is public, so no schema URL is cited. The layout is the
+same named analogue as SIMAH — the international credit-bureau report layout — mapped by
+the shared `adapters/ksa/kernel/bureau-report.ts`. Row "Bayan" in
+`docs/rails/public-structures.md`.
+
+- Enquiry: `POST /v1/credit-reports` with `{product: 'COMMERCIAL_CREDIT_REPORT',
+  enquiryPurpose, subject{crNumber, memberReference}, consentReference}`.
+- Report fields, mapping and fail-closed rules: as SIMAH's README. The score is an opaque
+  integer with **no published range**.
+- Reporting: `POST /v1/facility-events`, decimal amount, `acknowledgementId`.
+
+Bayan has its own mapping tests in `test/adapters/ksa-rails.test.ts`.
+
+**Unconfirmed, and the verification item:** every field name, the product code, and
+whether Bayan's layout differs from SIMAH's at all.
+
 ## What is settled without the sandbox
 
 - The port shape and outcomes (`ANSWERED` / `REFUSED` / `UNAVAILABLE`), tested in

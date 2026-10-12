@@ -67,9 +67,13 @@ const config = (withLedger = true): RailAdapterConfig => ({
 });
 /** A transport that counts the calls that reach it. */
 const counting = () => {
-  const t = { calls: 0 } as RailTransport & { calls: number };
-  t.call = () => {
+  const t = { calls: 0, bodies: [] } as unknown as RailTransport & {
+    calls: number;
+    bodies: (Readonly<Record<string, unknown>> | undefined)[];
+  };
+  t.call = (_operation, envelope) => {
     t.calls += 1;
+    t.bodies.push(envelope.body);
     return Promise.reject(new Error('the rail is not reached in this test'));
   };
   return t;
@@ -121,6 +125,8 @@ describe('a consent-gated rail checks the consent before calling out (SR-026)', 
     const t = counting();
     await bureau(t).request(enquiry('cns-live'));
     expect(t.calls).toBe(1);
+    // The bureau enquiry carries the consent it was made under (SIMAH's assumed report request).
+    expect(t.bodies[0]).toMatchObject({ consentReference: 'cns-live', subject: { crNumber: '1010000002' } });
   });
 
   it('asks each rail for its own purpose: an employment check under a bureau consent is refused', async () => {
@@ -140,5 +146,6 @@ describe('a consent-gated rail checks the consent before calling out (SR-026)', 
     expect(t.calls).toBe(0);
     await gosi.employment({ tenantId: 'bank-a', applicantRef: 'a', consentId: 'cns-employment', correlationId: 'c' });
     expect(t.calls).toBe(1);
+    expect(t.bodies[0]).toEqual({ applicantRef: 'a', consentRef: 'cns-employment' });
   });
 });
