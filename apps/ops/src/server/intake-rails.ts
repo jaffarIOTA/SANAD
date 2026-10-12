@@ -20,13 +20,19 @@ import type { BusinessRegistryPort } from '@sanad/core/ports/business-registry.t
 import type { ConsentLedger } from '@sanad/core/ports/consent-ledger.ts';
 import type { IdentityVerificationPort } from '@sanad/core/ports/identity-verification.ts';
 import type { ScreeningPort } from '@sanad/core/ports/screening.ts';
+import type { AccountInformationPort } from '@sanad/core/ports/account-information.ts';
+import type { CreditBureauPort } from '@sanad/core/ports/credit-bureau.ts';
+import type { TaxCompliancePort } from '@sanad/core/ports/tax-compliance.ts';
 import type { TsaInstant } from '@sanad/core/time/tsa.ts';
 import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
 
 import type { RailAdapterConfig } from '../../../../adapters/kernel/rail-adapter.ts';
 import { DemonstrationScreening } from '../../../../adapters/screening/demonstration/adapter.ts';
 import { DemonstrationTransport } from '../../../../adapters/uae/demonstration/transport.ts';
+import { AecbAdapter } from '../../../../adapters/uae/aecb/adapter.ts';
+import { FtaAdapter } from '../../../../adapters/uae/fta/adapter.ts';
 import { IcpAdapter } from '../../../../adapters/uae/icp/adapter.ts';
+import { OpenFinanceAdapter } from '../../../../adapters/uae/open-finance/adapter.ts';
 import { NerAdapter } from '../../../../adapters/uae/ner/adapter.ts';
 import { persistencePool } from './persistence.ts';
 
@@ -34,6 +40,12 @@ export interface KybRails {
   readonly registry: BusinessRegistryPort;
   readonly identity: IdentityVerificationPort;
   readonly screening: ScreeningPort;
+  /** The tax authority, for the TRN check at intake. */
+  readonly tax: TaxCompliancePort;
+  /** The credit bureau, for the commercial report at credit assessment. */
+  readonly bureau: CreditBureauPort;
+  /** Open Finance account information, for the bank-statement facts at credit assessment. */
+  readonly accounts: AccountInformationPort;
   readonly source: 'LIVE' | 'FIXTURE';
 }
 
@@ -87,6 +99,19 @@ export async function kybRails(
       transport,
     ),
     screening: new DemonstrationScreening(consents, attest),
+    tax: new FtaAdapter(demonstrationConfig(tenantId, 'TAX_COMPLIANCE', consents, now), credentials, transport),
+    bureau: new AecbAdapter(
+      demonstrationConfig(tenantId, 'CREDIT_BUREAU', consents, now),
+      credentials,
+      transport,
+      attest,
+    ),
+    accounts: new OpenFinanceAdapter(
+      // The vault names the credential by capability: a UAE tenant's Open Finance credential is its OPEN_BANKING one.
+      demonstrationConfig(tenantId, 'OPEN_BANKING', consents, now),
+      credentials,
+      transport,
+    ),
     source: 'FIXTURE',
   };
 }

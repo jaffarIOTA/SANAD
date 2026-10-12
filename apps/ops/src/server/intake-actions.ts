@@ -32,6 +32,7 @@ import {
   runIdentityCheck,
   runRegistryCheck,
   runScreening,
+  runTaxCheck,
   withdrawIntakeFor,
 } from './intake.ts';
 import { authorise, localeSegmentOf } from './session.ts';
@@ -99,7 +100,12 @@ const wholeNumber = (raw: string, max: number): number | undefined =>
   /^\d{1,4}$/.test(raw) && Number(raw) <= max ? Number(raw) : undefined;
 
 const ROLES: readonly PartyRole[] = ['OWNER', 'SIGNATORY', 'OWNER_SIGNATORY'];
-const CONSENT_TYPES: readonly IntakeConsentType[] = ['IDENTITY_VERIFICATION', 'SCREENING', 'CREDIT_BUREAU'];
+const CONSENT_TYPES: readonly IntakeConsentType[] = [
+  'IDENTITY_VERIFICATION',
+  'SCREENING',
+  'CREDIT_BUREAU',
+  'ACCOUNT_INFORMATION',
+];
 
 /** Up to this many parties on the opening form (the page draws the same number of rows). */
 const INTAKE_PARTY_ROWS = 5;
@@ -125,6 +131,7 @@ export async function openIntakeAction(form: FormData): Promise<void> {
     parties.push({ partyRef, displayName, role, ownershipPerTenThousand: share });
   }
   const nameAr = field(form, 'businessNameAr');
+  const trn = field(form, 'taxRegistrationNumber').replaceAll(/[\s-]/g, '');
   return finish(
     ctx,
     () =>
@@ -135,6 +142,7 @@ export async function openIntakeAction(form: FormData): Promise<void> {
           issuingAuthority: field(form, 'issuingAuthority'),
           businessNameEn: field(form, 'businessNameEn'),
           ...(nameAr === '' ? {} : { businessNameAr: nameAr }),
+          ...(trn === '' ? {} : { taxRegistrationNumber: trn }),
           sector: field(form, 'sector'),
           yearsInOperation: years,
           productCode: field(form, 'productCode'),
@@ -173,6 +181,11 @@ export async function intakeConsentAction(form: FormData): Promise<void> {
 export async function registryCheckAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_OFFICER');
   return finish(ctx, () => runRegistryCheck(ctx.tenant, ctx.intakeId, ctx.actor), 'REGISTRY_CHECKED');
+}
+
+export async function taxCheckAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(ctx, () => runTaxCheck(ctx.tenant, ctx.intakeId, ctx.actor), 'TAX_REGISTRATION_CHECKED');
 }
 
 export async function identityCheckAction(form: FormData): Promise<void> {

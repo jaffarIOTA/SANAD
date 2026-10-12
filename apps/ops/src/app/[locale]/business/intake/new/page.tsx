@@ -112,6 +112,17 @@ export default async function NewIntakePage({
                   className={`${INPUT} tabular-nums`}
                 />
               </label>
+              <label className={labelCls}>
+                {t('Tax registration number (TRN), if registered', 'رقم التسجيل الضريبي، إن وُجد')}
+                <input
+                  name="taxRegistrationNumber"
+                  inputMode="numeric"
+                  dir="ltr"
+                  autoComplete="off"
+                  placeholder="100XXXXXXXXXXXX"
+                  className={`${INPUT} identifier`}
+                />
+              </label>
             </div>
           </SectionCard>
 

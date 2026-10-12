@@ -469,6 +469,20 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
     ar: 'عولجت الإحالة وسُجّل سببها.',
   },
   BENEFICIAL_OWNERS_DECLARED: { en: 'Beneficial owners declared.', ar: 'سُجّل التصريح بالمستفيدين الحقيقيين.' },
+  TAX_REGISTRATION_CHECKED: {
+    en: 'VAT registration checked with the tax authority.',
+    ar: 'تم التحقق من التسجيل في ضريبة القيمة المضافة لدى الجهة الضريبية.',
+  },
+  // Credit-assessment rails (stage 5)
+  BUREAU_REPORT_FETCHED: {
+    en: 'Bureau report fetched. Its score is the assessment’s bureau result.',
+    ar: 'تم الاستعلام من المكتب الائتماني. درجته هي نتيجة المكتب في التقييم.',
+  },
+  BANK_STATEMENTS_FETCHED: {
+    en: 'Bank statements read. A second person confirms the facts.',
+    ar: 'قُرئت كشوف الحساب. يؤكد الحقائقَ شخصٌ آخر.',
+  },
+  BANK_STATEMENTS_CONFIRMED: { en: 'Bank-statement facts confirmed.', ar: 'أُكّدت حقائق كشوف الحساب.' },
   HANDED_TO_ASSESSMENT: {
     en: 'Handed over to credit assessment. Continue with the figures and documents.',
     ar: 'أُحيل إلى التقييم الائتماني. تابع بالأرقام والمستندات.',
@@ -848,6 +862,59 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
   KYB_INCOMPLETE: {
     en: 'Some checks are still missing or have not passed. The list on this screen says which.',
     ar: 'ما زالت بعض الفحوصات ناقصة أو لم تُجتز. توضح القائمة في هذه الشاشة ما هي.',
+  },
+  TRN_MALFORMED: {
+    en: 'A tax registration number is fifteen digits. Nothing was recorded.',
+    ar: 'رقم التسجيل الضريبي خمسة عشر رقماً. لم يُسجَّل شيء.',
+  },
+  TRN_NOT_RECORDED: {
+    en: 'Record the business’s tax registration number before checking it.',
+    ar: 'سجّل رقم التسجيل الضريبي للمنشأة قبل التحقق منه.',
+  },
+  // The credit-assessment rails. A refusal here fetched and recorded nothing.
+  BUREAU_CONSENT_NOT_IN_SANAD: {
+    en: 'This application was handed over by a partner, so Sanad holds no bureau consent to fetch under. Key the result from the upstream report.',
+    ar: 'أُحيل هذا الطلب من جهة شريكة، فلا يحمل سند موافقة استعلام يستعلم بموجبها. أدخل النتيجة من تقرير الجهة المُحيلة.',
+  },
+  BUREAU_NO_RECORD: {
+    en: 'The bureau holds no commercial file for this business. Key the result from an owner’s individual report.',
+    ar: 'لا يحتفظ المكتب الائتماني بملف تجاري لهذه المنشأة. أدخل النتيجة من تقرير فردي لأحد الملاك.',
+  },
+  BUREAU_NO_SCORE: {
+    en: 'The bureau report carries no score. Key the result from the report.',
+    ar: 'لا يحمل تقرير المكتب درجة. أدخل النتيجة من التقرير.',
+  },
+  BUREAU_RESULT_REQUIRED: {
+    en: 'Fetch the bureau report, or key its result from the upstream report, before recording the inputs.',
+    ar: 'استعلم من المكتب الائتماني، أو أدخل النتيجة من تقرير الجهة المُحيلة، قبل تسجيل المدخلات.',
+  },
+  ACCOUNT_CONSENT_NOT_IN_SANAD: {
+    en: 'No bank-account consent was recorded at Sanad’s intake for this application, so there is nothing to read under.',
+    ar: 'لم تُسجَّل عند الاستقبال في سند موافقة على الاطلاع على الحساب لهذا الطلب، فلا يُقرأ شيء.',
+  },
+  ACCOUNT_CONSENT_NOT_ON_RECORD: {
+    en: 'The bank-account consent is not among this application’s verification references.',
+    ar: 'موافقة الاطلاع على الحساب ليست ضمن مراجع التحقق لهذا الطلب.',
+  },
+  BANK_STATEMENT_REF_INVALID: {
+    en: 'The bank-statement service returned no valid reference, so nothing was recorded.',
+    ar: 'لم تُرجع خدمة كشوف الحساب مرجعاً صالحاً، فلم يُسجَّل شيء.',
+  },
+  BANK_STATEMENT_CURRENCY: {
+    en: 'The bank-statement amounts are not in the institution’s currency, so nothing was recorded.',
+    ar: 'مبالغ كشوف الحساب ليست بعملة المؤسسة، فلم يُسجَّل شيء.',
+  },
+  BANK_STATEMENTS_NOT_FETCHED: {
+    en: 'Read the bank statements before confirming them.',
+    ar: 'اقرأ كشوف الحساب قبل تأكيدها.',
+  },
+  BANK_STATEMENTS_ALREADY_CONFIRMED: {
+    en: 'These bank-statement facts are already confirmed.',
+    ar: 'حقائق كشوف الحساب هذه مؤكدة مسبقاً.',
+  },
+  FOUR_EYES_SELF_CONFIRMATION: {
+    en: 'You read these bank statements; another person confirms them.',
+    ar: 'أنت من قرأ كشوف الحساب هذه؛ يؤكدها شخص آخر.',
   },
   // The committee's approved terms. Nothing was recorded on any of these; the member corrects the figure and decides again.
   APPROVED_AMOUNT_MALFORMED: {

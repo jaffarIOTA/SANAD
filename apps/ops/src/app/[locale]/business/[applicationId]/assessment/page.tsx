@@ -29,20 +29,24 @@ import {
   approveStraightThroughAction,
   committeeDecisionAction,
   creditNotesAction,
+  fetchBureauReportAction,
   generateOfferAction,
   recordAssessmentInputsAction,
   runAssessmentAction,
 } from '../../../../../server/business-actions.ts';
 import {
   type CommitteeApprovalDefaults,
+  type BureauSource,
   committeeApprovalDefaults,
   getApplication,
+  intakeConsentFor,
   syncBusiness,
 } from '../../../../../server/business.ts';
 import { permits } from '../../../../../server/authority.ts';
 import { pageStaff } from '../../../../../server/session.ts';
 import type { StaffPrincipal } from '../../../../../server/staff.ts';
 import { Gate } from '../../../Gate.tsx';
+import { SourceBadge } from '../../intake/IntakeUi.tsx';
 import { formatFact, formatPercent, formatPoints } from '../../../../../server/business-dashboard.ts';
 import { staffJurisdiction } from '../../../../../server/jurisdiction.ts';
 import {
@@ -129,6 +133,13 @@ const STP_CHECK: Readonly<Record<string, { readonly en: string; readonly ar: str
   COLLATERAL_COVERAGE_MINIMUM: { en: 'Collateral coverage', ar: 'تغطية الضمان' },
 };
 
+/** Where the bureau result came from, in words: a keyed figure is never shown as a fetched one. */
+const BUREAU_SOURCE_WORDS: Readonly<Record<BureauSource, { readonly en: string; readonly ar: string }>> = {
+  KEYED_FROM_UPSTREAM_REPORT: { en: 'Keyed from the upstream report', ar: 'مُدخلة من تقرير الجهة المُحيلة' },
+  AECB_RAIL_FIXTURE: { en: 'AECB rail (fixture)', ar: 'الربط مع المكتب (تجريبي)' },
+  AECB_RAIL_LIVE: { en: 'AECB rail', ar: 'الربط مع المكتب' },
+};
+
 /** A weight per ten thousand as a whole percentage where it is one: 4000 → '40%'. */
 const weight = (w: bigint | number): string => {
   const v = BigInt(w);
@@ -189,6 +200,9 @@ export default async function CreditAssessmentPage({
       title={t('Credit assessment', 'التقييم الائتماني')}
     >
       {/* -- Inputs ------------------------------------------------------------------------------- */}
+      {inputsOpen || view.bureauFetch !== undefined ? (
+        <BureauCard segment={segment} view={view} editable={inputsOpen} staff={staff} f={f} />
+      ) : null}
       {inputsOpen || inputs !== undefined ? (
         <InputsCard
           segment={segment}
@@ -287,7 +301,11 @@ export default async function CreditAssessmentPage({
             <MetricTile
               label={t('Bureau score', 'درجة المكتب الائتماني')}
               value={fact('bureauScore', run.facts['bureauScore'])}
-              sub={t('AECB snapshot (fixture)', 'لقطة من المكتب (تجريبية)')}
+              sub={
+                inputs === undefined
+                  ? undefined
+                  : t(BUREAU_SOURCE_WORDS[inputs.bureau.source].en, BUREAU_SOURCE_WORDS[inputs.bureau.source].ar)
+              }
             />
             <MetricTile
               label={t('Owner DBR', 'عبء الدين على المالك')}
@@ -678,6 +696,100 @@ const majorUnits = (minor: bigint): string =>
   `${(minor / 100n).toString()}.${(minor % 100n).toString().padStart(2, '0')}`;
 
 /**
+ * The commercial bureau report, fetched through the AECB rail under the
+ * consent the business gave at Sanad's intake. Once fetched, its score is the
+ * assessment's bureau result and the inputs form asks for no bureau fields.
+ * An application handed over by a partner has no Sanad consent to fetch
+ * under; its officer keys the result from the upstream report instead.
+ */
+function BureauCard({
+  segment,
+  view,
+  editable,
+  staff,
+  f,
+}: {
+  readonly segment: string;
+  readonly view: NonNullable<Awaited<ReturnType<typeof getApplication>>>;
+  readonly editable: boolean;
+  readonly staff: StaffPrincipal;
+  readonly f: Formatters;
+}): ReactElement {
+  const { t } = f;
+  const fetched = view.bureauFetch;
+  const consent = intakeConsentFor(view.application, 'credit_bureau');
+  return (
+    <SectionCard
+      title={t('Commercial bureau report', 'تقرير المكتب الائتماني التجاري')}
+      note={t(
+        'Fetched through the AECB rail under the business’s intake consent: the summary and its reference, never the report itself.',
+        'يُستعلم عنه عبر الربط مع المكتب بموجب موافقة المنشأة عند الاستقبال: الملخص ومرجعه فقط، لا التقرير نفسه.',
+      )}
+      aside={
+        fetched === undefined ? (
+          <Chip tone="neutral">{t('Not fetched', 'لم يُستعلم عنه')}</Chip>
+        ) : (
+          <>
+            <SourceBadge source={fetched.source} f={f} />
+            <Chip tone="good">
+              <span>
+                {t('Fetched by', 'استعلم عنه')} <Id>{fetched.fetchedBy}</Id>
+              </span>
+            </Chip>
+          </>
+        )
+      }
+    >
+      {fetched === undefined ? null : (
+        <dl className="grid gap-4 sm:grid-cols-3 xl:grid-cols-4" data-bureau-fetched>
+          <Field label={t('Bureau report', 'تقرير المكتب')}>
+            <Id className="text-[12px]">{fetched.reportRef}</Id>
+          </Field>
+          <Field label={t('Bureau score', 'درجة المكتب')}>{f.n(fetched.score)}</Field>
+          <Field label={t('Total exposure', 'إجمالي الالتزامات')}>
+            <bdi className="tabular-nums">{f.money(fetched.totalExposure.minorUnits)}</bdi>{' '}
+            <span className="text-[12px] font-normal text-ink-quiet">{f.cur}</span>
+          </Field>
+          <Field label={t('Overdue', 'المتأخرات')}>
+            <bdi className="tabular-nums">{f.money(fetched.overdueAmount.minorUnits)}</bdi>{' '}
+            <span className="text-[12px] font-normal text-ink-quiet">{f.cur}</span>
+          </Field>
+          <Field label={t('Worst delinquency', 'أسوأ تأخر')}>
+            {t(`${f.n(fetched.worstDelinquencyDays)} days`, `${f.n(fetched.worstDelinquencyDays)} يوماً`)}
+          </Field>
+          <Field label={t('Active facilities', 'التسهيلات القائمة')}>{f.n(fetched.activeFacilities)}</Field>
+          <Field label={t('Defaults', 'حالات التعثر')}>
+            {fetched.defaults === 0 ? f.n(0) : <Chip tone="bad">{f.n(fetched.defaults)}</Chip>}
+          </Field>
+          <Field label={t('Bureau consent', 'موافقة الاستعلام الائتماني')}>
+            <Id className="text-[12px]">{fetched.consentId}</Id>
+          </Field>
+        </dl>
+      )}
+      {!editable ? null : consent === undefined ? (
+        <p className="text-[13px] text-ink-quiet" data-bureau-keyed-only>
+          {t(
+            'This application was handed over by a partner, so Sanad holds no bureau consent to fetch under. Key the result from the upstream report in the inputs below.',
+            'أُحيل هذا الطلب من جهة شريكة، فلا يحمل سند موافقة استعلام يستعلم بموجبها. أدخل النتيجة من تقرير الجهة المُحيلة في المدخلات أدناه.',
+          )}
+        </p>
+      ) : (
+        <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+          <form action={fetchBureauReportAction} className={fetched === undefined ? '' : 'mt-4'}>
+            <FormContext segment={segment} applicationId={view.application.applicationId} screen="assessment" />
+            <button type="submit" className={fetched === undefined ? BTN_PRIMARY : BTN_SECONDARY}>
+              {fetched === undefined
+                ? t('Fetch AECB report', 'الاستعلام من المكتب الائتماني')
+                : t('Fetch again', 'إعادة الاستعلام')}
+            </button>
+          </form>
+        </Gate>
+      )}
+    </SectionCard>
+  );
+}
+
+/**
  * The inputs the scorecard reads beyond the statements. Recorded by the
  * officer while the application is open; locked at submission and shown
  * read-only from then on. The bureau consent is chosen from the stage-4
@@ -715,8 +827,8 @@ function InputsCard({
     <SectionCard
       title={t('Assessment inputs', 'مدخلات التقييم')}
       note={t(
-        'What the scorecard reads beyond the statements. The bureau result is a recorded snapshot until the AECB rail is verified.',
-        'ما تقرؤه بطاقة الدرجات إضافةً إلى القوائم المالية. نتيجة المكتب الائتماني لقطة مسجلة إلى أن يُتحقق من الربط مع المكتب.',
+        'What the scorecard reads beyond the statements. A fetched bureau report is the bureau result; nothing typed overrides it.',
+        'ما تقرؤه بطاقة الدرجات إضافةً إلى القوائم المالية. تقرير المكتب المستعلم عنه هو نتيجة المكتب، ولا يتجاوزه أي إدخال يدوي.',
       )}
       aside={
         <>
@@ -742,6 +854,9 @@ function InputsCard({
             <Id className="text-[12px]">{inputs.bureau.consentId}</Id>
           </Field>
           <Field label={t('Bureau score', 'درجة المكتب')}>{f.n(inputs.bureau.score)}</Field>
+          <Field label={t('Bureau result source', 'مصدر نتيجة المكتب')}>
+            {t(BUREAU_SOURCE_WORDS[inputs.bureau.source].en, BUREAU_SOURCE_WORDS[inputs.bureau.source].ar)}
+          </Field>
           <Field label={t('Full-time employees', 'الموظفون بدوام كامل')}>{f.n(inputs.fullTimeEmployees)}</Field>
           <Field label={t('Relevant experience', 'الخبرة ذات الصلة')}>
             {t(`${f.n(inputs.relevantExperienceYears)} years`, `${f.n(inputs.relevantExperienceYears)} سنوات`)}
@@ -790,30 +905,34 @@ function InputsCard({
           <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
             <form action={recordAssessmentInputsAction} className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <FormContext segment={segment} applicationId={applicationId} screen="assessment" />
-              <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">
-                {t('Bureau report reference', 'مرجع تقرير المكتب')}
-                <input name="bureauReportRef" required defaultValue={inputs?.bureau.reportRef} className={INPUT} />
-              </label>
-              <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">
-                {t('Bureau consent (stage-4 reference)', 'موافقة الاستعلام (مرجع المرحلة ٤)')}
-                <select
-                  name="bureauConsentId"
-                  required
-                  defaultValue={inputs?.bureau.consentId ?? ''}
-                  className={INPUT}
-                  dir="ltr"
-                >
-                  <option value="" disabled>
-                    {t('Choose the consent…', 'اختر الموافقة…')}
-                  </option>
-                  {consentRefs.map((ref) => (
-                    <option key={ref} value={ref}>
-                      {ref}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {field('bureauScore', 'Bureau score', 'درجة المكتب', undefined, inputs?.bureau.score.toString())}
+              {view.bureauFetch === undefined ? (
+                <>
+                  <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">
+                    {t('Bureau report reference (keyed)', 'مرجع تقرير المكتب (إدخال يدوي)')}
+                    <input name="bureauReportRef" required defaultValue={inputs?.bureau.reportRef} className={INPUT} />
+                  </label>
+                  <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">
+                    {t('Bureau consent (stage-4 reference)', 'موافقة الاستعلام (مرجع المرحلة ٤)')}
+                    <select
+                      name="bureauConsentId"
+                      required
+                      defaultValue={inputs?.bureau.consentId ?? ''}
+                      className={INPUT}
+                      dir="ltr"
+                    >
+                      <option value="" disabled>
+                        {t('Choose the consent…', 'اختر الموافقة…')}
+                      </option>
+                      {consentRefs.map((ref) => (
+                        <option key={ref} value={ref}>
+                          {ref}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {field('bureauScore', 'Bureau score', 'درجة المكتب', undefined, inputs?.bureau.score.toString())}
+                </>
+              ) : null}
               {field(
                 'fullTimeEmployees',
                 'Full-time employees',

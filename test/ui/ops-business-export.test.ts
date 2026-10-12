@@ -91,11 +91,14 @@ describe.skipIf(DATABASE !== undefined)('#15 the pipeline CSV export', () => {
 });
 
 describe('#7 #12 the module map', () => {
-  it('marks signing and disbursement as fixtures, and the bureau score as manual', () => {
+  it('marks signing and disbursement as fixtures, and the bureau result as fetched on a fixture or keyed', () => {
     const items = MODULE_GROUPS.flatMap((g) => g.items);
     const signing = items.find((i) => i.id === 'business-sign-disburse');
     expect(signing?.readiness.kind).toBe('BLOCKED');
     if (signing?.readiness.kind === 'BLOCKED') expect(signing.readiness.on).toMatch(/fixture signing and payment/);
-    expect(items.find((i) => i.id === 'business-assessment')?.reference).toMatch(/MANUAL: the bureau score/);
+    const assessment = items.find((i) => i.id === 'business-assessment')?.reference;
+    expect(assessment).toMatch(/fetched through the AECB rail under the intake consent \(FIXTURE/);
+    expect(assessment).toMatch(/partner hand-over keys it from the upstream report, labelled keyed/);
+    expect(items.find((i) => i.id === 'aecb')?.readiness.kind).toBe('BLOCKED');
   });
 });

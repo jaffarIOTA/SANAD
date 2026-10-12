@@ -309,7 +309,7 @@ export interface AssessmentInputs {
     readonly reportRef: string;
     readonly consentId: string;
     readonly score: bigint;
-    readonly source: 'AECB_FIXTURE';
+    readonly source: BureauSource;
   };
   /** A count of people, for the SME size classification. */
   readonly fullTimeEmployees: number;
@@ -327,13 +327,66 @@ export interface AssessmentInputs {
   readonly recordedAtEpochSeconds: bigint;
 }
 
+/**
+ * Where the bureau result in the assessment inputs came from:
+ *   KEYED_FROM_UPSTREAM_REPORT  typed by the officer from the report the upstream customer record
+ *                               obtained at stage 4 (applications handed over by a partner), or
+ *                               from an owner's individual report where the business has no file
+ *   AECB_RAIL_FIXTURE           fetched through the bureau rail, answered by the demonstration transport
+ *   AECB_RAIL_LIVE              fetched through the bureau rail from the live bureau
+ * Records written before the rail existed said AECB_FIXTURE and meant keyed; they read as KEYED.
+ */
+export type BureauSource = 'KEYED_FROM_UPSTREAM_REPORT' | 'AECB_RAIL_FIXTURE' | 'AECB_RAIL_LIVE';
+
 export type AssessmentInputsEntry = Omit<
   AssessmentInputs,
   'recordedBy' | 'recordedAtEpochSeconds' | 'collateralValue' | 'bureau'
 > & {
-  readonly bureau: { readonly reportRef: string; readonly consentId: string; readonly score: bigint };
+  /** Absent when the bureau report was fetched through the rail: the fetched result is used, and nothing typed overrides it. */
+  readonly bureau?: { readonly reportRef: string; readonly consentId: string; readonly score: bigint };
   readonly collateralValueMinorUnits: bigint;
 };
+
+/**
+ * The commercial bureau report as fetched through the rail: the summary the
+ * bureau port carries (never the report itself — CLAUDE.md §5, snapshots not
+ * copies), its reference, and the consent it was obtained under.
+ */
+export interface BureauFetch {
+  readonly reportRef: string;
+  readonly consentId: string;
+  readonly score: bigint;
+  readonly source: 'FIXTURE' | 'LIVE';
+  readonly totalExposure: Money;
+  readonly overdueAmount: Money;
+  readonly worstDelinquencyDays: number;
+  readonly activeFacilities: number;
+  readonly defaults: number;
+  readonly fetchedBy: string;
+  readonly atEpochSeconds: bigint;
+}
+
+/**
+ * The business's bank-statement facts from Open Finance: cash-flow and
+ * conduct evidence beside the financial spread, never a spread figure
+ * (average inflow is not revenue; a count of salary credits is not a salary).
+ * Fetched by the officer under the business's account-information consent and
+ * confirmed by a second person before the assessment relies on it.
+ */
+export interface BankStatementFacts {
+  readonly referenceId: string;
+  readonly consentId: string;
+  readonly months: number;
+  readonly averageMonthlyInflow: Money;
+  readonly lowestMonthEndBalance: Money;
+  readonly returnedPaymentsLast6Months: number;
+  readonly salaryCreditsObserved: number;
+  readonly source: 'FIXTURE' | 'LIVE';
+  readonly fetchedBy: string;
+  readonly atEpochSeconds: bigint;
+  readonly confirmedBy?: string;
+  readonly confirmedAtEpochSeconds?: bigint;
+}
 
 export interface AssessmentRun {
   /** Also the assessment reference recorded on the application. */
@@ -410,6 +463,8 @@ export interface BusinessApplicationView {
   readonly figures: readonly FigureView[];
   readonly documents: readonly BusinessDocument[];
   readonly assessmentInputs?: AssessmentInputs;
+  readonly bureauFetch?: BureauFetch;
+  readonly bankFacts?: BankStatementFacts;
   readonly assessments: readonly AssessmentRun[];
   readonly latestAssessment?: AssessmentRun;
   readonly offers: readonly OfferRun[];
@@ -485,6 +540,8 @@ interface BusinessRecord {
   figures: FigureRow[];
   documents: BusinessDocument[];
   inputs?: AssessmentInputs;
+  bureauFetch?: BureauFetch;
+  bankFacts?: BankStatementFacts;
   assessments: AssessmentRun[];
   offers: OfferRun[];
   events: ApplicationEvent[];
@@ -875,6 +932,8 @@ function view(record: BusinessRecord, currency: CurrencyCode): BusinessApplicati
     })),
     documents: [...record.documents],
     ...(record.inputs === undefined ? {} : { assessmentInputs: record.inputs }),
+    ...(record.bureauFetch === undefined ? {} : { bureauFetch: record.bureauFetch }),
+    ...(record.bankFacts === undefined ? {} : { bankFacts: record.bankFacts }),
     assessments: [...record.assessments],
     ...(latestAssessment === undefined ? {} : { latestAssessment }),
     offers: [...record.offers],
@@ -994,6 +1053,11 @@ function restoreBook(book: TenantBook, persisted: Awaited<ReturnType<typeof load
 }
 
 /** Rebuilds what is recorded only as an event: contact, documents, assessment inputs, portfolio status. */
+/** A stored bureau source: the old AECB_FIXTURE (and an absent one) meant keyed from the upstream report. */
+function bureauSourceOf(stored: string | undefined): BureauSource {
+  return stored === 'AECB_RAIL_FIXTURE' || stored === 'AECB_RAIL_LIVE' ? stored : 'KEYED_FROM_UPSTREAM_REPORT';
+}
+
 function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
   const d = e.detail;
   switch (e.eventType) {
@@ -1031,7 +1095,7 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
           reportRef: d['bureauReportRef'] ?? '',
           consentId: d['bureauConsentId'] ?? '',
           score: BigInt(d['bureauScore'] ?? '0'),
-          source: 'AECB_FIXTURE',
+          source: bureauSourceOf(d['bureauSource']),
         },
         fullTimeEmployees: Number.parseInt(d['fullTimeEmployees'] ?? '0', 10),
         relevantExperienceYears: BigInt(d['relevantExperienceYears'] ?? '0'),
@@ -1045,6 +1109,43 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
         recordedBy: e.actor,
         recordedAtEpochSeconds: e.atEpochSeconds,
       };
+      return;
+    case 'BUREAU_REPORT_FETCHED': {
+      const currency = r.application.requested.currency;
+      r.bureauFetch = {
+        reportRef: d['reportRef'] ?? '',
+        consentId: d['consentId'] ?? '',
+        score: BigInt(d['score'] ?? '0'),
+        source: d['source'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+        totalExposure: money(BigInt(d['totalExposureMinorUnits'] ?? '0'), currency),
+        overdueAmount: money(BigInt(d['overdueMinorUnits'] ?? '0'), currency),
+        worstDelinquencyDays: Number.parseInt(d['worstDelinquencyDays'] ?? '0', 10),
+        activeFacilities: Number.parseInt(d['activeFacilities'] ?? '0', 10),
+        defaults: Number.parseInt(d['defaults'] ?? '0', 10),
+        fetchedBy: e.actor,
+        atEpochSeconds: e.atEpochSeconds,
+      };
+      return;
+    }
+    case 'BANK_STATEMENTS_FETCHED': {
+      const currency = r.application.requested.currency;
+      r.bankFacts = {
+        referenceId: d['referenceId'] ?? '',
+        consentId: d['consentId'] ?? '',
+        months: Number.parseInt(d['months'] ?? '0', 10),
+        averageMonthlyInflow: money(BigInt(d['averageMonthlyInflowMinorUnits'] ?? '0'), currency),
+        lowestMonthEndBalance: money(BigInt(d['lowestMonthEndBalanceMinorUnits'] ?? '0'), currency),
+        returnedPaymentsLast6Months: Number.parseInt(d['returnedPaymentsLast6Months'] ?? '0', 10),
+        salaryCreditsObserved: Number.parseInt(d['salaryCreditsObserved'] ?? '0', 10),
+        source: d['source'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+        fetchedBy: e.actor,
+        atEpochSeconds: e.atEpochSeconds,
+      };
+      return;
+    }
+    case 'BANK_STATEMENTS_CONFIRMED':
+      if (r.bankFacts !== undefined)
+        r.bankFacts = { ...r.bankFacts, confirmedBy: e.actor, confirmedAtEpochSeconds: e.atEpochSeconds };
       return;
     case 'PORTFOLIO_STATUS_RECORDED':
       r.portfolio = {
@@ -1924,24 +2025,41 @@ async function recordAssessmentInputsAt(
     return fail('ASSESSMENT_INPUTS_LOCKED', 'Assessment inputs are recorded only before the application is submitted', {
       status: r.application.status,
     });
-  if (!REF_SHAPE.test(entry.bureau.reportRef))
-    return fail('BUREAU_REF_INVALID', 'The bureau report is recorded by its reference');
-  if (!REF_SHAPE.test(entry.bureau.consentId))
-    return fail('BUREAU_CONSENT_MISSING', 'The bureau result is recorded with the consent id it was obtained under');
+  // A report fetched through the rail is the bureau result, and nothing typed overrides it.
+  // Without one, the officer keys the result from the upstream report under its stage-4 consent.
+  const fetched = r.bureauFetch;
+  let bureau: AssessmentInputs['bureau'];
+  if (fetched !== undefined) {
+    bureau = {
+      reportRef: fetched.reportRef,
+      consentId: fetched.consentId,
+      score: fetched.score,
+      source: fetched.source === 'LIVE' ? 'AECB_RAIL_LIVE' : 'AECB_RAIL_FIXTURE',
+    };
+  } else {
+    const keyed = entry.bureau;
+    if (keyed === undefined)
+      return fail('BUREAU_RESULT_REQUIRED', 'Fetch the bureau report, or key it from the upstream report');
+    if (!REF_SHAPE.test(keyed.reportRef))
+      return fail('BUREAU_REF_INVALID', 'The bureau report is recorded by its reference');
+    if (!REF_SHAPE.test(keyed.consentId))
+      return fail('BUREAU_CONSENT_MISSING', 'The bureau result is recorded with the consent id it was obtained under');
+    // The consent must be one stage 4 recorded; a consent id typed here and nowhere else is not a consent.
+    if (!r.application.applicant.upstreamVerificationRefs.includes(keyed.consentId))
+      return fail(
+        'BUREAU_CONSENT_NOT_ON_RECORD',
+        'The bureau consent is not among the stage-4 verification references handed over',
+      );
+    if (keyed.score < 0n || keyed.score > 10_000n)
+      return fail('BUREAU_SCORE_INVALID', 'The bureau score is the bureau’s own whole number');
+    bureau = { ...keyed, source: 'KEYED_FROM_UPSTREAM_REPORT' };
+  }
   const identity = identityNumberIn({
-    bureauReportRef: entry.bureau.reportRef,
-    bureauConsentId: entry.bureau.consentId,
+    bureauReportRef: bureau.reportRef,
+    bureauConsentId: bureau.consentId,
     sectorPriority: entry.sectorPriority,
   });
   if (identity !== undefined) return identity;
-  // The consent must be one stage 4 recorded; a consent id typed here and nowhere else is not a consent.
-  if (!r.application.applicant.upstreamVerificationRefs.includes(entry.bureau.consentId))
-    return fail(
-      'BUREAU_CONSENT_NOT_ON_RECORD',
-      'The bureau consent is not among the stage-4 verification references handed over',
-    );
-  if (entry.bureau.score < 0n || entry.bureau.score > 10_000n)
-    return fail('BUREAU_SCORE_INVALID', 'The bureau score is the bureau’s own whole number');
   if (!Number.isSafeInteger(entry.fullTimeEmployees) || entry.fullTimeEmployees < 0)
     return fail('EMPLOYEES_INVALID', 'Full-time employees is a whole, non-negative count');
   if (entry.relevantExperienceYears < 0n || entry.relevantExperienceYears > 80n)
@@ -1959,12 +2077,7 @@ async function recordAssessmentInputsAt(
   }
   if (entry.collateralValueMinorUnits < 0n) return fail('COLLATERAL_NEGATIVE', 'The collateral value is not negative');
   const inputs: AssessmentInputs = {
-    bureau: {
-      reportRef: entry.bureau.reportRef,
-      consentId: entry.bureau.consentId,
-      score: entry.bureau.score,
-      source: 'AECB_FIXTURE',
-    },
+    bureau,
     fullTimeEmployees: entry.fullTimeEmployees,
     relevantExperienceYears: entry.relevantExperienceYears,
     sectorPriority: entry.sectorPriority,
@@ -2018,6 +2131,156 @@ export async function recordAssessmentInputs(
   return withTenantLock(tenant, () =>
     recordAssessmentInputsAt(tenant, applicationId, entry, actor, developmentAttestation()),
   );
+}
+
+/**
+ * The consent recorded at intake for the business, of the given type, among
+ * the application's verification references — or undefined when the
+ * application did not come through Sanad's own intake (a partner hand-over
+ * carries its own stage-4 references, which Sanad's ledger does not hold).
+ */
+export function intakeConsentFor(
+  application: BusinessApplication,
+  type: 'credit_bureau' | 'account_information',
+): string | undefined {
+  if (!application.upstreamRef.startsWith('intake:')) return undefined;
+  const id = `${application.upstreamRef.slice('intake:'.length)}:entity:${type}`.toLowerCase();
+  return application.applicant.upstreamVerificationRefs.find((r) => r.toLowerCase() === id);
+}
+
+/** Record a bureau report fetched through the rail: its summary, reference and consent, before the inputs are recorded. */
+export async function recordBureauFetch(
+  tenant: TenantCode,
+  applicationId: string,
+  fetch: Omit<BureauFetch, 'fetchedBy' | 'atEpochSeconds'>,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    // Like the inputs it feeds: fetched only before submission, so what is scored is what was fetched.
+    if (!SPREAD_OPEN.has(r.application.status))
+      return fail('ASSESSMENT_INPUTS_LOCKED', 'The bureau report is fetched only before the application is submitted', {
+        status: r.application.status,
+      });
+    if (!REF_SHAPE.test(fetch.reportRef) || !REF_SHAPE.test(fetch.consentId))
+      return fail('BUREAU_REF_INVALID', 'The bureau report is recorded by its reference');
+    if (!r.application.applicant.upstreamVerificationRefs.includes(fetch.consentId))
+      return fail(
+        'BUREAU_CONSENT_NOT_ON_RECORD',
+        'The bureau consent is not among the application’s recorded consents',
+      );
+    const at = developmentAttestation().epochSeconds;
+    r.bureauFetch = { ...fetch, fetchedBy: actor, atEpochSeconds: at };
+    recordEvent(book, r, {
+      eventType: 'BUREAU_REPORT_FETCHED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: {
+        reportRef: fetch.reportRef,
+        consentId: fetch.consentId,
+        score: fetch.score.toString(),
+        source: fetch.source,
+        totalExposureMinorUnits: fetch.totalExposure.minorUnits.toString(),
+        overdueMinorUnits: fetch.overdueAmount.minorUnits.toString(),
+        worstDelinquencyDays: String(fetch.worstDelinquencyDays),
+        activeFacilities: String(fetch.activeFacilities),
+        defaults: String(fetch.defaults),
+      },
+    });
+    return ok(view(r, ctx.value.currency));
+  });
+}
+
+/** Record the bank-statement facts fetched through Open Finance. A new fetch replaces the last and needs confirming again. */
+export async function recordBankStatementFacts(
+  tenant: TenantCode,
+  applicationId: string,
+  facts: Omit<BankStatementFacts, 'fetchedBy' | 'atEpochSeconds' | 'confirmedBy' | 'confirmedAtEpochSeconds'>,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    if (!SPREAD_OPEN.has(r.application.status))
+      return fail('ASSESSMENT_INPUTS_LOCKED', 'Bank statements are fetched only before the application is submitted', {
+        status: r.application.status,
+      });
+    if (!REF_SHAPE.test(facts.referenceId) || !REF_SHAPE.test(facts.consentId))
+      return fail('BANK_STATEMENT_REF_INVALID', 'Bank-statement facts are recorded by the provider’s reference');
+    if (!r.application.applicant.upstreamVerificationRefs.includes(facts.consentId))
+      return fail(
+        'ACCOUNT_CONSENT_NOT_ON_RECORD',
+        'The account-information consent is not among the application’s recorded consents',
+      );
+    if (facts.averageMonthlyInflow.currency !== ctx.value.currency)
+      return fail('BANK_STATEMENT_CURRENCY', 'Bank-statement facts are in the tenant’s currency');
+    const at = developmentAttestation().epochSeconds;
+    r.bankFacts = { ...facts, fetchedBy: actor, atEpochSeconds: at };
+    recordEvent(book, r, {
+      eventType: 'BANK_STATEMENTS_FETCHED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: {
+        referenceId: facts.referenceId,
+        consentId: facts.consentId,
+        months: String(facts.months),
+        averageMonthlyInflowMinorUnits: facts.averageMonthlyInflow.minorUnits.toString(),
+        lowestMonthEndBalanceMinorUnits: facts.lowestMonthEndBalance.minorUnits.toString(),
+        returnedPaymentsLast6Months: String(facts.returnedPaymentsLast6Months),
+        salaryCreditsObserved: String(facts.salaryCreditsObserved),
+        source: facts.source,
+      },
+    });
+    return ok(view(r, ctx.value.currency));
+  });
+}
+
+/** A second person confirms the bank-statement facts before the assessment relies on them. */
+export async function confirmBankStatementFacts(
+  tenant: TenantCode,
+  applicationId: string,
+  confirmer: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    const facts = r.bankFacts;
+    if (facts === undefined)
+      return fail('BANK_STATEMENTS_NOT_FETCHED', 'Fetch the bank statements before confirming them');
+    if (facts.confirmedBy !== undefined)
+      return fail('BANK_STATEMENTS_ALREADY_CONFIRMED', 'These bank-statement facts are already confirmed');
+    if (confirmer === facts.fetchedBy)
+      return reject(
+        'OP-DETERMINACY',
+        'FOUR_EYES_SELF_CONFIRMATION',
+        'The officer who fetched the bank statements does not confirm them',
+      );
+    const at = developmentAttestation().epochSeconds;
+    r.bankFacts = { ...facts, confirmedBy: confirmer, confirmedAtEpochSeconds: at };
+    recordEvent(book, r, {
+      eventType: 'BANK_STATEMENTS_CONFIRMED',
+      fromStage: null,
+      toStage: null,
+      actor: confirmer,
+      atEpochSeconds: at,
+      detail: { referenceId: facts.referenceId },
+    });
+    return ok(view(r, ctx.value.currency));
+  });
 }
 
 async function submitAt(
@@ -2075,6 +2338,15 @@ export async function submitForAssessment(
  * are a credit-policy choice rather than arithmetic are labelled ILLUSTRATIVE
  * until the fund's Credit function states its own.
  */
+/** The bureau score's provenance, by how the inputs obtained it. */
+const BUREAU_FACT_SOURCE: Readonly<Record<BureauSource, string>> = {
+  KEYED_FROM_UPSTREAM_REPORT:
+    'AECB commercial report snapshot, keyed MANUALLY from the stage-4 report (or an owner’s individual report) with its reference and consent id',
+  AECB_RAIL_FIXTURE:
+    'AECB commercial report fetched through the bureau rail under the business’s recorded consent — answered by the demonstration transport (FIXTURE)',
+  AECB_RAIL_LIVE: 'AECB commercial report fetched through the bureau rail under the business’s recorded consent',
+};
+
 export const FACT_SOURCES: Readonly<Record<string, string>> = {
   bureauScore:
     'AECB commercial report snapshot, keyed MANUALLY from the stage-4 report with its reference and consent id (no live AECB call until that rail is verified)',
@@ -2203,6 +2475,10 @@ async function runAssessmentAt(
   if (!t.ok) return t;
   const factSources: Record<string, string> = {};
   for (const name of Object.keys(facts)) factSources[name] = FACT_SOURCES[name] ?? 'Not mapped';
+  // The bureau score's provenance is the one the inputs recorded, so each run says how its score was obtained.
+  const bureauSource = r.inputs?.bureau.source;
+  if ('bureauScore' in factSources && bureauSource !== undefined)
+    factSources['bureauScore'] = BUREAU_FACT_SOURCE[bureauSource];
   const run: AssessmentRun = {
     assessmentId,
     assessment: assessment.value,
