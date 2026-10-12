@@ -75,6 +75,9 @@ create table if not exists core.consent_record (
   granted_at_epoch     bigint      not null,
   expires_at_epoch     bigint,
   withdraws_consent_id text,
+  -- The whole record as the domain holds it, so its attested instants are rebuilt from their
+  -- evidence (token digest and authority), never from a bare epoch.
+  record               jsonb       not null,
   correlation_id       text        not null,
   created_at           timestamptz not null default now(),
   created_by           text        not null,

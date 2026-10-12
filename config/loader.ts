@@ -30,6 +30,7 @@ import bankAIdentity from './tenants/bank-a/identity/staff-identity.json' with {
 import fintechBIdentity from './tenants/fintech-b/identity/staff-identity.json' with { type: 'json' };
 import saSmeDefinition from './regulatory/sa/sme-definition.json' with { type: 'json' };
 import aeSmeDefinition from './regulatory/ae/sme-definition.json' with { type: 'json' };
+import aeBeneficialOwnership from './regulatory/ae/beneficial-ownership.json' with { type: 'json' };
 // Named ksa/uae, not sa/ae: a file called `sa.json` is a cloud service-account key by convention, and the secret scanner rightly refuses one.
 import saJurisdiction from './jurisdictions/ksa.json' with { type: 'json' };
 import aeJurisdiction from './jurisdictions/uae.json' with { type: 'json' };
@@ -123,6 +124,43 @@ export function loadTenantOnboarding(tenant: TenantCode): Result<TenantOnboardin
       tenant,
     });
   return parsed;
+}
+
+/** The beneficial-owner rule of a jurisdiction: the ownership share that makes a person a beneficial owner, and its citation. */
+export interface BeneficialOwnershipRule {
+  readonly ownershipThresholdPerTenThousand: number;
+  readonly citation: string;
+}
+
+const BENEFICIAL_OWNERSHIP: Readonly<Partial<Record<JurisdictionCode, unknown>>> = { AE: aeBeneficialOwnership };
+
+/**
+ * The beneficial-owner rule for a tenant's jurisdiction. A jurisdiction without
+ * one configured is refused, never defaulted: a threshold with no citation is a
+ * guess (CLAUDE.md §3).
+ */
+export function loadBeneficialOwnership(tenant: TenantCode): Result<BeneficialOwnershipRule> {
+  const onboarding = loadTenantOnboarding(tenant);
+  if (!onboarding.ok) return onboarding;
+  const raw = BENEFICIAL_OWNERSHIP[onboarding.value.jurisdiction] as
+    { ownershipThresholdPerTenThousand?: unknown; citation?: unknown } | undefined;
+  const threshold = raw?.ownershipThresholdPerTenThousand;
+  if (
+    raw === undefined ||
+    typeof raw.citation !== 'string' ||
+    raw.citation.trim().length < 20 ||
+    typeof threshold !== 'number' ||
+    !Number.isInteger(threshold) ||
+    threshold <= 0 ||
+    threshold > 10_000
+  )
+    return reject(
+      'OP-DETERMINACY',
+      'BENEFICIAL_OWNERSHIP_NOT_CONFIGURED',
+      'No cited beneficial-owner rule is configured for this jurisdiction',
+      { jurisdiction: onboarding.value.jurisdiction },
+    );
+  return ok({ ownershipThresholdPerTenThousand: threshold, citation: raw.citation });
 }
 
 /** The jurisdiction profile that applies to a tenant, from its onboarding. */
