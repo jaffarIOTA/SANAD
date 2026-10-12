@@ -365,15 +365,40 @@ export async function providerSignOutUrl(i: {
   return endSessionUrl(metadata.value, p.clientId, `${origin}${SIGNED_OUT_PATH}`, i.locale);
 }
 
+/** A CSP nonce as security-headers.ts makes one: base64 of 128 random bits. Anything else is not a nonce. */
+const NONCE_SHAPE = /^[A-Za-z0-9+/]{22}==$/;
+
+/**
+ * The nonce of the policy this request carries. The middleware puts the
+ * per-request Content-Security-Policy on the request as well as the response
+ * (next-security.ts), so a route handler can bind a script to it.
+ */
+export function requestNonce(request: Request): string | undefined {
+  const policy = request.headers.get('content-security-policy') ?? '';
+  const found = /'nonce-([^']+)'/.exec(policy)?.[1];
+  return found !== undefined && NONCE_SHAPE.test(found) ? found : undefined;
+}
+
 /**
  * The page the callback answers with on success. A document, not a redirect:
  * the session cookie is SameSite=Strict, and a browser does not send it on a
  * redirect chain that began at another site (the provider). Navigating from
  * this same-site page does send it.
+ *
+ * It moves on by itself three ways, so nobody waits on a button: one fixed
+ * `location.replace` bound to the request's CSP nonce (allowed by the existing
+ * strict policy, nothing loosened), a zero-second meta refresh for a browser
+ * that runs no script, and the link as the last resort. The destination is
+ * cut to letters, digits, `/`, `_` and `-` before it reaches any of the three,
+ * and nothing else from the request is written into the page.
  */
-export function continuePage(destination: string, locale: SignInLocale): string {
+export function continuePage(destination: string, locale: SignInLocale, nonce?: string): string {
   const safe = destination.replace(/[^A-Za-z0-9/_-]/g, '');
   const words = locale === 'ar' ? 'المتابعة' : 'Continue';
   const dir = locale === 'ar' ? 'rtl' : 'ltr';
-  return `<!doctype html><html lang="${locale}" dir="${dir}"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta http-equiv="refresh" content="0;url=${safe}"><title>Sanad</title></head><body><p><a href="${safe}">${words}</a></p></body></html>`;
+  const onwards =
+    nonce !== undefined && NONCE_SHAPE.test(nonce)
+      ? `<script nonce="${nonce}">location.replace(${JSON.stringify(safe)})</script>`
+      : '';
+  return `<!doctype html><html lang="${locale}" dir="${dir}"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta http-equiv="refresh" content="0;url=${safe}"><title>Sanad</title>${onwards}</head><body><p><a href="${safe}">${words}</a></p></body></html>`;
 }

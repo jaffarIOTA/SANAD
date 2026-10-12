@@ -34,6 +34,7 @@ import {
   providerSignOutUrl,
   publicOrigin,
   redirectUriFor,
+  requestNonce,
 } from '@sanad/auth/staff-oidc.ts';
 import type { StaffIdentityConfiguration } from '@sanad/core/config/staff-identity.ts';
 
@@ -626,10 +627,28 @@ describe('staff OIDC: the small pieces', () => {
       'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
     );
   });
-  it('the continue page carries no script and only a same-site path', () => {
+  it('the continue page carries no script without a nonce, and only a same-site path', () => {
     const html = continuePage('/en"><script>x</script>', 'en');
     expect(html).not.toContain('<script');
     expect(html).toContain('content="0;url=/enscriptx/script"');
+  });
+  it('with the request’s nonce it carries exactly one fixed, nonce-bound script and nothing injectable', () => {
+    const nonce = 's5xcGVfvnPnivws+Q+SxPg==';
+    const html = continuePage('/en"><script>alert(1)</script>', 'en', nonce);
+    expect(html.match(/<script/g)).toHaveLength(1);
+    expect(html).toContain(`<script nonce="${nonce}">location.replace("/enscriptalert1/script")</script>`);
+    // A value that is not a nonce is ignored: no script at all.
+    for (const bad of ['', 'x', `${nonce}"><script>`, 'a'.repeat(24)])
+      expect(continuePage('/en', 'en', bad)).not.toContain('<script');
+  });
+  it('reads the nonce from the policy the middleware puts on the request, and nothing else', () => {
+    const withPolicy = (policy: string) =>
+      new Request('https://ops.example/sign-in/callback', { headers: { 'content-security-policy': policy } });
+    expect(requestNonce(withPolicy("script-src 'self' 'nonce-s5xcGVfvnPnivws+Q+SxPg==' 'strict-dynamic'"))).toBe(
+      's5xcGVfvnPnivws+Q+SxPg==',
+    );
+    expect(requestNonce(withPolicy("script-src 'self' 'nonce-\"><x>' 'strict-dynamic'"))).toBeUndefined();
+    expect(requestNonce(new Request('https://ops.example/sign-in/callback'))).toBeUndefined();
   });
 });
 

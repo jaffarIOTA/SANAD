@@ -22,6 +22,7 @@ import {
   completeStaffSignIn,
   continuePage,
   providerSignOutUrl,
+  requestNonce,
   signInLocale,
   stateReplayGuard,
 } from '@sanad/auth/staff-oidc.ts';
@@ -152,7 +153,7 @@ export async function completeSingleSignOn(request: Request): Promise<Response> 
     authenticatedAtEpochSeconds: s.authenticatedAtEpochSeconds,
     ...(s.displayName === undefined ? {} : { displayName: s.displayName }),
   });
-  return new Response(continuePage(`/${outcome.locale}/credentials`, outcome.locale), {
+  return new Response(continuePage(`/${outcome.locale}/credentials`, outcome.locale, requestNonce(request)), {
     status: 200,
     headers: {
       'content-type': 'text/html; charset=utf-8',
