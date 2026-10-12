@@ -36,7 +36,7 @@ import {
   withdrawIntake,
 } from '@sanad/core/origination/business-intake.ts';
 
-import { handOver, mutateBusiness } from './business.ts';
+import { handOver, mutateBusiness, productVariants } from './business.ts';
 import { type IntakeVersion, loadIntakeBook, saveIntakeChanges } from './intake-persistence.ts';
 import { kybRails } from './intake-rails.ts';
 import { persistencePool } from './persistence.ts';
@@ -225,6 +225,15 @@ export async function openIntakeFor(
 ): Promise<Result<BusinessIntake>> {
   const currency = currencyOf(tenant);
   if (!currency.ok) return currency;
+  // The variant and its purpose from the tenant's catalogue now, not first at hand-over.
+  const variant = (await productVariants(tenant)).get(form.variantCode);
+  if (variant === undefined)
+    return fail('VARIANT_UNKNOWN', 'The tenant’s catalogue has no such variant', { variantCode: form.variantCode });
+  if (!variant.purposes.some((p) => p.code === form.purpose))
+    return reject('OP-LIMIT', 'PURPOSE_NOT_ALLOWED', 'This variant does not finance that purpose', {
+      variantCode: form.variantCode,
+      purpose: form.purpose,
+    });
   return withLock(tenant, async () => {
     const book = await hydrate(tenant);
     const next = Math.max(0, ...[...book.intakes.keys()].map((id) => Number(id.slice(4)))) + 1;
