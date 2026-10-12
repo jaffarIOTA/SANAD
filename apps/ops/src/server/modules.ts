@@ -378,6 +378,13 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         readiness: { kind: 'BLOCKED', on: 'fixture transport only — see adapters/uae/partner-bank/README.md' },
         reference: 'payments port — disbursement and collection through the fund’s partner bank',
       },
+      {
+        id: 'uae-open-finance',
+        titleEn: 'UAE Open Finance',
+        titleAr: 'التمويل المفتوح في الإمارات',
+        readiness: { kind: 'BLOCKED', on: 'fixture transport only — see adapters/uae/open-finance/README.md' },
+        reference: 'account-information port — affordability facts from CBUAE Open Finance v2.1',
+      },
     ],
   },
   {

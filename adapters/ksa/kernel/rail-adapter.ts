@@ -46,7 +46,13 @@ export abstract class RailAdapter extends BaseAdapter {
 
   protected async invoke(
     operation: string,
-    request: { readonly method: 'GET' | 'POST' | 'PUT'; readonly path: string; readonly body?: Body },
+    request: {
+      readonly method: 'GET' | 'POST' | 'PUT';
+      readonly path: string;
+      readonly body?: Body;
+      /** Rail-specific headers (a standard's interaction id, a consent binding). They never replace the credential or the correlation id. */
+      readonly headers?: Readonly<Record<string, string>>;
+    },
     correlationId: string,
   ): Promise<RailOutcome<Body>> {
     let secret;
@@ -62,7 +68,16 @@ export abstract class RailAdapter extends BaseAdapter {
           url: `${this.config.baseUrl}${request.path}`,
           ...(request.body === undefined ? {} : { body: request.body }),
           // The secret is exposed here and nowhere else in the adapter.
-          headers: { authorization: `Bearer ${secret.expose()}`, 'x-correlation-id': correlationId },
+          headers: {
+            // Only x- headers, and never the correlation id: a rail header cannot stand in for the credential.
+            ...Object.fromEntries(
+              Object.entries(request.headers ?? {}).filter(
+                ([k]) => /^x-/i.test(k) && k.toLowerCase() !== 'x-correlation-id',
+              ),
+            ),
+            authorization: `Bearer ${secret.expose()}`,
+            'x-correlation-id': correlationId,
+          },
         }),
       );
       return { kind: 'ANSWERED', value };
