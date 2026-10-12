@@ -455,6 +455,25 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
     ar: 'سُجّلت موافقتك. تتطلب صلاحيات الاعتماد موافقة عضو آخر في اللجنة قبل اعتماد الطلب.',
   },
   CREDIT_NOTES_RECORDED: { en: 'Credit report notes saved.', ar: 'حُفظت ملاحظات التقرير الائتماني.' },
+  // Intake and KYB (stages 1–4)
+  INTAKE_OPENED: {
+    en: 'Application opened. Record each consent, then run the checks.',
+    ar: 'فُتح الطلب. سجّل كل موافقة ثم أجرِ الفحوصات.',
+  },
+  CONSENT_RECORDED: { en: 'Consent recorded in the consent ledger.', ar: 'سُجّلت الموافقة في سجل الموافقات.' },
+  REGISTRY_CHECKED: { en: 'Trade licence checked in the register.', ar: 'تم التحقق من الرخصة التجارية في السجل.' },
+  IDENTITY_CHECKED: { en: 'Identity checked with the identity authority.', ar: 'تم التحقق من الهوية لدى جهة الهوية.' },
+  SCREENED: { en: 'Screening result recorded.', ar: 'سُجّلت نتيجة الفحص الأمني.' },
+  SCREENING_REFERRAL_CLEARED: {
+    en: 'Referral cleared and the reason recorded.',
+    ar: 'عولجت الإحالة وسُجّل سببها.',
+  },
+  BENEFICIAL_OWNERS_DECLARED: { en: 'Beneficial owners declared.', ar: 'سُجّل التصريح بالمستفيدين الحقيقيين.' },
+  HANDED_TO_ASSESSMENT: {
+    en: 'Handed over to credit assessment. Continue with the figures and documents.',
+    ar: 'أُحيل إلى التقييم الائتماني. تابع بالأرقام والمستندات.',
+  },
+  INTAKE_WITHDRAWN: { en: 'Application withdrawn.', ar: 'سُحب الطلب.' },
   OFFER_GENERATED: { en: 'Offer letter generated.', ar: 'أُعدّ خطاب العرض.' },
   OFFER_SENT: {
     en: 'Offer sent: the notification is queued on the outbox.',
@@ -715,6 +734,120 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
   CREDIT_NOTES_TOO_LONG: {
     en: 'Credit report notes are a summary of up to four thousand characters. Shorten them and save again.',
     ar: 'ملاحظات التقرير الائتماني ملخص لا يتجاوز أربعة آلاف حرف. اختصرها واحفظها مجدداً.',
+  },
+  // Intake and KYB (stages 1–4). Nothing was recorded on any of these.
+  INTAKE_NOT_OPEN: {
+    en: 'This application has been handed over, declined or withdrawn; it can no longer be changed here.',
+    ar: 'أُحيل هذا الطلب أو رُفض أو سُحب، فلم يعد قابلاً للتعديل هنا.',
+  },
+  INTAKE_NOT_FOUND: { en: 'There is no such application in intake.', ar: 'لا يوجد طلب بهذا الرقم قيد الاستلام.' },
+  INTAKE_ID_MALFORMED: {
+    en: 'The intake number is not in the expected form.',
+    ar: 'رقم الاستلام ليس بالصيغة المتوقعة.',
+  },
+  STALE_INTAKE: {
+    en: 'Someone else changed this application a moment ago. Nothing was saved; the screen now shows the current state.',
+    ar: 'عدّل شخص آخر هذا الطلب للتو. لم يُحفظ شيء، والشاشة تعرض الآن الحالة الحالية.',
+  },
+  TRADE_LICENCE_MALFORMED: {
+    en: 'Enter the trade licence number as it appears on the licence: letters, digits, slashes and dashes.',
+    ar: 'أدخل رقم الرخصة التجارية كما يظهر في الرخصة: حروف وأرقام وشرطات مائلة وشرطات.',
+  },
+  ISSUING_AUTHORITY_REQUIRED: {
+    en: 'Choose the authority that issued the licence.',
+    ar: 'اختر الجهة التي أصدرت الرخصة.',
+  },
+  BUSINESS_NAME_REQUIRED: { en: 'Enter the business name in English.', ar: 'أدخل اسم المنشأة بالإنجليزية.' },
+  SECTOR_REQUIRED: { en: 'Choose the business’s sector.', ar: 'اختر قطاع المنشأة.' },
+  YEARS_IN_OPERATION_INVALID: {
+    en: 'Enter the years in operation as a whole number.',
+    ar: 'أدخل سنوات التشغيل عدداً صحيحاً.',
+  },
+  PRODUCT_REQUIRED: { en: 'Choose the product.', ar: 'اختر المنتج.' },
+  VARIANT_OR_PURPOSE_REQUIRED: { en: 'Choose the product variant and the purpose.', ar: 'اختر فئة المنتج والغرض.' },
+  INTAKE_FIGURE_MALFORMED: {
+    en: 'Enter the tenor, grace and years as whole numbers, and the contribution as a percentage.',
+    ar: 'أدخل المدة وفترة السماح والسنوات أعداداً صحيحة، والمساهمة نسبةً مئوية.',
+  },
+  INTAKE_PARTY_MALFORMED: {
+    en: 'Each party needs a role and a share between zero and one hundred percent.',
+    ar: 'يحتاج كل طرف إلى صفة وحصة بين صفر ومئة بالمئة.',
+  },
+  PARTIES_REQUIRED: { en: 'Name the owners and signatories.', ar: 'أدخل الملاك والمفوّضين بالتوقيع.' },
+  PARTY_REF_INVALID: {
+    en: 'A party is recorded by a reference — letters, digits and dashes — never an identity number.',
+    ar: 'يُسجَّل الطرف بمرجع من حروف وأرقام وشرطات، لا برقم هوية.',
+  },
+  PARTY_REF_DUPLICATE: { en: 'Each party appears once.', ar: 'يظهر كل طرف مرة واحدة.' },
+  PARTY_NAME_REQUIRED: { en: 'Give each party a display name.', ar: 'أدخل اسماً معروضاً لكل طرف.' },
+  OWNERSHIP_INVALID: { en: 'A share is between zero and one hundred percent.', ar: 'الحصة بين صفر ومئة بالمئة.' },
+  OWNERSHIP_ROLE_MISMATCH: {
+    en: 'An owner holds a share; a signatory who owns nothing is a signatory only.',
+    ar: 'المالك يملك حصة؛ والمفوّض الذي لا يملك شيئاً مفوّض بالتوقيع فقط.',
+  },
+  OWNERSHIP_ABOVE_WHOLE: {
+    en: 'The shares add up to more than one hundred percent.',
+    ar: 'مجموع الحصص يتجاوز مئة بالمئة.',
+  },
+  SIGNATORY_REQUIRED: {
+    en: 'At least one party must be authorised to sign for the business.',
+    ar: 'يجب أن يكون طرف واحد على الأقل مفوّضاً بالتوقيع عن المنشأة.',
+  },
+  CONSENT_TYPE_UNKNOWN: {
+    en: 'That is not a consent this step records.',
+    ar: 'هذه ليست موافقة تُسجَّل في هذه الخطوة.',
+  },
+  CONSENT_SUBJECT_UNKNOWN: {
+    en: 'A consent is given by the business or one of its parties.',
+    ar: 'تُعطى الموافقة من المنشأة أو أحد أطرافها.',
+  },
+  CONSENT_REF_INVALID: {
+    en: 'Enter the consent form’s reference — letters, digits and dashes.',
+    ar: 'أدخل مرجع نموذج الموافقة من حروف وأرقام وشرطات.',
+  },
+  CONSENT_ALREADY_RECORDED: { en: 'This consent is already recorded.', ar: 'هذه الموافقة مسجلة مسبقاً.' },
+  CONSENT_MISSING: {
+    en: 'Record the person’s consent first. Nothing is checked without it.',
+    ar: 'سجّل موافقة الشخص أولاً. لا يُجرى أي فحص دونها.',
+  },
+  PARTY_UNKNOWN: { en: 'That person is not a party of this application.', ar: 'هذا الشخص ليس طرفاً في هذا الطلب.' },
+  SCREENING_SUBJECT_UNKNOWN: {
+    en: 'Screen the business or one of its parties.',
+    ar: 'أجرِ الفحص على المنشأة أو أحد أطرافها.',
+  },
+  CHECK_REF_INVALID: {
+    en: 'The service did not return a usable reference; nothing was recorded.',
+    ar: 'لم تُرجع الخدمة مرجعاً صالحاً، فلم يُسجَّل شيء.',
+  },
+  RAIL_UNAVAILABLE: {
+    en: 'The service is not connected in this environment, so nothing was checked. Nothing is assumed in its place.',
+    ar: 'الخدمة غير متصلة في هذه البيئة، فلم يُجرَ أي فحص. ولا يُفترض شيء مكانها.',
+  },
+  NOTHING_TO_CLEAR: { en: 'There is no open referral to clear.', ar: 'لا توجد إحالة مفتوحة لمعالجتها.' },
+  FOUR_EYES_SELF_CLEARANCE: {
+    en: 'You opened this application; another person clears its referrals.',
+    ar: 'أنت من فتح هذا الطلب؛ يعالج إحالاته شخص آخر.',
+  },
+  CLEARANCE_REASON_REQUIRED: { en: 'Record why the referral is cleared.', ar: 'سجّل سبب معالجة الإحالة.' },
+  UBO_DECLARANT_NOT_SIGNATORY: {
+    en: 'The declaration is made by a party authorised to sign.',
+    ar: 'يقدّم التصريحَ طرفٌ مفوّض بالتوقيع.',
+  },
+  UBO_NOT_A_PARTY: {
+    en: 'A beneficial owner is one of the application’s parties.',
+    ar: 'المستفيد الحقيقي أحد أطراف الطلب.',
+  },
+  UBO_OWNER_UNDECLARED: {
+    en: 'Every owner at or above the beneficial-ownership threshold must be declared.',
+    ar: 'يجب التصريح بكل مالك يبلغ حدّ المستفيد الحقيقي أو يتجاوزه.',
+  },
+  BENEFICIAL_OWNERSHIP_NOT_CONFIGURED: {
+    en: 'No cited beneficial-owner rule is configured for this jurisdiction, so the declaration cannot be checked.',
+    ar: 'لا توجد قاعدة موثّقة للمستفيد الحقيقي في هذه الولاية، فلا يمكن التحقق من التصريح.',
+  },
+  KYB_INCOMPLETE: {
+    en: 'Some checks are still missing or have not passed. The list on this screen says which.',
+    ar: 'ما زالت بعض الفحوصات ناقصة أو لم تُجتز. توضح القائمة في هذه الشاشة ما هي.',
   },
   // The committee's approved terms. Nothing was recorded on any of these; the member corrects the figure and decides again.
   APPROVED_AMOUNT_MALFORMED: {

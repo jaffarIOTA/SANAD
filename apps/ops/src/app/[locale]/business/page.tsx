@@ -17,6 +17,7 @@ import {
   syncBusiness,
 } from '../../../server/business.ts';
 import { statusChip } from '../../../server/business-dashboard.ts';
+import { listIntakes } from '../../../server/intake.ts';
 import { staffJurisdiction } from '../../../server/jurisdiction.ts';
 import { pageStaff } from '../../../server/session.ts';
 import { developmentAttestation } from '../../../server/store.ts';
@@ -74,7 +75,13 @@ export default async function BusinessListPage({
     );
 
   await syncBusiness(j.tenant);
-  const [views, variants] = await Promise.all([listApplications(j.tenant), productVariants(j.tenant)]);
+  const [views, variants, allIntakes] = await Promise.all([
+    listApplications(j.tenant),
+    productVariants(j.tenant),
+    listIntakes(j.tenant),
+  ]);
+  // Intakes still at stages 1–4; a handed-over one appears below as its application.
+  const intakes = allIntakes.filter((i) => i.status === 'DRAFT');
   const now = developmentAttestation().epochSeconds;
   const requested = typeof sp['stage'] === 'string' ? sp['stage'] : 'all';
   const filter: Filter = (FILTERS as readonly string[]).includes(requested) ? (requested as Filter) : 'all';
@@ -106,14 +113,53 @@ export default async function BusinessListPage({
             )}
           </p>
         </div>
-        <a
-          href={`/${segment}/business/export`}
-          className="press inline-flex h-10 items-center gap-2 rounded-tile border border-line-strong bg-surface px-4 text-[14px] font-semibold text-heading hover:bg-sunken"
-        >
-          <Icon name="document" size={18} />
-          {t('Export', 'تصدير')}
-        </a>
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={`/${segment}/business/export`}
+            className="press inline-flex h-10 items-center gap-2 rounded-tile border border-line-strong bg-surface px-4 text-[14px] font-semibold text-heading hover:bg-sunken"
+          >
+            <Icon name="document" size={18} />
+            {t('Export', 'تصدير')}
+          </a>
+          <a
+            href={`/${segment}/business/intake/new`}
+            className="press inline-flex h-10 items-center gap-2 rounded-tile bg-brand px-4 text-[14px] font-semibold text-on-brand hover:bg-brand-deep"
+          >
+            {t('New application', 'طلب جديد')}
+          </a>
+        </div>
       </div>
+
+      {intakes.length === 0 ? null : (
+        <section className="rounded-card border border-line bg-surface shadow-card">
+          <header className="border-b border-line px-5 py-4">
+            <h2 className="text-[15px] font-semibold text-heading">
+              {t('In intake and KYB (stages 1–4)', 'قيد الاستلام والتحقق (المراحل ١–٤)')}
+            </h2>
+          </header>
+          <ul className="divide-y divide-line">
+            {intakes.map((i) => (
+              <li key={i.intakeId} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+                <span className="flex flex-wrap items-center gap-2 text-[14px]">
+                  <span className="font-semibold text-heading">
+                    {f.arabic ? (i.entity.businessNameAr ?? i.entity.businessNameEn) : i.entity.businessNameEn}
+                  </span>
+                  <Id>{i.intakeId}</Id>
+                  <span className="text-ink-quiet tabular-nums">
+                    <bdi>{f.money(i.request.requested.minorUnits)}</bdi> {f.cur}
+                  </span>
+                </span>
+                <a
+                  href={`/${segment}/business/intake/${i.intakeId}`}
+                  className="text-[13px] font-semibold text-brand hover:underline"
+                >
+                  {t('Continue KYB', 'متابعة التحقق')}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="rounded-card border border-line bg-surface shadow-card">
         <nav aria-label={t('Stages', 'المراحل')} className="border-b border-line px-5 pt-4">

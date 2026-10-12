@@ -1,0 +1,92 @@
+/**
+ * The KYB rails an intake calls: the business registry, identity verification
+ * and screening, as ports (CLAUDE.md §5). Which implementation stands behind
+ * them is decided here and nowhere else:
+ *
+ *   - where a synthetic demonstration is permitted (the process declares
+ *     synthetic data and the database confirms it, or development), the real
+ *     UAE adapters run over the demonstration transport and the screening
+ *     stand-in, and every answer is labelled FIXTURE;
+ *   - anywhere else the rails are UNAVAILABLE until each has made a verified
+ *     sandbox call (its adapter README's verification item). A rail that is
+ *     down never approves anything: the intake simply cannot complete KYB.
+ *
+ * The adapters verify each consent themselves against the consent ledger
+ * before calling out (SR-026), so the ledger passed in is the tenant's own.
+ */
+import type { CredentialProvider, CredentialRef } from '@sanad/core/ports/credentials.ts';
+import { SecretValue } from '@sanad/core/ports/credentials.ts';
+import type { BusinessRegistryPort } from '@sanad/core/ports/business-registry.ts';
+import type { ConsentLedger } from '@sanad/core/ports/consent-ledger.ts';
+import type { IdentityVerificationPort } from '@sanad/core/ports/identity-verification.ts';
+import type { ScreeningPort } from '@sanad/core/ports/screening.ts';
+import type { TsaInstant } from '@sanad/core/time/tsa.ts';
+import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
+
+import type { RailAdapterConfig } from '../../../../adapters/kernel/rail-adapter.ts';
+import { DemonstrationScreening } from '../../../../adapters/screening/demonstration/adapter.ts';
+import { DemonstrationTransport } from '../../../../adapters/uae/demonstration/transport.ts';
+import { IcpAdapter } from '../../../../adapters/uae/icp/adapter.ts';
+import { NerAdapter } from '../../../../adapters/uae/ner/adapter.ts';
+import { persistencePool } from './persistence.ts';
+
+export interface KybRails {
+  readonly registry: BusinessRegistryPort;
+  readonly identity: IdentityVerificationPort;
+  readonly screening: ScreeningPort;
+  readonly source: 'LIVE' | 'FIXTURE';
+}
+
+/**
+ * The demonstration transport needs no credential, but the adapters ask for one
+ * exactly as they will of the vault; this answers that request with a value that
+ * reaches nothing and says what it is.
+ */
+class DemonstrationCredentials implements CredentialProvider {
+  get(_ref: CredentialRef): Promise<SecretValue> {
+    return Promise.resolve(new SecretValue('demonstration-transport-needs-no-credential'));
+  }
+}
+
+function demonstrationConfig(
+  tenantId: string,
+  provider: RailAdapterConfig['provider'],
+  consents: ConsentLedger,
+  now: () => number,
+): RailAdapterConfig {
+  return {
+    tenantId,
+    provider,
+    environment: 'sandbox',
+    freshnessWindowSeconds: 0,
+    failurePosture: 'FAIL_CLOSED',
+    credentialTtlSeconds: 600,
+    breaker: { failureThreshold: 3, resetAfterSeconds: 30, successThreshold: 1 },
+    nowEpochSeconds: now,
+    baseUrl: 'https://demonstration.invalid',
+    consents,
+  };
+}
+
+/** The tenant's KYB rails, or undefined where none may run (the screen then says the rails are unavailable). */
+export async function kybRails(
+  tenantId: string,
+  consents: ConsentLedger,
+  attest: () => Promise<TsaInstant>,
+  now: () => number,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): Promise<KybRails | undefined> {
+  if (!(await syntheticDemonstrationPermitted(persistencePool(env), env))) return undefined;
+  const transport = new DemonstrationTransport();
+  const credentials = new DemonstrationCredentials();
+  return {
+    registry: new NerAdapter(demonstrationConfig(tenantId, 'BUSINESS_REGISTRY', consents, now), credentials, transport),
+    identity: new IcpAdapter(
+      demonstrationConfig(tenantId, 'IDENTITY_VERIFICATION', consents, now),
+      credentials,
+      transport,
+    ),
+    screening: new DemonstrationScreening(consents, attest),
+    source: 'FIXTURE',
+  };
+}
