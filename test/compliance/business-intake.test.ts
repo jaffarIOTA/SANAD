@@ -166,6 +166,27 @@ describe('opening an intake', () => {
     );
   });
 
+  it('accepts a UAE tax registration number, yet still refuses an Emirates ID in any shape', () => {
+    const withTrn = openIntake(
+      { ...INPUT, entity: { ...INPUT.entity, taxRegistrationNumber: '100123456700003' } },
+      'AED',
+      'officer-1',
+      T,
+    );
+    expect(withTrn.ok).toBe(true);
+    for (const id of ['784-1990-1234567-1', '784199012345671', '784 1990 1234567 1'])
+      expectRefusal(
+        openIntake(
+          { ...INPUT, entity: { ...INPUT.entity, businessNameEn: `Owner ${id} Trading` } },
+          'AED',
+          'officer-1',
+          T,
+        ),
+        'OP-DETERMINACY',
+        'IDENTITY_NUMBER_IN_PAYLOAD',
+      );
+  });
+
   it('refuses a currency other than the tenant’s, and ownership above the whole', () => {
     expectRefusal(
       openIntake({ ...INPUT, request: { ...INPUT.request, requested: money(1n, 'SAR') } }, 'AED', 'officer-1', T),

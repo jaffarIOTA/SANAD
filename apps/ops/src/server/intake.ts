@@ -13,6 +13,7 @@
 import { type TenantCode, loadBeneficialOwnership, loadTenantOnboarding } from '@sanad/config/loader.ts';
 import { type ConsentRecord, grant } from '@sanad/core/consent/consent.ts';
 import { consentLedger } from '@sanad/core/consent/ledger.ts';
+import type { ConsentLedger } from '@sanad/core/ports/consent-ledger.ts';
 import { type CurrencyCode, money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import {
@@ -32,6 +33,7 @@ import {
   recordIdentityCheck,
   recordRegistryCheck,
   recordScreening,
+  recordTaxCheck,
   verificationRefsOf,
   withdrawIntake,
 } from '@sanad/core/origination/business-intake.ts';
@@ -202,6 +204,7 @@ export interface OpenIntakeForm {
   readonly businessNameAr?: string;
   readonly sector: string;
   readonly yearsInOperation: number;
+  readonly taxRegistrationNumber?: string;
   readonly productCode: string;
   readonly variantCode: string;
   readonly purpose: string;
@@ -248,6 +251,7 @@ export async function openIntakeFor(
           ...(form.businessNameAr === undefined ? {} : { businessNameAr: form.businessNameAr }),
           sector: form.sector,
           yearsInOperation: form.yearsInOperation,
+          ...(form.taxRegistrationNumber === undefined ? {} : { taxRegistrationNumber: form.taxRegistrationNumber }),
         },
         request: {
           productCode: form.productCode,
@@ -273,6 +277,8 @@ const PURPOSE: Readonly<Record<IntakeConsentType, string>> = {
   IDENTITY_VERIFICATION: 'Verify identity against the national identity authority for this financing application',
   SCREENING: 'Sanctions, PEP and adverse-media screening for this financing application',
   CREDIT_BUREAU: 'Credit bureau enquiry for this financing application',
+  ACCOUNT_INFORMATION:
+    'Read the business’s bank accounts, balances and transactions through Open Finance to assess this financing application',
 };
 
 /**
@@ -438,6 +444,51 @@ export async function runScreening(
     if (!t.ok) return t;
     return commit(tenant, book, t.value);
   });
+}
+
+/** Check the business's TRN with the tax authority and record the answer. Information for the assessment, never a gap. */
+export async function runTaxCheck(
+  tenant: TenantCode,
+  intakeId: string,
+  actor: string,
+): Promise<Result<BusinessIntake>> {
+  return withIntake(tenant, intakeId, async (book, intake) => {
+    const trn = intake.entity.taxRegistrationNumber;
+    if (trn === undefined)
+      return fail('TRN_NOT_RECORDED', 'The tax registration is checked by the TRN recorded at intake');
+    const rails = await kybRails(
+      tenant,
+      consentLedger(() => book.consents, attest),
+      attest,
+      nowSeconds,
+    );
+    if (rails === undefined) return unavailable('TAX_COMPLIANCE');
+    const r = await rails.tax.certificateStatus({ tenantId: tenant, crNumber: trn, correlationId: intakeId });
+    if (!r.ok) return r;
+    let status: 'VALID' | 'EXPIRED' | 'NOT_FOUND' | 'SUSPENDED';
+    let reference: string;
+    if (r.value.kind === 'ANSWERED') {
+      status = r.value.value.status;
+      reference = r.value.value.certificateRef ?? `trn-checked:${trn}`;
+    } else if (r.value.kind === 'REFUSED' && r.value.code === 'NOT_FOUND') {
+      status = 'NOT_FOUND';
+      reference = `trn-not-found:${trn}`;
+    } else return unavailable('TAX_COMPLIANCE');
+    const t = recordTaxCheck(
+      intake,
+      { status, reference, source: rails.source },
+      actor,
+      developmentAttestation().epochSeconds,
+    );
+    if (!t.ok) return t;
+    return commit(tenant, book, t.value);
+  });
+}
+
+/** The tenant's consent ledger as the intakes recorded it: what the assessment-stage rails check consents against. */
+export async function intakeConsentLedger(tenant: TenantCode): Promise<ConsentLedger> {
+  const book = await hydrate(tenant);
+  return consentLedger(() => book.consents, attest);
 }
 
 /** A second person clears a screening referral, with the reason. */

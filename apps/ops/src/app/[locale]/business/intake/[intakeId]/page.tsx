@@ -21,6 +21,7 @@ import {
   identityCheckAction,
   intakeConsentAction,
   registryCheckAction,
+  taxCheckAction,
   screeningAction,
   withdrawIntakeAction,
 } from '../../../../../server/intake-actions.ts';
@@ -55,7 +56,15 @@ const CONSENT_WORDS: Readonly<Record<IntakeConsentType, { readonly en: string; r
   IDENTITY_VERIFICATION: { en: 'Identity verification', ar: 'التحقق من الهوية' },
   SCREENING: { en: 'Screening', ar: 'الفحص الأمني' },
   CREDIT_BUREAU: { en: 'Credit bureau', ar: 'المكتب الائتماني' },
+  ACCOUNT_INFORMATION: { en: 'Bank accounts (Open Finance)', ar: 'الحسابات المصرفية (التمويل المفتوح)' },
 };
+
+const TAX_WORDS = {
+  VALID: { en: 'Registered', ar: 'مسجّلة' },
+  EXPIRED: { en: 'Deregistered', ar: 'أُلغي تسجيلها' },
+  NOT_FOUND: { en: 'Not registered', ar: 'غير مسجّلة' },
+  SUSPENDED: { en: 'Suspended', ar: 'موقوفة' },
+} as const;
 
 /** A consent: recorded (with its reference), or a one-field form to record it. */
 function ConsentCell({
@@ -199,6 +208,47 @@ const REGISTRY_WORDS = {
   NOT_FOUND: { en: 'Not on the register', ar: 'غير مسجلة' },
 } as const;
 
+/** The TRN's registration with the tax authority. Information for the assessment, never a gap. */
+function TaxCell({
+  segment,
+  intake,
+  open,
+  f,
+}: {
+  readonly segment: string;
+  readonly intake: BusinessIntake;
+  readonly open: boolean;
+  readonly f: Formatters;
+}): ReactElement {
+  const trn = intake.entity.taxRegistrationNumber;
+  if (trn === undefined)
+    return <span className="text-[13px] text-ink-quiet">{f.t('No TRN recorded', 'لم يُسجَّل رقم ضريبي')}</span>;
+  const c = intake.taxCheck;
+  return (
+    <>
+      <Id>{trn}</Id>
+      {c === undefined ? null : (
+        <>
+          <Chip tone={c.status === 'VALID' ? 'good' : 'warn'}>
+            {f.t(TAX_WORDS[c.status].en, TAX_WORDS[c.status].ar)}
+          </Chip>
+          <SourceBadge source={c.source} f={f} />
+        </>
+      )}
+      {open ? (
+        <form action={taxCheckAction}>
+          <Hidden segment={segment} intakeId={intake.intakeId} />
+          <button type="submit" className={BTN_SMALL}>
+            {c === undefined
+              ? f.t('Check VAT registration', 'التحقق من التسجيل الضريبي')
+              : f.t('Check again', 'إعادة التحقق')}
+          </button>
+        </form>
+      ) : null}
+    </>
+  );
+}
+
 function Row({ label, children }: { readonly label: string; readonly children: ReactNode }): ReactElement {
   return (
     <div className="grid gap-1 py-3 sm:grid-cols-[14rem_1fr] sm:items-center">
@@ -303,6 +353,7 @@ export default async function IntakePage({
           <Row label={t('Consents given for the business', 'موافقات المنشأة')}>
             <ConsentCell segment={segment} intake={i} subject="ENTITY" type="SCREENING" open={open} f={f} />
             <ConsentCell segment={segment} intake={i} subject="ENTITY" type="CREDIT_BUREAU" open={open} f={f} />
+            <ConsentCell segment={segment} intake={i} subject="ENTITY" type="ACCOUNT_INFORMATION" open={open} f={f} />
           </Row>
           <Row label={t('Screening', 'الفحص الأمني')}>
             <ScreeningCell
@@ -314,6 +365,9 @@ export default async function IntakePage({
               open={open}
               f={f}
             />
+          </Row>
+          <Row label={t('VAT registration', 'التسجيل الضريبي')}>
+            <TaxCell segment={segment} intake={i} open={open} f={f} />
           </Row>
         </dl>
       </SectionCard>

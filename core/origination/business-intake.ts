@@ -67,7 +67,15 @@ export interface IntakeParty {
 }
 
 /** The consents an intake captures, by the platform's consent types. */
-export type IntakeConsentType = 'IDENTITY_VERIFICATION' | 'SCREENING' | 'CREDIT_BUREAU';
+export type IntakeConsentType = 'IDENTITY_VERIFICATION' | 'SCREENING' | 'CREDIT_BUREAU' | 'ACCOUNT_INFORMATION';
+
+/** The tax authority's answer for the business's TRN. Informational: registration is mandatory only above a threshold. */
+export interface TaxCheck {
+  readonly status: 'VALID' | 'EXPIRED' | 'NOT_FOUND' | 'SUSPENDED';
+  readonly reference: string;
+  readonly source: CheckSource;
+  readonly atEpochSeconds: bigint;
+}
 
 /** `ENTITY` for a consent given on the business's behalf by an authorised signatory. */
 export type ConsentSubject = string;
@@ -96,6 +104,8 @@ export interface IntakeEntity {
   readonly businessNameAr?: string;
   readonly sector: string;
   readonly yearsInOperation: number;
+  /** The tax registration number, where the business has one (fifteen digits in the UAE). */
+  readonly taxRegistrationNumber?: string;
 }
 
 export interface IntakeRequest {
@@ -118,6 +128,7 @@ export interface BusinessIntake {
   readonly consents: readonly ConsentCapture[];
   readonly registry?: RegistryCheck;
   readonly entityScreening?: ScreeningCheck;
+  readonly taxCheck?: TaxCheck;
   readonly ubo?: UboDeclaration;
   readonly openedBy: string;
   readonly openedAtEpochSeconds: bigint;
@@ -201,6 +212,8 @@ export function openIntake(
   if (!CODE_SHAPE.test(e.sector)) return bad('SECTOR_REQUIRED', 'The sector is recorded by its code');
   if (!Number.isInteger(e.yearsInOperation) || e.yearsInOperation < 0 || e.yearsInOperation > 200)
     return bad('YEARS_IN_OPERATION_INVALID', 'Years in operation is a whole number');
+  if (e.taxRegistrationNumber !== undefined && !/^\d{15}$/.test(e.taxRegistrationNumber))
+    return bad('TRN_MALFORMED', 'A tax registration number is fifteen digits');
 
   const r = input.request;
   if (r.requested.currency !== tenantCurrency)
@@ -502,6 +515,33 @@ export function declareBeneficialOwners(
   );
 }
 
+/**
+ * The tax authority's answer for the business's TRN. Recorded whatever the
+ * status and never a KYB gap: VAT registration is mandatory only above a
+ * turnover threshold, so an unregistered business is not an ineligible one.
+ * The credit assessment reads it as information.
+ */
+export function recordTaxCheck(
+  intake: BusinessIntake,
+  check: Omit<TaxCheck, 'atEpochSeconds'>,
+  actor: string,
+  at: bigint,
+): Result<IntakeTransition> {
+  const o = open(intake, 'Record the tax registration check');
+  if (!o.ok) return o;
+  if (intake.entity.taxRegistrationNumber === undefined)
+    return bad('TRN_NOT_RECORDED', 'The tax registration is checked by the TRN recorded at intake');
+  const r = checkRef(check.reference);
+  if (!r.ok) return r;
+  return ok(
+    emit(intake, { taxCheck: { ...check, atEpochSeconds: at } }, 'TAX_REGISTRATION_CHECKED', actor, at, {
+      status: check.status,
+      reference: check.reference,
+      source: check.source,
+    }),
+  );
+}
+
 // -- Readiness and hand-over -------------------------------------------------------
 
 /** One thing still standing between the intake and credit assessment. */
@@ -547,6 +587,7 @@ export function verificationRefsOf(intake: BusinessIntake): readonly string[] {
   const refs: string[] = [];
   if (intake.registry !== undefined) refs.push(intake.registry.lookupRef);
   if (intake.entityScreening !== undefined) refs.push(intake.entityScreening.resultRef);
+  if (intake.taxCheck !== undefined) refs.push(intake.taxCheck.reference);
   for (const p of intake.parties) {
     if (p.identity !== undefined) refs.push(p.identity.verificationRef);
     if (p.screening !== undefined) refs.push(p.screening.resultRef);
