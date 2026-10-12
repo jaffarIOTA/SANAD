@@ -77,7 +77,7 @@ export async function kybRails(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): Promise<KybRails | undefined> {
   if (!(await syntheticDemonstrationPermitted(persistencePool(env), env))) return undefined;
-  const transport = new DemonstrationTransport();
+  const transport = new DemonstrationTransport(now);
   const credentials = new DemonstrationCredentials();
   return {
     registry: new NerAdapter(demonstrationConfig(tenantId, 'BUSINESS_REGISTRY', consents, now), credentials, transport),

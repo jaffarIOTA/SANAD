@@ -27,6 +27,33 @@ export function aed(value: unknown, currency?: unknown): Money | undefined {
   return minor === undefined ? undefined : money(minor, UAE_CURRENCY);
 }
 
+/**
+ * A `{ Amount, Currency }` object in the Open Finance / ISO 20022 style, where
+ * the amount is a decimal STRING that may carry up to five decimals. Only a
+ * string is accepted (a JSON number has already been a float); digits beyond
+ * the fils must be zero, because a dirham has no smaller unit; the currency
+ * must be AED.
+ */
+export function aedAmountObject(value: unknown, amountKey = 'Amount', currencyKey = 'Currency'): Money | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const rec = value as Record<string, unknown>;
+  const amount = rec[amountKey];
+  if (rec[currencyKey] !== UAE_CURRENCY || typeof amount !== 'string') return undefined;
+  const m = /^(\d{1,13})(?:\.(\d{1,5}))?$/.exec(amount);
+  if (m === null) return undefined;
+  const fraction = m[2] ?? '';
+  if (/[1-9]/.test(fraction.slice(2))) return undefined;
+  return money(BigInt(m[1] ?? '0') * 100n + BigInt(fraction.slice(0, 2).padEnd(2, '0')), UAE_CURRENCY);
+}
+
+/** AED minor units to the decimal string an ISO 20022-style instruction carries ("500000.00"), by digit manipulation. */
+export function aedDecimal(m: Money): string {
+  const negative = m.minorUnits < 0n;
+  const abs = negative ? -m.minorUnits : m.minorUnits;
+  const fils = (abs % 100n).toString().padStart(2, '0');
+  return `${negative ? '-' : ''}${(abs / 100n).toString()}.${fils}`;
+}
+
 /** An instruction or report the platform sends to a UAE rail must be in AED. */
 export function requireAed(m: Money): Result<true> {
   return m.currency === UAE_CURRENCY

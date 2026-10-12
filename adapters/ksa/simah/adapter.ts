@@ -1,8 +1,15 @@
 /**
  * SIMAH — credit bureau adapter (CLAUDE.md §5).
  *
- * Implements the CreditBureauPort port. Vendor vocabulary stops here: the port sees
+ * Implements the CreditBureauPort. Vendor vocabulary stops here: the port sees
  * capability-named outcomes and references, never this rail's field names.
+ *
+ * Assumed contract (no published schema — see README.md): an enquiry for one
+ * of SIMAH's public products (the consumer credit report, the commercial
+ * credit report "SIMAT"; the TAQEEM and MOLIM scores) answered in the common
+ * credit-bureau layout of `adapters/ksa/kernel/bureau-report.ts`. The score is
+ * an opaque integer; its range is not public and none is assumed.
+ *
  * Fixture transport for tests; live transport through the institution's
  * egress. Module status stays BLOCKED until the live transport has made a
  * verified sandbox call and README.md records what was learned.
@@ -11,19 +18,10 @@
 import type { CredentialProvider } from '../../../core/ports/credentials.ts';
 import type { Result } from '../../../core/kernel/result.ts';
 import { ok } from '../../../core/kernel/result.ts';
-import { money } from '../../../core/kernel/money.ts';
 import type { KnownDeviation } from '../../kernel/adapter.ts';
 import type { RailTransport } from '../../kernel/http-transport.ts';
-import {
-  RailAdapter,
-  type RailAdapterConfig,
-  bool,
-  decimalToMinor,
-  epoch,
-  int,
-  malformed,
-  str,
-} from '../kernel/rail-adapter.ts';
+import { RailAdapter, type RailAdapterConfig, minorToDecimal } from '../kernel/rail-adapter.ts';
+import { acknowledgementOf, mapBureauReport } from '../kernel/bureau-report.ts';
 import type {
   BureauOutcome,
   BureauRequest,
@@ -35,12 +33,22 @@ import type { TsaInstant } from '../../../core/time/tsa.ts';
 export const SIMAHADAPTER_DEVIATIONS: readonly KnownDeviation[] = [
   {
     id: 'SIMAH-DEV-001',
-    summary: 'Amounts arrive as decimal strings and the score as an opaque integer.',
+    summary: 'Amounts arrive as decimal strings and the score as an opaque integer whose range is not public.',
     containment:
-      'Decimals are converted to minor units by digit manipulation, never through a float; the score is carried as an opaque figure the decisioning DSL may compare but never do arithmetic on.',
+      'Decimals are converted to minor units by digit manipulation, never through a float; the score is carried as an opaque figure the decisioning DSL may compare but never do arithmetic on, and no range is assumed.',
+    verificationRef: 'KSA-RAIL-SIMAH-01',
+  },
+  {
+    id: 'SIMAH-DEV-002',
+    summary: 'The report layout and the reporting (data-furnishing) format are not public.',
+    containment:
+      'The common credit-bureau layout is assumed; a facility, default or score block that does not read exactly makes the report UNAVAILABLE.',
     verificationRef: 'KSA-RAIL-SIMAH-01',
   },
 ];
+
+/** SIMAH's public product for a commercial-registration enquiry. */
+export const SIMAH_COMMERCIAL_PRODUCT = 'SIMAT_COMMERCIAL_REPORT';
 
 export class SimahAdapter extends RailAdapter implements CreditBureauPort {
   readonly vendorName = 'SIMAH';
@@ -66,8 +74,13 @@ export class SimahAdapter extends RailAdapter implements CreditBureauPort {
       'bureau.enquiry',
       {
         method: 'POST',
-        path: '/v1/enquiries',
-        body: { subjectCr: req.commercialRegistration, consentRef: req.consentId, purpose: 'CREDIT_APPLICATION' },
+        path: '/v1/reports',
+        body: {
+          product: SIMAH_COMMERCIAL_PRODUCT,
+          enquiryPurpose: 'NEW_CREDIT_APPLICATION',
+          subject: { crNumber: req.commercialRegistration, memberReference: req.counterpartyId },
+          consentReference: req.consentId,
+        },
       },
       req.correlationId,
     );
@@ -78,36 +91,7 @@ export class SimahAdapter extends RailAdapter implements CreditBureauPort {
         ...(r.retryAfterSeconds === undefined ? {} : { retryAfterSeconds: r.retryAfterSeconds }),
       });
     if (r.kind === 'REFUSED') return ok({ kind: 'UNAVAILABLE', reason: `refused: ${r.code}` });
-    const reference = str(r.value['enquiryId']);
-    if (reference === undefined) return ok({ kind: 'UNAVAILABLE', reason: 'response malformed' });
-    if (r.value['found'] === false) return ok({ kind: 'NO_RECORD', bureauReference: reference });
-    const totalExposure = decimalToMinor(r.value['totalExposure']);
-    const overdue = decimalToMinor(r.value['overdueAmount']);
-    const worst = int(r.value['worstDelinquencyDays']);
-    const active = int(r.value['activeFacilities']);
-    if (totalExposure === undefined || overdue === undefined || worst === undefined || active === undefined)
-      return ok({ kind: 'UNAVAILABLE', reason: 'response malformed' });
-    const score = int(r.value['score']);
-    const defaults = Array.isArray(r.value['defaults'])
-      ? (r.value['defaults'] as unknown[]).flatMap((d) => {
-          const rec = d as Record<string, unknown>;
-          const amount = decimalToMinor(rec['amount']);
-          return amount === undefined ? [] : [{ amount: money(amount), settled: rec['settled'] === true }];
-        })
-      : [];
-    return ok({
-      kind: 'REPORT',
-      summary: {
-        bureauReference: reference,
-        retrievedAt: await this.#attest(),
-        totalExposure: money(totalExposure),
-        overdueAmount: money(overdue),
-        worstDelinquencyDays: worst,
-        activeFacilities: active,
-        ...(score === undefined ? {} : { bureauScore: score }),
-        defaults,
-      },
-    });
+    return ok(await mapBureauReport(r.value, this.#attest));
   }
 
   async report(rep: FacilityReport) {
@@ -115,11 +99,13 @@ export class SimahAdapter extends RailAdapter implements CreditBureauPort {
       'bureau.report',
       {
         method: 'POST',
-        path: '/v1/facilities/events',
+        path: '/v1/facility-events',
         body: {
           facilityRef: rep.facilityRef,
-          event: rep.event,
-          amount: rep.amount.minorUnits.toString(),
+          memberReference: rep.counterpartyId,
+          eventType: rep.event,
+          amount: minorToDecimal(rep.amount.minorUnits),
+          currency: rep.amount.currency,
           asOf: rep.asOfEpochSeconds.toString(),
           idempotencyKey: rep.idempotencyKey,
         },
@@ -128,7 +114,7 @@ export class SimahAdapter extends RailAdapter implements CreditBureauPort {
     );
     if (r.kind !== 'ANSWERED')
       return ok({ kind: 'UNAVAILABLE' as const, reason: r.kind === 'REFUSED' ? `refused: ${r.code}` : r.reason });
-    const ack = str(r.value['acknowledgementId']);
+    const ack = acknowledgementOf(r.value);
     return ok(
       ack === undefined
         ? { kind: 'UNAVAILABLE' as const, reason: 'response malformed' }

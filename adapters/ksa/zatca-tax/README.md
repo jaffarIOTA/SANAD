@@ -10,6 +10,30 @@ egress) has made a verified sandbox call and the findings are written here.
 
 KSA-RAIL-ZATCA-02 — the certificate status vocabulary and whether status is queryable by CR without the taxpayer’s own session.
 
+## Demonstration and assumed contract
+
+**Source: none published as an API.** ZATCA's zakat / tax certificate inquiry is a web
+e-service (`https://zatca.gov.sa`), searched by commercial registration or TIN; its screen
+shows the certificate number, type, status, issue and expiry dates and the taxpayer. Row
+"ZATCA Fatoora" (zakat certificate note) in `docs/rails/public-structures.md`.
+
+What the adapter now speaks: `GET /zatca/v1/zakat-certificates?crNumber={cr}` answered by
+`{certificateNumber, certificateType, status, issueDate, expiryDate, taxpayer{crNumber,
+nameAr}}`.
+
+- `status` by **own-key** lookup: `VALID`/`ACTIVE` → `VALID`, `EXPIRED`,
+  `SUSPENDED`/`REVOKED`/`CANCELLED` → `SUSPENDED`. Anything else — including
+  `constructor`, which a plain index once resolved to `Object.prototype.constructor` — is
+  `UNAVAILABLE`, never `VALID`.
+- A `VALID` certificate whose `expiryDate` has passed is `EXPIRED`. A certificate for
+  another CR is not understood. A 404 is the port's `NOT_FOUND` status.
+
+**Unconfirmed, and the verification item:** whether any API (or the Wathq / ZATCA partner
+route) exposes this to a financier, every field name, and the status vocabulary.
+
+The demonstration answers the cast's certificates (company 2's has expired); a CR ending
+`7777` is expired, `0000` has none.
+
 ## What is settled without the sandbox
 
 - The port shape and outcomes (`ANSWERED` / `REFUSED` / `UNAVAILABLE`), tested in

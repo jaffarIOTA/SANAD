@@ -10,6 +10,34 @@ egress) has made a verified sandbox call and the findings are written here.
 
 KSA-RAIL-GOSI-01 — the consent artefact the service requires, and whether salary is returned as a figure or a band.
 
+## Demonstration and assumed contract
+
+**Source: none published for lenders.** The shape is modelled on the contents of the public
+GOSI wage (salary) certificate e-service (`https://www.gosi.gov.sa`): the certificate
+number, and per employment the employer establishment (number and name), the joining date,
+the registered wage (basic wage, housing allowance, other allowances, total) and the
+employment status. The **likely live route** is Wathq's "Employee Information (MASDR/GOSI)"
+service (`https://developer.wathq.sa`), not a direct GOSI connection. Row "GOSI" in
+`docs/rails/public-structures.md`.
+
+What the adapter now speaks: `POST /gosi/v1/wage-certificates` with `{applicantRef,
+consentRef}`, answered by `{certificateNumber, issueDate, contributor{…}, employments[]
+{establishmentNumber, establishmentName, joiningDate, employmentStatus, wage{currency,
+basicWage, housingAllowance, otherAllowances, totalWage}}}`.
+
+- `contributor` is dropped. The primary employment is the `ACTIVE` one with the highest
+  wage; `employerRef` is `gosi-establishment:{establishmentNumber}`; the registered salary is
+  `totalWage`, or basic + housing + other where no total is given; `employedSince` is the
+  joining date. No active employment is `employed: false`.
+- One employment that does not read (unknown status, a decimal that does not parse, another
+  currency) refuses the certificate. A 404 is `REFUSED NOT_FOUND`.
+
+**Unconfirmed, and the verification item:** the route (Wathq vs. GOSI), every field name,
+the employment status vocabulary, and whether the wage is a figure or a band.
+
+The demonstration answers each cast person (their registered wage equals the payroll
+credit their bank shows); `unemployed` and `unknown` steer the failures.
+
 ## What is settled without the sandbox
 
 - The port shape and outcomes (`ANSWERED` / `REFUSED` / `UNAVAILABLE`), tested in
