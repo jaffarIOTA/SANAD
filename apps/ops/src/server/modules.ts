@@ -388,6 +388,26 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
     titleAr: 'تمويل المنشآت المباشر (الإمارات)',
     items: [
       {
+        id: 'business-intake',
+        titleEn: 'New application & intake',
+        titleAr: 'طلب جديد واستلامه',
+        href: '/business/intake/new',
+        readiness: live(),
+        reference:
+          'Stages 1–4 in Sanad (core/origination/business-intake.ts, 0025): trade licence and request keyed, parties by reference with ownership, consents into core.consent_record, beneficial owners against the cited 25% threshold (config/regulatory/ae/beneficial-ownership.json, article to confirm); hands over through the same stage-5 hand-over as the upstream API, idempotent on intake:<id>',
+      },
+      {
+        id: 'business-kyb',
+        titleEn: 'KYB checks (register, identity, screening)',
+        titleAr: 'فحوصات اعرف عميلك (السجل والهوية والفحص)',
+        readiness: {
+          kind: 'BLOCKED',
+          on: 'fixture rails: the NER and ICP adapters run over the demonstration transport and screening over a demonstration adapter, labelled Fixture, only where a synthetic demonstration is permitted; elsewhere RAIL_UNAVAILABLE until adapters/uae/ner, adapters/uae/icp and a screening vendor have made a verified sandbox call',
+        },
+        reference:
+          'Each check under the subject’s recorded consent (the adapter verifies it, SR-026); outcome and provider reference only; REFER cleared by a checker other than the officer who opened the intake; REJECT declines',
+      },
+      {
         id: 'business-pipeline',
         titleEn: 'Business applications',
         titleAr: 'طلبات المنشآت',

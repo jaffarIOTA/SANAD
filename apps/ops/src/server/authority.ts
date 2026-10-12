@@ -32,6 +32,8 @@ export const ACT_REQUIREMENTS = {
   /** Verify a keyed or read figure; validate a presented document. */
   BUSINESS_VERIFY: ['CHECKER'],
   BUSINESS_ASSESS: ['CHECKER'],
+  /** Clear a screening referral on an intake: a checker, never the officer who opened it (the domain refuses the same person). */
+  BUSINESS_KYB_CLEAR: ['CHECKER'],
   /** Write the credit report notes the committee reads: the analyst, who is a checker. */
   BUSINESS_CREDIT_NOTES: ['CHECKER'],
   BUSINESS_APPROVE: ['CHECKER', 'SENIOR_CHECKER'],
