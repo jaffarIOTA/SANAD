@@ -17,5 +17,6 @@ export {
   epoch,
   int,
   malformed,
+  own,
   str,
 } from '../ksa/kernel/rail-adapter.ts';
