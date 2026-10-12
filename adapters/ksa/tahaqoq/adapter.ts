@@ -22,6 +22,7 @@ import {
   epoch,
   int,
   malformed,
+  own,
   str,
 } from '../kernel/rail-adapter.ts';
 import type { DocumentVerificationPort } from '../../../core/ports/document-verification.ts';
@@ -61,7 +62,7 @@ export class TahaqoqAdapter extends RailAdapter implements DocumentVerificationP
   }) {
     const consent = await this.requireConsent(p.tenantId, p.consentId, 'DOCUMENT_VERIFICATION');
     if (!consent.ok) return consent;
-    const vendorType = TahaqoqAdapter.DOCUMENT_TYPES[p.documentType];
+    const vendorType = own(TahaqoqAdapter.DOCUMENT_TYPES, p.documentType);
     if (vendorType === undefined) return ok({ kind: 'REFUSED' as const, code: 'DOCUMENT_TYPE_UNSUPPORTED' });
     const r = await this.invoke(
       'document.verify',

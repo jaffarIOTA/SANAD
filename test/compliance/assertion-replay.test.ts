@@ -38,20 +38,27 @@ const config = (guard: AssertionReplayGuard | undefined, maxAge?: number): RailA
   ...(guard === undefined ? {} : { assertionReplay: guard }),
   ...(maxAge === undefined ? {} : { maxAssertionAgeSeconds: maxAge }),
 });
+/**
+ * A Nafath status answer for one transaction (third-party published shape): the completed
+ * transaction's transId is the assertion, `iat` of the verified callback its time.
+ */
 const nafath = (guard: AssertionReplayGuard | undefined, completedAt: number, assertionId = 'asr-1', maxAge?: number) =>
-  new NafathAdapter(
-    config(guard, maxAge),
-    new Credentials(),
-    new FixtureTransport([
-      {
-        operation: 'identity.confirm',
-        match: {},
-        response: { status: 'COMPLETED', assertionId, subjectRef: 'sub-1', completedAt },
-      },
-    ]),
-  ) as IdentityAuthenticationPort;
-const confirm = async (port: IdentityAuthenticationPort, tenantId = 'bank-a') =>
-  expectOk(await port.confirmAuthentication({ tenantId, transactionRef: 'tx-1', correlationId: 'c' }));
+  Object.assign(
+    new NafathAdapter(
+      config(guard, maxAge),
+      new Credentials(),
+      new FixtureTransport([
+        {
+          operation: 'identity.confirm',
+          match: { transId: assertionId, random: '42' },
+          response: { status: 'COMPLETED', transId: assertionId, iat: completedAt },
+        },
+      ]),
+    ) as IdentityAuthenticationPort,
+    { transactionRef: `${assertionId}:42` },
+  );
+const confirm = async (port: IdentityAuthenticationPort & { transactionRef: string }, tenantId = 'bank-a') =>
+  expectOk(await port.confirmAuthentication({ tenantId, transactionRef: port.transactionRef, correlationId: 'c' }));
 
 describe('an identity assertion is accepted once, fresh, for its tenant (SR-007)', () => {
   it('accepts it the first time and refuses the replay', async () => {
