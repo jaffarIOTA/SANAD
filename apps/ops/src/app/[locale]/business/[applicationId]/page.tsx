@@ -32,6 +32,8 @@ import type { Result } from '@sanad/core/kernel/result.ts';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 
 import {
+  confirmBankStatementsAction,
+  fetchBankStatementsAction,
   proposeFigureAction,
   presentDocumentAction,
   submitForAssessmentAction,
@@ -44,13 +46,16 @@ import {
   checklistStatus,
   figureReadiness,
   getApplication,
+  intakeConsentFor,
   productVariants,
   syncBusiness,
 } from '../../../../server/business.ts';
 import { type DocumentGroup, documentGroup, formatFact, formatPercent } from '../../../../server/business-dashboard.ts';
 import { staffJurisdiction } from '../../../../server/jurisdiction.ts';
 import { pageStaff } from '../../../../server/session.ts';
+import type { StaffPrincipal } from '../../../../server/staff.ts';
 import { Gate } from '../../Gate.tsx';
+import { SourceBadge } from '../intake/IntakeUi.tsx';
 import {
   ApplicationShell,
   BTN_PRIMARY,
@@ -582,6 +587,11 @@ export default async function LoanApplicationPage({
         <OwnerDbr view={view} readiness={readiness} policy={policy} f={f} />
       </SectionCard>
 
+      {/* -- Bank statements (Open Finance) ------------------------------------------------------------ */}
+      {open || view.bankFacts !== undefined ? (
+        <BankStatementsCard segment={segment} view={view} editable={open} staff={staff} f={f} />
+      ) : null}
+
       {/* -- Documents -------------------------------------------------------------------------------- */}
       <SectionCard
         id="documents"
@@ -826,6 +836,132 @@ export default async function LoanApplicationPage({
 }
 
 /** The owner's debt burden: monthly obligations ÷ monthly gross salary, against the policy's maximum. */
+/**
+ * A year of the business's bank statements, read through Open Finance under
+ * the account-information consent given at Sanad's intake. Four facts, kept
+ * beside the spread as cash-flow and conduct evidence — never a spread figure
+ * (average inflow is not revenue). The officer fetches; a second person
+ * confirms before the assessment relies on them.
+ */
+function BankStatementsCard({
+  segment,
+  view,
+  editable,
+  staff,
+  f,
+}: {
+  readonly segment: string;
+  readonly view: NonNullable<Awaited<ReturnType<typeof getApplication>>>;
+  readonly editable: boolean;
+  readonly staff: StaffPrincipal;
+  readonly f: Formatters;
+}): ReactElement {
+  const { t } = f;
+  const facts = view.bankFacts;
+  const consent = intakeConsentFor(view.application, 'account_information');
+  const amount = (minor: bigint) => (
+    <>
+      <bdi className="tabular-nums">{f.money(minor)}</bdi>{' '}
+      <span className="text-[12px] font-normal text-ink-quiet">{f.cur}</span>
+    </>
+  );
+  const fetchForm =
+    !editable || consent === undefined ? null : (
+      <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+        <form action={fetchBankStatementsAction}>
+          <FormContext segment={segment} applicationId={view.application.applicationId} />
+          <button type="submit" className={facts === undefined ? BTN_PRIMARY : BTN_SECONDARY}>
+            {facts === undefined ? t('Fetch bank statements', 'جلب كشوف الحساب') : t('Fetch again', 'إعادة الجلب')}
+          </button>
+        </form>
+      </Gate>
+    );
+  const confirmForm =
+    !editable || facts === undefined || facts.confirmedBy !== undefined ? null : (
+      <Gate staff={staff} act="BUSINESS_VERIFY" arabic={f.arabic} ownWork={facts.fetchedBy === staff.principalId}>
+        <form action={confirmBankStatementsAction}>
+          <FormContext segment={segment} applicationId={view.application.applicationId} />
+          <button type="submit" className={BTN_PRIMARY}>
+            {t('Confirm as checker', 'التأكيد بصفة المراجِع')}
+          </button>
+        </form>
+      </Gate>
+    );
+  let status: ReactElement;
+  if (facts === undefined) status = <Chip tone="neutral">{t('Not fetched', 'لم تُجلب')}</Chip>;
+  else if (facts.confirmedBy === undefined)
+    status = <Chip tone="warn">{t('Awaiting a checker', 'بانتظار المراجِع')}</Chip>;
+  else
+    status = (
+      <Chip tone="good">
+        <span>
+          {t('Confirmed by', 'أكّدها')} <Id>{facts.confirmedBy}</Id>
+        </span>
+      </Chip>
+    );
+  return (
+    <SectionCard
+      id="bank-statements"
+      title={t('Bank statements (Open Finance)', 'كشوف الحساب (التمويل المفتوح)')}
+      note={t(
+        'Read under the business’s account-information consent: four facts and their reference, never the statements themselves.',
+        'تُقرأ بموجب موافقة المنشأة على الاطلاع على الحساب: أربع حقائق ومرجعها فقط، لا الكشوف نفسها.',
+      )}
+      aside={
+        <>
+          {facts === undefined ? null : <SourceBadge source={facts.source} f={f} />}
+          {status}
+        </>
+      }
+    >
+      {facts === undefined ? null : (
+        <dl className="mb-4 grid gap-4 sm:grid-cols-3 xl:grid-cols-4" data-bank-facts>
+          <Field label={t('Average monthly inflow', 'متوسط التدفقات الشهرية الواردة')}>
+            {amount(facts.averageMonthlyInflow.minorUnits)}
+          </Field>
+          <Field label={t('Lowest month-end balance', 'أدنى رصيد في نهاية شهر')}>
+            {amount(facts.lowestMonthEndBalance.minorUnits)}
+          </Field>
+          <Field label={t('Returned payments, last 6 months', `المدفوعات المرتجعة، آخر ${f.n(6)} أشهر`)}>
+            {facts.returnedPaymentsLast6Months === 0 ? (
+              f.n(0)
+            ) : (
+              <Chip tone="warn">{f.n(facts.returnedPaymentsLast6Months)}</Chip>
+            )}
+          </Field>
+          <Field label={t('Salary credits observed', 'إيداعات الرواتب المرصودة')}>
+            {f.n(facts.salaryCreditsObserved)}
+          </Field>
+          <Field label={t('Period', 'الفترة')}>{t(`${f.n(facts.months)} months`, `${f.n(facts.months)} شهراً`)}</Field>
+          <Field label={t('Reference', 'المرجع')}>
+            <Id className="text-[12px]">{facts.referenceId}</Id>
+          </Field>
+          <Field label={t('Fetched by', 'جلبها')}>
+            <Id className="text-[12px]">{facts.fetchedBy}</Id>
+          </Field>
+          <Field label={t('Consent', 'الموافقة')}>
+            <Id className="text-[12px]">{facts.consentId}</Id>
+          </Field>
+        </dl>
+      )}
+      {editable && consent === undefined ? (
+        <p className="text-[13px] text-ink-quiet" data-bank-no-consent>
+          {t(
+            'No bank-account consent was recorded at Sanad’s intake for this application, so there is nothing to read under.',
+            'لم تُسجَّل عند الاستقبال في سند موافقة على الاطلاع على الحساب لهذا الطلب، فلا يُقرأ شيء.',
+          )}
+        </p>
+      ) : null}
+      {fetchForm === null && confirmForm === null ? null : (
+        <div className="flex flex-wrap items-center gap-3">
+          {confirmForm}
+          {fetchForm}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
 function OwnerDbr({
   view,
   readiness,

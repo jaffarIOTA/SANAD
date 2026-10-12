@@ -334,7 +334,8 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         titleEn: 'AECB',
         titleAr: 'الاتحاد للمعلومات الائتمانية',
         readiness: { kind: 'BLOCKED', on: 'fixture transport only — see adapters/uae/aecb/README.md' },
-        reference: 'credit-bureau port — commercial and individual reports, facility reporting (ADR 0005)',
+        reference:
+          'credit-bureau port — commercial and individual reports, facility reporting (ADR 0005); fetched from the assessment screen under the intake consent, answered by the labelled demonstration transport',
       },
       {
         id: 'uae-pass',
@@ -369,7 +370,8 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         titleEn: 'FTA',
         titleAr: 'الهيئة الاتحادية للضرائب',
         readiness: { kind: 'BLOCKED', on: 'fixture transport only — see adapters/uae/fta/README.md' },
-        reference: 'tax-compliance port — VAT registration status',
+        reference:
+          'tax-compliance port — VAT registration status by TRN, checked at intake as information (never a KYB gap); labelled demonstration answers',
       },
       {
         id: 'partner-bank',
@@ -383,7 +385,8 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         titleEn: 'UAE Open Finance',
         titleAr: 'التمويل المفتوح في الإمارات',
         readiness: { kind: 'BLOCKED', on: 'fixture transport only — see adapters/uae/open-finance/README.md' },
-        reference: 'account-information port — affordability facts from CBUAE Open Finance v2.1',
+        reference:
+          'account-information port — affordability facts from CBUAE Open Finance v2.1; read on the loan application under the intake consent and confirmed by a second person; labelled demonstration answers',
       },
     ],
   },
@@ -430,7 +433,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         href: '/business',
         readiness: live(),
         reference:
-          'Verified figures under four eyes (read figures enter only through the system path; keyed figures and corrections are verified by a second principal), documents validated by the checker, variant checklists, SME assessment run by the checker (knock-outs, 40/60 scorecard, risk, STP vs committee) — every threshold ILLUSTRATIVE until the fund supplies its policy. MANUAL: the bureau score is keyed from the stage-4 AECB report with its consent id and report reference (no live AECB call until that adapter is verified); inputs lock at submission',
+          'Verified figures under four eyes (read figures enter only through the system path; keyed figures and corrections are verified by a second principal), documents validated by the checker, variant checklists, SME assessment run by the checker (knock-outs, 40/60 scorecard, risk, STP vs committee) — every threshold ILLUSTRATIVE until the fund supplies its policy. The bureau result is fetched through the AECB rail under the intake consent (FIXTURE until that adapter is verified; nothing typed overrides it); a partner hand-over keys it from the upstream report, labelled keyed; bank-statement facts from Open Finance sit beside the spread, confirmed under four eyes; inputs lock at submission',
       },
       {
         id: 'business-offer',

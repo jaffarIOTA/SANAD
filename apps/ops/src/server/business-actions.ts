@@ -36,8 +36,10 @@ import type { TenantCode } from '@sanad/config/loader.ts';
 import type { Result } from '@sanad/core/kernel/result.ts';
 
 import type { WorkbenchAct } from './authority.ts';
+import { fetchBankStatements, fetchBureauReport } from './business-rails.ts';
 import {
   approveStraightThrough,
+  confirmBankStatementFacts,
   decideInCommittee,
   recordCreditNotes,
   generateOffer,
@@ -213,8 +215,12 @@ export async function validateDocumentAction(form: FormData): Promise<void> {
 
 export async function recordAssessmentInputsAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  // A fetched bureau report sends no bureau fields: the service uses what was fetched.
+  const keyedScore = field(form, 'bureauScore');
+  const score = keyedScore === '' ? undefined : wholeBigint(keyedScore);
+  if (keyedScore !== '' && score === undefined)
+    return finish(ctx, refused('INPUT_MALFORMED', 'The bureau score is a whole number'), '');
   const numbers = {
-    score: wholeBigint(field(form, 'bureauScore')),
     experience: wholeBigint(field(form, 'relevantExperienceYears')),
     commitment: wholeBigint(field(form, 'commitmentRatioPerTenThousand')),
     risk: wholeBigint(field(form, 'riskAnalysisScorePerTenThousand')),
@@ -237,11 +243,15 @@ export async function recordAssessmentInputsAction(form: FormData): Promise<void
         ctx.tenant,
         ctx.applicationId,
         {
-          bureau: {
-            reportRef: field(form, 'bureauReportRef'),
-            consentId: field(form, 'bureauConsentId'),
-            score: numbers.score as bigint,
-          },
+          ...(score === undefined
+            ? {}
+            : {
+                bureau: {
+                  reportRef: field(form, 'bureauReportRef'),
+                  consentId: field(form, 'bureauConsentId'),
+                  score,
+                },
+              }),
           fullTimeEmployees: Number.parseInt(employees, 10),
           relevantExperienceYears: numbers.experience as bigint,
           sectorPriority: field(form, 'sectorPriority'),
@@ -255,6 +265,28 @@ export async function recordAssessmentInputsAction(form: FormData): Promise<void
         ctx.actor,
       ),
     'INPUTS_RECORDED',
+  );
+}
+
+/** Fetch the business's commercial bureau report under its intake consent. */
+export async function fetchBureauReportAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(ctx, () => fetchBureauReport(ctx.tenant, ctx.applicationId, ctx.actor), 'BUREAU_REPORT_FETCHED');
+}
+
+/** Read the business's bank statements through Open Finance under its intake consent. */
+export async function fetchBankStatementsAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(ctx, () => fetchBankStatements(ctx.tenant, ctx.applicationId, ctx.actor), 'BANK_STATEMENTS_FETCHED');
+}
+
+/** A checker other than the fetching officer confirms the bank-statement facts. */
+export async function confirmBankStatementsAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_VERIFY');
+  return finish(
+    ctx,
+    () => confirmBankStatementFacts(ctx.tenant, ctx.applicationId, ctx.actor),
+    'BANK_STATEMENTS_CONFIRMED',
   );
 }
 
