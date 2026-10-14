@@ -61,6 +61,13 @@ export const CREDENTIAL_FILE = new RegExp(
 /** Values that are obviously not secrets. */
 export const PLACEHOLDER = /^(development|example|placeholder|redacted|changeme|test|fixture|your[_-])/i;
 
+/**
+ * AWS's published documentation key pair, exactly — the Signature V4 worked
+ * examples sign with it, and a signer is tested by reproducing them. Matched
+ * whole, case-sensitive: no real key has these values.
+ */
+export const DOCUMENTATION_EXAMPLE = /^(AKIAIOSFODNN7EXAMPLE|wJalrXUtnFEMI\/K7MDENG\/bPxRfiCYEXAMPLEKEY)(?![A-Za-z0-9])/;
+
 /** Key and certificate material, which never belongs in the repository. */
 export const KEY_FILE = /\.(pem|p12|pfx|key|jks|keystore)$/i;
 
@@ -108,7 +115,12 @@ export function findSecrets(path, content) {
 
   for (const match of content.matchAll(OPAQUE_ASSIGNMENT)) {
     const value = match[2] ?? '';
-    if (PLACEHOLDER.test(value) || value.startsWith('${') || value.startsWith('process.env')) {
+    if (
+      PLACEHOLDER.test(value) ||
+      DOCUMENTATION_EXAMPLE.test(value) ||
+      value.startsWith('${') ||
+      value.startsWith('process.env')
+    ) {
       continue;
     }
     const line = content.slice(0, match.index).split('\n').length;
