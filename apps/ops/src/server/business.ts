@@ -80,6 +80,7 @@ import {
 } from '@sanad/core/documents/checklist.ts';
 import { type OfferLetter, buildOfferLetter } from '@sanad/core/documents/offer-letter.ts';
 import type { JurisdictionProfile } from '@sanad/core/jurisdiction/profile.ts';
+import type { StorableMediaType } from '@sanad/core/ports/object-storage.ts';
 import { type CurrencyCode, type Money, money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import {
@@ -289,6 +290,17 @@ export interface BusinessDocument {
   readonly validationStatus: PresentedDocument['validationStatus'];
   readonly presentedBy: string;
   readonly validatedBy?: string;
+  /** Present when the document was uploaded rather than referenced: the stored bytes' hash, size, type and store. */
+  readonly content?: DocumentContent;
+}
+
+/** An uploaded document's stored bytes, by hash. The bytes themselves live in the object store, never here. */
+export interface DocumentContent {
+  readonly sha256Hex: string;
+  readonly byteLength: number;
+  readonly mediaType: StorableMediaType;
+  /** FIXTURE: the in-memory demonstration store, labelled on screen. LIVE: the tenant's configured store. */
+  readonly storage: 'FIXTURE' | 'LIVE';
 }
 
 /**
@@ -1058,6 +1070,16 @@ function bureauSourceOf(stored: string | undefined): BureauSource {
   return stored === 'AECB_RAIL_FIXTURE' || stored === 'AECB_RAIL_LIVE' ? stored : 'KEYED_FROM_UPSTREAM_REPORT';
 }
 
+function contentOf(d: Readonly<Record<string, string>>): DocumentContent {
+  const type = d['contentType'];
+  return {
+    sha256Hex: d['contentSha256'] ?? '',
+    byteLength: Number.parseInt(d['contentBytes'] ?? '0', 10),
+    mediaType: type === 'image/png' || type === 'image/jpeg' ? type : 'application/pdf',
+    storage: d['contentStorage'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+  };
+}
+
 function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
   const d = e.detail;
   switch (e.eventType) {
@@ -1079,6 +1101,7 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
           authorityId: d['capturedAuthority'] ?? '',
         }),
         presentedBy: e.actor,
+        ...(d['contentSha256'] === undefined ? {} : { content: contentOf(d) }),
       });
       return;
     case 'DOCUMENT_VALIDATED':
@@ -1885,7 +1908,7 @@ export async function verifyFigure(
 async function presentDocumentAt(
   tenant: TenantCode,
   applicationId: string,
-  doc: { readonly documentType: string; readonly documentRef: string },
+  doc: { readonly documentType: string; readonly documentRef: string; readonly content?: DocumentContent },
   actor: string,
   at: TsaInstant,
 ): Promise<Result<BusinessApplicationView>> {
@@ -1906,12 +1929,15 @@ async function presentDocumentAt(
   if (identity !== undefined) return identity;
   // A typed reference proves nothing about the document: it is PENDING until a different principal validates it.
   const status: BusinessDocument['validationStatus'] = 'PENDING';
+  if (doc.content !== undefined && !/^[0-9a-f]{64}$/.test(doc.content.sha256Hex))
+    return fail('DOCUMENT_CONTENT_INVALID', 'An uploaded document is recorded by the hash of its bytes');
   r.documents.push({
     documentType: doc.documentType,
     documentRef: doc.documentRef,
     capturedAt: at,
     validationStatus: status,
     presentedBy: actor,
+    ...(doc.content === undefined ? {} : { content: doc.content }),
   });
   recordEvent(book, r, {
     eventType: 'DOCUMENT_PRESENTED',
@@ -1926,6 +1952,14 @@ async function presentDocumentAt(
       capturedAtEpoch: at.epochSeconds.toString(),
       capturedTokenDigest: at.tokenDigest,
       capturedAuthority: at.authorityId,
+      ...(doc.content === undefined
+        ? {}
+        : {
+            contentSha256: doc.content.sha256Hex,
+            contentBytes: String(doc.content.byteLength),
+            contentType: doc.content.mediaType,
+            contentStorage: doc.content.storage,
+          }),
     },
   });
   return ok(view(r, ctx.value.currency));
@@ -1938,7 +1972,7 @@ async function presentDocumentAt(
 export async function presentDocument(
   tenant: TenantCode,
   applicationId: string,
-  doc: { readonly documentType: string; readonly documentRef: string },
+  doc: { readonly documentType: string; readonly documentRef: string; readonly content?: DocumentContent },
   actor: string,
 ): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () => presentDocumentAt(tenant, applicationId, doc, actor, developmentAttestation()));

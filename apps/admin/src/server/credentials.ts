@@ -42,6 +42,7 @@ export const VAULT_PROVIDERS = [
   'MOHRE',
   'FTA',
   'PARTNER_BANK',
+  'S3_STORAGE',
 ] as const;
 export type VaultProvider = (typeof VAULT_PROVIDERS)[number];
 export const ENVIRONMENTS = ['sandbox', 'uat', 'production'] as const;
@@ -50,6 +51,7 @@ export type Environment = (typeof ENVIRONMENTS)[number];
 /** The key names each provider's adapter reads, offered as suggestions; any name is accepted. */
 export const KNOWN_KEY_NAMES: Readonly<Partial<Record<VaultProvider, readonly string[]>>> = {
   NUTRIENT: ['web_sdk_license_key', 'document_engine_base_url', 'document_engine_api_token', 'jwt_private_key'],
+  S3_STORAGE: ['access_key_id', 'secret_access_key', 'endpoint', 'region', 'bucket'],
   TUUM: ['username', 'password', 'tenant_code', 'auth_base_url', 'loan_api_base_url'],
 };
 

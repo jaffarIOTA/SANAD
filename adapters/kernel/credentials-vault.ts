@@ -25,7 +25,8 @@ import type { CredentialAuditSink } from './credentials-environment.ts';
 
 /**
  * Every provider code the vault accepts: migration 0007's list, widened for
- * the UAE rails by migration 0015 (ADR 0005). A code outside this list would
+ * the UAE rails by migration 0015 (ADR 0005) and for the document object store
+ * by migration 0026. A code outside this list would
  * be refused by the table's check constraint, so it is refused here first.
  */
 export const VAULT_PROVIDER_CODES = [
@@ -55,6 +56,7 @@ export const VAULT_PROVIDER_CODES = [
   'MOHRE',
   'FTA',
   'PARTNER_BANK',
+  'S3_STORAGE',
 ] as const;
 export type VaultProviderCode = (typeof VAULT_PROVIDER_CODES)[number];
 
@@ -86,6 +88,7 @@ const VAULT_PROVIDER: Readonly<Record<CredentialProviderName, VaultProviderCode>
   RATE_PUBLISHER: 'RATE_PUBLISHER',
   COMMODITY_BROKER: 'COMMODITY_BROKER',
   WORKFLOW_ENGINE: 'WORKFLOW_ENGINE',
+  OBJECT_STORAGE: 'S3_STORAGE',
 };
 
 export const isVaultProviderCode = (code: string): code is VaultProviderCode =>

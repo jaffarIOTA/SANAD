@@ -15,6 +15,8 @@ const config = {
   // No X-Powered-By: the framework is nobody's business (ZAP 10037).
   poweredByHeader: false,
   eslint: { ignoreDuringBuilds: true },
+  // An uploaded document is at most 10 MB (core/documents/upload.ts); the form's other fields ride along.
+  experimental: { serverActions: { bodySizeLimit: '11mb' } },
   async redirects() {
     return [{ source: '/', destination: '/en', permanent: false }];
   },

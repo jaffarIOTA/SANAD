@@ -37,6 +37,7 @@ import {
   proposeFigureAction,
   presentDocumentAction,
   submitForAssessmentAction,
+  uploadDocumentAction,
   validateDocumentAction,
   verifyFigureAction,
   withdrawApplicationAction,
@@ -154,6 +155,12 @@ function DocumentProvenance({
 }
 
 const OPEN = new Set(['RECEIVED', 'SPREADING']);
+
+const MEDIA_LABEL: Readonly<Record<string, string>> = {
+  'application/pdf': 'PDF',
+  'image/png': 'PNG',
+  'image/jpeg': 'JPEG',
+};
 
 /** The knock-out on a fact in the fund's policy: the minimum (or maximum) a ratio tile is held against. */
 function knockoutOn(policy: SmeAssessmentPolicy | undefined, fact: string | undefined) {
@@ -600,12 +607,12 @@ export default async function LoanApplicationPage({
           !checklist.ok ? undefined : f.arabic ? (
             <>
               قائمة فئة {variant?.nameAr ?? a.variantCode} (الإصدار <Id>{checklist.value.checklist.version}</Id>).
-              تُسجَّل المستندات بمرجعها لا بمحتواها.
+              يُحفظ الملف المرفوع في مخزن المستندات ويُسجَّل هنا ببصمته.
             </>
           ) : (
             <>
               The {variant?.nameEn ?? a.variantCode} checklist (version <Id>{checklist.value.checklist.version}</Id>).
-              Documents are recorded by reference, never by content.
+              An uploaded file is kept in the document store and recorded here by its fingerprint.
             </>
           )
         }
@@ -650,7 +657,7 @@ export default async function LoanApplicationPage({
                                 </span>
                               )}
                             </span>
-                            {held === undefined ? null : (
+                            {held === undefined ? null : held.content === undefined ? (
                               <bdi
                                 dir="ltr"
                                 className="identifier block truncate text-start text-[11px] text-ink-quiet"
@@ -658,6 +665,32 @@ export default async function LoanApplicationPage({
                               >
                                 {held.documentRef}
                               </bdi>
+                            ) : (
+                              <span className="flex flex-wrap items-center gap-2 text-[12px]" data-document-file>
+                                <a
+                                  href={`/api/business/v1/applications/${encodeURIComponent(a.applicationId)}/documents/${held.content.sha256Hex}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-medium text-brand hover:underline"
+                                >
+                                  {t('View file', 'عرض الملف')}
+                                </a>
+                                <span className="text-ink-quiet">
+                                  {MEDIA_LABEL[held.content.mediaType]} ·{' '}
+                                  {t(
+                                    `${f.n(Math.max(1, Math.ceil(held.content.byteLength / 1024)))} KB`,
+                                    `${f.n(Math.max(1, Math.ceil(held.content.byteLength / 1024)))} ك.ب`,
+                                  )}
+                                </span>
+                                <SourceBadge source={held.content.storage} f={f} />
+                                <bdi
+                                  dir="ltr"
+                                  className="identifier text-[11px] text-ink-quiet"
+                                  title={t('SHA-256 fingerprint of the file', 'البصمة الرقمية للملف')}
+                                >
+                                  {held.content.sha256Hex.slice(0, 12)}
+                                </bdi>
+                              </span>
                             )}
                           </span>
                           <span className="flex flex-col items-start gap-0.5">
@@ -697,25 +730,55 @@ export default async function LoanApplicationPage({
                           ) : null}
                           {open && r.status !== 'PRESENT' && r.status !== 'PENDING' ? (
                             <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
-                              <form
-                                action={presentDocumentAction}
-                                className="flex w-full flex-wrap items-center gap-2 sm:w-auto"
-                              >
-                                <FormContext segment={segment} applicationId={a.applicationId} />
-                                <input type="hidden" name="documentType" value={r.item.documentType} />
-                                <label className="min-w-0 flex-1 sm:w-[220px] sm:flex-none">
-                                  <span className="sr-only">{t('Document reference', 'مرجع المستند')}</span>
-                                  <input
-                                    name="documentRef"
-                                    required
-                                    placeholder={t('Document reference', 'مرجع المستند')}
-                                    className={INPUT}
-                                  />
-                                </label>
-                                <button type="submit" className={BTN_SMALL}>
-                                  {t('Attach', 'إرفاق')}
-                                </button>
-                              </form>
+                              <div className="flex w-full flex-col gap-2 sm:w-auto">
+                                <form
+                                  action={uploadDocumentAction}
+                                  className="flex w-full flex-wrap items-center gap-2 sm:w-auto"
+                                  data-document-upload
+                                >
+                                  <FormContext segment={segment} applicationId={a.applicationId} />
+                                  <input type="hidden" name="documentType" value={r.item.documentType} />
+                                  <label className="min-w-0 flex-1 sm:w-[240px] sm:flex-none">
+                                    <span className="sr-only">
+                                      {t(`File for ${r.item.titleEn}`, `ملف ${r.item.titleAr}`)}
+                                    </span>
+                                    <input
+                                      type="file"
+                                      name="file"
+                                      required
+                                      accept="application/pdf,image/png,image/jpeg"
+                                      className="block w-full text-[12px] text-ink file:me-2 file:rounded-tile file:border file:border-line-strong file:bg-surface file:px-2 file:py-1 file:text-[12px] file:font-semibold file:text-heading"
+                                    />
+                                  </label>
+                                  <button type="submit" className={BTN_SMALL}>
+                                    {t('Upload', 'رفع')}
+                                  </button>
+                                </form>
+                                <details className="text-[12px] text-ink-quiet">
+                                  <summary className="cursor-pointer select-none">
+                                    {t('Held elsewhere? Attach by reference', 'محفوظ في نظام آخر؟ أرفقه بمرجعه')}
+                                  </summary>
+                                  <form
+                                    action={presentDocumentAction}
+                                    className="mt-2 flex w-full flex-wrap items-center gap-2 sm:w-auto"
+                                  >
+                                    <FormContext segment={segment} applicationId={a.applicationId} />
+                                    <input type="hidden" name="documentType" value={r.item.documentType} />
+                                    <label className="min-w-0 flex-1 sm:w-[220px] sm:flex-none">
+                                      <span className="sr-only">{t('Document reference', 'مرجع المستند')}</span>
+                                      <input
+                                        name="documentRef"
+                                        required
+                                        placeholder={t('Document reference', 'مرجع المستند')}
+                                        className={INPUT}
+                                      />
+                                    </label>
+                                    <button type="submit" className={BTN_SMALL}>
+                                      {t('Attach', 'إرفاق')}
+                                    </button>
+                                  </form>
+                                </details>
+                              </div>
                             </Gate>
                           ) : null}
                         </li>
