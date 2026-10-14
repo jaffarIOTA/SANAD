@@ -1,0 +1,4 @@
+# Every entry is registered in .security/suppressions.json with an owner, a reason
+# and an expiry; scripts/suppressions-check.mjs fails the build otherwise.
+# SR-049: .NET Pkcs DoS inside the Nutrient viewer's browser-side WebAssembly bundle. Expires 2026-10-21.
+CVE-2026-84008 exp:2026-10-21
