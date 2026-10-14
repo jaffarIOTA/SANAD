@@ -117,7 +117,9 @@ describe('the assessment inputs', () => {
 
   it('are required on screen before Submit, since they lock at submission', () => {
     expect(APPLICATION).toContain('const inputsMissing = view.assessmentInputs === undefined;');
-    expect(APPLICATION).toMatch(/const ready = [^\n]*&& !inputsMissing;/);
+    expect(APPLICATION).toMatch(/const ready =[^;]*&& !inputsMissing &&\s*securityReady;/);
+    // UAE M3: the required security, recorded and confirmed, is a submit precondition too.
+    expect(APPLICATION).toContain('const securityReady = security.ok && security.value.position.complete;');
   });
 });
 
@@ -186,6 +188,7 @@ const SOURCES = [
   'apps/ops/src/server/business-rails.ts',
   'apps/ops/src/server/business-storage.ts',
   'core/documents/upload.ts',
+  'core/origination/security-register.ts',
   'core/origination/business-application.ts',
   'core/applicant/financials.ts',
   'core/origination/business-intake.ts',

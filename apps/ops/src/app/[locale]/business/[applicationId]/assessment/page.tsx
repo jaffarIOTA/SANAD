@@ -891,9 +891,15 @@ function InputsCard({
           <Field label={t('Audited financials', 'قوائم مالية مدققة')}>
             {inputs.auditedFinancialsAvailable ? t('Available', 'متوفرة') : t('Not available', 'غير متوفرة')}
           </Field>
-          <Field label={t('Collateral value', 'قيمة الضمان')}>
+          <Field label={t('Collateral value (keyed)', 'قيمة الضمان (مُدخلة)')}>
             <bdi className="tabular-nums">{f.money(inputs.collateralValue.minorUnits)}</bdi>{' '}
             <span className="text-[12px] font-normal text-ink-quiet">{f.cur}</span>
+            <span className="mt-1 block text-[11px] font-normal text-ink-quiet" data-collateral-source>
+              {t(
+                'Scoring uses the confirmed security register instead wherever it holds valued collateral.',
+                'يعتمد التقييم على سجل الضمانات المؤكد بدلاً منها متى تضمّن ضماناً عينياً ذا قيمة.',
+              )}
+            </span>
           </Field>
         </dl>
       )}
@@ -983,7 +989,10 @@ function InputsCard({
                 inputs?.failedFilesRatePerTenThousand.toString(),
               )}
               <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">
-                {t(`Collateral value (${f.cur})`, `قيمة الضمان (${f.cur})`)}
+                {t(
+                  `Collateral value (${f.cur}) — used only where the security register holds no valued collateral`,
+                  `قيمة الضمان (${f.cur}) — تُستخدم فقط إن خلا سجل الضمانات من ضمان عيني ذي قيمة`,
+                )}
                 <input
                   name="collateralValue"
                   required
