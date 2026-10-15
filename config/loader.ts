@@ -31,6 +31,7 @@ import fintechBIdentity from './tenants/fintech-b/identity/staff-identity.json' 
 import saSmeDefinition from './regulatory/sa/sme-definition.json' with { type: 'json' };
 import aeSmeDefinition from './regulatory/ae/sme-definition.json' with { type: 'json' };
 import aeBeneficialOwnership from './regulatory/ae/beneficial-ownership.json' with { type: 'json' };
+import saBeneficialOwnership from './regulatory/sa/beneficial-ownership.json' with { type: 'json' };
 // Named ksa/uae, not sa/ae: a file called `sa.json` is a cloud service-account key by convention, and the secret scanner rightly refuses one.
 import saJurisdiction from './jurisdictions/ksa.json' with { type: 'json' };
 import aeJurisdiction from './jurisdictions/uae.json' with { type: 'json' };
@@ -132,7 +133,10 @@ export interface BeneficialOwnershipRule {
   readonly citation: string;
 }
 
-const BENEFICIAL_OWNERSHIP: Readonly<Partial<Record<JurisdictionCode, unknown>>> = { AE: aeBeneficialOwnership };
+const BENEFICIAL_OWNERSHIP: Readonly<Partial<Record<JurisdictionCode, unknown>>> = {
+  AE: aeBeneficialOwnership,
+  SA: saBeneficialOwnership,
+};
 
 /**
  * The beneficial-owner rule for a tenant's jurisdiction. A jurisdiction without
