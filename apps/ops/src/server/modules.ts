@@ -451,9 +451,10 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         titleAr: 'تمويل المنشآت الإسلامي (التورق)',
         readiness: {
           kind: 'BLOCKED',
-          on: 'K4, and the institution’s Shariah board ruling for SME Tawarruq recorded through Admin → Products (sme-term-islamic stays disabled without it)',
+          on: 'the institution’s Shariah board ruling for SME Tawarruq, recorded through Admin → Products (sme-term-islamic stays disabled without it), and the board’s view on booking it as a loan contract (ADR 0007); the commodity broker runs on the Saudi demonstration transport, labelled Fixture, until adapters/ksa/commodity-broker is verified',
         },
-        reference: 'products/sme-term-islamic: commodity purchase from the board-approved broker, deferred sale, agency where the board permits, then disbursement',
+        reference:
+          'K4 (built): offered as a deferred sale — commodity cost, profit, deferred price, the letter in profit terms with the customer as purchaser — then, between signature and disbursement, the commodity bought at exactly the quoted cost, sold to the customer on the signed instrument, title passed, sold on (as agent only where the board permits), each step validated by products/sme-term-islamic and attested after the one before; one payment of the proceeds, never tranches; booked as a loan contract (TAWRROUQ, ILLUSTRATIVE) under ADR 0007',
       },
     ],
   },

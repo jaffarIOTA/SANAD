@@ -11,8 +11,12 @@ import type { ReactElement } from 'react';
 import { maskIban } from '@sanad/core/kernel/iban.ts';
 
 import {
+  buyCommodityAction,
   confirmPayeeAction,
   planTranchesAction,
+  sellCommodityOnBehalfAction,
+  sellCommodityToCustomerAction,
+  transferCommodityTitleAction,
   recordFixturePaymentResultAction,
   recordPayeeAction,
   satisfyConditionAction,
@@ -261,6 +265,9 @@ export function ClosingCard({
           </details>
         </Gate>
       ) : null}
+      {/* -- Tawarruq (KSA K4) ------------------------------------------------------------------ */}
+      {a.productCode === 'sme-term-islamic' ? <TawarruqSection view={view} staff={staff} f={f} ctx={ctx} /> : null}
+
       {/* -- Drawdown -------------------------------------------------------------------------- */}
       <h3 className={`${H3} mt-5`}>{t('Drawdown', 'السحب')}</h3>
       <DrawdownSection view={view} staff={staff} f={f} ctx={ctx} fixtureResults={fixtureResults} />
@@ -364,6 +371,103 @@ function DrawdownSection({
               </button>
             </form>
           </details>
+        </Gate>
+      ) : null}
+    </>
+  );
+}
+
+const TAWARRUQ_STEPS: readonly { readonly state: string; readonly en: string; readonly ar: string }[] = [
+  { state: 'COMMODITY_PURCHASED', en: 'Commodity bought from the broker', ar: 'شراء السلعة من الوسيط' },
+  { state: 'SOLD_TO_CUSTOMER', en: 'Sold to the customer for the deferred price', ar: 'بيعها للعميل بالثمن المؤجل' },
+  { state: 'TITLE_TRANSFERRED', en: 'Title passed to the customer', ar: 'نقل الملكية إلى العميل' },
+  { state: 'PROCEEDS_REALISED', en: 'Sold on for cash', ar: 'بيعها للغير نقداً' },
+];
+
+/** The commodity steps between signature and disbursement, each confirmed by the broker; only the next one is offered. */
+function TawarruqSection({
+  view,
+  staff,
+  f,
+  ctx,
+}: {
+  readonly view: View;
+  readonly staff: StaffPrincipal;
+  readonly f: Formatters;
+  readonly ctx: ReactElement;
+}): ReactElement {
+  const { t } = f;
+  const tw = view.closing.tawarruq;
+  const done = tw === undefined ? 0 : TAWARRUQ_STEPS.findIndex((x) => x.state === tw.state) + 1;
+  const signed = view.application.status === 'SIGNED';
+  return (
+    <>
+      <h3 className={`${H3} mt-5`}>{t('Tawarruq', 'التورق')}</h3>
+      <ol className="mb-3 flex list-none flex-col gap-1.5 p-0" data-tawarruq>
+        {TAWARRUQ_STEPS.map((step, i) => (
+          <li key={step.state} className="flex flex-wrap items-center gap-2 text-[13px]">
+            <Chip tone={i < done ? 'good' : 'neutral'}>{i < done ? t('Done', 'تم') : t('Pending', 'قيد الانتظار')}</Chip>
+            <span className="text-heading">{t(step.en, step.ar)}</span>
+            {i === 0 && tw !== undefined ? (
+              <span className="text-[11px] text-ink-quiet">
+                <Id>{tw.lot.lotRef}</Id> · {tw.lot.quantity} {tw.lot.unit} · <SourceBadge source={tw.source} f={f} />
+              </span>
+            ) : null}
+            {i === 3 && tw?.proceeds !== undefined ? (
+              <span className="text-[12px] text-ink">
+                <bdi className="tabular-nums">{f.money(tw.proceeds.minorUnits)}</bdi> {f.cur}
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+      {signed && done < 4 ? (
+        <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic}>
+          {done === 0 ? (
+            <form action={buyCommodityAction}>
+              {ctx}
+              <button type="submit" className={BTN_SMALL}>
+                {t('Buy the commodity', 'شراء السلعة')}
+              </button>
+            </form>
+          ) : done === 1 ? (
+            <form action={sellCommodityToCustomerAction} className="flex flex-wrap items-center gap-2">
+              {ctx}
+              <select name="saleDocumentRef" required className={INPUT} defaultValue="">
+                <option value="" disabled>
+                  {t('The signed deferred-sale instrument…', 'عقد البيع الآجل الموقّع…')}
+                </option>
+                {view.documents.map((d) => (
+                  <option key={d.documentRef} value={d.documentRef}>
+                    {d.documentType} · {d.documentRef.slice(0, 40)}
+                  </option>
+                ))}
+              </select>
+              <button type="submit" className={BTN_SMALL}>
+                {t('Sell to the customer', 'البيع للعميل')}
+              </button>
+            </form>
+          ) : done === 2 ? (
+            <form action={transferCommodityTitleAction}>
+              {ctx}
+              <button type="submit" className={BTN_SMALL}>
+                {t('Transfer title', 'نقل الملكية')}
+              </button>
+            </form>
+          ) : (
+            <form action={sellCommodityOnBehalfAction} className="flex flex-wrap items-center gap-2">
+              {ctx}
+              <input
+                name="agencyRef"
+                dir="ltr"
+                placeholder={t('Agency appointment ref (if selling as agent)', 'مرجع الوكالة (إن كان البيع بالوكالة)')}
+                className={INPUT}
+              />
+              <button type="submit" className={BTN_SMALL}>
+                {t('Sell on for cash', 'البيع للغير نقداً')}
+              </button>
+            </form>
+          )}
         </Gate>
       ) : null}
     </>

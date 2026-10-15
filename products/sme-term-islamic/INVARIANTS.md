@@ -23,3 +23,5 @@ Each is enforced in code and attacked in `test/compliance/sme-products.test.ts`.
   amount, tenor, grace, contribution, years in operation and purpose; a dated schedule whose
   dates are never defaulted; illustrative values say so; the two copies of the variant code are
   identical.
+
+> **Booking (ADR 0007, 2026-10-15):** the loan system may hold a disbursed SME Tawarruq as a loan contract carrying the quotation's profit rate. SI-2 still governs Sanad's records — the deferred price is the contract's figure — and the booking must reconcile to it. Board view required before go-live.

@@ -2,7 +2,7 @@
   "configId": "fintech-b-loan-booking",
   "version": "0.1.0",
   "adapter": "TUUM",
-  "policyRef": "ILLUSTRATIVE — 'SME FINANCE SAR RAG' is a riyal SME product in Tuum's partners sandbox (adapters/tuum/README.md, 2026-10-08) that belongs to another partner's test set; the institution's own product replaces it. Rate-priced products only: a Murabaha or Tawarruq product is never listed here",
+  "policyRef": "ILLUSTRATIVE — 'SME FINANCE SAR RAG' is a riyal SME product in Tuum's partners sandbox (adapters/tuum/README.md, 2026-10-08) that belongs to another partner's test set; the institution's own product replaces it. A Murabaha product is never listed here; a Tawarruq product may be, under ADR 0007",
   "products": {
     "sme-term-conventional": {
       "loanTypeCode": "SME FINANCE SAR RAG"
