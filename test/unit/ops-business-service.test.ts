@@ -11,6 +11,8 @@
 import type { Pool } from 'pg';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { justifyDeviations } from '../support/business-decision-pack.ts';
+
 import { meetSecurityRequirements } from '../support/business-security.ts';
 
 import { loadOfferDatePolicy } from '@sanad/config/loader.ts';
@@ -181,6 +183,7 @@ async function driveToApproved(): Promise<void> {
   expect((await recordAssessmentInputs(TENANT, ID, INPUTS, officer)).ok).toBe(true);
   expect((await submitForAssessment(TENANT, ID, officer)).ok).toBe(true);
   expect((await runAssessment(TENANT, ID, checker)).ok).toBe(true);
+  await justifyDeviations(TENANT, ID, checker);
   expect(
     (await decideInCommittee(TENANT, ID, { decidedBy: committee, approved: true, reason: 'Within risk-aligned terms' }))
       .ok,
@@ -252,6 +255,7 @@ describe('the business-application service — full journey in memory', () => {
     expect(submitted.ok && submitted.value.application.status).toBe('SUBMITTED');
 
     const assessed = await runAssessment(TENANT, ID, checker);
+    await justifyDeviations(TENANT, ID, checker);
     expect(assessed.ok).toBe(true);
     if (!assessed.ok) return;
     // AED 800,000 is above the straight-through maximum: the committee decides.

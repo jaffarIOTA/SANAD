@@ -44,6 +44,10 @@ import {
   approveStraightThrough,
   confirmBankStatementFacts,
   confirmSecurityItem,
+  addCondition,
+  addCovenant,
+  justifyDeviation,
+  withdrawPackItem,
   recordCollateral,
   recordGuarantee,
   withdrawSecurityItem,
@@ -88,7 +92,7 @@ async function contextOf(form: FormData, act: WorkbenchAct): Promise<Context> {
   const applicationId = field(form, 'applicationId');
   // The screen to return to: one of the application's own sub-screens, from a fixed list — never a path from the form.
   const screen = field(form, 'screen');
-  const suffix = screen === 'assessment' || screen === 'offer' ? `/${screen}` : '';
+  const suffix = screen === 'assessment' || screen === 'offer' || screen === 'decision' ? `/${screen}` : '';
   const path =
     applicationId === '' ? `/${locale}/business` : `/${locale}/business/${encodeURIComponent(applicationId)}${suffix}`;
   // No session: to sign in. No authority for this act: back with AUTHORITY_REQUIRED. Tenant not active: to sign in.
@@ -550,5 +554,52 @@ export async function withdrawSecurityAction(form: FormData): Promise<void> {
     ctx,
     () => withdrawSecurityItem(ctx.tenant, ctx.applicationId, field(form, 'itemId'), ctx.actor),
     'SECURITY_WITHDRAWN',
+  );
+}
+
+// -- The decision pack (UAE M4) -----------------------------------------------------------
+
+/** Credit attaches a condition precedent or subsequent, in both languages. */
+export async function addConditionAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_CREDIT_NOTES');
+  const kind = field(form, 'kind');
+  const rawDue = field(form, 'dueDays');
+  const due = rawDue === '' ? undefined : /^\d{1,4}$/.test(rawDue) ? Number(rawDue) : -1;
+  return finish(
+    ctx,
+    () =>
+      addCondition(
+        ctx.tenant,
+        ctx.applicationId,
+        {
+          kind,
+          textEn: field(form, 'textEn'),
+          textAr: field(form, 'textAr'),
+          ...(due === undefined ? {} : { dueDaysAfterDisbursement: due }),
+        },
+        ctx.actor,
+      ),
+    'CONDITION_ADDED',
+  );
+}
+
+/** Credit attaches a covenant from the institution's templates; no threshold is typed. */
+export async function addCovenantAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_CREDIT_NOTES');
+  return finish(ctx, () => addCovenant(ctx.tenant, ctx.applicationId, field(form, 'templateCode'), ctx.actor), 'COVENANT_ADDED');
+}
+
+export async function withdrawPackItemAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_CREDIT_NOTES');
+  return finish(ctx, () => withdrawPackItem(ctx.tenant, ctx.applicationId, field(form, 'itemId'), ctx.actor), 'PACK_ITEM_WITHDRAWN');
+}
+
+/** Credit states the mitigant for a deviation the assessment recorded. */
+export async function justifyDeviationAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_CREDIT_NOTES');
+  return finish(
+    ctx,
+    () => justifyDeviation(ctx.tenant, ctx.applicationId, field(form, 'code'), field(form, 'justification'), ctx.actor),
+    'DEVIATION_JUSTIFIED',
   );
 }
