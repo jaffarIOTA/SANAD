@@ -52,7 +52,7 @@ export type Environment = (typeof ENVIRONMENTS)[number];
 export const KNOWN_KEY_NAMES: Readonly<Partial<Record<VaultProvider, readonly string[]>>> = {
   NUTRIENT: ['web_sdk_license_key', 'document_engine_base_url', 'document_engine_api_token', 'jwt_private_key'],
   S3_STORAGE: ['access_key_id', 'secret_access_key', 'endpoint', 'region', 'bucket'],
-  TUUM: ['username', 'password', 'tenant_code', 'auth_base_url', 'loan_api_base_url'],
+  TUUM: ['username', 'password', 'tenant_code', 'auth_base_url', 'loan_api_base_url', 'person_api_base_url'],
 };
 
 export interface CredentialRow {

@@ -474,6 +474,18 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
           'UAE M5a: the signing intent opened on the sent letter version and bound to its SHA-256, confirmed by the identity service (signer recorded by reference); every condition precedent on the approved pack evidenced by a document and verified by a second person; the payee IBAN validated (country, length, mod 97), proven by a document and confirmed by a second person — the full IBAN shown only to an eligible confirmer; disbursement refused until all are met, released by a finance principal who is neither the approver, the submitter nor whoever recorded the payee. UAE M5b: a drawdown plan of 1–12 tranches adding up to the facility, released in order, each its own idempotent instruction; a rejected or returned payment fails the tranche and withdraws the payee confirmation until a second person confirms again (SR-050 fixed)',
       },
       {
+        id: 'business-loan-booking',
+        titleEn: 'Booking in the loan system',
+        titleAr: 'التسجيل في نظام القروض',
+        readiness: {
+          kind: 'BLOCKED',
+          on: 'fixture loan system: the Tuum lending adapter runs over the demonstration transport, labelled Fixture, until the fund’s AED product exists in Tuum and TUUM-LEND-01 is answered (adapters/tuum/README.md); live once the vault holds the CORE_BANKING credentials and person_api_base_url',
+        },
+        reference:
+          'UAE M6 (core/ports/loan-booking.ts, adapters/tuum/lending-adapter.ts): a disbursed, rate-priced loan booked as a loan contract on the signed terms — Sanad’s rate and APR sent, never taken (a different echoed rate is refused) — idempotent on business:<id>:book; the loan account number, contract and customer references recorded once (LOAN_BOOKED). Product codes per tenant in config/tenants/<t>/core-banking/loan-products.json; Murabaha never booked this way',
+        jurisdictions: AE,
+      },
+      {
         id: 'business-handover-api',
         titleEn: 'Hand-over API',
         titleAr: 'واجهة تسليم الطلبات',

@@ -439,6 +439,10 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
     en: 'Document recorded by reference. It counts once the checker validates it.',
     ar: 'سُجّل المستند بمرجعه، ويُحتسب بعد تحقق المراجِع منه.',
   },
+  LOAN_BOOKED: {
+    en: 'Booked in the loan system. The loan account number is recorded.',
+    ar: 'سُجّل في نظام القروض، وحُفظ رقم حساب التمويل.',
+  },
   TRANCHES_PLANNED: { en: 'Drawdown plan recorded.', ar: 'سُجّلت خطة السحب.' },
   TRANCHE_RELEASED: {
     en: 'Tranche released to the partner bank. Its result arrives as the bank’s status report.',
@@ -910,6 +914,29 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
     en: 'Record the business’s tax registration number before checking it.',
     ar: 'سجّل رقم التسجيل الضريبي للمنشأة قبل التحقق منه.',
   },
+  // Booking in the loan system (UAE M6). A refusal here booked nothing.
+  LOAN_ALREADY_BOOKED: { en: 'This loan is already booked in the loan system.', ar: 'هذا التمويل مُسجَّل مسبقاً في نظام القروض.' },
+  LOAN_BOOKING_REF_INVALID: {
+    en: 'The loan system returned no usable reference, so nothing was recorded.',
+    ar: 'لم يُرجع نظام القروض مرجعاً صالحاً، فلم يُسجَّل شيء.',
+  },
+  LOAN_PRODUCT_NOT_MAPPED: {
+    en: 'This product has no loan-system product code configured, so it cannot be booked.',
+    ar: 'لا يوجد رمز منتج في نظام القروض مهيأ لهذا المنتج، فلا يمكن تسجيله.',
+  },
+  LOAN_BOOKING_NOT_CONFIGURED: {
+    en: 'No loan-system product mapping is configured for this institution.',
+    ar: 'لا توجد مطابقة لمنتجات نظام القروض مهيأة لهذه المؤسسة.',
+  },
+  LOAN_BOOKING_REFUSED: {
+    en: 'The loan system did not book the loan. Nothing was recorded; check the product set-up in the loan system.',
+    ar: 'لم يسجّل نظام القروض التمويل، ولم يُسجَّل شيء. تحقّق من إعداد المنتج في نظام القروض.',
+  },
+  LOAN_RATE_MISMATCH: {
+    en: 'The loan system answered with a different interest rate from the one the borrower signed for, so the booking was refused. The signed rate is the contract’s rate.',
+    ar: 'أجاب نظام القروض بمعدل ربح مختلف عن المعدل الذي وقّع عليه المقترض، فرُفض التسجيل. المعدل الموقّع هو معدل العقد.',
+  },
+  LOAN_BOOKING_INVALID: { en: 'The booking terms are incomplete.', ar: 'شروط التسجيل غير مكتملة.' },
   // Tranches and payment results (UAE M5b). A refusal here paid nothing.
   TRANCHES_LOCKED: { en: 'The drawdown plan changes only before the first release.', ar: 'لا تتغير خطة السحب إلا قبل الصرف الأول.' },
   TRANCHES_INVALID: {
