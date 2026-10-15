@@ -89,6 +89,7 @@ export class NafathAdapter extends RailAdapter implements IdentityAuthentication
     readonly tenantId: string;
     readonly applicantRef: string;
     readonly purpose: 'LOGIN' | 'STEP_UP' | 'SIGNATURE_INTENT';
+    readonly documentHash?: string;
     readonly correlationId: string;
   }) {
     const r = await this.invoke(
@@ -97,7 +98,13 @@ export class NafathAdapter extends RailAdapter implements IdentityAuthentication
         method: 'POST',
         path: `/api/v1/mfa/request?local=ar&requestId=${encodeURIComponent(p.correlationId)}`,
         // The egress resolves applicantRef to the national identifier Nafath expects; it never comes back.
-        body: { applicantRef: p.applicantRef, service: SERVICE[p.purpose] },
+        // A signing intent carries the SHA-256 of the document signed, so the confirmation is bound to that content
+        // (the field name is the verification item's to confirm with the tenant's Nafath profile).
+        body: {
+          applicantRef: p.applicantRef,
+          service: SERVICE[p.purpose],
+          ...(p.purpose === 'SIGNATURE_INTENT' && p.documentHash !== undefined ? { documentHash: p.documentHash } : {}),
+        },
       },
       p.correlationId,
     );

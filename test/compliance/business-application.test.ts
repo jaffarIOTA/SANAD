@@ -123,6 +123,12 @@ describe('stage 5: hand-over', () => {
     // KSA: ten digits starting 1 (citizen) or 2 (resident), alone or inside a reference.
     for (const s of ['1012345678', '2087654321', 'nid-1012345678', 'iqama:2087654321', 'see 1012345678 above'])
       expect(containsIdentityNumber(s), s).toBe(true);
+    // KSA K3: inside an alphanumeric token — a provider's hexadecimal id, a UUID — ten digits in a row are not a person's id.
+    for (const s of ['demo-approve-a1012345678bcdef', '3f2a1b7e-9c4d-4e1a-8b2c-a1012345678f', 'wathq:7000000101:ttro8w0'])
+      expect(containsIdentityNumber(s), s).toBe(false);
+    // The business's own registration number, embedded in a provider's reference, is not a person's id either.
+    expect(containsIdentityNumber('ZC-DEMO-1010000101', new Set(), '1010000101')).toBe(false);
+    expect(containsIdentityNumber('ZC-DEMO-1010000101 owner 1012345678', new Set(), '1010000101')).toBe(true);
     // Not an identity number: a ten-digit run starting otherwise, a longer or shorter run, an application id, a reference.
     for (const s of [
       '3012345678',

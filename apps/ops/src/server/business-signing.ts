@@ -18,6 +18,8 @@ import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
 
 import { DemonstrationTransport } from '../../../../adapters/uae/demonstration/transport.ts';
 import { UaePassAdapter } from '../../../../adapters/uae/uae-pass/adapter.ts';
+import { KsaDemonstrationTransport } from '../../../../adapters/ksa/demonstration/transport.ts';
+import { NafathAdapter } from '../../../../adapters/ksa/nafath/adapter.ts';
 import {
   type BusinessApplicationView,
   getApplication,
@@ -26,7 +28,7 @@ import {
   recordSigningStarted,
 } from './business.ts';
 import { intakeConsentLedger } from './intake.ts';
-import { DemonstrationCredentials, demonstrationConfig } from './intake-rails.ts';
+import { DemonstrationCredentials, demonstrationConfig, tenantJurisdiction } from './intake-rails.ts';
 import { persistencePool } from './persistence.ts';
 import { developmentAttestation } from './store.ts';
 
@@ -46,15 +48,26 @@ const replayGuard = () => {
 async function signingRail(
   tenant: TenantCode,
   env: Readonly<Record<string, string | undefined>> = process.env,
-): Promise<{ readonly port: IdentityAuthenticationPort; readonly source: 'LIVE' | 'FIXTURE' } | undefined> {
+): Promise<
+  | { readonly port: IdentityAuthenticationPort; readonly source: 'LIVE' | 'FIXTURE'; readonly rail: 'UAE_PASS' | 'NAFATH' }
+  | undefined
+> {
   if (!(await syntheticDemonstrationPermitted(persistencePool(env), env))) return undefined;
   const config = {
     ...demonstrationConfig(tenant, 'IDENTITY_AUTHENTICATION', await intakeConsentLedger(tenant), nowSeconds),
     assertionReplay: replayGuard(),
   };
+  // The jurisdiction's national identity: Nafath in Saudi Arabia, UAE Pass in the UAE.
+  if (tenantJurisdiction(tenant) === 'SA')
+    return {
+      port: new NafathAdapter(config, new DemonstrationCredentials(), new KsaDemonstrationTransport(nowSeconds)),
+      source: 'FIXTURE',
+      rail: 'NAFATH',
+    };
   return {
     port: new UaePassAdapter(config, new DemonstrationCredentials(), new DemonstrationTransport(nowSeconds)),
     source: 'FIXTURE',
+    rail: 'UAE_PASS',
   };
 }
 
@@ -85,7 +98,7 @@ export async function startSigning(
   });
   if (!r.ok) return r;
   if (r.value.kind === 'UNAVAILABLE')
-    return fail('RAIL_UNAVAILABLE', 'The identity service did not answer; nothing was opened', { rail: 'UAE_PASS' });
+    return fail('RAIL_UNAVAILABLE', 'The identity service did not answer; nothing was opened', { rail: 'IDENTITY_AUTHENTICATION' });
   if (r.value.kind === 'REFUSED')
     return fail('SIGNATURE_REFUSED', 'The identity service refused to open the signing', { code: r.value.code });
   return recordSigningStarted(tenant, applicationId, { ...r.value.value, letterVersion, source: rail.source }, actor);
@@ -113,9 +126,11 @@ export async function confirmSigning(
   });
   if (!r.ok) return r;
   if (r.value.kind === 'UNAVAILABLE')
-    return fail('RAIL_UNAVAILABLE', 'The identity service did not answer; nothing was confirmed', { rail: 'UAE_PASS' });
+    return fail('RAIL_UNAVAILABLE', 'The identity service did not answer; nothing was confirmed', { rail: 'IDENTITY_AUTHENTICATION' });
   if (r.value.kind === 'REFUSED') {
-    if (r.value.code === 'STATUS_PENDING') return fail('SIGNATURE_PENDING', 'The signatory has not signed yet');
+    // UAE Pass says STATUS_PENDING, Nafath STATUS_WAITING: the signatory has not answered yet.
+    if (r.value.code === 'STATUS_PENDING' || r.value.code === 'STATUS_WAITING')
+      return fail('SIGNATURE_PENDING', 'The signatory has not signed yet');
     // Refused, cancelled, expired or at too low an assurance: the intent is closed so a new one can open.
     await recordSigningEnded(tenant, applicationId, r.value.code, actor);
     return fail('SIGNATURE_REFUSED', 'The identity service did not confirm a signature', { code: r.value.code });
@@ -125,5 +140,6 @@ export async function confirmSigning(
     applicationId,
     { assertionId: r.value.value.assertionId, identityRef: r.value.value.identityRef, source: rail.source },
     actor,
+    rail.rail === 'NAFATH' ? 'nafath' : 'uaepass',
   );
 }
