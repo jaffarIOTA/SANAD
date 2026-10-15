@@ -439,6 +439,10 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
     en: 'Document recorded by reference. It counts once the checker validates it.',
     ar: 'سُجّل المستند بمرجعه، ويُحتسب بعد تحقق المراجِع منه.',
   },
+  TAWARRUQ_COMMODITY_PURCHASED: { en: 'Commodity bought from the broker at the quoted cost.', ar: 'اشتُريت السلعة من الوسيط بالتكلفة المسعّرة.' },
+  TAWARRUQ_SOLD_TO_CUSTOMER: { en: 'Commodity sold to the customer for the deferred price.', ar: 'بيعت السلعة للعميل بالثمن المؤجل.' },
+  TAWARRUQ_TITLE_TRANSFERRED: { en: 'Title passed to the customer.', ar: 'انتقلت الملكية إلى العميل.' },
+  TAWARRUQ_PROCEEDS_REALISED: { en: 'Commodity sold on; the proceeds are ready to pay.', ar: 'بيعت السلعة للغير، والحصيلة جاهزة للصرف.' },
   LOAN_BOOKED: {
     en: 'Booked in the loan system. The loan account number is recorded.',
     ar: 'سُجّل في نظام القروض، وحُفظ رقم حساب التمويل.',
@@ -914,6 +918,19 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
     en: 'Record the business’s tax registration number before checking it.',
     ar: 'سجّل رقم التسجيل الضريبي للمنشأة قبل التحقق منه.',
   },
+  // Tawarruq execution (KSA K4). A refusal here bought, sold and paid nothing.
+  NOT_TAWARRUQ: { en: 'This application is not a Tawarruq.', ar: 'هذا الطلب ليس تورقاً.' },
+  TAWARRUQ_BEFORE_SIGNATURE: { en: 'The commodity is bought only once the customer has signed.', ar: 'لا تُشترى السلعة إلا بعد توقيع العميل.' },
+  TAWARRUQ_STEP_OUT_OF_ORDER: {
+    en: 'The Tawarruq steps run in order: buy, sell to the customer, transfer title, sell on.',
+    ar: 'تجري خطوات التورق بالترتيب: الشراء، ثم البيع للعميل، ثم نقل الملكية، ثم البيع للغير.',
+  },
+  TAWARRUQ_INCOMPLETE: {
+    en: 'The proceeds are paid only after the commodity is bought, sold to the customer, title has passed and it is sold on.',
+    ar: 'لا تُصرف الحصيلة إلا بعد شراء السلعة وبيعها للعميل ونقل ملكيتها وبيعها للغير.',
+  },
+  TRANCHES_NOT_PERMITTED: { en: 'A Tawarruq pays its proceeds once; it is not drawn in tranches.', ar: 'يُصرف التورق دفعة واحدة؛ ولا يُسحب على دفعات.' },
+  BROKER_REFUSED: { en: 'The commodity broker did not confirm the step, so nothing was recorded.', ar: 'لم يؤكد وسيط السلع الخطوة، فلم يُسجَّل شيء.' },
   // Booking in the loan system (UAE M6). A refusal here booked nothing.
   LOAN_ALREADY_BOOKED: { en: 'This loan is already booked in the loan system.', ar: 'هذا التمويل مُسجَّل مسبقاً في نظام القروض.' },
   LOAN_BOOKING_REF_INVALID: {
