@@ -1,0 +1,67 @@
+{
+  "policyId": "sme-direct-lending-decision-pack-sa",
+  "version": "0.1.0",
+  "source": "TENANT_CREDIT_POLICY",
+  "policyRef": "ILLUSTRATIVE — Fintech B's placeholder, adapted 2026-10-15 from the UAE fund's illustrative decision-pack; not an approved policy and not a SAMA requirement. The institution replaces it before any real use",
+  "maxSubsequentDueDays": 180,
+  "covenantTemplates": [
+    {
+      "code": "DSCR_MIN",
+      "kind": "FINANCIAL",
+      "metric": "DEBT_SERVICE_COVER",
+      "minimumPerTenThousand": 14000,
+      "frequency": "ANNUAL",
+      "labelEn": "Debt-service cover of at least 1.40×, tested on each year's audited financial statements",
+      "labelAr": "ألا تقل تغطية خدمة الدين عن ١٫٤٠ مرة، وتُختبر على القوائم المالية المدققة لكل سنة"
+    },
+    {
+      "code": "CURRENT_RATIO_MIN",
+      "kind": "FINANCIAL",
+      "metric": "CURRENT_RATIO",
+      "minimumPerTenThousand": 10000,
+      "frequency": "ANNUAL",
+      "labelEn": "Current ratio of at least 1.00×, tested on each year's audited financial statements",
+      "labelAr": "ألا تقل نسبة التداول عن ١٫٠٠ مرة، وتُختبر على القوائم المالية المدققة لكل سنة"
+    },
+    {
+      "code": "AUDITED_FINANCIALS",
+      "kind": "INFORMATION",
+      "frequency": "ANNUAL",
+      "labelEn": "Audited financial statements delivered within 120 days of each financial year end",
+      "labelAr": "تقديم القوائم المالية المدققة خلال ١٢٠ يوماً من نهاية كل سنة مالية"
+    },
+    {
+      "code": "VAT_RETURNS",
+      "kind": "INFORMATION",
+      "frequency": "QUARTERLY",
+      "labelEn": "Copies of filed VAT returns delivered each quarter",
+      "labelAr": "تقديم نسخ من الإقرارات الضريبية للقيمة المضافة المقدّمة كل ربع سنة"
+    },
+    {
+      "code": "NO_FURTHER_BORROWING",
+      "kind": "NEGATIVE",
+      "labelEn": "No further borrowing or security granted to others without the lender's written consent",
+      "labelAr": "عدم الاقتراض أو منح ضمانات للغير دون موافقة كتابية من المموّل"
+    },
+    {
+      "code": "NO_OWNERSHIP_CHANGE",
+      "kind": "NEGATIVE",
+      "labelEn": "No change in ownership or control without the lender's written consent",
+      "labelAr": "عدم تغيير الملكية أو السيطرة دون موافقة كتابية من المموّل"
+    },
+    {
+      "code": "ZAKAT_CERTIFICATE",
+      "kind": "INFORMATION",
+      "frequency": "ANNUAL",
+      "labelEn": "A valid zakat certificate from ZATCA maintained and delivered each year",
+      "labelAr": "الاحتفاظ بشهادة زكاة سارية من هيئة الزكاة والضريبة والجمارك وتقديمها سنوياً"
+    },
+    {
+      "code": "GOSI_COMPLIANCE",
+      "kind": "INFORMATION",
+      "frequency": "ANNUAL",
+      "labelEn": "A GOSI compliance certificate delivered each year",
+      "labelAr": "تقديم شهادة الالتزام من المؤسسة العامة للتأمينات الاجتماعية سنوياً"
+    }
+  ]
+}

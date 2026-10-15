@@ -1,0 +1,11 @@
+{
+  "policyId": "sme-direct-lending-offer-dates-sa",
+  "version": "0.1.0",
+  "source": "TENANT_CREDIT_POLICY",
+  "policyRef": "ILLUSTRATIVE — Bank A's placeholder, adapted 2026-10-15 from the UAE fund's illustrative offer-policy; not an approved policy and not a SAMA requirement. The institution replaces it before any real use",
+  "maxDisbursementAfterOfferDays": "60",
+  "minFirstDueAfterDisbursementDays": "15",
+  "maxFirstDueAfterDisbursementDays": "45",
+  "defaultDisbursementAfterOfferDays": "14",
+  "offerValidityDays": "30"
+}

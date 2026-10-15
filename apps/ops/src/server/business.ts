@@ -78,6 +78,7 @@ import {
   isChecklistComplete,
 } from '@sanad/core/documents/checklist.ts';
 import { type OfferLetter, buildOfferLetter } from '@sanad/core/documents/offer-letter.ts';
+import { ummAlQura } from './hijri.ts';
 import type { JurisdictionProfile } from '@sanad/core/jurisdiction/profile.ts';
 import type { StorableMediaType } from '@sanad/core/ports/object-storage.ts';
 import {
@@ -170,6 +171,7 @@ import {
   saveBusinessChanges,
 } from './business-persistence.ts';
 import { persistencePool, persistenceUrl } from './persistence.ts';
+import { publishedBenchmark } from './rate-rails.ts';
 import { developmentAttestation } from './store.ts';
 
 export type { ApplicationEvent, FigureRow } from './business-persistence.ts';
@@ -3848,10 +3850,15 @@ async function generateOfferAt(
   if (!dates.ok) return dates;
   const tenorDays = approved.tenorMonths * 30;
 
-  const pricing = resolvePricingInputs(product.value.entry.pricingRule, {
+  // A benchmark-linked product (the Saudi SME products: SAIBOR + margin) is priced from the published benchmark;
+  // without it the quote is refused, never priced from a stale or guessed rate.
+  const rule = product.value.entry.pricingRule;
+  const benchmark = rule.kind === 'BENCHMARK_PLUS_MARGIN' ? await publishedBenchmark(tenant, rule.benchmarkCode, at) : undefined;
+  const pricing = resolvePricingInputs(rule, {
     principal: facility,
     tenorDays,
     asOfEpochSeconds: at.epochSeconds,
+    ...(benchmark === undefined ? {} : { benchmark }),
   });
   if (!pricing.ok) return pricing;
   // The module's "requested" amount and tenor are what the institution offers: the approved terms.
@@ -3911,7 +3918,7 @@ async function generateOfferAt(
       { party: 'BORROWER', role: { en: 'Authorised Signatory of the Borrower', ar: 'المفوّض بالتوقيع عن المقترض' } },
     ],
     conditions: [...q.collateral.map((c) => ({ en: c.labelEn, ar: c.labelAr })), ...packConditionsForLetter(r)],
-  });
+  }, ummAlQura);
   if (!letter.ok) return letter;
 
   const terms: OfferTerms = {
