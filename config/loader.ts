@@ -438,3 +438,37 @@ export function loadDecisionPackPolicy(tenant: TenantCode): Result<DecisionPackP
     });
   return parseDecisionPackPolicy(raw);
 }
+
+import fundAeLoanProducts from './tenants/sme-fund-ae/core-banking/loan-products.json' with { type: 'json' };
+
+/** Which loan-system product code books each rate-priced Sanad product, for a tenant that books loans in its loan system. */
+export interface LoanBookingConfig {
+  readonly adapter: string;
+  readonly policyRef: string;
+  readonly products: Readonly<Record<string, { readonly loanTypeCode: string }>>;
+}
+
+const LOAN_BOOKING: Readonly<Partial<Record<TenantCode, unknown>>> = { 'sme-fund-ae': fundAeLoanProducts };
+
+export function loadLoanBookingConfig(tenant: TenantCode): Result<LoanBookingConfig> {
+  const raw = LOAN_BOOKING[tenant] as Record<string, unknown> | undefined;
+  if (raw === undefined)
+    return reject('OP-DETERMINACY', 'LOAN_BOOKING_NOT_CONFIGURED', 'No loan-system product mapping is configured for this tenant', {
+      tenant,
+    });
+  const products = raw['products'];
+  if (typeof raw['adapter'] !== 'string' || typeof raw['policyRef'] !== 'string' || products === null || typeof products !== 'object')
+    return reject('OP-DETERMINACY', 'LOAN_BOOKING_NOT_CONFIGURED', 'The loan-system product mapping is malformed', { tenant });
+  for (const [code, v] of Object.entries(products as Record<string, unknown>)) {
+    const t = (v as Record<string, unknown> | null)?.['loanTypeCode'];
+    if (typeof t !== 'string' || t.trim() === '')
+      return reject('OP-DETERMINACY', 'LOAN_BOOKING_NOT_CONFIGURED', 'Each product names its loan-system product code', { code });
+    if (code === 'murabaha-scf')
+      return reject('OP-DETERMINACY', 'LOAN_BOOKING_NOT_CONFIGURED', 'A Murabaha product is never booked as a loan contract', { code });
+  }
+  return ok({
+    adapter: raw['adapter'],
+    policyRef: raw['policyRef'],
+    products: products as Record<string, { readonly loanTypeCode: string }>,
+  });
+}
