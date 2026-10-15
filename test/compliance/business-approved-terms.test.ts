@@ -16,6 +16,8 @@
 import type { Pool } from 'pg';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { preparePayee } from '../support/business-closing.ts';
+
 import { justifyDeviations } from '../support/business-decision-pack.ts';
 
 import { meetSecurityRequirements } from '../support/business-security.ts';
@@ -62,6 +64,8 @@ import {
   recordSigned,
   resetBusinessStore,
   runAssessment,
+  satisfyCondition,
+  verifyCondition,
   sendOffer,
   submitForAssessment,
   validateDocument,
@@ -612,6 +616,16 @@ describe('the partner’s prototype through the service: 5,000,000 / 72 requeste
     expectOk(await sendOffer(TENANT, ID, officer));
     expectOk(await recordSigned(TENANT, ID, { letterVersion: offer?.letter.version ?? '' }, officer));
     vi.setSystemTime(new Date('2029-08-04T06:00:00Z'));
+    await preparePayee(TENANT, ID, officer, checker);
+    // UAE M5a: the condition precedent on the pack is evidenced and verified by two people before money moves.
+    const blocked = await recordDisbursed(TENANT, ID, finance);
+    expect(blocked.ok ? 'disbursed' : blocked.error.reason).toBe('CONDITIONS_PRECEDENT_OUTSTANDING');
+    const cp = (await getApplication(TENANT, ID))?.pack.conditions.find((c) => c.kind === 'PRECEDENT');
+    const evidence = (await getApplication(TENANT, ID))?.documents[0]?.documentRef ?? '';
+    expectOk(await satisfyCondition(TENANT, ID, cp?.conditionId ?? '', evidence, officer));
+    const self = await verifyCondition(TENANT, ID, cp?.conditionId ?? '', officer);
+    expect(self.ok ? 'verified' : self.error.reason).toBe('FOUR_EYES_SELF_CONFIRMATION');
+    expectOk(await verifyCondition(TENANT, ID, cp?.conditionId ?? '', checker));
     expectOk(await recordDisbursed(TENANT, ID, finance));
     const payment = queuedBusinessNotifications().find((e) => e.subjectRef === ID && e.kind === 'PAYMENT_DISBURSE');
     expect(payment?.payload['minorUnits']).toBe('200000000');

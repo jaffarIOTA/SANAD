@@ -87,6 +87,7 @@ export class PartnerBankAdapter extends RailAdapter implements PaymentsPort {
   async disburse(p: {
     readonly tenantId: string;
     readonly beneficiaryRef: string;
+    readonly beneficiaryAccount?: { readonly iban: string };
     readonly amount: Money;
     readonly purposeCode: string;
     readonly reference: string;
@@ -102,6 +103,8 @@ export class PartnerBankAdapter extends RailAdapter implements PaymentsPort {
         PmtId: { InstrId: p.idempotencyKey, EndToEndId: p.reference },
         InstdAmt: { Ccy: p.amount.currency, Amt: aedDecimal(p.amount) },
         Cdtr: { Ref: p.beneficiaryRef },
+        // ISO 20022 pain.001 CdtrAcct/Id/IBAN: the account credited, when the payee is paid by IBAN.
+        ...(p.beneficiaryAccount === undefined ? {} : { CdtrAcct: { Id: { IBAN: p.beneficiaryAccount.iban } } }),
         Purp: { Cd: p.purposeCode },
       },
       p.idempotencyKey,

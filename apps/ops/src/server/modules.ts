@@ -468,10 +468,10 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         titleAr: 'التوقيع والصرف',
         readiness: {
           kind: 'BLOCKED',
-          on: 'fixture signing and payment: the screens record a UAE Pass fixture signature and a partner-bank fixture payment reference (finance principal releases; PAYMENT_DISBURSE and BUREAU_REPORT queued on the outbox in the same transaction) until adapters/uae/uae-pass and adapters/uae/partner-bank have made a verified sandbox call',
+          on: 'fixture rails: signing runs the UAE Pass adapter over the demonstration transport, labelled Fixture, only where a synthetic demonstration is permitted; the payment instruction (PAYMENT_DISBURSE with the payee IBAN, BUREAU_REPORT) is queued on the outbox for the partner bank — both until adapters/uae/uae-pass and adapters/uae/partner-bank have made a verified sandbox call. Tranches and the bank’s payment result are M5b',
         },
         reference:
-          'Stage 7 signature on the sent letter version, disbursement released by a finance principal distinct from the approver',
+          'UAE M5a: the signing intent opened on the sent letter version and bound to its SHA-256, confirmed by the identity service (signer recorded by reference); every condition precedent on the approved pack evidenced by a document and verified by a second person; the payee IBAN validated (country, length, mod 97), proven by a document and confirmed by a second person — the full IBAN shown only to an eligible confirmer; disbursement refused until all are met, released by a finance principal who is neither the approver, the submitter nor whoever recorded the payee',
       },
       {
         id: 'business-handover-api',
