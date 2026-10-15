@@ -95,7 +95,10 @@ describe('#7 #12 the module map', () => {
     const items = MODULE_GROUPS.flatMap((g) => g.items);
     const signing = items.find((i) => i.id === 'business-sign-disburse');
     expect(signing?.readiness.kind).toBe('BLOCKED');
-    if (signing?.readiness.kind === 'BLOCKED') expect(signing.readiness.on).toMatch(/fixture signing and payment/);
+    if (signing?.readiness.kind === 'BLOCKED') {
+      expect(signing.readiness.on).toMatch(/^fixture rails: signing runs the UAE Pass adapter over the demonstration transport, labelled Fixture/);
+      expect(signing.readiness.on).toMatch(/adapters\/uae\/partner-bank have made a verified sandbox call/);
+    }
     const assessment = items.find((i) => i.id === 'business-assessment')?.reference;
     expect(assessment).toMatch(/fetched through the AECB rail under the intake consent \(FIXTURE/);
     expect(assessment).toMatch(/partner hand-over keys it from the upstream report, labelled keyed/);

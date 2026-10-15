@@ -439,6 +439,21 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
     en: 'Document recorded by reference. It counts once the checker validates it.',
     ar: 'سُجّل المستند بمرجعه، ويُحتسب بعد تحقق المراجِع منه.',
   },
+  SIGNING_STARTED: {
+    en: 'Signing opened at the identity service. Check for the signature once the signatory has signed.',
+    ar: 'بدأ التوقيع لدى خدمة الهوية. تحقّق من التوقيع بعد أن يوقّع المفوّض.',
+  },
+  SIGNED_THROUGH_IDENTITY: { en: 'Signature confirmed by the identity service.', ar: 'أكدت خدمة الهوية التوقيع.' },
+  CP_SATISFIED: {
+    en: 'Evidence recorded. The condition counts once a second person verifies it.',
+    ar: 'سُجّل الدليل، ويُحتسب الشرط بعد تحقق شخص آخر منه.',
+  },
+  CP_VERIFIED: { en: 'Condition precedent verified.', ar: 'تم التحقق من الشرط المسبق.' },
+  PAYEE_RECORDED: {
+    en: 'Payee account recorded. It is used once a second person confirms it.',
+    ar: 'سُجّل حساب المستفيد، ويُعتمد بعد تأكيده من شخص آخر.',
+  },
+  PAYEE_CONFIRMED: { en: 'Payee account confirmed.', ar: 'تم تأكيد حساب المستفيد.' },
   CONDITION_ADDED: { en: 'Condition attached to the decision pack.', ar: 'أُضيف الشرط إلى حزمة القرار.' },
   COVENANT_ADDED: { en: 'Covenant attached to the decision pack.', ar: 'أُضيف التعهد إلى حزمة القرار.' },
   PACK_ITEM_WITHDRAWN: { en: 'Withdrawn from the decision pack.', ar: 'سُحب من حزمة القرار.' },
@@ -888,6 +903,57 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
   TRN_NOT_RECORDED: {
     en: 'Record the business’s tax registration number before checking it.',
     ar: 'سجّل رقم التسجيل الضريبي للمنشأة قبل التحقق منه.',
+  },
+  // Closing (UAE M5a). A refusal here signed, recorded and paid nothing.
+  CLOSING_LOCKED: {
+    en: 'Closing steps are recorded between approval and disbursement.',
+    ar: 'تُسجَّل خطوات الإغلاق بين الاعتماد والصرف.',
+  },
+  SIGNING_REF_INVALID: {
+    en: 'The identity service returned no usable reference, so nothing was recorded.',
+    ar: 'لم تُرجع خدمة الهوية مرجعاً صالحاً، فلم يُسجَّل شيء.',
+  },
+  SIGNING_NOT_STARTED: { en: 'Open the signing first.', ar: 'ابدأ التوقيع أولاً.' },
+  SIGNING_EXPIRED: {
+    en: 'The signing window has passed. Open a new one.',
+    ar: 'انقضت مهلة التوقيع. ابدأ توقيعاً جديداً.',
+  },
+  SIGNATURE_PENDING: {
+    en: 'The signatory has not signed yet. Check again once they have.',
+    ar: 'لم يوقّع المفوّض بعد. تحقّق مرة أخرى بعد توقيعه.',
+  },
+  SIGNATURE_REFUSED: {
+    en: 'The identity service did not confirm a signature (refused, cancelled, or at too low an assurance level). Open a new signing.',
+    ar: 'لم تؤكد خدمة الهوية التوقيع (رُفض أو أُلغي أو بمستوى توثيق غير كافٍ). ابدأ توقيعاً جديداً.',
+  },
+  CONDITION_NOT_FOUND: {
+    en: 'That condition precedent is not on the approved pack.',
+    ar: 'هذا الشرط المسبق غير موجود في الحزمة المعتمدة.',
+  },
+  CONDITION_ALREADY_VERIFIED: { en: 'That condition precedent is already verified.', ar: 'هذا الشرط المسبق مُتحقَّق منه مسبقاً.' },
+  CONDITION_NOT_SATISFIED: { en: 'Evidence the condition precedent first.', ar: 'قدّم دليل استيفاء الشرط المسبق أولاً.' },
+  CONDITIONS_PRECEDENT_OUTSTANDING: {
+    en: 'Every condition precedent must be evidenced and verified by a second person before drawdown.',
+    ar: 'يجب تقديم دليل كل شرط مسبق والتحقق منه من شخص آخر قبل السحب.',
+  },
+  PAYEE_NAME_INVALID: { en: 'Give the account holder’s name, 2 to 140 characters.', ar: 'اذكر اسم صاحب الحساب، من حرفين إلى مئة وأربعين حرفاً.' },
+  PAYEE_NOT_RECORDED: { en: 'Record the payee account first.', ar: 'سجّل حساب المستفيد أولاً.' },
+  PAYEE_ALREADY_CONFIRMED: { en: 'The payee account is already confirmed.', ar: 'حساب المستفيد مؤكَّد مسبقاً.' },
+  PAYEE_NOT_CONFIRMED: {
+    en: 'The payee account must be recorded and confirmed by a second person before disbursement.',
+    ar: 'يجب تسجيل حساب المستفيد وتأكيده من شخص آخر قبل الصرف.',
+  },
+  FOUR_EYES_PAYEE: {
+    en: 'You recorded the payee account; another finance user releases the payment.',
+    ar: 'أنت من سجّل حساب المستفيد؛ يصرف الدفعة موظف مالية آخر.',
+  },
+  IBAN_INVALID: {
+    en: 'That is not a valid IBAN for this country: check the country code, the length and the check digits.',
+    ar: 'رقم الآيبان غير صالح لهذا البلد: تحقّق من رمز البلد والطول وأرقام التحقق.',
+  },
+  IBAN_COUNTRY_UNSUPPORTED: {
+    en: 'There is no IBAN rule for this institution’s country.',
+    ar: 'لا توجد قاعدة آيبان لبلد هذه المؤسسة.',
   },
   // The decision pack (UAE M4). A refusal here changed nothing.
   DECISION_PACK_LOCKED: {

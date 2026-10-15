@@ -116,3 +116,25 @@ describe('the store and a worker pass', () => {
     expect(claimedTwice[0].length + claimedTwice[1].length).toBe(1);
   });
 });
+
+describe('UAE M5a: a disbursement to an IBAN', () => {
+  it('hands the payee account to the payments port with the instruction', async () => {
+    const seen: unknown[] = [];
+    const ports = developmentDispatchPorts([]);
+    const payments = {
+      ...ports.payments,
+      disburse: (p: Parameters<typeof ports.payments.disburse>[0]) => {
+        seen.push(p.beneficiaryAccount);
+        return ports.payments.disburse(p);
+      },
+    };
+    await dispatchOnce(
+      event({ payload: { beneficiaryRef: 'app-1', beneficiaryIban: 'AE070331234567890123456', minorUnits: '5000000', currency: 'AED' } }),
+      { ...ports, payments },
+      policy,
+      1,
+    );
+    await dispatchOnce(event(), { ...ports, payments }, policy, 1);
+    expect(seen).toEqual([{ iban: 'AE070331234567890123456' }, undefined]);
+  });
+});
