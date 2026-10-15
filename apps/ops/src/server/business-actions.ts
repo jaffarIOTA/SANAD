@@ -41,11 +41,13 @@ import type { WorkbenchAct } from './authority.ts';
 import { fetchBankStatements, fetchBureauReport } from './business-rails.ts';
 import { uploadBusinessDocument } from './business-storage.ts';
 import { confirmSigning, startSigning } from './business-signing.ts';
+import { recordFixturePaymentResult } from './business-payments.ts';
 import {
   approveStraightThrough,
   confirmBankStatementFacts,
   confirmSecurityItem,
   confirmPayee,
+  planTranches,
   recordPayee,
   satisfyCondition,
   verifyCondition,
@@ -659,4 +661,40 @@ export async function recordPayeeAction(form: FormData): Promise<void> {
 export async function confirmPayeeAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_VERIFY');
   return finish(ctx, () => confirmPayee(ctx.tenant, ctx.applicationId, ctx.actor), 'PAYEE_CONFIRMED');
+}
+
+// -- Tranches and payment results (UAE M5b) -----------------------------------------------
+
+/**
+ * The officer plans the drawdowns: one tranche per line, "amount" or
+ * "amount, yyyy-mm-dd". Amounts in major units with up to two decimals; the
+ * service checks they add up to the facility.
+ */
+export async function planTranchesAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  const lines = field(form, 'plan')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l !== '');
+  const plan: { amountMinorUnits: bigint; plannedDate?: string }[] = [];
+  for (const line of lines) {
+    const [amount = '', date = ''] = line.split(',').map((x) => x.trim());
+    const minor = minorUnits(amount);
+    if (minor === undefined) return finish(ctx, refused('AMOUNT_MALFORMED', 'Each tranche starts with an amount'), '');
+    plan.push({ amountMinorUnits: minor, ...(date === '' ? {} : { plannedDate: date }) });
+  }
+  return finish(ctx, () => planTranches(ctx.tenant, ctx.applicationId, plan, ctx.actor), 'TRANCHES_PLANNED');
+}
+
+/** On the synthetic site only: finance records the bank's result for the latest released tranche, marked Fixture. */
+export async function recordFixturePaymentResultAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  const status = field(form, 'status');
+  if (status !== 'SETTLED' && status !== 'REJECTED')
+    return finish(ctx, refused('PAYMENT_STATUS_INVALID', 'A fixture result is settled or rejected'), '');
+  return finish(
+    ctx,
+    () => recordFixturePaymentResult(ctx.tenant, ctx.applicationId, status, ctx.actor),
+    'PAYMENT_RESULT_RECORDED',
+  );
 }

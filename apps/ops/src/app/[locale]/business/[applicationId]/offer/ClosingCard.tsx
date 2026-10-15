@@ -12,6 +12,8 @@ import { maskIban } from '@sanad/core/kernel/iban.ts';
 
 import {
   confirmPayeeAction,
+  planTranchesAction,
+  recordFixturePaymentResultAction,
   recordPayeeAction,
   satisfyConditionAction,
   verifyConditionAction,
@@ -33,11 +35,14 @@ export function ClosingCard({
   view,
   staff,
   f,
+  fixtureResults,
 }: {
   readonly segment: string;
   readonly view: View;
   readonly staff: StaffPrincipal;
   readonly f: Formatters;
+  /** On the synthetic site, where no bank is connected, finance may record a bank result marked Fixture. */
+  readonly fixtureResults: boolean;
 }): ReactElement {
   const { t } = f;
   const a = view.application;
@@ -256,6 +261,111 @@ export function ClosingCard({
           </details>
         </Gate>
       ) : null}
+      {/* -- Drawdown -------------------------------------------------------------------------- */}
+      <h3 className={`${H3} mt-5`}>{t('Drawdown', 'السحب')}</h3>
+      <DrawdownSection view={view} staff={staff} f={f} ctx={ctx} fixtureResults={fixtureResults} />
     </SectionCard>
+  );
+}
+
+const TRANCHE_STATUS: Readonly<Record<string, { readonly en: string; readonly ar: string; readonly tone: 'good' | 'warn' | 'bad' | 'neutral' }>> = {
+  PLANNED: { en: 'Planned', ar: 'مخطط', tone: 'neutral' },
+  RELEASED: { en: 'Sent to the bank', ar: 'أُرسل إلى البنك', tone: 'warn' },
+  SETTLED: { en: 'Settled', ar: 'تمت التسوية', tone: 'good' },
+  FAILED: { en: 'Payment failed', ar: 'فشل الدفع', tone: 'bad' },
+};
+
+function DrawdownSection({
+  view,
+  staff,
+  f,
+  ctx,
+  fixtureResults,
+}: {
+  readonly view: View;
+  readonly staff: StaffPrincipal;
+  readonly f: Formatters;
+  readonly ctx: ReactElement;
+  readonly fixtureResults: boolean;
+}): ReactElement {
+  const { t } = f;
+  const a = view.application;
+  const tranches = view.closing.tranches;
+  const released = (tranches ?? []).some((x) => x.releases > 0);
+  const awaiting = [...(tranches ?? [])].reverse().find((x) => x.status === 'RELEASED');
+  return (
+    <>
+      {tranches === undefined ? (
+        <p className="mb-3 text-[13px] text-ink-quiet">
+          {t('One tranche of the whole facility, unless a plan is recorded.', 'دفعة واحدة بكامل التمويل ما لم تُسجَّل خطة.')}
+        </p>
+      ) : (
+        <ul className="mb-3 flex list-none flex-col divide-y divide-line rounded-tile border border-line p-0" data-tranches>
+          {tranches.map((x) => {
+            const st = TRANCHE_STATUS[x.status] ?? { en: x.status, ar: x.status, tone: 'neutral' as const };
+            return (
+              <li key={x.trancheId} className="flex flex-wrap items-center gap-3 px-4 py-3 text-[13px]">
+                <Id>{x.trancheId}</Id>
+                <bdi className="tabular-nums font-medium text-heading">
+                  {f.money(x.amount.minorUnits)} <span className="text-[12px] font-normal text-ink-quiet">{f.cur}</span>
+                </bdi>
+                <span className="text-ink-quiet">{x.plannedDate === undefined ? '' : f.isoDate(x.plannedDate)}</span>
+                <Chip tone={st.tone}>{t(st.en, st.ar)}</Chip>
+                {x.failureCode === undefined || x.status !== 'FAILED' ? null : (
+                  <span className="text-[12px] text-blocked">
+                    {t('Bank reason', 'سبب البنك')} <Id>{x.failureCode}</Id> —{' '}
+                    {t('correct the payee account, then release it again', 'صحّح حساب المستفيد ثم أعد الصرف')}
+                  </span>
+                )}
+                {x.instructionRef === undefined ? null : <Id className="text-[11px] text-ink-quiet">{x.instructionRef}</Id>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {fixtureResults && awaiting !== undefined ? (
+        <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic}>
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-tile border border-attention/40 bg-attention-wash px-4 py-3" data-fixture-result>
+            <span className="text-[13px] text-ink">
+              {t(
+                `No bank is connected here. Record ${awaiting.trancheId}’s result as a Fixture:`,
+                `لا يوجد بنك متصل هنا. سجّل نتيجة ${awaiting.trancheId} كنتيجة تجريبية:`,
+              )}
+            </span>
+            {(['SETTLED', 'REJECTED'] as const).map((st) => (
+              <form key={st} action={recordFixturePaymentResultAction}>
+                {ctx}
+                <input type="hidden" name="status" value={st} />
+                <button type="submit" className={BTN_SMALL}>
+                  {st === 'SETTLED' ? t('Settled', 'تمت التسوية') : t('Rejected', 'مرفوض')}
+                </button>
+              </form>
+            ))}
+          </div>
+        </Gate>
+      ) : null}
+      {!released && OPEN.has(a.status) ? (
+        <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+          <details className="rounded-tile border border-line p-4" data-plan-tranches>
+            <summary className="cursor-pointer select-none text-[14px] font-semibold text-heading">
+              {t('Plan the drawdown in tranches', 'تقسيم السحب إلى دفعات')}
+            </summary>
+            <form action={planTranchesAction} className="mt-3 grid gap-3">
+              {ctx}
+              <label className="grid gap-1 text-[13px]">
+                {t(
+                  `One tranche per line: amount (${f.cur}), and optionally its date (yyyy-mm-dd). They must add up to the facility.`,
+                  `دفعة في كل سطر: المبلغ (${f.cur})، واختيارياً تاريخها (yyyy-mm-dd). يجب أن يساوي مجموعها مبلغ التمويل.`,
+                )}
+                <textarea name="plan" required rows={4} dir="ltr" className={INPUT} placeholder={'500000, 2026-11-01\n300000, 2027-01-15'} />
+              </label>
+              <button type="submit" className={`${BTN_SMALL} justify-self-start`}>
+                {t('Record plan', 'تسجيل الخطة')}
+              </button>
+            </form>
+          </details>
+        </Gate>
+      ) : null}
+    </>
   );
 }

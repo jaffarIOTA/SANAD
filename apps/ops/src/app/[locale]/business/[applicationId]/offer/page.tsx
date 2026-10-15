@@ -36,6 +36,8 @@ import {
   syncBusiness,
 } from '../../../../../server/business.ts';
 import { ClosingCard } from './ClosingCard.tsx';
+import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
+import { persistencePool } from '../../../../../server/persistence.ts';
 import { formatPercent, scheduleExcerpt } from '../../../../../server/business-dashboard.ts';
 import { staffJurisdiction } from '../../../../../server/jurisdiction.ts';
 import { pageStaff } from '../../../../../server/session.ts';
@@ -88,6 +90,8 @@ export default async function OfferPage({
   await syncBusiness(j.tenant);
   const view = await getApplication(j.tenant, applicationId);
   if (view === undefined) notFound();
+  // A bank result may be recorded on screen (marked Fixture) only where a synthetic demonstration is permitted.
+  const fixtureResults = await syntheticDemonstrationPermitted(persistencePool(process.env), process.env);
   const f = formatters(locale === 'ar-SA', view.currency);
   const { t } = f;
   const a = view.application;
@@ -341,7 +345,7 @@ export default async function OfferPage({
       </SectionCard>
 
       {/* -- Closing: signature, conditions precedent, payee ------------------------------------------ */}
-      <ClosingCard segment={segment} view={view} staff={staff} f={f} />
+      <ClosingCard segment={segment} view={view} staff={staff} f={f} fixtureResults={fixtureResults} />
 
       {/* -- Signing and disbursement --------------------------------------------------------------- */}
       <div className="grid gap-5 lg:grid-cols-2">
@@ -926,9 +930,32 @@ function NextStep({
         </Gate>
       );
     }
-    case 'DISBURSED':
+    case 'DISBURSED': {
+      // A later tranche, or a failed one once the payee is corrected, is released here; the service checks the rest.
+      const nextTranche = (view.closing.tranches ?? []).find((x) => x.status === 'PLANNED' || x.status === 'FAILED');
       return (
         <div className="flex flex-col gap-3">
+          {nextTranche === undefined ? null : (
+            <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic} ownWork={a.submittedBy === staff.principalId}>
+              <form action={recordDisbursedAction} className="flex flex-wrap items-center justify-between gap-3" data-release-tranche>
+                {ctx}
+                <p className="text-[13px] text-ink-quiet">
+                  {nextTranche.status === 'FAILED'
+                    ? t(
+                        `${nextTranche.trancheId}’s payment failed, which withdrew the payee confirmation. Once the account is corrected if needed and confirmed again, release it once more.`,
+                        `فشل دفع ${nextTranche.trancheId}، فسُحب تأكيد حساب المستفيد. بعد تصحيح الحساب إن لزم وتأكيده من جديد، أعد صرفه.`,
+                      )
+                    : t(
+                        `Next: ${nextTranche.trancheId}${nextTranche.plannedDate === undefined ? '' : `, from ${f.isoDate(nextTranche.plannedDate)}`}.`,
+                        `التالي: ${nextTranche.trancheId}${nextTranche.plannedDate === undefined ? '' : `، اعتباراً من ${f.isoDate(nextTranche.plannedDate)}`}.`,
+                      )}
+                </p>
+                <button type="submit" className={BTN_PRIMARY}>
+                  {t(`Release ${nextTranche.trancheId} as finance`, `صرف ${nextTranche.trancheId} بصفة المالية`)}
+                </button>
+              </form>
+            </Gate>
+          )}
           <p className="text-[13px] text-ink">
             {t(
               `Disbursed${a.disbursement === undefined ? '' : ` on ${f.epochDate(a.disbursement.atEpochSeconds)}`} — handed to the loan system (stage 8).`,
@@ -976,6 +1003,7 @@ function NextStep({
           </Gate>
         </div>
       );
+    }
     default:
       return (
         <DisabledAction

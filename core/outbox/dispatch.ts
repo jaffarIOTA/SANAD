@@ -73,6 +73,22 @@ function fromRail<T>(
       };
 }
 
+/**
+ * A payment the hub answered is delivered only if the hub took it. REJECTED
+ * (and, for a collection, RETURNED) is a payment that did not happen: a dead
+ * letter for a person, never "delivered" (SR-050). ACCEPTED and SETTLED are
+ * delivered; the settlement itself arrives as the bank's status report.
+ */
+function fromPayment<T extends { readonly instructionRef: string; readonly status: string }>(
+  outcome: RailOutcome<T>,
+  attempt: number,
+  policy: RetryPolicy,
+): DispatchOutcome {
+  if (outcome.kind === 'ANSWERED' && (outcome.value.status === 'REJECTED' || outcome.value.status === 'RETURNED'))
+    return { kind: 'DEAD', reason: `payment ${outcome.value.status.toLowerCase()}: ${outcome.value.instructionRef}` };
+  return fromRail(outcome, (v) => v.instructionRef, attempt, policy);
+}
+
 /** `attempt` is the number of this attempt, starting at 1. */
 export async function dispatchOnce(
   event: OutboxEvent,
@@ -103,7 +119,7 @@ export async function dispatchOnce(
         idempotencyKey: event.idempotencyKey,
         correlationId: event.correlationId,
       });
-      return r.ok ? fromRail(r.value, (v) => v.instructionRef, attempt, policy) : dead(r.error.reason);
+      return r.ok ? fromPayment(r.value, attempt, policy) : dead(r.error.reason);
     }
     case 'PAYMENT_COLLECT': {
       const amount = asMoney(event);
@@ -117,7 +133,7 @@ export async function dispatchOnce(
         idempotencyKey: event.idempotencyKey,
         correlationId: event.correlationId,
       });
-      return r.ok ? fromRail(r.value, (v) => v.instructionRef, attempt, policy) : dead(r.error.reason);
+      return r.ok ? fromPayment(r.value, attempt, policy) : dead(r.error.reason);
     }
     case 'BUREAU_REPORT': {
       const amount = asMoney(event);
