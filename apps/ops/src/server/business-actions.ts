@@ -43,6 +43,10 @@ import { uploadBusinessDocument } from './business-storage.ts';
 import {
   approveStraightThrough,
   confirmBankStatementFacts,
+  confirmSecurityItem,
+  recordCollateral,
+  recordGuarantee,
+  withdrawSecurityItem,
   decideInCommittee,
   recordCreditNotes,
   generateOffer,
@@ -454,5 +458,97 @@ export async function withdrawApplicationAction(form: FormData): Promise<void> {
     ctx,
     () => withdrawApplication(ctx.tenant, ctx.applicationId, field(form, 'reason'), ctx.actor),
     'WITHDRAWN',
+  );
+}
+
+// -- The security register (UAE M3) -------------------------------------------------------
+
+/** A civil date (YYYY-MM-DD) as epoch seconds at 00:00 UTC; undefined if it is not a real date. */
+function civilDateSeconds(raw: string): bigint | undefined {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (m === null) return undefined;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const ms = Date.UTC(y, mo - 1, d);
+  const back = new Date(ms);
+  if (back.getUTCFullYear() !== y || back.getUTCMonth() !== mo - 1 || back.getUTCDate() !== d) return undefined;
+  return BigInt(ms / 1000);
+}
+
+/** The officer records a collateral item: kind, description, market value, valuation date and valuer, charge. */
+export async function recordCollateralAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  const value = minorUnits(field(form, 'marketValue'));
+  if (value === undefined) return finish(ctx, refused('AMOUNT_MALFORMED', 'The market value is an amount'), '');
+  const valuedAt = civilDateSeconds(field(form, 'valuedOn'));
+  if (valuedAt === undefined) return finish(ctx, refused('DATE_MALFORMED', 'The valuation date is a date'), '');
+  const evidenceRef = field(form, 'evidenceRef');
+  const chargeRef = field(form, 'chargeRef');
+  return finish(
+    ctx,
+    () =>
+      recordCollateral(
+        ctx.tenant,
+        ctx.applicationId,
+        {
+          kind: field(form, 'kind'),
+          description: field(form, 'description'),
+          marketValueMinorUnits: value,
+          valuedAtEpochSeconds: valuedAt,
+          valuerRef: field(form, 'valuerRef'),
+          ...(evidenceRef === '' ? {} : { evidenceRef }),
+          charge: field(form, 'charge'),
+          ...(chargeRef === '' ? {} : { chargeRef }),
+        },
+        ctx.actor,
+      ),
+    'COLLATERAL_RECORDED',
+  );
+}
+
+/** The officer records a guarantee: an owner's personal guarantee, or a company's. Limited when a limit is given. */
+export async function recordGuaranteeAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  const kind = field(form, 'guarantorKind');
+  const rawLimit = field(form, 'limit');
+  const limit = rawLimit === '' ? undefined : minorUnits(rawLimit);
+  if (rawLimit !== '' && limit === undefined)
+    return finish(ctx, refused('AMOUNT_MALFORMED', 'The guarantee limit is an amount'), '');
+  const deedRef = field(form, 'deedRef');
+  return finish(
+    ctx,
+    () =>
+      recordGuarantee(
+        ctx.tenant,
+        ctx.applicationId,
+        {
+          guarantorKind: kind,
+          guarantorRef: field(form, kind === 'PERSONAL' ? 'ownerRef' : 'companyRef'),
+          guarantorName: field(form, 'companyName'),
+          ...(limit === undefined ? {} : { limitMinorUnits: limit }),
+          ...(deedRef === '' ? {} : { deedRef }),
+        },
+        ctx.actor,
+      ),
+    'GUARANTEE_RECORDED',
+  );
+}
+
+/** A checker — not whoever recorded it — confirms a collateral item or guarantee. */
+export async function confirmSecurityAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_VERIFY');
+  return finish(
+    ctx,
+    () => confirmSecurityItem(ctx.tenant, ctx.applicationId, field(form, 'itemId'), ctx.actor),
+    'SECURITY_CONFIRMED',
+  );
+}
+
+/** The officer withdraws an item before submission; it stays on record, counted nowhere. */
+export async function withdrawSecurityAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(
+    ctx,
+    () => withdrawSecurityItem(ctx.tenant, ctx.applicationId, field(form, 'itemId'), ctx.actor),
+    'SECURITY_WITHDRAWN',
   );
 }

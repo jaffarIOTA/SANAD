@@ -16,6 +16,8 @@
 import type { Pool } from 'pg';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { meetSecurityRequirements } from '../support/business-security.ts';
+
 import type { FinancialMetric } from '@sanad/core/applicant/financials.ts';
 import { money } from '@sanad/core/kernel/money.ts';
 import { type Result, expectOk } from '@sanad/core/kernel/result.ts';
@@ -477,6 +479,10 @@ async function driveToCommittee(): Promise<void> {
     expectOk(await validateDocument(TENANT, ID, documentRef, 'VALID', checker));
   }
   expectOk(await recordAssessmentInputs(TENANT, ID, INPUTS, officer));
+  // UAE M3: everything else is ready, so the only refusal left is the security the variant requires.
+  const early = await submitForAssessment(TENANT, ID, officer);
+  expect(early.ok ? 'submitted' : early.error.reason).toBe('SECURITY_INCOMPLETE');
+  await meetSecurityRequirements(TENANT, ID, officer, checker, INPUTS.collateralValueMinorUnits, BigInt(Math.floor(Date.now() / 1000)) - 86_400n);
   expectOk(await submitForAssessment(TENANT, ID, officer));
   const assessed = expectOk(await runAssessment(TENANT, ID, checker));
   expect(assessed.application.status).toBe('IN_COMMITTEE');

@@ -49,6 +49,7 @@ import {
   getApplication,
   intakeConsentFor,
   productVariants,
+  securityStatus,
   syncBusiness,
 } from '../../../../server/business.ts';
 import { type DocumentGroup, documentGroup, formatFact, formatPercent } from '../../../../server/business-dashboard.ts';
@@ -57,6 +58,7 @@ import { pageStaff } from '../../../../server/session.ts';
 import type { StaffPrincipal } from '../../../../server/staff.ts';
 import { Gate } from '../../Gate.tsx';
 import { SourceBadge } from '../intake/IntakeUi.tsx';
+import { SecurityCard } from './SecurityCard.tsx';
 import {
   ApplicationShell,
   BTN_PRIMARY,
@@ -189,10 +191,11 @@ export default async function LoanApplicationPage({
   const f = formatters(locale === 'ar-SA', view.currency);
   const { t } = f;
 
-  const [readiness, checklist, variants] = await Promise.all([
+  const [readiness, checklist, variants, security] = await Promise.all([
     figureReadiness(j.tenant, applicationId),
     checklistStatus(j.tenant, applicationId),
     productVariants(j.tenant),
+    securityStatus(j.tenant, applicationId),
   ]);
   const policyResult = loadSmeAssessmentPolicy(j.tenant);
   const policy = policyResult.ok ? policyResult.value : undefined;
@@ -209,8 +212,16 @@ export default async function LoanApplicationPage({
     : [];
   // The inputs lock at submission, so the screen does not offer Submit before they are recorded (the scoring cannot run without them).
   const inputsMissing = view.assessmentInputs === undefined;
+  // Every security the variant requires, recorded and confirmed by a second person (the service refuses otherwise).
+  const securityOutstanding = security.ok ? security.value.position.requirements.filter((r) => !r.met) : [];
+  const securityReady = security.ok && security.value.position.complete;
   const ready =
-    readiness.ok && readiness.value.spreadComplete && checklist.ok && checklist.value.complete && !inputsMissing;
+    readiness.ok &&
+    readiness.value.spreadComplete &&
+    checklist.ok &&
+    checklist.value.complete &&
+    !inputsMissing &&
+    securityReady;
 
   return (
     <ApplicationShell
@@ -792,6 +803,9 @@ export default async function LoanApplicationPage({
         )}
       </SectionCard>
 
+      {/* -- Security -------------------------------------------------------------------------------- */}
+      <SecurityCard segment={segment} view={view} status={security} editable={open} staff={staff} f={f} />
+
       {/* -- Submit ---------------------------------------------------------------------------------- */}
       <section className="flex flex-col gap-4 rounded-card border border-line bg-surface p-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
@@ -858,6 +872,12 @@ export default async function LoanApplicationPage({
                   ? t(
                       'Record the bureau result and the assessment inputs on the Credit assessment screen; they lock at submission.',
                       'سجّل نتيجة المكتب الائتماني ومدخلات التقييم في شاشة التقييم الائتماني؛ فهي تُقفل عند الإحالة.',
+                    )
+                  : '',
+                !securityReady
+                  ? t(
+                      `Security still to be recorded and confirmed: ${securityOutstanding.map((r) => (security.ok ? security.value.labels[r.code]?.en : undefined) ?? r.code).join(', ')}.`,
+                      `ضمانات لم تُسجَّل أو تُؤكَّد بعد: ${securityOutstanding.map((r) => (security.ok ? security.value.labels[r.code]?.ar : undefined) ?? r.code).join('، ')}.`,
                     )
                   : '',
               ]

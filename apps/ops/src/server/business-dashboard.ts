@@ -439,6 +439,16 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
     en: 'Document recorded by reference. It counts once the checker validates it.',
     ar: 'سُجّل المستند بمرجعه، ويُحتسب بعد تحقق المراجِع منه.',
   },
+  COLLATERAL_RECORDED: {
+    en: 'Collateral recorded. It counts once a second person confirms it.',
+    ar: 'سُجّل الضمان، ويُحتسب بعد تأكيده من شخص آخر.',
+  },
+  GUARANTEE_RECORDED: {
+    en: 'Guarantee recorded. It counts once a second person confirms it.',
+    ar: 'سُجّلت الكفالة، وتُحتسب بعد تأكيدها من شخص آخر.',
+  },
+  SECURITY_CONFIRMED: { en: 'Confirmed. It now counts towards the security.', ar: 'تم التأكيد، ويُحتسب الآن ضمن الضمانات.' },
+  SECURITY_WITHDRAWN: { en: 'Withdrawn. It no longer counts.', ar: 'سُحب البند، ولم يعد يُحتسب.' },
   DOCUMENT_UPLOADED: {
     en: 'File uploaded and recorded by its fingerprint. It counts once the checker validates it.',
     ar: 'رُفع الملف وسُجّل ببصمته، ويُحتسب بعد تحقق المراجِع منه.',
@@ -875,6 +885,79 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
     en: 'Record the business’s tax registration number before checking it.',
     ar: 'سجّل رقم التسجيل الضريبي للمنشأة قبل التحقق منه.',
   },
+  // The security register (UAE M3). A refusal here recorded nothing.
+  SECURITY_LOCKED: {
+    en: 'The security register changes only before the application is submitted.',
+    ar: 'لا يُعدَّل سجل الضمانات إلا قبل إحالة الطلب.',
+  },
+  SECURITY_INCOMPLETE: {
+    en: 'Every security the product requires must be recorded and confirmed by a second person before submitting. The security section says which are outstanding.',
+    ar: 'يجب تسجيل كل ضمان يتطلبه المنتج وتأكيده من شخص آخر قبل الإحالة. يوضح قسم الضمانات ما لم يكتمل.',
+  },
+  SECURITY_EVIDENCE_NOT_ON_FILE: {
+    en: 'Attach the valuation report or deed to the application first, then name it here.',
+    ar: 'أرفق تقرير التقييم أو سند الضمان بالطلب أولاً، ثم اختره هنا.',
+  },
+  SECURITY_ITEM_NOT_FOUND: { en: 'That item is not in the security register.', ar: 'هذا البند غير موجود في سجل الضمانات.' },
+  SECURITY_ITEM_WITHDRAWN: {
+    en: 'That item has been withdrawn. Record it again if it still applies.',
+    ar: 'سُحب هذا البند. سجّله مرة أخرى إن كان لا يزال قائماً.',
+  },
+  SECURITY_ALREADY_CONFIRMED: { en: 'That item is already confirmed.', ar: 'هذا البند مؤكَّد مسبقاً.' },
+  VALUATION_STALE: {
+    en: 'The valuation is older than the policy allows. Record the item again with a current valuation.',
+    ar: 'التقييم أقدم مما تسمح به السياسة. سجّل البند مجدداً بتقييم حديث.',
+  },
+  VALUATION_IN_FUTURE: { en: 'A valuation is dated today or earlier.', ar: 'يكون تاريخ التقييم اليوم أو قبله.' },
+  COLLATERAL_KIND_INVALID: { en: 'Choose a kind of collateral from the list.', ar: 'اختر نوع الضمان من القائمة.' },
+  COLLATERAL_DESCRIPTION_INVALID: {
+    en: 'Describe the asset in 3 to 120 characters.',
+    ar: 'صِف الأصل في ثلاثة أحرف إلى مئة وعشرين حرفاً.',
+  },
+  COLLATERAL_VALUE_INVALID: { en: 'The market value is a positive amount.', ar: 'القيمة السوقية مبلغ موجب.' },
+  COLLATERAL_REF_INVALID: {
+    en: 'The valuer and the evidence are recorded by reference: letters, digits and : . _ / - only.',
+    ar: 'يُسجَّل المقيِّم والمستند بمرجعهما: حروف وأرقام والرموز : . _ / - فقط.',
+  },
+  CHARGE_STATUS_INVALID: {
+    en: 'A charge is registered, pending or not applicable.',
+    ar: 'يكون الرهن مسجَّلاً أو قيد التسجيل أو غير منطبق.',
+  },
+  CHARGE_REF_REQUIRED: {
+    en: 'A registered charge carries the registry’s reference.',
+    ar: 'يحمل الرهن المسجَّل مرجع جهة التسجيل.',
+  },
+  GUARANTOR_KIND_INVALID: { en: 'A guarantor is a person or a company.', ar: 'الكفيل شخص أو شركة.' },
+  GUARANTOR_REF_INVALID: {
+    en: 'The guarantor and the deed are recorded by reference.',
+    ar: 'يُسجَّل الكفيل وسند الكفالة بمرجعهما.',
+  },
+  GUARANTOR_NOT_AN_OWNER: {
+    en: 'A personal guarantor is one of the applicant’s owners.',
+    ar: 'الكفيل الشخصي أحد ملّاك المنشأة المتقدمة.',
+  },
+  GUARANTOR_NAME_INVALID: {
+    en: 'Name the guarantor company in 2 to 120 characters.',
+    ar: 'اذكر اسم الشركة الكفيلة في حرفين إلى مئة وعشرين حرفاً.',
+  },
+  GUARANTEE_LIMIT_INVALID: { en: 'A limited guarantee has a positive limit.', ar: 'للكفالة المحدودة سقف موجب.' },
+  GUARANTEE_DUPLICATE: {
+    en: 'This guarantor already has a guarantee on the application. Withdraw it to replace it.',
+    ar: 'لهذا الكفيل كفالة على الطلب مسبقاً. اسحبها لاستبدالها.',
+  },
+  IDENTITY_NUMBER_IN_FREE_TEXT: {
+    en: 'No identity number belongs in this record. Use the party’s reference instead.',
+    ar: 'لا يُدرَج رقم هوية في هذا السجل. استخدم مرجع الطرف بدلاً منه.',
+  },
+  SECURITY_POLICY_INVALID: {
+    en: 'The institution’s security policy is not readable, so nothing was recorded.',
+    ar: 'تعذّرت قراءة سياسة الضمانات لدى المؤسسة، فلم يُسجَّل شيء.',
+  },
+  SECURITY_POLICY_NOT_FOUND: {
+    en: 'No security policy is configured for this institution, so the register cannot be checked.',
+    ar: 'لا توجد سياسة ضمانات مهيأة لهذه المؤسسة، فلا يمكن التحقق من السجل.',
+  },
+  DATE_MALFORMED: { en: 'Enter the date as year-month-day.', ar: 'أدخل التاريخ بصيغة السنة-الشهر-اليوم.' },
   // Document upload. A refusal here stored and presented nothing.
   UPLOAD_EMPTY: { en: 'Choose a file to upload.', ar: 'اختر ملفاً لرفعه.' },
   UPLOAD_TOO_LARGE: {

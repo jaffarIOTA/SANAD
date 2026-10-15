@@ -1,7 +1,7 @@
 # Object storage
 
 **Port:** `core/ports/object-storage.ts`. **Capability:** `OBJECT_STORAGE`. **Vault provider:** `S3_STORAGE`.
-**Status:** `BLOCKED` until the S3 adapter has made a verified call (STORAGE-01 below).
+**Status:** `LIVE` against Supabase Storage (development, synthetic data) since 2026-10-15 — STORAGE-01 below.
 
 | Implementation | Where | Use |
 |---|---|---|
@@ -43,6 +43,28 @@ Read from the vault on every call, never cached, logged or returned.
 - whether it requires `x-amz-content-sha256` to be the payload hash (as sent) or accepts `UNSIGNED-PAYLOAD`;
 - that the stored `content-type` is returned on GET;
 - what a missing bucket or a revoked key returns (expected 404 / 403 → `REFUSED`).
+
+## STORAGE-01 — verified 2026-10-15
+
+A live call through `S3ObjectStorage`, with every credential read from the vault
+(provider `S3_STORAGE`, environment `sandbox`), against the development project's
+Supabase Storage S3 endpoint, region `ap-south-1`:
+
+| Call | Result |
+|---|---|
+| PUT of an 82-byte synthetic PDF, key `<tenant>/verification/STORAGE-01/<sha256>` | 200 → `ANSWERED` |
+| GET of the same key | 200, 82 bytes, `content-type: application/pdf` returned, hash matches → `ANSWERED` |
+| GET of a key that does not exist | 404 → `REFUSED HTTP_404` |
+
+What this settles:
+
+- Supabase Storage accepts the path-style, header-signed SigV4 request as built (service `s3`, region `ap-south-1`).
+- It accepts `x-amz-content-sha256` as the payload hash; `UNSIGNED-PAYLOAD` was not needed.
+- The stored `content-type` comes back on GET.
+- A missing object is a 404, so it reads as a refusal, never as an outage.
+
+Not yet observed: a revoked key's answer (expected 403 → `REFUSED`). The verification
+object was left in the bucket; it is synthetic and content-addressed.
 
 ## Open items
 

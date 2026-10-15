@@ -406,3 +406,18 @@ export function loadOfferDatePolicy(tenant: TenantCode): Result<OfferDatePolicy>
     });
   return parseOfferDatePolicy(raw);
 }
+
+import fundAeSecurityPolicy from './tenants/sme-fund-ae/credit-policy/security.json' with { type: 'json' };
+import { type SecurityPolicy, parseSecurityPolicy } from '../core/origination/security-register.ts';
+
+const SECURITY_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = { 'sme-fund-ae': fundAeSecurityPolicy };
+
+/** The collateral haircuts, valuation age and the requirement behind each catalogue collateral code, for a tenant that configures them. */
+export function loadSecurityPolicy(tenant: TenantCode): Result<SecurityPolicy> {
+  const raw = SECURITY_POLICIES[tenant];
+  if (raw === undefined)
+    return reject('OP-DETERMINACY', 'SECURITY_POLICY_NOT_FOUND', 'No security policy is configured for this tenant', {
+      tenant,
+    });
+  return parseSecurityPolicy(raw);
+}
