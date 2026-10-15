@@ -19,20 +19,26 @@ import {
   ingestReadFigures,
   presentDocument,
   recordAssessmentInputs,
+  queuedBusinessNotifications,
+  recordDisbursed,
   resetBusinessStore,
   runAssessment,
+  sendOffer,
   submitForAssessment,
   validateDocument,
   verifyFigure,
   proposeFigures,
 } from '../../apps/ops/src/server/business.ts';
 import { publishedBenchmark } from '../../apps/ops/src/server/rate-rails.ts';
+import { confirmSigning, startSigning } from '../../apps/ops/src/server/business-signing.ts';
+import { bookInLoanSystem } from '../../apps/ops/src/server/business-booking.ts';
+import { EXAMPLE_SA_IBAN, preparePayee } from '../support/business-closing.ts';
 import { justifyDeviations } from '../support/business-decision-pack.ts';
 import { meetSecurityRequirements } from '../support/business-security.ts';
 
 const CASES = [
-  { tenant: 'fintech-b', id: 'FB-00009001', marginBp: 550n, officer: 'stf-fb-officer-01', checker: 'stf-fb-checker-01', committee: 'stf-fb-committee-01' },
-  { tenant: 'bank-a', id: 'BA-00009001', marginBp: 400n, officer: 'stf-maker-01', checker: 'stf-checker-01', committee: 'stf-committee-01' },
+  { tenant: 'fintech-b', id: 'FB-00009001', marginBp: 550n, officer: 'stf-fb-officer-01', checker: 'stf-fb-checker-01', committee: 'stf-fb-committee-01', finance: 'stf-fb-finance-01' },
+  { tenant: 'bank-a', id: 'BA-00009001', marginBp: 400n, officer: 'stf-maker-01', checker: 'stf-checker-01', committee: 'stf-committee-01', finance: 'stf-finance-01' },
 ] as const;
 
 const FIGURES: readonly [FinancialMetric, string, bigint][] = [
@@ -46,7 +52,8 @@ const FIGURES: readonly [FinancialMetric, string, bigint][] = [
 ];
 
 const DAY_MS = 86_400_000;
-const isoAfter = (days: number): string => new Date(Date.now() + days * DAY_MS).toISOString().slice(0, 10);
+/** Calendar dates in Riyadh (UTC+3), as the service dates a Saudi offer. Test arithmetic only. */
+const isoAfter = (days: number): string => new Date(Date.now() + 3 * 3_600_000 + days * DAY_MS).toISOString().slice(0, 10);
 
 beforeEach(() => {
   vi.stubEnv('SANAD_DATABASE_URL', '');
@@ -54,7 +61,7 @@ beforeEach(() => {
 });
 
 describe('a Saudi SME application', () => {
-  it.each(CASES)('$tenant: hands over in SAR, assesses on the tenant’s policy, and offers at SAIBOR + the tenant’s margin', async ({ tenant: TENANT, id: ID, marginBp, officer, checker, committee }) => {
+  it.each(CASES)('$tenant: hands over in SAR, assesses on the tenant’s policy, and offers at SAIBOR + the tenant’s margin', async ({ tenant: TENANT, id: ID, marginBp, officer, checker, committee, finance }) => {
     expectOk(
       await handOver(
         TENANT,
@@ -136,7 +143,7 @@ describe('a Saudi SME application', () => {
       expectOk(await decideInCommittee(TENANT, ID, { decidedBy: committee, approved: true, reason: 'Within risk-aligned terms' }));
     }
 
-    const offered = expectOk(await generateOffer(TENANT, ID, officer, { disbursementDate: isoAfter(2), firstDueDate: isoAfter(32) }));
+    const offered = expectOk(await generateOffer(TENANT, ID, officer, { disbursementDate: isoAfter(0), firstDueDate: isoAfter(30) }));
     const terms = offered.latestOffer?.terms;
     const saibor = await publishedBenchmark(TENANT, 'SAIBOR-3M', developmentAttestation());
     expect(saibor).toBeDefined();
@@ -144,5 +151,22 @@ describe('a Saudi SME application', () => {
     expect(terms?.rateBp).toBe((saibor?.rate.bp ?? 0n) + marginBp);
     expect(terms?.rateSourceRef).toBe(saibor?.referenceId);
     expect(terms?.aprBp).toBeGreaterThan(terms?.rateBp ?? 0n);
+
+    // K3 — closing in Saudi Arabia: signed through Nafath on the sent letter, paid to a Saudi IBAN through the
+    // payments hub with the SIMAH facility-opened report, then booked in the loan system.
+    expectOk(await sendOffer(TENANT, ID, officer));
+    const opened = expectOk(await startSigning(TENANT, ID, officer));
+    expect(opened.closing.signing?.source).toBe('FIXTURE');
+    const signed = expectOk(await confirmSigning(TENANT, ID, officer));
+    expect(signed.application.status).toBe('SIGNED');
+    expect(signed.application.signature?.signatureRef).toMatch(/^nafath:/);
+    await preparePayee(TENANT, ID, officer, checker, EXAMPLE_SA_IBAN);
+    const paid = expectOk(await recordDisbursed(TENANT, ID, finance));
+    expect(paid.application.status).toBe('DISBURSED');
+    const payment = queuedBusinessNotifications().find((e) => e.subjectRef === ID && e.kind === 'PAYMENT_DISBURSE');
+    expect(payment?.payload).toMatchObject({ rail: 'PAYMENTS_HUB', beneficiaryIban: EXAMPLE_SA_IBAN, currency: 'SAR' });
+    expect(queuedBusinessNotifications().some((e) => e.subjectRef === ID && e.kind === 'BUREAU_REPORT')).toBe(true);
+    const booked = expectOk(await bookInLoanSystem(TENANT, ID, finance));
+    expect(booked.booking).toMatchObject({ source: 'FIXTURE', productCode: 'SME FINANCE SAR RAG' });
   });
 });

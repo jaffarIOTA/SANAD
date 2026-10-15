@@ -221,7 +221,9 @@ const bad = (reason: string, detail: string, context?: Readonly<Record<string, s
 // A UAE national identity number always begins 784 (the UAE's ISO 3166 numeric code). Any fifteen digits would also
 // match a UAE tax registration number (fifteen digits beginning 100), which is not personal data.
 const AE_IDENTITY_NUMBER = /(?<!\d)784[- ]?\d{4}[- ]?\d{7}[- ]?\d(?!\d)/;
-const SA_IDENTITY_NUMBER = /(?<!\d)[12]\d{9}(?!\d)/;
+// Standing alone, not inside an alphanumeric token: a provider's hexadecimal reference (a UUID, a transaction id) can
+// hold ten digits in a row, and that is not a person's id. Spaces, punctuation and line ends still delimit one.
+const SA_IDENTITY_NUMBER = /(?<![0-9A-Za-z])[12]\d{9}(?![0-9A-Za-z])/;
 const IDENTITY_NUMBERS: readonly RegExp[] = [AE_IDENTITY_NUMBER, SA_IDENTITY_NUMBER];
 
 /**

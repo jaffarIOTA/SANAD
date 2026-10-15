@@ -93,6 +93,7 @@ export default async function OfferPage({
   const view = await getApplication(j.tenant, applicationId);
   if (view === undefined) notFound();
   // A bank result may be recorded on screen (marked Fixture) only where a synthetic demonstration is permitted.
+  const saudi = j.code === 'SA';
   const fixtureResults = await syntheticDemonstrationPermitted(persistencePool(process.env), process.env);
   const f = formatters(locale === 'ar-SA', view.currency);
   const { t } = f;
@@ -356,14 +357,16 @@ export default async function OfferPage({
           note={
             f.arabic ? (
               <>
-                التوقيع عبر الهوية الرقمية (
+                التوقيع عبر {saudi ? 'نفاذ' : 'الهوية الرقمية'} (
                 <bdi dir="ltr" className="whitespace-nowrap">
-                  UAE Pass
+                  {saudi ? 'Nafath' : 'UAE Pass'}
                 </bdi>
                 ) — مرجع تجريبي إلى أن يُتحقق من الربط.
               </>
             ) : (
-              'Signed through UAE Pass — a fixture reference until the UAE Pass rail is verified.'
+              saudi
+                ? 'Signed through Nafath — demonstration answers, labelled Fixture, until the Nafath rail is verified.'
+                : 'Signed through UAE Pass — a fixture reference until the UAE Pass rail is verified.'
             )
           }
         >
@@ -392,13 +395,22 @@ export default async function OfferPage({
         </SectionCard>
         <SectionCard
           title={t('Disbursement', 'الصرف')}
-          note={t(
-            'Partner bank — a fixture reference until the partner-bank rail is verified.',
-            'البنك الشريك — مرجع تجريبي إلى أن يُتحقق من الربط.',
-          )}
+          note={
+            saudi
+              ? t(
+                  'The institution’s payments hub — a fixture reference until the payments-hub rail is verified.',
+                  'منصة المدفوعات لدى المؤسسة — مرجع تجريبي إلى أن يُتحقق من الربط.',
+                )
+              : t(
+                  'Partner bank — a fixture reference until the partner-bank rail is verified.',
+                  'البنك الشريك — مرجع تجريبي إلى أن يُتحقق من الربط.',
+                )
+          }
         >
           <dl className="grid gap-4 sm:grid-cols-2">
-            <Field label={t('Paying bank', 'البنك الدافع')}>{t('Partner bank', 'البنك الشريك')}</Field>
+            <Field label={t('Paying bank', 'البنك الدافع')}>
+              {saudi ? t('Payments hub', 'منصة المدفوعات') : t('Partner bank', 'البنك الشريك')}
+            </Field>
             <Field label={t('Disbursement', 'طريقة الصرف')}>{t('Single disbursement', 'دفعة واحدة')}</Field>
             <Field label={t('Amount', 'المبلغ')}>
               <bdi className="tabular-nums">{f.money(terms.facilityAmount.minorUnits)}</bdi>{' '}
@@ -793,8 +805,8 @@ function NextStep({
               {t('Sent by the officer who is signed in', 'يرسله الموظف الذي سجّل الدخول')} (<Id>{staff.principalId}</Id>
               ).{' '}
               {t(
-                'The applicant receives the letter to sign through UAE Pass. The letter goes by reference; the PDF arrives when the document platform is licensed.',
-                'يستلم العميل الخطاب للتوقيع عبر الهوية الرقمية. يُرسل الخطاب بمرجعه؛ ويصل ملف PDF عند ترخيص منصة المستندات.',
+                'The applicant receives the letter to sign through the national digital identity (UAE Pass, or Nafath in Saudi Arabia). The letter goes by reference; the PDF arrives when the document platform is licensed.',
+                'يستلم العميل الخطاب للتوقيع عبر الهوية الرقمية الوطنية (الهوية الرقمية الإماراتية، أو نفاذ في السعودية). يُرسل الخطاب بمرجعه؛ ويصل ملف PDF عند ترخيص منصة المستندات.',
               )}
             </p>
             <button type="submit" className={BTN_PRIMARY}>
