@@ -445,6 +445,15 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
           'UAE M3 (core/origination/security-register.ts): collateral by kind, market value, valuation date and valuer, charge status with the registry reference; personal guarantees from the applicant’s owners and corporate guarantees, limited or unlimited; evidence named only if on the application. Recorded by the officer, confirmed by a different person; only confirmed, current items count. Lending value after the tenant’s haircut, cover rounded down, loan-to-value rounded up. The variant’s collateral codes map to requirements in config (credit-policy/security.json, ILLUSTRATIVE); submission refused while any is outstanding; scoring’s collateral cover comes from the register where it holds valued collateral. No charge-registry rail yet: references are keyed',
       },
       {
+        id: 'business-decision-pack',
+        titleEn: 'Decision pack (memo, deviations, conditions, covenants)',
+        titleAr: 'حزمة القرار (المذكرة والاستثناءات والشروط والتعهدات)',
+        href: '/business',
+        readiness: live(),
+        reference:
+          'UAE M4 (core/origination/decision-pack.ts): a credit memo assembled from the record; deviations read from the assessment’s route reasons, each justified before a committee may approve, and never approved by the member who justified it; conditions precedent and subsequent in both languages and covenants from the tenant’s templates only (credit-policy/decision-pack.json, ILLUSTRATIVE), capped by the risk band’s maxConditions; locked once a committee member approves, frozen at approval by its SHA-256; stated in the offer letter. Satisfying conditions precedent before drawdown is M5',
+      },
+      {
         id: 'business-offer',
         titleEn: 'Offer letter & sending',
         titleAr: 'خطاب العرض وإرساله',

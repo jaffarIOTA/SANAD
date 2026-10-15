@@ -16,6 +16,8 @@
 import type { Pool } from 'pg';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { justifyDeviations } from '../support/business-decision-pack.ts';
+
 import { meetSecurityRequirements } from '../support/business-security.ts';
 
 import type { FinancialMetric } from '@sanad/core/applicant/financials.ts';
@@ -43,6 +45,8 @@ import {
   type HandoverRequest,
   READ_FIGURE_SOURCES,
   SEED_PRINCIPALS,
+  addCondition,
+  addCovenant,
   checklistStatus,
   committeeApprovalDefaults,
   decideInCommittee,
@@ -485,6 +489,13 @@ async function driveToCommittee(): Promise<void> {
   await meetSecurityRequirements(TENANT, ID, officer, checker, INPUTS.collateralValueMinorUnits, BigInt(Math.floor(Date.now() / 1000)) - 86_400n);
   expectOk(await submitForAssessment(TENANT, ID, officer));
   const assessed = expectOk(await runAssessment(TENANT, ID, checker));
+  // UAE M4: the committee cannot approve over a deviation nobody has justified.
+  const unjustified = await decideInCommittee(TENANT, ID, { decidedBy: committee, approved: true, reason: 'Within risk-aligned terms' });
+  expect(unjustified.ok ? 'approved' : unjustified.error.reason).toBe('DEVIATIONS_UNJUSTIFIED');
+  await justifyDeviations(TENANT, ID, checker);
+  // A condition precedent and a covenant on the pack: the offer letter states both.
+  expectOk(await addCondition(TENANT, ID, { kind: 'PRECEDENT', textEn: 'Board resolution approving the facility', textAr: 'قرار مجلس الإدارة بالموافقة على التمويل' }, checker));
+  expectOk(await addCovenant(TENANT, ID, 'DSCR_MIN', checker));
   expect(assessed.application.status).toBe('IN_COMMITTEE');
   expect(assessed.latestAssessment?.assessment.riskLevel).toBe('LOW');
 }
@@ -567,6 +578,13 @@ describe('the partner’s prototype through the service: 5,000,000 / 72 requeste
       await generateOffer(TENANT, ID, officer, { disbursementDate: '2029-08-04', firstDueDate: '2029-09-10' }),
     );
     const offer = offered.latestOffer;
+    expect(offer?.letter.conditions.map((c) => c.en)).toEqual(
+      expect.arrayContaining([
+        'Before first drawdown: Board resolution approving the facility',
+        expect.stringMatching(/^Covenant: Debt-service cover of at least 1\.40×/),
+      ]),
+    );
+    expect(offered.pack.frozen?.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(offer?.terms.facilityAmount).toEqual(aed(200_000_000n));
     expect(offer?.terms.months).toBe(60);
     expect(offer?.terms.monthlyInstalment.minorUnits).toBe(3_462_918n);

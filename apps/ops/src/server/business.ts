@@ -45,7 +45,7 @@ import {
   loadProductCatalogue,
   loadSmeAssessmentPolicy,
   loadSmeDefinition,
-  loadTenantOnboarding, loadSecurityPolicy } from '@sanad/config/loader.ts';
+  loadTenantOnboarding, loadSecurityPolicy, loadDecisionPackPolicy } from '@sanad/config/loader.ts';
 import {
   type FigureSourceKind,
   type FinancialFigure,
@@ -93,6 +93,19 @@ import {
   validateGuaranteeEntry,
   valuationCurrent,
 } from '@sanad/core/origination/security-register.ts';
+import {
+  type Condition,
+  type ConditionEntry,
+  type Covenant,
+  type Deviation,
+  type Justification,
+  attachedCount,
+  covenantTemplate,
+  deviationsOf,
+  packDigest,
+  validateCondition,
+  validateJustification,
+} from '@sanad/core/origination/decision-pack.ts';
 import { type CurrencyCode, type Money, money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import {
@@ -491,6 +504,8 @@ export interface BusinessApplicationView {
   readonly bankFacts?: BankStatementFacts;
   /** The collateral offered and the guarantees given, withdrawn items included. */
   readonly security: SecurityRegister;
+  /** Conditions and covenants attached, deviation justifications, and the digest frozen at approval. */
+  readonly pack: DecisionPackRecord;
   readonly assessments: readonly AssessmentRun[];
   readonly latestAssessment?: AssessmentRun;
   readonly offers: readonly OfferRun[];
@@ -556,6 +571,18 @@ export interface ReadFigureEntry extends OfficerFigureEntry {
 /** Both kinds, as the internal recorder takes them. */
 type FigureProposalEntry = OfficerFigureEntry & { readonly sourceKind: FigureSourceKind };
 
+export interface FrozenPack {
+  readonly digest: string;
+  readonly atEpochSeconds: bigint;
+}
+
+export interface DecisionPackRecord {
+  readonly conditions: readonly Condition[];
+  readonly covenants: readonly Covenant[];
+  readonly justifications: Readonly<Record<string, Justification>>;
+  readonly frozen?: FrozenPack;
+}
+
 // =============================================================================
 // State
 // =============================================================================
@@ -569,6 +596,7 @@ interface BusinessRecord {
   bureauFetch?: BureauFetch;
   bankFacts?: BankStatementFacts;
   security: { collateral: CollateralItem[]; guarantees: Guarantee[] };
+  pack: { conditions: Condition[]; covenants: Covenant[]; justifications: Record<string, Justification>; frozen?: FrozenPack };
   assessments: AssessmentRun[];
   offers: OfferRun[];
   events: ApplicationEvent[];
@@ -962,6 +990,12 @@ function view(record: BusinessRecord, currency: CurrencyCode): BusinessApplicati
     ...(record.bureauFetch === undefined ? {} : { bureauFetch: record.bureauFetch }),
     ...(record.bankFacts === undefined ? {} : { bankFacts: record.bankFacts }),
     security: { collateral: [...record.security.collateral], guarantees: [...record.security.guarantees] },
+    pack: {
+      conditions: [...record.pack.conditions],
+      covenants: [...record.pack.covenants],
+      justifications: { ...record.pack.justifications },
+      ...(record.pack.frozen === undefined ? {} : { frozen: record.pack.frozen }),
+    },
     assessments: [...record.assessments],
     ...(latestAssessment === undefined ? {} : { latestAssessment }),
     offers: [...record.offers],
@@ -1020,6 +1054,7 @@ function restoreBook(book: TenantBook, persisted: Awaited<ReturnType<typeof load
       figures: [],
       documents: [],
       security: { collateral: [], guarantees: [] },
+      pack: { conditions: [], covenants: [], justifications: {} },
       assessments: [],
       offers: [],
       events: [],
@@ -1144,6 +1179,57 @@ function updateSecurityItem(r: BusinessRecord, itemId: string, mark: SecurityMar
 
 const nextSecurityId = (prefix: 'COL' | 'GUA', taken: number): string => `${prefix}-${String(taken + 1).padStart(3, '0')}`;
 
+// -- the decision pack (UAE M4) -----------------------------------------------
+
+function conditionFromDetail(d: Readonly<Record<string, string>>, e: ApplicationEvent): Condition {
+  const due = d['dueDaysAfterDisbursement'];
+  return {
+    conditionId: d['itemId'] ?? '',
+    kind: d['kind'] === 'SUBSEQUENT' ? 'SUBSEQUENT' : 'PRECEDENT',
+    textEn: d['textEn'] ?? '',
+    textAr: d['textAr'] ?? '',
+    ...(due === undefined ? {} : { dueDaysAfterDisbursement: Number.parseInt(due, 10) }),
+    addedBy: e.actor,
+    addedAtEpochSeconds: e.atEpochSeconds,
+  };
+}
+
+/** A covenant replays from the template as it stood when attached, never from today's policy. */
+function covenantFromDetail(d: Readonly<Record<string, string>>, e: ApplicationEvent): Covenant {
+  const kind = d['kind'] === 'FINANCIAL' || d['kind'] === 'NEGATIVE' ? d['kind'] : 'INFORMATION';
+  const frequency = d['frequency'];
+  return {
+    covenantId: d['itemId'] ?? '',
+    template: {
+      code: d['code'] ?? '',
+      kind,
+      ...(d['metric'] === undefined ? {} : { metric: d['metric'] }),
+      ...(d['minimumPerTenThousand'] === undefined
+        ? {}
+        : { minimumPerTenThousand: Number.parseInt(d['minimumPerTenThousand'], 10) }),
+      ...(frequency === 'QUARTERLY' || frequency === 'SEMI_ANNUAL' || frequency === 'ANNUAL' ? { frequency } : {}),
+      labelEn: d['labelEn'] ?? '',
+      labelAr: d['labelAr'] ?? '',
+    },
+    addedBy: e.actor,
+    addedAtEpochSeconds: e.atEpochSeconds,
+  };
+}
+
+function withdrawPackItemIn(r: BusinessRecord, itemId: string, actor: string): boolean {
+  const c = r.pack.conditions.findIndex((x) => x.conditionId === itemId && x.withdrawnBy === undefined);
+  if (c >= 0) {
+    r.pack.conditions[c] = { ...(r.pack.conditions[c] as Condition), withdrawnBy: actor };
+    return true;
+  }
+  const v = r.pack.covenants.findIndex((x) => x.covenantId === itemId && x.withdrawnBy === undefined);
+  if (v >= 0) {
+    r.pack.covenants[v] = { ...(r.pack.covenants[v] as Covenant), withdrawnBy: actor };
+    return true;
+  }
+  return false;
+}
+
 function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
   const d = e.detail;
   switch (e.eventType) {
@@ -1245,6 +1331,21 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
       return;
     case 'SECURITY_WITHDRAWN':
       updateSecurityItem(r, d['itemId'] ?? '', { withdrawnBy: e.actor });
+      return;
+    case 'CONDITION_ADDED':
+      r.pack.conditions.push(conditionFromDetail(d, e));
+      return;
+    case 'COVENANT_ADDED':
+      r.pack.covenants.push(covenantFromDetail(d, e));
+      return;
+    case 'PACK_ITEM_WITHDRAWN':
+      withdrawPackItemIn(r, d['itemId'] ?? '', e.actor);
+      return;
+    case 'DEVIATION_JUSTIFIED':
+      r.pack.justifications[d['code'] ?? ''] = { text: d['text'] ?? '', by: e.actor, atEpochSeconds: e.atEpochSeconds };
+      return;
+    case 'DECISION_PACK_FROZEN':
+      r.pack.frozen = { digest: d['digest'] ?? '', atEpochSeconds: e.atEpochSeconds };
       return;
     case 'PORTFOLIO_STATUS_RECORDED':
       r.portfolio = {
@@ -1657,6 +1758,7 @@ async function handOverAt(
     figures: [],
     documents: [],
     security: { collateral: [], guarantees: [] },
+    pack: { conditions: [], covenants: [], justifications: {} },
     assessments: [],
     offers: [],
     events: [],
@@ -2917,6 +3019,294 @@ export async function runAssessment(
   return withTenantLock(tenant, () => runAssessmentAt(tenant, applicationId, actor, developmentAttestation()));
 }
 
+// -- the decision pack (UAE M4) -----------------------------------------------
+
+const PACK_OPEN = new Set(['ASSESSED', 'IN_COMMITTEE']);
+
+/** The pack changes while the decision is being prepared: assessed, before any approval is recorded. */
+function packOpen(r: BusinessRecord): Result<true> {
+  if (!PACK_OPEN.has(r.application.status) || r.pack.frozen !== undefined)
+    return fail('DECISION_PACK_LOCKED', 'The decision pack changes only between assessment and approval', {
+      status: r.application.status,
+    });
+  if ((r.application.committeeApprovals ?? []).length > 0)
+    return fail(
+      'DECISION_PACK_LOCKED',
+      'A committee member has approved this pack; it no longer changes, so every member approves the same one',
+    );
+  return ok(true);
+}
+
+const latestRun = (r: BusinessRecord): AssessmentRun | undefined => r.assessments[r.assessments.length - 1];
+
+function deviationsFor(r: BusinessRecord): readonly Deviation[] {
+  const run = latestRun(r);
+  return run === undefined ? [] : deviationsOf(run.assessment.reasons, r.pack.justifications);
+}
+
+function packDigestOf(r: BusinessRecord): string {
+  return packDigest({
+    applicationId: r.application.applicationId,
+    assessmentRef: latestRun(r)?.assessmentId ?? '',
+    deviations: deviationsFor(r),
+    conditions: r.pack.conditions,
+    covenants: r.pack.covenants,
+  });
+}
+
+/** The cap from the risk band: how many conditions and covenants the facility may carry. */
+function packCapacity(r: BusinessRecord): Result<number> {
+  const max = latestRun(r)?.assessment.terms?.maxConditions;
+  return max === undefined
+    ? fail('RISK_BAND_REQUIRED', 'The assessment placed the case in no risk band, so its conditions cannot be bounded')
+    : ok(max);
+}
+
+function freezePack(book: TenantBook, r: BusinessRecord, at: bigint): void {
+  if (r.application.status !== 'APPROVED' || r.pack.frozen !== undefined) return;
+  const digest = packDigestOf(r);
+  r.pack.frozen = { digest, atEpochSeconds: at };
+  const live = <T extends { readonly withdrawnBy?: string }>(xs: readonly T[]) => xs.filter((x) => x.withdrawnBy === undefined);
+  recordEvent(book, r, {
+    eventType: 'DECISION_PACK_FROZEN',
+    fromStage: null,
+    toStage: null,
+    actor: 'system',
+    atEpochSeconds: at,
+    detail: {
+      digest,
+      deviations: String(deviationsFor(r).length),
+      conditions: String(live(r.pack.conditions).length),
+      covenants: String(live(r.pack.covenants).length),
+    },
+  });
+}
+
+type PackChange = (r: BusinessRecord, book: TenantBook, at: bigint) => Result<true>;
+
+async function changePack(
+  tenant: TenantCode,
+  applicationId: string,
+  change: PackChange,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    const open = packOpen(r);
+    if (!open.ok) return open;
+    const done = change(r, book, developmentAttestation().epochSeconds);
+    if (!done.ok) return done;
+    return ok(view(r, ctx.value.currency));
+  });
+}
+
+const nextPackId = (prefix: 'CON' | 'COV', taken: number): string => `${prefix}-${String(taken + 1).padStart(3, '0')}`;
+
+/** Credit attaches a condition precedent or subsequent, in both languages, within the risk band's cap. */
+export async function addCondition(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: ConditionEntry,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return changePack(tenant, applicationId, (r, book, at) => {
+    const policy = loadDecisionPackPolicy(tenant);
+    if (!policy.ok) return policy;
+    const c = validateCondition(entry, policy.value);
+    if (!c.ok) return c;
+    const cap = packCapacity(r);
+    if (!cap.ok) return cap;
+    if (attachedCount(r.pack.conditions, r.pack.covenants) >= cap.value)
+      return fail('CONDITIONS_ABOVE_RISK_MAXIMUM', 'The risk band allows no more conditions and covenants', {
+        maxConditions: String(cap.value),
+      });
+    const conditionId = nextPackId('CON', r.pack.conditions.length);
+    r.pack.conditions.push({ ...c.value, conditionId, addedBy: actor, addedAtEpochSeconds: at });
+    recordEvent(book, r, {
+      eventType: 'CONDITION_ADDED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: {
+        itemId: conditionId,
+        kind: c.value.kind,
+        textEn: c.value.textEn,
+        textAr: c.value.textAr,
+        ...(c.value.dueDaysAfterDisbursement === undefined
+          ? {}
+          : { dueDaysAfterDisbursement: String(c.value.dueDaysAfterDisbursement) }),
+      },
+    });
+    return ok(true);
+  });
+}
+
+/** Credit attaches a covenant from the institution's templates; the template is snapshotted as it stands. */
+export async function addCovenant(
+  tenant: TenantCode,
+  applicationId: string,
+  templateCode: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return changePack(tenant, applicationId, (r, book, at) => {
+    const policy = loadDecisionPackPolicy(tenant);
+    if (!policy.ok) return policy;
+    const t = covenantTemplate(policy.value, templateCode);
+    if (!t.ok) return t;
+    if (r.pack.covenants.some((c) => c.withdrawnBy === undefined && c.template.code === templateCode))
+      return fail('COVENANT_DUPLICATE', 'This covenant is already attached');
+    const cap = packCapacity(r);
+    if (!cap.ok) return cap;
+    if (attachedCount(r.pack.conditions, r.pack.covenants) >= cap.value)
+      return fail('CONDITIONS_ABOVE_RISK_MAXIMUM', 'The risk band allows no more conditions and covenants', {
+        maxConditions: String(cap.value),
+      });
+    const covenantId = nextPackId('COV', r.pack.covenants.length);
+    r.pack.covenants.push({ covenantId, template: t.value, addedBy: actor, addedAtEpochSeconds: at });
+    const tpl = t.value;
+    recordEvent(book, r, {
+      eventType: 'COVENANT_ADDED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: {
+        itemId: covenantId,
+        code: tpl.code,
+        kind: tpl.kind,
+        ...(tpl.metric === undefined ? {} : { metric: tpl.metric }),
+        ...(tpl.minimumPerTenThousand === undefined ? {} : { minimumPerTenThousand: String(tpl.minimumPerTenThousand) }),
+        ...(tpl.frequency === undefined ? {} : { frequency: tpl.frequency }),
+        labelEn: tpl.labelEn,
+        labelAr: tpl.labelAr,
+      },
+    });
+    return ok(true);
+  });
+}
+
+/** Withdraw a condition or covenant before approval. It stays on record, attached nowhere. */
+export async function withdrawPackItem(
+  tenant: TenantCode,
+  applicationId: string,
+  itemId: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return changePack(tenant, applicationId, (r, book, at) => {
+    if (!withdrawPackItemIn(r, itemId, actor))
+      return fail('PACK_ITEM_NOT_FOUND', 'No such condition or covenant on the pack', { itemId });
+    recordEvent(book, r, {
+      eventType: 'PACK_ITEM_WITHDRAWN',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { itemId },
+    });
+    return ok(true);
+  });
+}
+
+/** Credit states why a deviation is acceptable. A later justification replaces the earlier; every version is an event. */
+export async function justifyDeviation(
+  tenant: TenantCode,
+  applicationId: string,
+  code: string,
+  text: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return changePack(tenant, applicationId, (r, book, at) => {
+    if (!deviationsFor(r).some((d) => d.code === code))
+      return fail('DEVIATION_NOT_FOUND', 'The assessment records no such deviation', { code });
+    const t = validateJustification(text);
+    if (!t.ok) return t;
+    r.pack.justifications[code] = { text: t.value, by: actor, atEpochSeconds: at };
+    recordEvent(book, r, {
+      eventType: 'DEVIATION_JUSTIFIED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { code, text: t.value },
+    });
+    return ok(true);
+  });
+}
+
+export interface DecisionPackStatus {
+  readonly deviations: readonly Deviation[];
+  readonly conditions: readonly Condition[];
+  readonly covenants: readonly Covenant[];
+  readonly attached: number;
+  /** Absent when the assessment placed the case in no risk band. */
+  readonly maxConditions?: number;
+  readonly templates: readonly { readonly code: string; readonly labelEn: string; readonly labelAr: string }[];
+  readonly maxSubsequentDueDays: number;
+  readonly policyRef: string;
+  /** Conditions precedent the register suggests: a charge recorded as pending registration. */
+  readonly suggested: readonly { readonly textEn: string; readonly textAr: string }[];
+  readonly editable: boolean;
+  /** The digest as the pack stands; equal to `frozen.digest` once approved, unless something changed after. */
+  readonly digest: string;
+  readonly frozen?: FrozenPack;
+}
+
+export async function decisionPack(tenant: TenantCode, applicationId: string): Promise<Result<DecisionPackStatus>> {
+  const book = await hydrate(tenant);
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  const policy = loadDecisionPackPolicy(tenant);
+  if (!policy.ok) return policy;
+  const cap = packCapacity(r);
+  const pending = r.security.collateral.filter(
+    (c) => c.withdrawnBy === undefined && c.confirmedBy !== undefined && c.charge === 'PENDING',
+  );
+  const already = new Set(r.pack.conditions.filter((c) => c.withdrawnBy === undefined).map((c) => c.textEn));
+  return ok({
+    deviations: deviationsFor(r),
+    conditions: [...r.pack.conditions],
+    covenants: [...r.pack.covenants],
+    attached: attachedCount(r.pack.conditions, r.pack.covenants),
+    ...(cap.ok ? { maxConditions: cap.value } : {}),
+    templates: policy.value.covenantTemplates.map((t) => ({ code: t.code, labelEn: t.labelEn, labelAr: t.labelAr })),
+    maxSubsequentDueDays: policy.value.maxSubsequentDueDays,
+    policyRef: policy.value.policyRef,
+    suggested: pending
+      .map((c) => ({
+        textEn: `Charge over ${c.description} (${c.itemId}) registered, with the registry's reference`,
+        textAr: `تسجيل الرهن على ${c.description} (${c.itemId}) مع مرجع جهة التسجيل`,
+      }))
+      .filter((x) => !already.has(x.textEn)),
+    editable: packOpen(r).ok,
+    digest: packDigestOf(r),
+    ...(r.pack.frozen === undefined ? {} : { frozen: r.pack.frozen }),
+  });
+}
+
+/** The pack's live conditions and covenants as the offer letter states them, in both languages. */
+function packConditionsForLetter(r: BusinessRecord): readonly { readonly en: string; readonly ar: string }[] {
+  const conditions = r.pack.conditions
+    .filter((c) => c.withdrawnBy === undefined)
+    .map((c) =>
+      c.kind === 'PRECEDENT'
+        ? { en: `Before first drawdown: ${c.textEn}`, ar: `قبل السحب الأول: ${c.textAr}` }
+        : {
+            en: `Within ${String(c.dueDaysAfterDisbursement ?? 0)} days after first drawdown: ${c.textEn}`,
+            ar: `خلال ${arabicIndic(String(c.dueDaysAfterDisbursement ?? 0))} يوماً من السحب الأول: ${c.textAr}`,
+          },
+    );
+  const covenants = r.pack.covenants
+    .filter((c) => c.withdrawnBy === undefined)
+    .map((c) => ({ en: `Covenant: ${c.template.labelEn}`, ar: `تعهّد: ${c.template.labelAr}` }));
+  return [...conditions, ...covenants];
+}
+
+const arabicIndic = (s: string): string => s.replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)] ?? d);
+
 async function approveAt(
   tenant: TenantCode,
   applicationId: string,
@@ -2931,6 +3321,7 @@ async function approveAt(
   const t = approveStraightThroughCore(r.application, approver, at.epochSeconds);
   if (!t.ok) return t;
   apply(book, r, t.value);
+  freezePack(book, r, at.epochSeconds);
   return ok(view(r, ctx.value.currency));
 }
 
@@ -3093,7 +3484,24 @@ async function decideAt(
     },
   );
   if (!t.ok) return t;
+  // After the domain's own checks (status, four eyes, reason, limits), so their refusals come first.
+  if (decision.approved) {
+    const deviations = deviationsFor(r);
+    const unjustified = deviations.filter((d) => d.justification === undefined).map((d) => d.code);
+    if (unjustified.length > 0)
+      return fail('DEVIATIONS_UNJUSTIFIED', 'Every deviation from policy is justified in the decision pack before approval', {
+        deviations: unjustified.join(','),
+      });
+    // Whoever argued for an exception does not also approve it.
+    if (deviations.some((d) => d.justification?.by === decision.decidedBy))
+      return reject(
+        'OP-DETERMINACY',
+        'FOUR_EYES_SELF_JUSTIFICATION',
+        'A committee member who justified a deviation does not approve the case',
+      );
+  }
   apply(book, r, t.value);
+  freezePack(book, r, at.epochSeconds);
   return ok(view(r, currency));
 }
 
@@ -3275,7 +3683,7 @@ async function generateOfferAt(
       { party: 'LENDER', role: { en: 'Authorised Signatory', ar: 'المفوّض بالتوقيع' } },
       { party: 'BORROWER', role: { en: 'Authorised Signatory of the Borrower', ar: 'المفوّض بالتوقيع عن المقترض' } },
     ],
-    conditions: q.collateral.map((c) => ({ en: c.labelEn, ar: c.labelAr })),
+    conditions: [...q.collateral.map((c) => ({ en: c.labelEn, ar: c.labelAr })), ...packConditionsForLetter(r)],
   });
   if (!letter.ok) return letter;
 
@@ -4249,7 +4657,26 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
     if (!submitted.ok || s.reach === 'SUBMITTED') continue;
 
     const assessed = await runAssessmentAt(tenant, id, checker, step(5n));
-    if (!assessed.ok || s.reach === 'ASSESSED') continue;
+    if (!assessed.ok) continue;
+    // Credit justifies each deviation the assessment recorded; the committee (another person) then approves.
+    if (assessed.value.application.status === 'IN_COMMITTEE') {
+      const rec = bookOf(tenant).records.get(id);
+      if (rec !== undefined)
+        for (const d of deviationsFor(rec)) {
+          const text = 'ILLUSTRATIVE — mitigated by the confirmed security and the owners’ personal guarantees';
+          const at = step(5n).epochSeconds;
+          rec.pack.justifications[d.code] = { text, by: checker, atEpochSeconds: at };
+          recordEvent(bookOf(tenant), rec, {
+            eventType: 'DEVIATION_JUSTIFIED',
+            fromStage: null,
+            toStage: null,
+            actor: checker,
+            atEpochSeconds: at,
+            detail: { code: d.code, text },
+          });
+        }
+    }
+    if (s.reach === 'ASSESSED') continue;
 
     const status = assessed.value.application.status;
     const decided =
