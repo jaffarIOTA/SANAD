@@ -446,16 +446,17 @@ export async function runScreening(
   });
 }
 
-/** Check the business's TRN with the tax authority and record the answer. Information for the assessment, never a gap. */
+/**
+ * Check the business's tax standing and record the answer. Information for the
+ * assessment, never a gap. In the UAE, the tax registration (TRN) with the tax
+ * authority; in Saudi Arabia, the zakat certificate by commercial registration.
+ */
 export async function runTaxCheck(
   tenant: TenantCode,
   intakeId: string,
   actor: string,
 ): Promise<Result<BusinessIntake>> {
   return withIntake(tenant, intakeId, async (book, intake) => {
-    const trn = intake.entity.taxRegistrationNumber;
-    if (trn === undefined)
-      return fail('TRN_NOT_RECORDED', 'The tax registration is checked by the TRN recorded at intake');
     const rails = await kybRails(
       tenant,
       consentLedger(() => book.consents, attest),
@@ -463,22 +464,28 @@ export async function runTaxCheck(
       nowSeconds,
     );
     if (rails === undefined) return unavailable('TAX_COMPLIANCE');
+    const saudi = rails.jurisdiction === 'SA';
+    const trn = saudi ? intake.entity.tradeLicence : intake.entity.taxRegistrationNumber;
+    if (trn === undefined)
+      return fail('TRN_NOT_RECORDED', 'The tax registration is checked by the TRN recorded at intake');
     const r = await rails.tax.certificateStatus({ tenantId: tenant, crNumber: trn, correlationId: intakeId });
     if (!r.ok) return r;
     let status: 'VALID' | 'EXPIRED' | 'NOT_FOUND' | 'SUSPENDED';
     let reference: string;
     if (r.value.kind === 'ANSWERED') {
       status = r.value.value.status;
-      reference = r.value.value.certificateRef ?? `trn-checked:${trn}`;
+      // A fallback reference never carries the registration number itself (CLAUDE.md §2).
+      reference = r.value.value.certificateRef ?? (saudi ? `zakat-checked:${intakeId}` : `trn-checked:${trn}`);
     } else if (r.value.kind === 'REFUSED' && r.value.code === 'NOT_FOUND') {
       status = 'NOT_FOUND';
-      reference = `trn-not-found:${trn}`;
+      reference = saudi ? `zakat-not-found:${intakeId}` : `trn-not-found:${trn}`;
     } else return unavailable('TAX_COMPLIANCE');
     const t = recordTaxCheck(
       intake,
       { status, reference, source: rails.source },
       actor,
       developmentAttestation().epochSeconds,
+      saudi,
     );
     if (!t.ok) return t;
     return commit(tenant, book, t.value);

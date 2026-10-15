@@ -34,6 +34,13 @@ import { FtaAdapter } from '../../../../adapters/uae/fta/adapter.ts';
 import { IcpAdapter } from '../../../../adapters/uae/icp/adapter.ts';
 import { OpenFinanceAdapter } from '../../../../adapters/uae/open-finance/adapter.ts';
 import { NerAdapter } from '../../../../adapters/uae/ner/adapter.ts';
+import { KsaDemonstrationTransport } from '../../../../adapters/ksa/demonstration/transport.ts';
+import { OpenBankingAdapter } from '../../../../adapters/ksa/open-banking/adapter.ts';
+import { SimahAdapter } from '../../../../adapters/ksa/simah/adapter.ts';
+import { WathqAdapter } from '../../../../adapters/ksa/wathq/adapter.ts';
+import { YakeenAdapter } from '../../../../adapters/ksa/yakeen/adapter.ts';
+import { ZatcaTaxAdapter } from '../../../../adapters/ksa/zatca-tax/adapter.ts';
+import { loadTenantOnboarding, isTenantCode } from '@sanad/config/loader.ts';
 import { persistencePool } from './persistence.ts';
 
 export interface KybRails {
@@ -47,6 +54,19 @@ export interface KybRails {
   /** Open Finance account information, for the bank-statement facts at credit assessment. */
   readonly accounts: AccountInformationPort;
   readonly source: 'LIVE' | 'FIXTURE';
+  /**
+   * Whose rails these are. The tax check differs: the UAE's checks a tax
+   * registration number with the tax authority; Saudi Arabia's checks the
+   * zakat certificate by commercial registration.
+   */
+  readonly jurisdiction: 'AE' | 'SA';
+}
+
+/** The tenant's jurisdiction, from its onboarding (ADR 0005). */
+export function tenantJurisdiction(tenantId: string): 'AE' | 'SA' | undefined {
+  if (!isTenantCode(tenantId)) return undefined;
+  const o = loadTenantOnboarding(tenantId);
+  return o.ok && (o.value.jurisdiction === 'AE' || o.value.jurisdiction === 'SA') ? o.value.jurisdiction : undefined;
 }
 
 /**
@@ -89,8 +109,24 @@ export async function kybRails(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): Promise<KybRails | undefined> {
   if (!(await syntheticDemonstrationPermitted(persistencePool(env), env))) return undefined;
-  const transport = new DemonstrationTransport(now);
   const credentials = new DemonstrationCredentials();
+  const jurisdiction = tenantJurisdiction(tenantId);
+  if (jurisdiction === 'SA') {
+    // Saudi Arabia: Wathq (commercial register), Yakeen (identity), ZATCA (zakat certificate by CR), SIMAH, Open Banking.
+    const ksa = new KsaDemonstrationTransport(now);
+    return {
+      registry: new WathqAdapter(demonstrationConfig(tenantId, 'BUSINESS_REGISTRY', consents, now), credentials, ksa),
+      identity: new YakeenAdapter(demonstrationConfig(tenantId, 'IDENTITY_VERIFICATION', consents, now), credentials, ksa),
+      screening: new DemonstrationScreening(consents, attest),
+      tax: new ZatcaTaxAdapter(demonstrationConfig(tenantId, 'TAX_COMPLIANCE', consents, now), credentials, ksa),
+      bureau: new SimahAdapter(demonstrationConfig(tenantId, 'CREDIT_BUREAU', consents, now), credentials, ksa, attest),
+      accounts: new OpenBankingAdapter(demonstrationConfig(tenantId, 'OPEN_BANKING', consents, now), credentials, ksa),
+      source: 'FIXTURE',
+      jurisdiction: 'SA',
+    };
+  }
+  if (jurisdiction !== 'AE') return undefined;
+  const transport = new DemonstrationTransport(now);
   return {
     registry: new NerAdapter(demonstrationConfig(tenantId, 'BUSINESS_REGISTRY', consents, now), credentials, transport),
     identity: new IcpAdapter(
@@ -113,5 +149,6 @@ export async function kybRails(
       transport,
     ),
     source: 'FIXTURE',
+    jurisdiction: 'AE',
   };
 }
