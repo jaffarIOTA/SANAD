@@ -439,6 +439,11 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
     en: 'Document recorded by reference. It counts once the checker validates it.',
     ar: 'سُجّل المستند بمرجعه، ويُحتسب بعد تحقق المراجِع منه.',
   },
+  REPAYMENT_RECORDED: {
+    en: 'Repayment recorded. A manual receipt counts once a second person confirms it against the statement.',
+    ar: 'سُجّل السداد. يُحتسب المبلغ المُدخل يدوياً بعد تأكيده من شخص آخر مقابل الكشف.',
+  },
+  REPAYMENT_CONFIRMED: { en: 'Repayment confirmed.', ar: 'تم تأكيد السداد.' },
   TAWARRUQ_COMMODITY_PURCHASED: { en: 'Commodity bought from the broker at the quoted cost.', ar: 'اشتُريت السلعة من الوسيط بالتكلفة المسعّرة.' },
   TAWARRUQ_SOLD_TO_CUSTOMER: { en: 'Commodity sold to the customer for the deferred price.', ar: 'بيعت السلعة للعميل بالثمن المؤجل.' },
   TAWARRUQ_TITLE_TRANSFERRED: { en: 'Title passed to the customer.', ar: 'انتقلت الملكية إلى العميل.' },
@@ -918,6 +923,13 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
     en: 'Record the business’s tax registration number before checking it.',
     ar: 'سجّل رقم التسجيل الضريبي للمنشأة قبل التحقق منه.',
   },
+  // Servicing (S1). A refusal here recorded nothing.
+  REPAYMENT_AMOUNT_INVALID: { en: 'A repayment is a positive amount.', ar: 'السداد مبلغ موجب.' },
+  REPAYMENT_DATE_INVALID: { en: 'A repayment is dated between disbursement and today.', ar: 'يكون تاريخ السداد بين الصرف واليوم.' },
+  REPAYMENT_REF_INVALID: { en: 'Record the bank’s or channel’s reference for the receipt.', ar: 'سجّل مرجع البنك أو القناة للمبلغ المستلم.' },
+  REPAYMENT_DUPLICATE: { en: 'This receipt is already recorded.', ar: 'هذا المبلغ مُسجَّل مسبقاً.' },
+  REPAYMENT_NOT_FOUND: { en: 'That repayment is not on the facility.', ar: 'هذا السداد غير موجود على التمويل.' },
+  REPAYMENT_ALREADY_CONFIRMED: { en: 'That repayment is already confirmed.', ar: 'هذا السداد مؤكَّد مسبقاً.' },
   // Tawarruq execution (KSA K4). A refusal here bought, sold and paid nothing.
   NOT_TAWARRUQ: { en: 'This application is not a Tawarruq.', ar: 'هذا الطلب ليس تورقاً.' },
   TAWARRUQ_BEFORE_SIGNATURE: { en: 'The commodity is bought only once the customer has signed.', ar: 'لا تُشترى السلعة إلا بعد توقيع العميل.' },
