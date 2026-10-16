@@ -45,7 +45,7 @@ import {
   loadProductCatalogue,
   loadSmeAssessmentPolicy,
   loadSmeDefinition,
-  loadTenantOnboarding, loadSecurityPolicy, loadDecisionPackPolicy } from '@sanad/config/loader.ts';
+  loadTenantOnboarding, loadSecurityPolicy, loadDecisionPackPolicy, loadServicingPolicy } from '@sanad/config/loader.ts';
 import {
   type FigureSourceKind,
   type FinancialFigure,
@@ -168,7 +168,9 @@ import {
 } from '@sanad/products/sme-term-islamic/execution.ts';
 import type { SmeIslamicQuote } from '@sanad/products/sme-term-islamic/pricing.ts';
 import type { CommodityLot } from '@sanad/core/ports/commodity-broker.ts';
-import { type FacilityPosition, civilDay, facilityPosition } from '@sanad/core/servicing/instalment-position.ts';
+import { type FacilityPosition, type ScheduledInstalment, civilDay, facilityPosition } from '@sanad/core/servicing/instalment-position.ts';
+import { lateChargesDue } from '@sanad/core/servicing/late-charges.ts';
+import { reamortise, respreadPrice } from '@sanad/core/servicing/restructure.ts';
 import type { SmeVariant } from '@sanad/products/sme-term-conventional/variants.ts';
 
 import { postgresOutboxStore } from '../../../../services/outbox/src/postgres-store.ts';
@@ -672,11 +674,44 @@ export interface CollectionRecord {
   readonly result?: 'PAID' | 'RETURNED';
 }
 
+export interface LateChargeRecord {
+  readonly instalmentNumber: number;
+  readonly amount: Money;
+  /** INCOME for a term loan; CHARITY for an Islamic facility — never the institution's income. */
+  readonly treatment: 'INCOME' | 'CHARITY';
+  readonly assessedBy: string;
+  readonly assessedAtEpochSeconds: bigint;
+  readonly waivedBy?: string;
+  readonly waiverReason?: string;
+}
+
+/** Collections and late charges paused while the customer is in hardship, with the reason; lifted by a second person. */
+export interface HardshipRecord {
+  readonly reason: string;
+  readonly setBy: string;
+  readonly setAtEpochSeconds: bigint;
+}
+
+export interface RestructureRecord {
+  readonly restructureId: string;
+  readonly effectiveDate: string;
+  readonly rows: readonly ScheduledInstalment[];
+  /** What was owed on the day, and what the new schedule asks: equal for an Islamic facility, never more. */
+  readonly outstandingBefore: Money;
+  readonly totalAfter: Money;
+  readonly proposedBy: string;
+  readonly approvedBy?: string;
+  readonly reason: string;
+}
+
 export interface ServicingView {
   readonly repayments: readonly RepaymentRecord[];
   readonly collections: readonly CollectionRecord[];
   /** The months (yyyy-mm) whose status has been reported to the credit bureau. */
   readonly bureauReports: readonly string[];
+  readonly lateCharges: readonly LateChargeRecord[];
+  readonly hardship?: HardshipRecord;
+  readonly restructures: readonly RestructureRecord[];
   /** Against the signed schedule, confirmed repayments only, as of today in the tenant's time zone. */
   readonly position: FacilityPosition;
   /** The loan system's last reported status, set against Sanad's own: a difference is flagged, never overwritten. */
@@ -770,7 +805,15 @@ interface BusinessRecord {
     tawarruq?: TawarruqRecord;
   };
   booking?: LoanBookingRecord;
-  servicing: { repayments: RepaymentRecord[]; collections: CollectionRecord[]; bureauReports: string[]; settledReported?: true };
+  servicing: {
+    repayments: RepaymentRecord[];
+    collections: CollectionRecord[];
+    bureauReports: string[];
+    settledReported?: true;
+    lateCharges: LateChargeRecord[];
+    hardship?: HardshipRecord;
+    restructures: RestructureRecord[];
+  };
   assessments: AssessmentRun[];
   offers: OfferRun[];
   events: ApplicationEvent[];
@@ -1257,7 +1300,7 @@ function restoreBook(book: TenantBook, persisted: Awaited<ReturnType<typeof load
       security: { collateral: [], guarantees: [] },
       pack: { conditions: [], covenants: [], justifications: {} },
       closing: { cps: {} },
-      servicing: { repayments: [], collections: [], bureauReports: [] },
+      servicing: { repayments: [], collections: [], bureauReports: [], lateCharges: [], restructures: [] },
       assessments: [],
       offers: [],
       events: [],
@@ -1692,6 +1735,50 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
     case 'COLLECTION_RESULT': {
       const i = r.servicing.collections.findIndex((x) => x.idempotencyKey === d['idempotencyKey']);
       if (i >= 0) r.servicing.collections[i] = { ...(r.servicing.collections[i] as CollectionRecord), result: d['result'] === 'PAID' ? 'PAID' : 'RETURNED' };
+      return;
+    }
+    case 'LATE_CHARGE_ASSESSED':
+      r.servicing.lateCharges.push({
+        instalmentNumber: Number.parseInt(d['instalment'] ?? '0', 10),
+        amount: money(BigInt(d['amountMinorUnits'] ?? '0'), r.application.requested.currency),
+        treatment: d['treatment'] === 'CHARITY' ? 'CHARITY' : 'INCOME',
+        assessedBy: e.actor,
+        assessedAtEpochSeconds: e.atEpochSeconds,
+      });
+      return;
+    case 'LATE_CHARGE_WAIVED': {
+      const i = r.servicing.lateCharges.findIndex((x) => String(x.instalmentNumber) === d['instalment'] && x.waivedBy === undefined);
+      if (i >= 0) r.servicing.lateCharges[i] = { ...(r.servicing.lateCharges[i] as LateChargeRecord), waivedBy: e.actor, waiverReason: d['reason'] ?? '' };
+      return;
+    }
+    case 'HARDSHIP_SET':
+      r.servicing.hardship = { reason: d['reason'] ?? '', setBy: e.actor, setAtEpochSeconds: e.atEpochSeconds };
+      return;
+    case 'HARDSHIP_LIFTED':
+      delete r.servicing.hardship;
+      return;
+    case 'RESTRUCTURE_PROPOSED': {
+      const currency = r.application.requested.currency;
+      r.servicing.restructures.push({
+        restructureId: d['restructureId'] ?? '',
+        effectiveDate: d['effectiveDate'] ?? '',
+        rows: (d['rows'] ?? '')
+          .split(';')
+          .filter((x) => x !== '')
+          .map((x) => {
+            const [n, due, pr, ch] = x.split('|');
+            return { number: Number.parseInt(n ?? '0', 10), dueDate: due ?? '', principal: money(BigInt(pr ?? '0'), currency), charge: money(BigInt(ch ?? '0'), currency) };
+          }),
+        outstandingBefore: money(BigInt(d['outstandingBefore'] ?? '0'), currency),
+        totalAfter: money(BigInt(d['totalAfter'] ?? '0'), currency),
+        proposedBy: e.actor,
+        reason: d['reason'] ?? '',
+      });
+      return;
+    }
+    case 'RESTRUCTURE_APPROVED': {
+      const i = r.servicing.restructures.findIndex((x) => x.restructureId === d['restructureId']);
+      if (i >= 0) r.servicing.restructures[i] = { ...(r.servicing.restructures[i] as RestructureRecord), approvedBy: e.actor };
       return;
     }
     case 'BUREAU_STATUS_REPORTED':
@@ -2159,7 +2246,7 @@ async function handOverAt(
     security: { collateral: [], guarantees: [] },
     pack: { conditions: [], covenants: [], justifications: {} },
     closing: { cps: {} },
-    servicing: { repayments: [], collections: [], bureauReports: [] },
+    servicing: { repayments: [], collections: [], bureauReports: [], lateCharges: [], restructures: [] },
     assessments: [],
     offers: [],
     events: [],
@@ -4934,13 +5021,18 @@ function scheduleOf(r: BusinessRecord) {
 /** The position as of today in the tenant's time zone, from confirmed repayments only; undefined before disbursement. */
 function servicingOf(r: BusinessRecord): ServicingView | undefined {
   if (r.application.status !== 'DISBURSED') return undefined;
-  const schedule = scheduleOf(r);
   const ctx = tenantContext(r.application.tenantId as TenantCode);
-  if (schedule === undefined || !ctx.ok) return undefined;
+  if (!ctx.ok) return undefined;
   const today = localDate(developmentAttestation().epochSeconds, ctx.value.profile);
+  // An approved restructuring supersedes the signed schedule from its effective date: what was owed then, re-spread,
+  // and only receipts from that day count against it.
+  const current = [...r.servicing.restructures].reverse().find((x) => x.approvedBy !== undefined);
+  const schedule = current?.rows ?? scheduleOf(r);
+  if (schedule === undefined) return undefined;
+  const confirmed = r.servicing.repayments.filter((x) => x.confirmedBy !== undefined);
   const position = facilityPosition(
     schedule,
-    r.servicing.repayments.filter((x) => x.confirmedBy !== undefined),
+    current === undefined ? confirmed : confirmed.filter((x) => x.receivedOn >= current.effectiveDate),
     today,
     ctx.value.currency,
   );
@@ -4948,6 +5040,9 @@ function servicingOf(r: BusinessRecord): ServicingView | undefined {
     repayments: [...r.servicing.repayments],
     collections: [...r.servicing.collections],
     bureauReports: [...r.servicing.bureauReports],
+    lateCharges: [...r.servicing.lateCharges],
+    ...(r.servicing.hardship === undefined ? {} : { hardship: r.servicing.hardship }),
+    restructures: [...r.servicing.restructures],
     position,
     ...(r.portfolio === undefined
       ? {}
@@ -5093,6 +5188,8 @@ export async function presentCollections(
     const servicing = servicingOf(r);
     if (servicing === undefined)
       return fail('TRANSITION_NOT_ALLOWED', 'Instalments are collected on a disbursed facility', { status: r.application.status });
+    if (r.servicing.hardship !== undefined)
+      return fail('HARDSHIP_HOLD', 'Collections are paused while the customer is in hardship');
     const saudi = ctx.value.profile.code === 'SA';
     const payee = r.closing.payee;
     if (!saudi && payee?.confirmedBy === undefined)
@@ -5291,6 +5388,181 @@ export async function reportToBureau(
       detail: { month, event: inArrears ? 'ARREARS' : 'INSTALMENT_PAID', daysPastDue: String(s.position.daysPastDue) },
     });
     return ok(view(r, ctx.value.currency));
+  });
+}
+
+// -- servicing (S3): late charges, hardship, restructuring -------------------------
+
+const reasonOk = (text: string): Result<string> => {
+  const t = text.trim();
+  if (t.length < 10 || t.length > 500) return fail('SERVICING_REASON_REQUIRED', 'State the reason in 10 to 500 characters');
+  if (containsIdentityNumber(t)) return fail('IDENTITY_NUMBER_IN_FREE_TEXT', 'No identity number belongs in a reason');
+  return ok(t);
+};
+
+/** Charge each instalment overdue beyond the grace days, once; for an Islamic facility, as a charity obligation. */
+export async function assessLateCharges(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, ctx, at) => {
+    const s = servicingOf(r);
+    if (s === undefined) return fail('TRANSITION_NOT_ALLOWED', 'Late charges apply to a disbursed facility', { status: r.application.status });
+    if (r.servicing.hardship !== undefined) return fail('HARDSHIP_HOLD', 'No late charge is assessed while the customer is in hardship');
+    const policy = loadServicingPolicy(tenant);
+    if (!policy.ok) return policy;
+    const due = lateChargesDue(
+      s.position,
+      policy.value,
+      new Set(r.servicing.lateCharges.map((c) => c.instalmentNumber)),
+      isTawarruq(r.application.productCode),
+      ctx.currency,
+    );
+    if (due.length === 0) return fail('NO_LATE_CHARGE_DUE', 'No instalment is overdue beyond the grace days and not yet charged');
+    for (const c of due) {
+      r.servicing.lateCharges.push({ ...c, assessedBy: actor, assessedAtEpochSeconds: at });
+      recordEvent(book, r, {
+        eventType: 'LATE_CHARGE_ASSESSED',
+        fromStage: null,
+        toStage: null,
+        actor,
+        atEpochSeconds: at,
+        detail: { instalment: String(c.instalmentNumber), amountMinorUnits: c.amount.minorUnits.toString(), treatment: c.treatment },
+      });
+    }
+    return ok(true);
+  });
+}
+
+/** A second person waives a late charge, with the reason. */
+export async function waiveLateCharge(
+  tenant: TenantCode,
+  applicationId: string,
+  instalmentNumber: number,
+  reason: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    const i = r.servicing.lateCharges.findIndex((c) => c.instalmentNumber === instalmentNumber && c.waivedBy === undefined);
+    const c = r.servicing.lateCharges[i];
+    if (c === undefined) return fail('LATE_CHARGE_NOT_FOUND', 'No such late charge outstanding');
+    if (actor === c.assessedBy) return reject('OP-DETERMINACY', 'FOUR_EYES_SELF_WAIVER', 'Whoever assessed a charge does not waive it');
+    const why = reasonOk(reason);
+    if (!why.ok) return why;
+    r.servicing.lateCharges[i] = { ...c, waivedBy: actor, waiverReason: why.value };
+    recordEvent(book, r, { eventType: 'LATE_CHARGE_WAIVED', fromStage: null, toStage: null, actor, atEpochSeconds: at, detail: { instalment: String(instalmentNumber), reason: why.value } });
+    return ok(true);
+  });
+}
+
+/** Place the customer in hardship: collections and late charges pause. Lifted by a second person. */
+export async function setHardship(
+  tenant: TenantCode,
+  applicationId: string,
+  reason: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    if (r.application.status !== 'DISBURSED') return fail('TRANSITION_NOT_ALLOWED', 'Hardship applies to a disbursed facility', { status: r.application.status });
+    if (r.servicing.hardship !== undefined) return fail('HARDSHIP_ALREADY_SET', 'The customer is already in hardship');
+    const why = reasonOk(reason);
+    if (!why.ok) return why;
+    r.servicing.hardship = { reason: why.value, setBy: actor, setAtEpochSeconds: at };
+    recordEvent(book, r, { eventType: 'HARDSHIP_SET', fromStage: null, toStage: null, actor, atEpochSeconds: at, detail: { reason: why.value } });
+    return ok(true);
+  });
+}
+
+export async function liftHardship(tenant: TenantCode, applicationId: string, actor: string): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    const h = r.servicing.hardship;
+    if (h === undefined) return fail('HARDSHIP_NOT_SET', 'The customer is not in hardship');
+    if (actor === h.setBy) return reject('OP-DETERMINACY', 'FOUR_EYES_SELF_CONFIRMATION', 'Whoever placed the hold does not lift it');
+    delete r.servicing.hardship;
+    recordEvent(book, r, { eventType: 'HARDSHIP_LIFTED', fromStage: null, toStage: null, actor, atEpochSeconds: at, detail: {} });
+    return ok(true);
+  });
+}
+
+/**
+ * Propose a restructuring from today: what is owed — arrears included —
+ * re-spread over the new instalments. A term loan is re-amortised at its
+ * signed rate; an Islamic facility's outstanding price is re-spread with its
+ * total unchanged. It takes effect only once approved by a second person.
+ */
+export async function proposeRestructure(
+  tenant: TenantCode,
+  applicationId: string,
+  terms: { readonly firstDueDate: string; readonly numberOfPayments: number; readonly reason: string },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, ctx, at) => {
+    const s = servicingOf(r);
+    if (s === undefined) return fail('TRANSITION_NOT_ALLOWED', 'A disbursed facility is restructured', { status: r.application.status });
+    if (r.servicing.restructures.some((x) => x.approvedBy === undefined))
+      return fail('RESTRUCTURE_PENDING', 'A restructuring is already awaiting approval');
+    const why = reasonOk(terms.reason);
+    if (!why.ok) return why;
+    const policy = loadServicingPolicy(tenant);
+    if (!policy.ok) return policy;
+    const signed = r.offers.find((o) => o.letter.version === r.application.offer?.letterVersion);
+    if (signed === undefined) return fail('OFFER_NOT_GENERATED', 'The signed letter version is not on record');
+    const effectiveDate = s.position.asOf;
+    const paymentDay = Number(terms.firstDueDate.slice(8, 10));
+    const outstandingPrincipal = s.position.outstandingPrincipal;
+    const outstandingCharge = money(s.position.outstandingTotal.minorUnits - outstandingPrincipal.minorUnits, ctx.currency);
+    const t = { effectiveDate, firstDueDate: terms.firstDueDate, numberOfPayments: terms.numberOfPayments, paymentDay };
+    const rows = isTawarruq(r.application.productCode)
+      ? respreadPrice(outstandingPrincipal, outstandingCharge, t, policy.value.restructuring.maxPayments)
+      : reamortise(outstandingPrincipal, signed.terms.rateBp, t, policy.value.restructuring.maxPayments);
+    if (!rows.ok) return rows;
+    const totalAfter = money(rows.value.reduce((a, x) => a + x.principal.minorUnits + x.charge.minorUnits, 0n), ctx.currency);
+    const restructureId = `RS-${String(r.servicing.restructures.length + 1).padStart(3, '0')}`;
+    r.servicing.restructures.push({
+      restructureId,
+      effectiveDate,
+      rows: rows.value,
+      outstandingBefore: s.position.outstandingTotal,
+      totalAfter,
+      proposedBy: actor,
+      reason: why.value,
+    });
+    recordEvent(book, r, {
+      eventType: 'RESTRUCTURE_PROPOSED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: {
+        restructureId,
+        effectiveDate,
+        rows: rows.value.map((x) => `${String(x.number)}|${x.dueDate}|${x.principal.minorUnits.toString()}|${x.charge.minorUnits.toString()}`).join(';'),
+        outstandingBefore: s.position.outstandingTotal.minorUnits.toString(),
+        totalAfter: totalAfter.minorUnits.toString(),
+        reason: why.value,
+      },
+    });
+    return ok(true);
+  });
+}
+
+/** A second person approves the proposed restructuring; it then supersedes the schedule from its effective date. */
+export async function approveRestructure(
+  tenant: TenantCode,
+  applicationId: string,
+  restructureId: string,
+  approver: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    const i = r.servicing.restructures.findIndex((x) => x.restructureId === restructureId);
+    const rs = r.servicing.restructures[i];
+    if (rs === undefined) return fail('RESTRUCTURE_NOT_FOUND', 'No such restructuring', { restructureId });
+    if (rs.approvedBy !== undefined) return fail('RESTRUCTURE_ALREADY_APPROVED', 'This restructuring is already approved');
+    if (approver === rs.proposedBy) return reject('OP-DETERMINACY', 'FOUR_EYES_SELF_APPROVAL', 'Whoever proposed a restructuring does not approve it');
+    r.servicing.restructures[i] = { ...rs, approvedBy: approver };
+    recordEvent(book, r, { eventType: 'RESTRUCTURE_APPROVED', fromStage: null, toStage: null, actor: approver, atEpochSeconds: at, detail: { restructureId } });
+    return ok(true);
   });
 }
 

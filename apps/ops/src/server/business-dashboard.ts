@@ -439,6 +439,15 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
     en: 'Document recorded by reference. It counts once the checker validates it.',
     ar: 'سُجّل المستند بمرجعه، ويُحتسب بعد تحقق المراجِع منه.',
   },
+  LATE_CHARGES_ASSESSED: { en: 'Late charges assessed.', ar: 'احتُسبت رسوم التأخير.' },
+  LATE_CHARGE_WAIVED: { en: 'Late charge waived.', ar: 'تم التنازل عن رسوم التأخير.' },
+  HARDSHIP_SET: { en: 'Hardship recorded: collections and late charges paused.', ar: 'سُجّلت حالة التعثر: أوقف التحصيل ورسوم التأخير.' },
+  HARDSHIP_LIFTED: { en: 'Hardship lifted.', ar: 'رُفعت حالة التعثر.' },
+  RESTRUCTURE_PROPOSED: {
+    en: 'Restructuring proposed. It takes effect once a second person approves it.',
+    ar: 'اقتُرحت إعادة الهيكلة، وتسري بعد اعتمادها من شخص آخر.',
+  },
+  RESTRUCTURE_APPROVED: { en: 'Restructuring approved: the new schedule applies.', ar: 'اعتُمدت إعادة الهيكلة: يسري الجدول الجديد.' },
   COLLECTIONS_PRESENTED: {
     en: 'Instalments presented for collection. Each result arrives from the channel.',
     ar: 'قُدّمت الأقساط للتحصيل، وتصل نتيجة كل منها من القناة.',
@@ -929,6 +938,34 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
     en: 'Record the business’s tax registration number before checking it.',
     ar: 'سجّل رقم التسجيل الضريبي للمنشأة قبل التحقق منه.',
   },
+  // Servicing (S3). A refusal here charged, waived and restructured nothing.
+  SERVICING_REASON_REQUIRED: { en: 'State the reason in 10 to 500 characters.', ar: 'اذكر السبب في عشرة أحرف إلى خمسمئة حرف.' },
+  NO_LATE_CHARGE_DUE: {
+    en: 'No instalment is overdue beyond the grace days and not yet charged.',
+    ar: 'لا يوجد قسط متأخر بعد أيام السماح لم تُحتسب عليه رسوم.',
+  },
+  LATE_CHARGE_NOT_FOUND: { en: 'No such late charge is outstanding.', ar: 'لا توجد رسوم تأخير قائمة بهذا الوصف.' },
+  FOUR_EYES_SELF_WAIVER: { en: 'You assessed this charge; another person waives it.', ar: 'أنت من احتسب هذه الرسوم؛ يتنازل عنها شخص آخر.' },
+  HARDSHIP_HOLD: {
+    en: 'Collections and late charges are paused while the customer is in hardship.',
+    ar: 'التحصيل ورسوم التأخير متوقفة ما دام العميل في حالة تعثر.',
+  },
+  HARDSHIP_ALREADY_SET: { en: 'The customer is already in hardship.', ar: 'العميل في حالة تعثر مسبقاً.' },
+  HARDSHIP_NOT_SET: { en: 'The customer is not in hardship.', ar: 'العميل ليس في حالة تعثر.' },
+  RESTRUCTURE_PENDING: { en: 'A restructuring is already awaiting approval.', ar: 'توجد إعادة هيكلة بانتظار الاعتماد.' },
+  RESTRUCTURE_NOT_FOUND: { en: 'No such restructuring.', ar: 'لا توجد إعادة هيكلة بهذا الوصف.' },
+  RESTRUCTURE_ALREADY_APPROVED: { en: 'This restructuring is already approved.', ar: 'إعادة الهيكلة هذه معتمدة مسبقاً.' },
+  RESTRUCTURE_TERMS_INVALID: {
+    en: 'The new schedule needs a whole number of instalments within the policy’s limit, the first falling after today.',
+    ar: 'يحتاج الجدول الجديد إلى عدد صحيح من الأقساط ضمن حد السياسة، أولها بعد اليوم.',
+  },
+  NOTHING_TO_RESTRUCTURE: { en: 'Nothing is owed, so there is nothing to restructure.', ar: 'لا يوجد مستحق، فلا شيء يُعاد هيكلته.' },
+  TOTAL_WOULD_CHANGE: {
+    en: 'An Islamic facility is restructured without changing what is owed.',
+    ar: 'يُعاد هيكلة التمويل الإسلامي دون تغيير المبلغ المستحق.',
+  },
+  SERVICING_POLICY_INVALID: { en: 'The institution’s servicing policy is not readable.', ar: 'تعذّرت قراءة سياسة خدمة التمويل لدى المؤسسة.' },
+  SERVICING_POLICY_NOT_FOUND: { en: 'No servicing policy is configured for this institution.', ar: 'لا توجد سياسة خدمة تمويل مهيأة لهذه المؤسسة.' },
   // Servicing (S2). A refusal here presented and reported nothing.
   NOTHING_TO_COLLECT: { en: 'No instalment is due for collection now.', ar: 'لا يوجد قسط مستحق للتحصيل الآن.' },
   COLLECTION_NOT_FOUND: { en: 'No presented instalment matches that result.', ar: 'لا يوجد قسط مُقدَّم يطابق هذه النتيجة.' },

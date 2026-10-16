@@ -11,6 +11,12 @@ import type { ReactElement } from 'react';
 import { delinquencyBucket } from '@sanad/core/servicing/instalment-position.ts';
 
 import {
+  approveRestructureAction,
+  assessLateChargesAction,
+  liftHardshipAction,
+  proposeRestructureAction,
+  setHardshipAction,
+  waiveLateChargeAction,
   confirmRepaymentAction,
   presentCollectionsAction,
   recordFixtureCollectionResultAction,
@@ -258,6 +264,121 @@ export function ServicingCard({
           </form>
         </details>
       </Gate>
+
+      {/* -- S3: late charges, hardship, restructuring ------------------------------------------- */}
+      <div className="mt-5 grid gap-4 lg:grid-cols-3" data-servicing-s3>
+        <div className="rounded-tile border border-line p-4">
+          <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">{t('Late charges', 'رسوم التأخير')}</h3>
+          {s.lateCharges.length === 0 ? (
+            <p className="mb-2 text-[13px] text-ink-quiet">{t('None.', 'لا يوجد.')}</p>
+          ) : (
+            <ul className="mb-2 flex list-none flex-col gap-2 p-0 text-[13px]">
+              {s.lateCharges.map((c) => (
+                <li key={c.instalmentNumber} className="flex flex-wrap items-center gap-2">
+                  <span>
+                    {t('Instalment', 'القسط')} {f.n(c.instalmentNumber)} · {amount(c.amount.minorUnits)}
+                  </span>
+                  <Chip tone={c.treatment === 'CHARITY' ? 'neutral' : 'warn'}>
+                    {c.treatment === 'CHARITY' ? t('To charity', 'للأعمال الخيرية') : t('Fee', 'رسوم')}
+                  </Chip>
+                  {c.waivedBy !== undefined ? (
+                    <Chip tone="good">{t('Waived', 'متنازَل عنها')}</Chip>
+                  ) : (
+                    <Gate staff={staff} act="BUSINESS_VERIFY" arabic={f.arabic} ownWork={c.assessedBy === staff.principalId}>
+                      <form action={waiveLateChargeAction} className="flex flex-wrap items-center gap-1">
+                        {ctx}
+                        <input type="hidden" name="instalment" value={String(c.instalmentNumber)} />
+                        <input name="reason" required minLength={10} placeholder={t('Reason', 'السبب')} className={INPUT} />
+                        <button type="submit" className={BTN_SMALL}>
+                          {t('Waive', 'تنازل')}
+                        </button>
+                      </form>
+                    </Gate>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic}>
+            <form action={assessLateChargesAction}>
+              {ctx}
+              <button type="submit" className={BTN_SMALL}>
+                {t('Assess late charges', 'احتساب رسوم التأخير')}
+              </button>
+            </form>
+          </Gate>
+        </div>
+
+        <div className="rounded-tile border border-line p-4">
+          <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">{t('Hardship', 'التعثر')}</h3>
+          {s.hardship !== undefined ? (
+            <>
+              <p className="mb-2 text-[13px] text-ink">
+                <Chip tone="warn">{t('Collections paused', 'التحصيل متوقف')}</Chip> {s.hardship.reason}
+              </p>
+              <Gate staff={staff} act="BUSINESS_VERIFY" arabic={f.arabic} ownWork={s.hardship.setBy === staff.principalId}>
+                <form action={liftHardshipAction}>
+                  {ctx}
+                  <button type="submit" className={BTN_SMALL}>
+                    {t('Lift hardship', 'رفع حالة التعثر')}
+                  </button>
+                </form>
+              </Gate>
+            </>
+          ) : (
+            <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+              <form action={setHardshipAction} className="grid gap-2">
+                {ctx}
+                <textarea name="reason" required minLength={10} rows={2} placeholder={t('Why the customer is in hardship', 'سبب تعثر العميل')} className={INPUT} />
+                <button type="submit" className={`${BTN_SMALL} justify-self-start`}>
+                  {t('Place in hardship', 'تسجيل حالة تعثر')}
+                </button>
+              </form>
+            </Gate>
+          )}
+        </div>
+
+        <div className="rounded-tile border border-line p-4">
+          <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">{t('Restructuring', 'إعادة الهيكلة')}</h3>
+          {s.restructures.map((rs) => (
+            <div key={rs.restructureId} className="mb-2 text-[13px]">
+              <p>
+                <Id>{rs.restructureId}</Id> · {t(`${f.n(rs.rows.length)} instalments from`, `${f.n(rs.rows.length)} قسطاً اعتباراً من`)}{' '}
+                {f.isoDate(rs.rows[0]?.dueDate ?? rs.effectiveDate)}
+              </p>
+              <p className="text-ink-quiet">
+                {t('Owed', 'المستحق')} {amount(rs.outstandingBefore.minorUnits)} → {amount(rs.totalAfter.minorUnits)}
+              </p>
+              {rs.approvedBy !== undefined ? (
+                <Chip tone="good">{t('In force', 'سارية')}</Chip>
+              ) : (
+                <Gate staff={staff} act="BUSINESS_APPROVE" arabic={f.arabic} ownWork={rs.proposedBy === staff.principalId}>
+                  <form action={approveRestructureAction}>
+                    {ctx}
+                    <input type="hidden" name="restructureId" value={rs.restructureId} />
+                    <button type="submit" className={BTN_SMALL}>
+                      {t('Approve restructuring', 'اعتماد إعادة الهيكلة')}
+                    </button>
+                  </form>
+                </Gate>
+              )}
+            </div>
+          ))}
+          {s.restructures.some((x) => x.approvedBy === undefined) ? null : (
+            <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+              <form action={proposeRestructureAction} className="grid gap-2">
+                {ctx}
+                <input name="numberOfPayments" required inputMode="numeric" dir="ltr" placeholder={t('New instalments', 'عدد الأقساط الجديدة')} className={INPUT} />
+                <input name="firstDueDate" type="date" required dir="ltr" className={INPUT} />
+                <textarea name="reason" required minLength={10} rows={2} placeholder={t('Reason', 'السبب')} className={INPUT} />
+                <button type="submit" className={`${BTN_SMALL} justify-self-start`}>
+                  {t('Propose restructuring', 'اقتراح إعادة هيكلة')}
+                </button>
+              </form>
+            </Gate>
+          )}
+        </div>
+      </div>
     </SectionCard>
   );
 }
