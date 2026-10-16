@@ -446,6 +446,14 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
           'K3: the same closing as the UAE journey — conditions precedent, a payee IBAN (SA, 24 characters, mod 97) confirmed by a second person, tranches, the bank’s signed status report — with the Saudi rails; booked under the tenant’s mapping (SME FINANCE SAR RAG, ILLUSTRATIVE)',
       },
       {
+        id: 'ksa-business-servicing',
+        titleEn: 'Servicing: repayments and arrears',
+        titleAr: 'خدمة التمويل: السداد والمتأخرات',
+        href: '/business',
+        readiness: live(),
+        reference: 'Servicing S1: the same position, receipts and reconciliation as the UAE journey, in SAR; SADAD collection is S2',
+      },
+      {
         id: 'ksa-business-islamic',
         titleEn: 'Islamic SME finance (Tawarruq)',
         titleAr: 'تمويل المنشآت الإسلامي (التورق)',
@@ -552,6 +560,15 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         reference:
           'UAE M6 (core/ports/loan-booking.ts, adapters/tuum/lending-adapter.ts): a disbursed, rate-priced loan booked as a loan contract on the signed terms — Sanad’s rate and APR sent, never taken (a different echoed rate is refused) — idempotent on business:<id>:book; the loan account number, contract and customer references recorded once (LOAN_BOOKED). Product codes per tenant in config/tenants/<t>/core-banking/loan-products.json; Murabaha never booked this way',
         jurisdictions: AE,
+      },
+      {
+        id: 'business-servicing',
+        titleEn: 'Servicing: repayments and arrears',
+        titleAr: 'خدمة التمويل: السداد والمتأخرات',
+        href: '/business',
+        readiness: live(),
+        reference:
+          'Servicing S1 (core/servicing/instalment-position.ts): the position of a disbursed facility against its signed schedule from confirmed receipts — oldest instalment first, charge before principal; due today is due, overdue the day after; arrears, days past due and bucket; stage 9 when past due, without a hand-keyed status. A manual receipt is recorded by finance and counts once a second person confirms it; the loan system’s report is reconciled against Sanad’s, a difference flagged. Collections through SADAD and the partner bank are S2; late charges and restructuring S3. Both jurisdictions',
       },
       {
         id: 'business-handover-api',
