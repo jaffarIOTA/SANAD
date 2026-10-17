@@ -63,9 +63,94 @@ function column(letter: OfferLetter, lang: Lang): string {
 </section>`;
 }
 
-/** The letter as HTML: Arabic column first, English beside it; the version printed in the page footer. */
-export function offerLetterHtml(letter: OfferLetter): string {
+/**
+ * The letterhead: the issuing institution's logo in each script and its two
+ * colours. Configuration (config/tenants/<t>/documents/letter-branding.json);
+ * which brand may appear on a letter, and where, is the caller's decision.
+ */
+export interface LetterBranding {
+  /** Inline SVG markup of the Latin lockup. */
+  readonly logoEnSvg: string;
+  /** Inline SVG markup of the Arabic lockup. */
+  readonly logoArSvg: string;
+  /** #rrggbb: the rule under the letterhead and the footer. */
+  readonly accent: string;
+  /** #rrggbb: headings. */
+  readonly heading: string;
+}
+
+const SVG_ELEMENTS = new Set(['svg', 'g', 'path', 'title']);
+const SVG_ATTRIBUTES = new Set(['xmlns', 'viewBox', 'role', 'aria-label', 'fill', 'transform', 'd']);
+const COLOUR = /^#[0-9A-Fa-f]{6}$/;
+
+/**
+ * An SVG fit to print inline, or undefined. Only shapes: the elements svg, g,
+ * path and title, and the attributes that draw them. No script, style, link,
+ * image, entity or event handler can pass, so the page still loads nothing and
+ * runs nothing.
+ */
+export function safeLetterSvg(svg: string): string | undefined {
+  const s = svg.trim();
+  if (s.length === 0 || s.length > 64 * 1024 || !s.startsWith('<svg') || !s.endsWith('</svg>')) return undefined;
+  // One linear pass, no backtracking: tags, their attributes, and the text between them.
+  let i = 0;
+  let inTitle = false;
+  while (i < s.length) {
+    const open = s.indexOf('<', i);
+    const text = s.slice(i, open < 0 ? s.length : open);
+    // Text is only a title's, and never an entity.
+    if (text.includes('&') || text.includes('>') || (!inTitle && text.trim().length > 0)) return undefined;
+    if (open < 0) break;
+    const close = s.indexOf('>', open);
+    if (close < 0) return undefined;
+    const tag = s.slice(open + 1, close);
+    if (tag.includes('<')) return undefined;
+    const closing = tag.startsWith('/');
+    const body = (closing ? tag.slice(1) : tag).replace(/\/$/, '');
+    const nameEnd = body.search(/\s|$/);
+    const name = body.slice(0, nameEnd);
+    if (!SVG_ELEMENTS.has(name)) return undefined;
+    let rest = body.slice(nameEnd);
+    if (closing && rest.trim().length > 0) return undefined;
+    while (rest.trim().length > 0) {
+      rest = rest.trimStart();
+      const eq = rest.indexOf('="');
+      if (eq <= 0) return undefined;
+      const attr = rest.slice(0, eq);
+      const end = rest.indexOf('"', eq + 2);
+      if (end < 0 || !SVG_ATTRIBUTES.has(attr) || rest.slice(eq + 2, end).includes('&')) return undefined;
+      rest = rest.slice(end + 1);
+      if (rest.length > 0 && !/^\s/.test(rest)) return undefined;
+    }
+    if (name === 'title') inTitle = !closing && !tag.endsWith('/');
+    i = close + 1;
+  }
+  return s;
+}
+
+function letterhead(branding: LetterBranding | undefined): { readonly html: string; readonly css: string } {
+  if (branding === undefined) return { html: '', css: '' };
+  const en = safeLetterSvg(branding.logoEnSvg);
+  const ar = safeLetterSvg(branding.logoArSvg);
+  const accent = COLOUR.test(branding.accent) ? branding.accent : '#444444';
+  const heading = COLOUR.test(branding.heading) ? branding.heading : '#111111';
+  // Right to left: the Arabic lockup sits on the reading side, the Latin one opposite.
+  const html =
+    en === undefined && ar === undefined
+      ? ''
+      : `<header class="letterhead"><div class="logo" lang="ar">${ar ?? ''}</div><div class="logo" lang="en">${en ?? ''}</div></header>`;
+  const css = `
+  .letterhead { display: flex; justify-content: space-between; align-items: center; padding-bottom: 3mm; margin-bottom: 6mm; border-bottom: 0.6mm solid ${accent}; }
+  .letterhead .logo svg { height: 11mm; width: auto; display: block; }
+  h1, h2 { color: ${heading}; }
+  .footer { border-top: 0.3mm solid ${accent}; padding-top: 1.5mm; }`;
+  return { html, css };
+}
+
+/** The letter as HTML: the letterhead when branded, Arabic column first, English beside it; the version in the footer. */
+export function offerLetterHtml(letter: OfferLetter, branding?: LetterBranding): string {
   const version = escapeHtml(letter.version);
+  const head = letterhead(branding);
   return `<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
@@ -77,7 +162,7 @@ export function offerLetterHtml(letter: OfferLetter): string {
   .cols { display: flex; gap: 10mm; align-items: flex-start; }
   .col { flex: 1 1 0; min-width: 0; }
   h1 { font-size: 15pt; margin: 0 0 2mm; }
-  h2 { font-size: 10.5pt; margin: 5mm 0 1.5mm; text-transform: uppercase; letter-spacing: 0.02em; color: #444; }
+  h2 { font-size: 10.5pt; margin: 5mm 0 1.5mm; text-transform: uppercase; letter-spacing: 0.02em; color: #444; }${head.css}
   table { width: 100%; border-collapse: collapse; }
   th, td { padding: 1.2mm 0; border-bottom: 0.2mm solid #ddd; vertical-align: top; text-align: start; }
   th { font-weight: normal; color: #555; width: 45%; padding-inline-end: 3mm; }
@@ -92,6 +177,7 @@ export function offerLetterHtml(letter: OfferLetter): string {
 </style>
 </head>
 <body>
+${head.html}
 <div class="cols">
 ${column(letter, 'ar')}
 ${column(letter, 'en')}
