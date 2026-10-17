@@ -445,28 +445,46 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
   },
   LATE_CHARGES_ASSESSED: { en: 'Late charges assessed.', ar: 'احتُسبت رسوم التأخير.' },
   LATE_CHARGE_WAIVED: { en: 'Late charge waived.', ar: 'تم التنازل عن رسوم التأخير.' },
-  HARDSHIP_SET: { en: 'Hardship recorded: collections and late charges paused.', ar: 'سُجّلت حالة التعثر: أوقف التحصيل ورسوم التأخير.' },
+  HARDSHIP_SET: {
+    en: 'Hardship recorded: collections and late charges paused.',
+    ar: 'سُجّلت حالة التعثر: أوقف التحصيل ورسوم التأخير.',
+  },
   HARDSHIP_LIFTED: { en: 'Hardship lifted.', ar: 'رُفعت حالة التعثر.' },
   RESTRUCTURE_PROPOSED: {
     en: 'Restructuring proposed. It takes effect once a second person approves it.',
     ar: 'اقتُرحت إعادة الهيكلة، وتسري بعد اعتمادها من شخص آخر.',
   },
-  RESTRUCTURE_APPROVED: { en: 'Restructuring approved: the new schedule applies.', ar: 'اعتُمدت إعادة الهيكلة: يسري الجدول الجديد.' },
+  RESTRUCTURE_APPROVED: {
+    en: 'Restructuring approved: the new schedule applies.',
+    ar: 'اعتُمدت إعادة الهيكلة: يسري الجدول الجديد.',
+  },
   COLLECTIONS_PRESENTED: {
     en: 'Instalments presented for collection. Each result arrives from the channel.',
     ar: 'قُدّمت الأقساط للتحصيل، وتصل نتيجة كل منها من القناة.',
   },
   COLLECTION_RESULT_RECORDED: { en: 'Collection result recorded.', ar: 'سُجّلت نتيجة التحصيل.' },
-  BUREAU_STATUS_REPORTED: { en: 'This month’s status queued for the credit bureau.', ar: 'أُدرجت حالة هذا الشهر للإبلاغ إلى المكتب الائتماني.' },
+  BUREAU_STATUS_REPORTED: {
+    en: 'This month’s status queued for the credit bureau.',
+    ar: 'أُدرجت حالة هذا الشهر للإبلاغ إلى المكتب الائتماني.',
+  },
   REPAYMENT_RECORDED: {
     en: 'Repayment recorded. A manual receipt counts once a second person confirms it against the statement.',
     ar: 'سُجّل السداد. يُحتسب المبلغ المُدخل يدوياً بعد تأكيده من شخص آخر مقابل الكشف.',
   },
   REPAYMENT_CONFIRMED: { en: 'Repayment confirmed.', ar: 'تم تأكيد السداد.' },
-  TAWARRUQ_COMMODITY_PURCHASED: { en: 'Commodity bought from the broker at the quoted cost.', ar: 'اشتُريت السلعة من الوسيط بالتكلفة المسعّرة.' },
-  TAWARRUQ_SOLD_TO_CUSTOMER: { en: 'Commodity sold to the customer for the deferred price.', ar: 'بيعت السلعة للعميل بالثمن المؤجل.' },
+  TAWARRUQ_COMMODITY_PURCHASED: {
+    en: 'Commodity bought from the broker at the quoted cost.',
+    ar: 'اشتُريت السلعة من الوسيط بالتكلفة المسعّرة.',
+  },
+  TAWARRUQ_SOLD_TO_CUSTOMER: {
+    en: 'Commodity sold to the customer for the deferred price.',
+    ar: 'بيعت السلعة للعميل بالثمن المؤجل.',
+  },
   TAWARRUQ_TITLE_TRANSFERRED: { en: 'Title passed to the customer.', ar: 'انتقلت الملكية إلى العميل.' },
-  TAWARRUQ_PROCEEDS_REALISED: { en: 'Commodity sold on; the proceeds are ready to pay.', ar: 'بيعت السلعة للغير، والحصيلة جاهزة للصرف.' },
+  TAWARRUQ_PROCEEDS_REALISED: {
+    en: 'Commodity sold on; the proceeds are ready to pay.',
+    ar: 'بيعت السلعة للغير، والحصيلة جاهزة للصرف.',
+  },
   LOAN_BOOKED: {
     en: 'Booked in the loan system. The loan account number is recorded.',
     ar: 'سُجّل في نظام القروض، وحُفظ رقم حساب التمويل.',
@@ -504,7 +522,10 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
     en: 'Guarantee recorded. It counts once a second person confirms it.',
     ar: 'سُجّلت الكفالة، وتُحتسب بعد تأكيدها من شخص آخر.',
   },
-  SECURITY_CONFIRMED: { en: 'Confirmed. It now counts towards the security.', ar: 'تم التأكيد، ويُحتسب الآن ضمن الضمانات.' },
+  SECURITY_CONFIRMED: {
+    en: 'Confirmed. It now counts towards the security.',
+    ar: 'تم التأكيد، ويُحتسب الآن ضمن الضمانات.',
+  },
   SECURITY_WITHDRAWN: { en: 'Withdrawn. It no longer counts.', ar: 'سُحب البند، ولم يعد يُحتسب.' },
   DOCUMENT_UPLOADED: {
     en: 'File uploaded and recorded by its fingerprint. It counts once the checker validates it.',
@@ -948,47 +969,83 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
     ar: 'لم يُصدر محرك المستندات الخطاب، فلم يُحفظ شيء. المعاينة أدناه هي الخطاب.',
   },
   // Servicing (S3). A refusal here charged, waived and restructured nothing.
-  SERVICING_REASON_REQUIRED: { en: 'State the reason in 10 to 500 characters.', ar: 'اذكر السبب في عشرة أحرف إلى خمسمئة حرف.' },
+  SERVICING_REASON_REQUIRED: {
+    en: 'State the reason in 10 to 500 characters.',
+    ar: 'اذكر السبب في عشرة أحرف إلى خمسمئة حرف.',
+  },
   NO_LATE_CHARGE_DUE: {
     en: 'No instalment is overdue beyond the grace days and not yet charged.',
     ar: 'لا يوجد قسط متأخر بعد أيام السماح لم تُحتسب عليه رسوم.',
   },
   LATE_CHARGE_NOT_FOUND: { en: 'No such late charge is outstanding.', ar: 'لا توجد رسوم تأخير قائمة بهذا الوصف.' },
-  FOUR_EYES_SELF_WAIVER: { en: 'You assessed this charge; another person waives it.', ar: 'أنت من احتسب هذه الرسوم؛ يتنازل عنها شخص آخر.' },
+  FOUR_EYES_SELF_WAIVER: {
+    en: 'You assessed this charge; another person waives it.',
+    ar: 'أنت من احتسب هذه الرسوم؛ يتنازل عنها شخص آخر.',
+  },
   HARDSHIP_HOLD: {
     en: 'Collections and late charges are paused while the customer is in hardship.',
     ar: 'التحصيل ورسوم التأخير متوقفة ما دام العميل في حالة تعثر.',
   },
   HARDSHIP_ALREADY_SET: { en: 'The customer is already in hardship.', ar: 'العميل في حالة تعثر مسبقاً.' },
   HARDSHIP_NOT_SET: { en: 'The customer is not in hardship.', ar: 'العميل ليس في حالة تعثر.' },
-  RESTRUCTURE_PENDING: { en: 'A restructuring is already awaiting approval.', ar: 'توجد إعادة هيكلة بانتظار الاعتماد.' },
+  RESTRUCTURE_PENDING: {
+    en: 'A restructuring is already awaiting approval.',
+    ar: 'توجد إعادة هيكلة بانتظار الاعتماد.',
+  },
   RESTRUCTURE_NOT_FOUND: { en: 'No such restructuring.', ar: 'لا توجد إعادة هيكلة بهذا الوصف.' },
-  RESTRUCTURE_ALREADY_APPROVED: { en: 'This restructuring is already approved.', ar: 'إعادة الهيكلة هذه معتمدة مسبقاً.' },
+  RESTRUCTURE_ALREADY_APPROVED: {
+    en: 'This restructuring is already approved.',
+    ar: 'إعادة الهيكلة هذه معتمدة مسبقاً.',
+  },
   RESTRUCTURE_TERMS_INVALID: {
     en: 'The new schedule needs a whole number of instalments within the policy’s limit, the first falling after today.',
     ar: 'يحتاج الجدول الجديد إلى عدد صحيح من الأقساط ضمن حد السياسة، أولها بعد اليوم.',
   },
-  NOTHING_TO_RESTRUCTURE: { en: 'Nothing is owed, so there is nothing to restructure.', ar: 'لا يوجد مستحق، فلا شيء يُعاد هيكلته.' },
+  NOTHING_TO_RESTRUCTURE: {
+    en: 'Nothing is owed, so there is nothing to restructure.',
+    ar: 'لا يوجد مستحق، فلا شيء يُعاد هيكلته.',
+  },
   TOTAL_WOULD_CHANGE: {
     en: 'An Islamic facility is restructured without changing what is owed.',
     ar: 'يُعاد هيكلة التمويل الإسلامي دون تغيير المبلغ المستحق.',
   },
-  SERVICING_POLICY_INVALID: { en: 'The institution’s servicing policy is not readable.', ar: 'تعذّرت قراءة سياسة خدمة التمويل لدى المؤسسة.' },
-  SERVICING_POLICY_NOT_FOUND: { en: 'No servicing policy is configured for this institution.', ar: 'لا توجد سياسة خدمة تمويل مهيأة لهذه المؤسسة.' },
+  SERVICING_POLICY_INVALID: {
+    en: 'The institution’s servicing policy is not readable.',
+    ar: 'تعذّرت قراءة سياسة خدمة التمويل لدى المؤسسة.',
+  },
+  SERVICING_POLICY_NOT_FOUND: {
+    en: 'No servicing policy is configured for this institution.',
+    ar: 'لا توجد سياسة خدمة تمويل مهيأة لهذه المؤسسة.',
+  },
   // Servicing (S2). A refusal here presented and reported nothing.
   NOTHING_TO_COLLECT: { en: 'No instalment is due for collection now.', ar: 'لا يوجد قسط مستحق للتحصيل الآن.' },
-  COLLECTION_NOT_FOUND: { en: 'No presented instalment matches that result.', ar: 'لا يوجد قسط مُقدَّم يطابق هذه النتيجة.' },
-  BUREAU_ALREADY_REPORTED: { en: 'This month’s status is already reported to the bureau.', ar: 'حالة هذا الشهر مُبلَّغة للمكتب الائتماني مسبقاً.' },
+  COLLECTION_NOT_FOUND: {
+    en: 'No presented instalment matches that result.',
+    ar: 'لا يوجد قسط مُقدَّم يطابق هذه النتيجة.',
+  },
+  BUREAU_ALREADY_REPORTED: {
+    en: 'This month’s status is already reported to the bureau.',
+    ar: 'حالة هذا الشهر مُبلَّغة للمكتب الائتماني مسبقاً.',
+  },
   // Servicing (S1). A refusal here recorded nothing.
   REPAYMENT_AMOUNT_INVALID: { en: 'A repayment is a positive amount.', ar: 'السداد مبلغ موجب.' },
-  REPAYMENT_DATE_INVALID: { en: 'A repayment is dated between disbursement and today.', ar: 'يكون تاريخ السداد بين الصرف واليوم.' },
-  REPAYMENT_REF_INVALID: { en: 'Record the bank’s or channel’s reference for the receipt.', ar: 'سجّل مرجع البنك أو القناة للمبلغ المستلم.' },
+  REPAYMENT_DATE_INVALID: {
+    en: 'A repayment is dated between disbursement and today.',
+    ar: 'يكون تاريخ السداد بين الصرف واليوم.',
+  },
+  REPAYMENT_REF_INVALID: {
+    en: 'Record the bank’s or channel’s reference for the receipt.',
+    ar: 'سجّل مرجع البنك أو القناة للمبلغ المستلم.',
+  },
   REPAYMENT_DUPLICATE: { en: 'This receipt is already recorded.', ar: 'هذا المبلغ مُسجَّل مسبقاً.' },
   REPAYMENT_NOT_FOUND: { en: 'That repayment is not on the facility.', ar: 'هذا السداد غير موجود على التمويل.' },
   REPAYMENT_ALREADY_CONFIRMED: { en: 'That repayment is already confirmed.', ar: 'هذا السداد مؤكَّد مسبقاً.' },
   // Tawarruq execution (KSA K4). A refusal here bought, sold and paid nothing.
   NOT_TAWARRUQ: { en: 'This application is not a Tawarruq.', ar: 'هذا الطلب ليس تورقاً.' },
-  TAWARRUQ_BEFORE_SIGNATURE: { en: 'The commodity is bought only once the customer has signed.', ar: 'لا تُشترى السلعة إلا بعد توقيع العميل.' },
+  TAWARRUQ_BEFORE_SIGNATURE: {
+    en: 'The commodity is bought only once the customer has signed.',
+    ar: 'لا تُشترى السلعة إلا بعد توقيع العميل.',
+  },
   TAWARRUQ_STEP_OUT_OF_ORDER: {
     en: 'The Tawarruq steps run in order: buy, sell to the customer, transfer title, sell on.',
     ar: 'تجري خطوات التورق بالترتيب: الشراء، ثم البيع للعميل، ثم نقل الملكية، ثم البيع للغير.',
@@ -997,10 +1054,19 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
     en: 'The proceeds are paid only after the commodity is bought, sold to the customer, title has passed and it is sold on.',
     ar: 'لا تُصرف الحصيلة إلا بعد شراء السلعة وبيعها للعميل ونقل ملكيتها وبيعها للغير.',
   },
-  TRANCHES_NOT_PERMITTED: { en: 'A Tawarruq pays its proceeds once; it is not drawn in tranches.', ar: 'يُصرف التورق دفعة واحدة؛ ولا يُسحب على دفعات.' },
-  BROKER_REFUSED: { en: 'The commodity broker did not confirm the step, so nothing was recorded.', ar: 'لم يؤكد وسيط السلع الخطوة، فلم يُسجَّل شيء.' },
+  TRANCHES_NOT_PERMITTED: {
+    en: 'A Tawarruq pays its proceeds once; it is not drawn in tranches.',
+    ar: 'يُصرف التورق دفعة واحدة؛ ولا يُسحب على دفعات.',
+  },
+  BROKER_REFUSED: {
+    en: 'The commodity broker did not confirm the step, so nothing was recorded.',
+    ar: 'لم يؤكد وسيط السلع الخطوة، فلم يُسجَّل شيء.',
+  },
   // Booking in the loan system (UAE M6). A refusal here booked nothing.
-  LOAN_ALREADY_BOOKED: { en: 'This loan is already booked in the loan system.', ar: 'هذا التمويل مُسجَّل مسبقاً في نظام القروض.' },
+  LOAN_ALREADY_BOOKED: {
+    en: 'This loan is already booked in the loan system.',
+    ar: 'هذا التمويل مُسجَّل مسبقاً في نظام القروض.',
+  },
   LOAN_BOOKING_REF_INVALID: {
     en: 'The loan system returned no usable reference, so nothing was recorded.',
     ar: 'لم يُرجع نظام القروض مرجعاً صالحاً، فلم يُسجَّل شيء.',
@@ -1023,7 +1089,10 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
   },
   LOAN_BOOKING_INVALID: { en: 'The booking terms are incomplete.', ar: 'شروط التسجيل غير مكتملة.' },
   // Tranches and payment results (UAE M5b). A refusal here paid nothing.
-  TRANCHES_LOCKED: { en: 'The drawdown plan changes only before the first release.', ar: 'لا تتغير خطة السحب إلا قبل الصرف الأول.' },
+  TRANCHES_LOCKED: {
+    en: 'The drawdown plan changes only before the first release.',
+    ar: 'لا تتغير خطة السحب إلا قبل الصرف الأول.',
+  },
   TRANCHES_INVALID: {
     en: 'A plan is 1 to 12 positive tranches, dated in order and not before the offer’s disbursement date.',
     ar: 'الخطة من دفعة إلى اثنتي عشرة دفعة موجبة، بتواريخ متتالية لا تسبق تاريخ الصرف في العرض.',
@@ -1033,8 +1102,14 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
     ar: 'يجب أن يساوي مجموع الدفعات مبلغ التمويل تماماً.',
   },
   NO_TRANCHE_TO_RELEASE: { en: 'Every tranche of the facility has been released.', ar: 'صُرفت جميع دفعات التمويل.' },
-  PAYMENT_NOT_FOUND: { en: 'No released tranche carries that payment instruction.', ar: 'لا توجد دفعة مصروفة تحمل أمر الدفع هذا.' },
-  PAYMENT_STATUS_INVALID: { en: 'The bank’s status report was not usable; nothing was recorded.', ar: 'تقرير حالة البنك غير صالح، فلم يُسجَّل شيء.' },
+  PAYMENT_NOT_FOUND: {
+    en: 'No released tranche carries that payment instruction.',
+    ar: 'لا توجد دفعة مصروفة تحمل أمر الدفع هذا.',
+  },
+  PAYMENT_STATUS_INVALID: {
+    en: 'The bank’s status report was not usable; nothing was recorded.',
+    ar: 'تقرير حالة البنك غير صالح، فلم يُسجَّل شيء.',
+  },
   // Closing (UAE M5a). A refusal here signed, recorded and paid nothing.
   CLOSING_LOCKED: {
     en: 'Closing steps are recorded between approval and disbursement.',
@@ -1061,13 +1136,22 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
     en: 'That condition precedent is not on the approved pack.',
     ar: 'هذا الشرط المسبق غير موجود في الحزمة المعتمدة.',
   },
-  CONDITION_ALREADY_VERIFIED: { en: 'That condition precedent is already verified.', ar: 'هذا الشرط المسبق مُتحقَّق منه مسبقاً.' },
-  CONDITION_NOT_SATISFIED: { en: 'Evidence the condition precedent first.', ar: 'قدّم دليل استيفاء الشرط المسبق أولاً.' },
+  CONDITION_ALREADY_VERIFIED: {
+    en: 'That condition precedent is already verified.',
+    ar: 'هذا الشرط المسبق مُتحقَّق منه مسبقاً.',
+  },
+  CONDITION_NOT_SATISFIED: {
+    en: 'Evidence the condition precedent first.',
+    ar: 'قدّم دليل استيفاء الشرط المسبق أولاً.',
+  },
   CONDITIONS_PRECEDENT_OUTSTANDING: {
     en: 'Every condition precedent must be evidenced and verified by a second person before drawdown.',
     ar: 'يجب تقديم دليل كل شرط مسبق والتحقق منه من شخص آخر قبل السحب.',
   },
-  PAYEE_NAME_INVALID: { en: 'Give the account holder’s name, 2 to 140 characters.', ar: 'اذكر اسم صاحب الحساب، من حرفين إلى مئة وأربعين حرفاً.' },
+  PAYEE_NAME_INVALID: {
+    en: 'Give the account holder’s name, 2 to 140 characters.',
+    ar: 'اذكر اسم صاحب الحساب، من حرفين إلى مئة وأربعين حرفاً.',
+  },
   PAYEE_NOT_RECORDED: { en: 'Record the payee account first.', ar: 'سجّل حساب المستفيد أولاً.' },
   PAYEE_ALREADY_CONFIRMED: { en: 'The payee account is already confirmed.', ar: 'حساب المستفيد مؤكَّد مسبقاً.' },
   PAYEE_NOT_CONFIRMED: {
@@ -1106,7 +1190,10 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
   },
   COVENANT_UNKNOWN: { en: 'Choose a covenant from the institution’s list.', ar: 'اختر تعهداً من قائمة المؤسسة.' },
   COVENANT_DUPLICATE: { en: 'This covenant is already attached.', ar: 'هذا التعهد مُضاف مسبقاً.' },
-  PACK_ITEM_NOT_FOUND: { en: 'That condition or covenant is not on the pack.', ar: 'هذا الشرط أو التعهد غير موجود في الحزمة.' },
+  PACK_ITEM_NOT_FOUND: {
+    en: 'That condition or covenant is not on the pack.',
+    ar: 'هذا الشرط أو التعهد غير موجود في الحزمة.',
+  },
   DEVIATION_NOT_FOUND: { en: 'The assessment records no such deviation.', ar: 'لا يسجّل التقييم هذا الاستثناء.' },
   JUSTIFICATION_LENGTH: {
     en: 'State the mitigant in 10 to 1000 characters.',
@@ -1141,7 +1228,10 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
     en: 'Attach the valuation report or deed to the application first, then name it here.',
     ar: 'أرفق تقرير التقييم أو سند الضمان بالطلب أولاً، ثم اختره هنا.',
   },
-  SECURITY_ITEM_NOT_FOUND: { en: 'That item is not in the security register.', ar: 'هذا البند غير موجود في سجل الضمانات.' },
+  SECURITY_ITEM_NOT_FOUND: {
+    en: 'That item is not in the security register.',
+    ar: 'هذا البند غير موجود في سجل الضمانات.',
+  },
   SECURITY_ITEM_WITHDRAWN: {
     en: 'That item has been withdrawn. Record it again if it still applies.',
     ar: 'سُحب هذا البند. سجّله مرة أخرى إن كان لا يزال قائماً.',

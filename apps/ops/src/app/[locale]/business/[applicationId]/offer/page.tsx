@@ -368,10 +368,10 @@ export default async function OfferPage({
                 </bdi>
                 ) — مرجع تجريبي إلى أن يُتحقق من الربط.
               </>
+            ) : saudi ? (
+              'Signed through Nafath — demonstration answers, labelled Fixture, until the Nafath rail is verified.'
             ) : (
-              saudi
-                ? 'Signed through Nafath — demonstration answers, labelled Fixture, until the Nafath rail is verified.'
-                : 'Signed through UAE Pass — a fixture reference until the UAE Pass rail is verified.'
+              'Signed through UAE Pass — a fixture reference until the UAE Pass rail is verified.'
             )
           }
         >
@@ -511,11 +511,16 @@ export default async function OfferPage({
         </details>
 
         {/* The letter as a real PDF, rendered by the document engine, stored by its fingerprint. */}
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-tile border border-line px-4 py-3" data-offer-pdf>
+        <div
+          className="mt-3 flex flex-wrap items-center gap-3 rounded-tile border border-line px-4 py-3"
+          data-offer-pdf
+        >
           {(() => {
             const pdf = [...view.letterPdfs].reverse().find((x) => x.letterVersion === offer.letter.version);
             return pdf === undefined ? (
-              <span className="text-[13px] text-ink-quiet">{t('No PDF of this letter version yet.', 'لا يوجد ملف PDF لإصدار الخطاب هذا بعد.')}</span>
+              <span className="text-[13px] text-ink-quiet">
+                {t('No PDF of this letter version yet.', 'لا يوجد ملف PDF لإصدار الخطاب هذا بعد.')}
+              </span>
             ) : (
               <>
                 <a
@@ -528,8 +533,11 @@ export default async function OfferPage({
                 </a>
                 <SourceBadge source={pdf.storage} f={f} />
                 <span className="text-[11px] text-ink-quiet">
-                  {t(`${f.n(Math.max(1, Math.ceil(pdf.byteLength / 1024)))} KB`, `${f.n(Math.max(1, Math.ceil(pdf.byteLength / 1024)))} ك.ب`)} ·{' '}
-                  <Id>{pdf.sha256Hex.slice(0, 12)}</Id>
+                  {t(
+                    `${f.n(Math.max(1, Math.ceil(pdf.byteLength / 1024)))} KB`,
+                    `${f.n(Math.max(1, Math.ceil(pdf.byteLength / 1024)))} ك.ب`,
+                  )}{' '}
+                  · <Id>{pdf.sha256Hex.slice(0, 12)}</Id>
                 </span>
               </>
             );
@@ -868,7 +876,11 @@ function NextStep({
         <div className="flex flex-col gap-4">
           <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
             {view.closing.signing === undefined ? (
-              <form action={startSigningAction} className="flex flex-wrap items-center justify-between gap-3" data-start-signing>
+              <form
+                action={startSigningAction}
+                className="flex flex-wrap items-center justify-between gap-3"
+                data-start-signing
+              >
                 {ctx}
                 <p className="text-[13px] text-ink-quiet">
                   {t(
@@ -881,7 +893,11 @@ function NextStep({
                 </button>
               </form>
             ) : (
-              <form action={confirmSigningAction} className="flex flex-wrap items-center justify-between gap-3" data-confirm-signing>
+              <form
+                action={confirmSigningAction}
+                className="flex flex-wrap items-center justify-between gap-3"
+                data-confirm-signing
+              >
                 {ctx}
                 <p className="text-[13px] text-ink-quiet">
                   {t(
@@ -997,7 +1013,11 @@ function NextStep({
         <div className="flex flex-col gap-3">
           {nextTranche === undefined ? null : (
             <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic} ownWork={a.submittedBy === staff.principalId}>
-              <form action={recordDisbursedAction} className="flex flex-wrap items-center justify-between gap-3" data-release-tranche>
+              <form
+                action={recordDisbursedAction}
+                className="flex flex-wrap items-center justify-between gap-3"
+                data-release-tranche
+              >
                 {ctx}
                 <p className="text-[13px] text-ink-quiet">
                   {nextTranche.status === 'FAILED'
@@ -1042,7 +1062,11 @@ function NextStep({
             </p>
           ) : (
             <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic}>
-              <form action={bookLoanAction} className="flex flex-wrap items-center justify-between gap-3" data-book-loan>
+              <form
+                action={bookLoanAction}
+                className="flex flex-wrap items-center justify-between gap-3"
+                data-book-loan
+              >
                 {ctx}
                 <p className="text-[13px] text-ink-quiet">
                   {t(
