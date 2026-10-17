@@ -1,6 +1,15 @@
 name: Sync Discovered API with APIConnect
 
-on: [push, pull_request, workflow_dispatch]
+# Only when an API definition (or this workflow) changes: on main, on a pull request, or by hand. Before
+# 2026-10-17 it ran on every push, so the first push of each feature branch — which has no previous commit to
+# compare with, and so counts every gateway file as changed — called API Connect for nothing.
+on:
+  push:
+    branches: [main]
+    paths: ['gateway/ibm/**', '.github/workflows/ibm.yml']
+  pull_request:
+    paths: ['gateway/ibm/**', '.github/workflows/ibm.yml']
+  workflow_dispatch:
 
 # Read the repository; nothing else (SR-022).
 permissions:

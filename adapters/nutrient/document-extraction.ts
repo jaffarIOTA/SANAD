@@ -109,7 +109,8 @@ export class NutrientDocumentExtraction implements DocumentExtractionPort {
     );
     if (!endpoint.ok) return ok({ kind: 'UNAVAILABLE', reason: endpoint.reason });
     const form = new FormData();
-    form.append('document', new Blob([params.pdf], { type: 'application/pdf' }), 'document.pdf');
+    // A copy backed by a plain ArrayBuffer: the DOM's BlobPart does not take a view over a shared buffer.
+    form.append('document', new Blob([new Uint8Array(params.pdf)], { type: 'application/pdf' }), 'document.pdf');
     form.append(
       'instructions',
       JSON.stringify({

@@ -4,7 +4,9 @@
  * account through the partner bank). Each case attempts a doubled or a lost
  * collection and passes only when the service prevents it.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished } from 'vitest';
+
+import { serveFromEnvironmentMap } from '../support/credentials.ts';
 
 import { expectOk } from '@sanad/core/kernel/result.ts';
 import {
@@ -47,16 +49,54 @@ describe('collections', () => {
     if (first === undefined) throw new Error('nothing presented');
     const before = v.servicing?.position.arrears.minorUnits ?? 0n;
     const paid = expectOk(
-      await recordCollectionResult(TENANT, ID, { idempotencyKey: first.idempotencyKey, status: 'PAID', reference: 'pb-coll-1', receivedOn: today(), source: 'FIXTURE' }, 'partner-bank'),
+      await recordCollectionResult(
+        TENANT,
+        ID,
+        {
+          idempotencyKey: first.idempotencyKey,
+          status: 'PAID',
+          reference: 'pb-coll-1',
+          receivedOn: today(),
+          source: 'FIXTURE',
+        },
+        'partner-bank',
+      ),
     );
-    expect(paid.servicing?.repayments.at(-1)).toMatchObject({ channel: 'PARTNER_BANK', confirmedBy: 'rail:partner_bank' });
+    expect(paid.servicing?.repayments.at(-1)).toMatchObject({
+      channel: 'PARTNER_BANK',
+      confirmedBy: 'rail:partner_bank',
+    });
     expect(paid.servicing?.position.arrears.minorUnits).toBeLessThan(before);
     const again = expectOk(
-      await recordCollectionResult(TENANT, ID, { idempotencyKey: first.idempotencyKey, status: 'PAID', reference: 'pb-coll-1', receivedOn: today(), source: 'FIXTURE' }, 'partner-bank'),
+      await recordCollectionResult(
+        TENANT,
+        ID,
+        {
+          idempotencyKey: first.idempotencyKey,
+          status: 'PAID',
+          reference: 'pb-coll-1',
+          receivedOn: today(),
+          source: 'FIXTURE',
+        },
+        'partner-bank',
+      ),
     );
     expect(again.servicing?.repayments).toHaveLength(paid.servicing?.repayments.length ?? 0);
     if (second !== undefined) {
-      expectOk(await recordCollectionResult(TENANT, ID, { idempotencyKey: second.idempotencyKey, status: 'RETURNED', reference: 'pb-coll-2', receivedOn: today(), source: 'FIXTURE' }, 'partner-bank'));
+      expectOk(
+        await recordCollectionResult(
+          TENANT,
+          ID,
+          {
+            idempotencyKey: second.idempotencyKey,
+            status: 'RETURNED',
+            reference: 'pb-coll-2',
+            receivedOn: today(),
+            source: 'FIXTURE',
+          },
+          'partner-bank',
+        ),
+      );
       const re = expectOk(await presentCollections(TENANT, ID, finance));
       expect(re.servicing?.collections.at(-1)?.idempotencyKey).toBe(`${second.idempotencyKey}:R1`);
     }
@@ -64,18 +104,37 @@ describe('collections', () => {
 
   it('reports the month to the bureau once; a facility repaid in full is reported settled once', async () => {
     const v = expectOk(await reportToBureau(TENANT, ID, finance));
-    const report = queuedBusinessNotifications().find((e) => e.subjectRef === ID && e.idempotencyKey === `business:${ID}:bureau:${today().slice(0, 7)}`);
-    expect(report?.payload).toMatchObject({ event: (v.servicing?.position.daysPastDue ?? 0) > 0 ? 'ARREARS' : 'INSTALMENT_PAID' });
+    const report = queuedBusinessNotifications().find(
+      (e) => e.subjectRef === ID && e.idempotencyKey === `business:${ID}:bureau:${today().slice(0, 7)}`,
+    );
+    expect(report?.payload).toMatchObject({
+      event: (v.servicing?.position.daysPastDue ?? 0) > 0 ? 'ARREARS' : 'INSTALMENT_PAID',
+    });
     expect(reason(await reportToBureau(TENANT, ID, finance))).toBe('BUREAU_ALREADY_REPORTED');
     // Pay everything still owed, confirmed by a second person: the bureau hears SETTLED, once.
     const owed = (await getApplication(TENANT, ID))?.servicing?.position.outstandingTotal.minorUnits ?? 0n;
     expect(owed).toBeGreaterThan(0n);
     const rp = expectOk(
-      await recordRepayment(TENANT, ID, { amountMinorUnits: owed, receivedOn: today(), reference: 'bank-ref-payoff', channel: 'MANUAL', source: 'LIVE' }, finance),
+      await recordRepayment(
+        TENANT,
+        ID,
+        {
+          amountMinorUnits: owed,
+          receivedOn: today(),
+          reference: 'bank-ref-payoff',
+          channel: 'MANUAL',
+          source: 'LIVE',
+        },
+        finance,
+      ),
     );
-    const settled = expectOk(await confirmRepayment(TENANT, ID, rp.servicing?.repayments.at(-1)?.repaymentId ?? '', checker));
+    const settled = expectOk(
+      await confirmRepayment(TENANT, ID, rp.servicing?.repayments.at(-1)?.repaymentId ?? '', checker),
+    );
     expect(settled.servicing?.position.outstandingTotal.minorUnits).toBe(0n);
-    const settledReports = queuedBusinessNotifications().filter((e) => e.subjectRef === ID && e.idempotencyKey === `business:${ID}:bureau:settled`);
+    const settledReports = queuedBusinessNotifications().filter(
+      (e) => e.subjectRef === ID && e.idempotencyKey === `business:${ID}:bureau:settled`,
+    );
     expect(settledReports).toHaveLength(1);
     expect(settledReports[0]?.payload['event']).toBe('SETTLED');
   });
@@ -83,16 +142,35 @@ describe('collections', () => {
 
 describe('the collection-results webhook', () => {
   it('records a signed paid result; refuses an unsigned one', async () => {
-    process.env['SANAD_CREDENTIAL_PAYMENTS_HUB_SANDBOX_WEBHOOK_SECRET'] = 'test-webhook-secret-for-collections-0123456789';
+    // From an environment map even where a database (and so the vault) is configured: the CI database suite.
+    const restore = serveFromEnvironmentMap({
+      SANAD_CREDENTIAL_PAYMENTS_HUB_SANDBOX_WEBHOOK_SECRET: 'test-webhook-secret-for-collections-0123456789',
+    });
+    onTestFinished(restore);
     const v = expectOk(await presentCollections(TENANT, ID, finance));
     const key = v.servicing?.collections[0]?.idempotencyKey ?? '';
-    const raw = JSON.stringify({ applicationId: ID, idempotencyKey: key, status: 'PAID', reference: 'pb-hook-1', receivedOn: today() });
-    const unsigned = await POST(new Request('https://ops.example/x', { method: 'POST', body: raw }), { params: Promise.resolve({ tenant: TENANT }) });
-    expect(unsigned.status).toBe(401);
-    const header = signWebhook(new TextEncoder().encode('test-webhook-secret-for-collections-0123456789'), raw, BigInt(Math.floor(Date.now() / 1000)));
-    const signed = await POST(new Request('https://ops.example/x', { method: 'POST', body: raw, headers: { 'Sanad-Signature': header } }), {
+    const raw = JSON.stringify({
+      applicationId: ID,
+      idempotencyKey: key,
+      status: 'PAID',
+      reference: 'pb-hook-1',
+      receivedOn: today(),
+    });
+    const unsigned = await POST(new Request('https://ops.example/x', { method: 'POST', body: raw }), {
       params: Promise.resolve({ tenant: TENANT }),
     });
+    expect(unsigned.status).toBe(401);
+    const header = signWebhook(
+      new TextEncoder().encode('test-webhook-secret-for-collections-0123456789'),
+      raw,
+      BigInt(Math.floor(Date.now() / 1000)),
+    );
+    const signed = await POST(
+      new Request('https://ops.example/x', { method: 'POST', body: raw, headers: { 'Sanad-Signature': header } }),
+      {
+        params: Promise.resolve({ tenant: TENANT }),
+      },
+    );
     expect(signed.status).toBe(204);
     expect((await getApplication(TENANT, ID))?.servicing?.collections[0]?.result).toBe('PAID');
   });

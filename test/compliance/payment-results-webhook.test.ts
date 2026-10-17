@@ -5,9 +5,10 @@
  * secret records the result. The tenant is the one whose secret verified the
  * signature — a body naming another is not read.
  */
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { signWebhook } from '../../adapters/kernel/webhook-signature.ts';
+import { serveFromEnvironmentMap } from '../support/credentials.ts';
 import { getApplication, listApplications, resetBusinessStore } from '../../apps/ops/src/server/business.ts';
 import { POST } from '../../apps/ops/src/app/api/business/v1/webhooks/payment-results/[tenant]/route.ts';
 
@@ -15,9 +16,12 @@ const SECRET = 'test-webhook-secret-for-payment-results-0123456789';
 const TENANT = 'sme-fund-ae';
 let id = '';
 
+// From an environment map even where a database (and so the vault) is configured: the CI database suite.
+let restoreProvider = (): void => undefined;
 beforeAll(() => {
-  process.env['SANAD_CREDENTIAL_PAYMENTS_HUB_SANDBOX_WEBHOOK_SECRET'] = SECRET;
+  restoreProvider = serveFromEnvironmentMap({ SANAD_CREDENTIAL_PAYMENTS_HUB_SANDBOX_WEBHOOK_SECRET: SECRET });
 });
+afterAll(() => restoreProvider());
 
 beforeEach(async () => {
   resetBusinessStore();
@@ -38,7 +42,12 @@ const deliver = (body: unknown, opts: { secret?: string; header?: string | null;
   });
   return POST(request, { params: Promise.resolve({ tenant: opts.tenant ?? TENANT }) });
 };
-const settled = () => ({ applicationId: id, idempotencyKey: `business:${id}:disburse`, status: 'SETTLED', instructionRef: 'pb-1' });
+const settled = () => ({
+  applicationId: id,
+  idempotencyKey: `business:${id}:disburse`,
+  status: 'SETTLED',
+  instructionRef: 'pb-1',
+});
 const trancheStatus = async () => (await getApplication(TENANT, id))?.closing.tranches?.[0]?.status;
 
 describe('payment status reports', () => {

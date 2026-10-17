@@ -13,6 +13,10 @@ Constraints while it is interim:
 - **Licence unconfirmed.** A forum purchase may not carry the pack author's licence for use as a product logo. Do not
   use it in print, on a client contract, in a trademark filing or in marketing outside the hosted synthetic
   environment.
+- **Offer letters.** The demo tenants' letterhead (`config/branding/sanad-interim.json`, generated from the colour
+  logo files here) is marked `INTERIM_SYNTHETIC_ONLY`. The ops app prints it on a rendered letter only where a
+  synthetic demonstration is permitted, and a deployed letter prints without a logo. An institution's own letterhead
+  goes in its own brand file with `markStatus: "OWNED"`, named from `config/tenants/<t>/documents/letter-branding.json`.
 - **To replace it,** license (or commission) a mark the product owner owns. Then replace the four paths in
   `BrandMark` and each app's `icon.svg`, and change this file's status.
 
