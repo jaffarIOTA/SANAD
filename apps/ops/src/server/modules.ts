@@ -696,7 +696,10 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         id: 'generated',
         titleEn: 'Generated documents',
         titleAr: 'المستندات الصادرة',
-        readiness: { kind: 'BLOCKED', on: 'Document platform licence scope — Web SDK alone, or with Document Engine.' },
+        readiness: {
+          kind: 'BLOCKED',
+          on: 'Document Engine runs locally in Nutrient’s evaluation mode (adapters/nutrient/compose; V-02 and V-03 passed 2026-10-17, and HTML-to-PDF renders Arabic joined and right-to-left); the production licence and the in-Kingdom deployment are still to come, and evaluation output carries a watermark.',
+        },
         reference: 'OI-05',
       },
       {

@@ -8,9 +8,13 @@
 # reference on first start (check V-02).
 services:
   document-engine:
-    image: pspdfkit/document-engine:1.7.0
+    image: pspdfkit/document-engine:1.19.0
     environment:
-      ACTIVATION_KEY: ${ACTIVATION_KEY:?set in compose/.env from the trial licence}
+      # Empty: the engine runs in evaluation mode — Nutrient's trial, no key required, a watermark on
+      # every exported document. A purchased licence's key goes in compose/.env; nowhere else.
+      # 1.19 reads LICENSE_KEY; ACTIVATION_KEY is the older name, kept so an older .env still works.
+      LICENSE_KEY: ${LICENSE_KEY:-}
+      ACTIVATION_KEY: ${ACTIVATION_KEY:-}
       API_AUTH_TOKEN: ${API_AUTH_TOKEN:?written by scripts/nutrient-dev-keys.sh}
       SECRET_KEY_BASE: ${SECRET_KEY_BASE:?written by scripts/nutrient-dev-keys.sh}
       JWT_ALGORITHM: RS256
