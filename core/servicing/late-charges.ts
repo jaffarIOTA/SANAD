@@ -31,12 +31,20 @@ export function parseServicingPolicy(raw: unknown): Result<ServicingPolicy> {
   if (typeof amount !== 'string' || !/^\d{1,12}$/.test(amount))
     return reject('OP-DETERMINACY', 'SERVICING_POLICY_INVALID', 'The late charge is a whole number of minor units');
   if (typeof max !== 'number' || !Number.isInteger(max) || max < 1 || max > 120)
-    return reject('OP-DETERMINACY', 'SERVICING_POLICY_INVALID', 'The restructured schedule has at most 120 instalments');
-  return ok({ policyRef: r['policyRef'], lateCharge: { graceDays: grace, amountMinorUnits: BigInt(amount) }, restructuring: { maxPayments: max } });
+    return reject(
+      'OP-DETERMINACY',
+      'SERVICING_POLICY_INVALID',
+      'The restructured schedule has at most 120 instalments',
+    );
+  return ok({
+    policyRef: r['policyRef'],
+    lateCharge: { graceDays: grace, amountMinorUnits: BigInt(amount) },
+    restructuring: { maxPayments: max },
+  });
 }
 
 export interface LateChargeDue {
-  readonly instalmentNumber: number;
+  readonly scheduleNumber: number;
   readonly amount: Money;
   readonly treatment: 'INCOME' | 'CHARITY';
 }
@@ -51,6 +59,15 @@ export function lateChargesDue(
 ): readonly LateChargeDue[] {
   const today = civilDay(position.asOf) ?? 0;
   return position.instalments
-    .filter((i) => i.state === 'OVERDUE' && today - (civilDay(i.dueDate) ?? today) > policy.lateCharge.graceDays && !alreadyCharged.has(i.number))
-    .map((i) => ({ instalmentNumber: i.number, amount: money(policy.lateCharge.amountMinorUnits, currency), treatment: islamic ? 'CHARITY' : 'INCOME' }));
+    .filter(
+      (i) =>
+        i.state === 'OVERDUE' &&
+        today - (civilDay(i.dueDate) ?? today) > policy.lateCharge.graceDays &&
+        !alreadyCharged.has(i.number),
+    )
+    .map((i) => ({
+      scheduleNumber: i.number,
+      amount: money(policy.lateCharge.amountMinorUnits, currency),
+      treatment: islamic ? 'CHARITY' : 'INCOME',
+    }));
 }

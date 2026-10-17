@@ -443,6 +443,10 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
     en: 'Letter rendered as a PDF and stored by its fingerprint.',
     ar: 'أُصدر الخطاب بصيغة PDF وحُفظ ببصمته.',
   },
+  LETTER_SEALED: {
+    en: 'Signed letter sealed with the institution’s digital signature and stored by its fingerprint.',
+    ar: 'خُتم الخطاب الموقّع بالتوقيع الرقمي للمؤسسة وحُفظ ببصمته.',
+  },
   LATE_CHARGES_ASSESSED: { en: 'Late charges assessed.', ar: 'احتُسبت رسوم التأخير.' },
   LATE_CHARGE_WAIVED: { en: 'Late charge waived.', ar: 'تم التنازل عن رسوم التأخير.' },
   HARDSHIP_SET: {
@@ -968,6 +972,24 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
     en: 'The document engine did not render the letter, so nothing was stored. The preview below is the letter.',
     ar: 'لم يُصدر محرك المستندات الخطاب، فلم يُحفظ شيء. المعاينة أدناه هي الخطاب.',
   },
+  // Sealing the signed letter. A refusal here sealed and stored nothing.
+  DOCUMENT_SIGNING_UNAVAILABLE: {
+    en: 'The document engine or the signing service did not seal the letter, so nothing was stored. Try again.',
+    ar: 'لم يختم محرك المستندات أو خدمة التوقيع الخطاب، فلم يُحفظ شيء. أعد المحاولة.',
+  },
+  LETTER_NOT_SIGNED: {
+    en: 'The letter is sealed only after the customer has signed it.',
+    ar: 'لا يُختم الخطاب إلا بعد أن يوقّعه العميل.',
+  },
+  LETTER_ALREADY_SEALED: { en: 'The signed letter is already sealed.', ar: 'الخطاب الموقّع مختوم بالفعل.' },
+  LETTER_PDF_NOT_RENDERED: {
+    en: 'Render the signed letter version as a PDF first; the seal goes on that PDF.',
+    ar: 'أصدر نسخة PDF من إصدار الخطاب الموقّع أولًا؛ فالختم يوضع على ذلك الملف.',
+  },
+  SEAL_NOT_VALID: {
+    en: 'The seal did not validate (signature, certificate chain or integrity), so it was not recorded.',
+    ar: 'لم يُتحقق من صحة الختم (التوقيع أو سلسلة الشهادات أو سلامة الملف)، فلم يُسجَّل.',
+  },
   // Servicing (S3). A refusal here charged, waived and restructured nothing.
   SERVICING_REASON_REQUIRED: {
     en: 'State the reason in 10 to 500 characters.',
@@ -1304,6 +1326,10 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
   STORAGE_UNAVAILABLE: {
     en: 'The document store is not available, so nothing was stored or recorded. Try again, or attach the document by reference.',
     ar: 'مخزن المستندات غير متاح، فلم يُحفظ أو يُسجَّل شيء. أعد المحاولة، أو أرفق المستند بمرجعه.',
+  },
+  OBJECT_TAMPERED: {
+    en: 'The stored letter PDF no longer matches its fingerprint, so nothing was sealed. Render the letter again and report this.',
+    ar: 'لم يعد ملف PDF المحفوظ للخطاب مطابقًا لبصمته، فلم يُختم شيء. أصدر الخطاب مجددًا وأبلغ عن ذلك.',
   },
   OBJECT_HASH_MISMATCH: {
     en: 'The file changed while it was being stored. Nothing was recorded; upload it again.',

@@ -542,6 +542,8 @@ export interface BusinessApplicationView {
   readonly servicing?: ServicingView;
   /** The offer letters rendered as PDF, by letter version (the PDF is a rendition; the version is the letter). */
   readonly letterPdfs: readonly LetterPdf[];
+  /** The signed letter sealed with the institution's digital signature, once it is. */
+  readonly sealedLetters: readonly SealedLetter[];
   readonly assessments: readonly AssessmentRun[];
   readonly latestAssessment?: AssessmentRun;
   readonly offers: readonly OfferRun[];
@@ -671,7 +673,7 @@ export interface RepaymentRecord {
 
 /** An instalment presented for collection: a SADAD bill (Saudi Arabia) or a direct collection by the partner bank (UAE). */
 export interface CollectionRecord {
-  readonly instalmentNumber: number;
+  readonly scheduleNumber: number;
   readonly idempotencyKey: string;
   readonly channel: 'SADAD' | 'PARTNER_BANK';
   readonly amount: Money;
@@ -682,7 +684,7 @@ export interface CollectionRecord {
 }
 
 export interface LateChargeRecord {
-  readonly instalmentNumber: number;
+  readonly scheduleNumber: number;
   readonly amount: Money;
   /** INCOME for a term loan; CHARITY for an Islamic facility — never the institution's income. */
   readonly treatment: 'INCOME' | 'CHARITY';
@@ -738,6 +740,28 @@ export interface LetterPdf {
   readonly storage: 'LIVE' | 'FIXTURE';
   readonly renderedBy: string;
   readonly renderedAtEpochSeconds: bigint;
+}
+
+export interface SealedLetter {
+  /** The letter version the customer signed. */
+  readonly letterVersion: string;
+  /** The SHA-256 of the rendered PDF that was sealed. */
+  readonly sourceSha256Hex: string;
+  /** The SHA-256 of the sealed PDF (the signed revision), under which its bytes are stored. */
+  readonly sha256Hex: string;
+  readonly byteLength: number;
+  readonly storage: 'LIVE' | 'FIXTURE';
+  /** The customer's signature it seals (the identity service's reference). */
+  readonly signatureRef: string;
+  readonly padesLevel: string;
+  readonly longTermValidation: boolean;
+  readonly signerCommonName: string;
+  readonly issuerCommonName: string;
+  readonly certificateSerialHex: string;
+  /** The signing environment: a sandbox certificate is plumbing, not a signature anyone should rely on. */
+  readonly environment: 'sandbox' | 'uat' | 'production';
+  readonly sealedBy: string;
+  readonly sealedAtEpochSeconds: bigint;
 }
 
 export interface LoanBookingRecord {
@@ -833,6 +857,7 @@ interface BusinessRecord {
   };
   booking?: LoanBookingRecord;
   letterPdfs: LetterPdf[];
+  sealedLetters: SealedLetter[];
   servicing: {
     repayments: RepaymentRecord[];
     collections: CollectionRecord[];
@@ -1270,6 +1295,7 @@ function view(record: BusinessRecord, currency: CurrencyCode): BusinessApplicati
     ...(record.booking === undefined ? {} : { booking: record.booking }),
     ...(servicing === undefined ? {} : { servicing }),
     letterPdfs: [...record.letterPdfs],
+    sealedLetters: [...record.sealedLetters],
     assessments: [...record.assessments],
     ...(latestAssessment === undefined ? {} : { latestAssessment }),
     offers: [...record.offers],
@@ -1332,6 +1358,7 @@ function restoreBook(book: TenantBook, persisted: Awaited<ReturnType<typeof load
       closing: { cps: {} },
       servicing: { repayments: [], collections: [], bureauReports: [], lateCharges: [], restructures: [] },
       letterPdfs: [],
+      sealedLetters: [],
       assessments: [],
       offers: [],
       events: [],
@@ -1774,7 +1801,7 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
       return;
     case 'COLLECTION_PRESENTED':
       r.servicing.collections.push({
-        instalmentNumber: Number.parseInt(d['instalment'] ?? '0', 10),
+        scheduleNumber: Number.parseInt(d['instalment'] ?? '0', 10),
         idempotencyKey: d['idempotencyKey'] ?? '',
         channel: d['channel'] === 'SADAD' ? 'SADAD' : 'PARTNER_BANK',
         amount: money(BigInt(d['amountMinorUnits'] ?? '0'), r.application.requested.currency),
@@ -1794,7 +1821,7 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
     }
     case 'LATE_CHARGE_ASSESSED':
       r.servicing.lateCharges.push({
-        instalmentNumber: Number.parseInt(d['instalment'] ?? '0', 10),
+        scheduleNumber: Number.parseInt(d['instalment'] ?? '0', 10),
         amount: money(BigInt(d['amountMinorUnits'] ?? '0'), r.application.requested.currency),
         treatment: d['treatment'] === 'CHARITY' ? 'CHARITY' : 'INCOME',
         assessedBy: e.actor,
@@ -1803,7 +1830,7 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
       return;
     case 'LATE_CHARGE_WAIVED': {
       const i = r.servicing.lateCharges.findIndex(
-        (x) => String(x.instalmentNumber) === d['instalment'] && x.waivedBy === undefined,
+        (x) => String(x.scheduleNumber) === d['instalment'] && x.waivedBy === undefined,
       );
       if (i >= 0)
         r.servicing.lateCharges[i] = {
@@ -1869,6 +1896,24 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
         storage: d['storage'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
         renderedBy: e.actor,
         renderedAtEpochSeconds: e.atEpochSeconds,
+      });
+      return;
+    case 'LETTER_SEALED':
+      r.sealedLetters.push({
+        letterVersion: d['letterVersion'] ?? '',
+        sourceSha256Hex: d['sourceSha256'] ?? '',
+        sha256Hex: d['sha256'] ?? '',
+        byteLength: Number.parseInt(d['byteLength'] ?? '0', 10),
+        storage: d['storage'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+        signatureRef: d['signatureRef'] ?? '',
+        padesLevel: d['padesLevel'] ?? '',
+        longTermValidation: d['longTermValidation'] === 'true',
+        signerCommonName: d['signerCommonName'] ?? '',
+        issuerCommonName: d['issuerCommonName'] ?? '',
+        certificateSerialHex: d['certificateSerialHex'] ?? '',
+        environment: d['environment'] === 'production' ? 'production' : d['environment'] === 'uat' ? 'uat' : 'sandbox',
+        sealedBy: e.actor,
+        sealedAtEpochSeconds: e.atEpochSeconds,
       });
       return;
     case 'LOAN_BOOKED':
@@ -2334,6 +2379,7 @@ async function handOverAt(
     closing: { cps: {} },
     servicing: { repayments: [], collections: [], bureauReports: [], lateCharges: [], restructures: [] },
     letterPdfs: [],
+    sealedLetters: [],
     assessments: [],
     offers: [],
     events: [],
@@ -5490,14 +5536,14 @@ export async function presentCollections(
       (i) =>
         i.outstanding.minorUnits > 0n &&
         (civilDay(i.dueDate) ?? 0) <= today + COLLECTION_LEAD_DAYS &&
-        !r.servicing.collections.some((c) => c.instalmentNumber === i.number && c.result !== 'RETURNED'),
+        !r.servicing.collections.some((c) => c.scheduleNumber === i.number && c.result !== 'RETURNED'),
     );
     if (due.length === 0) return fail('NOTHING_TO_COLLECT', 'No instalment is due for collection now');
     const at = developmentAttestation().epochSeconds;
     const base = { tenantId: tenant, subjectRef: applicationId, correlationId: applicationId };
     const channel: CollectionRecord['channel'] = saudi ? 'SADAD' : 'PARTNER_BANK';
     const planned = due.map((i) => {
-      const attempts = r.servicing.collections.filter((c) => c.instalmentNumber === i.number).length;
+      const attempts = r.servicing.collections.filter((c) => c.scheduleNumber === i.number).length;
       const key = `business:${applicationId}:collect:I${String(i.number)}${attempts > 0 ? `:R${String(attempts)}` : ''}`;
       return { i, key };
     });
@@ -5534,7 +5580,7 @@ export async function presentCollections(
     commitSideEffects(book, queued.value);
     for (const { i, key } of planned) {
       r.servicing.collections.push({
-        instalmentNumber: i.number,
+        scheduleNumber: i.number,
         idempotencyKey: key,
         channel,
         amount: i.outstanding,
@@ -5753,7 +5799,7 @@ export async function assessLateCharges(
     const due = lateChargesDue(
       s.position,
       policy.value,
-      new Set(r.servicing.lateCharges.map((c) => c.instalmentNumber)),
+      new Set(r.servicing.lateCharges.map((c) => c.scheduleNumber)),
       isTawarruq(r.application.productCode),
       ctx.currency,
     );
@@ -5768,7 +5814,7 @@ export async function assessLateCharges(
         actor,
         atEpochSeconds: at,
         detail: {
-          instalment: String(c.instalmentNumber),
+          instalment: String(c.scheduleNumber),
           amountMinorUnits: c.amount.minorUnits.toString(),
           treatment: c.treatment,
         },
@@ -5782,14 +5828,12 @@ export async function assessLateCharges(
 export async function waiveLateCharge(
   tenant: TenantCode,
   applicationId: string,
-  instalmentNumber: number,
+  scheduleNumber: number,
   reason: string,
   actor: string,
 ): Promise<Result<BusinessApplicationView>> {
   return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
-    const i = r.servicing.lateCharges.findIndex(
-      (c) => c.instalmentNumber === instalmentNumber && c.waivedBy === undefined,
-    );
+    const i = r.servicing.lateCharges.findIndex((c) => c.scheduleNumber === scheduleNumber && c.waivedBy === undefined);
     const c = r.servicing.lateCharges[i];
     if (c === undefined) return fail('LATE_CHARGE_NOT_FOUND', 'No such late charge outstanding');
     if (actor === c.assessedBy)
@@ -5803,7 +5847,7 @@ export async function waiveLateCharge(
       toStage: null,
       actor,
       atEpochSeconds: at,
-      detail: { instalment: String(instalmentNumber), reason: why.value },
+      detail: { instalment: String(scheduleNumber), reason: why.value },
     });
     return ok(true);
   });
@@ -6006,6 +6050,98 @@ export async function recordOfferPdf(
     });
     return ok(true);
   });
+}
+
+/**
+ * Record the signed letter sealed with the institution's digital signature.
+ * Only the letter the customer signed, only from a PDF of exactly that
+ * version, only once, and only a seal the engine validated: a signature that
+ * does not validate, or whose bytes are not intact, is not recorded.
+ */
+export async function recordLetterSealed(
+  tenant: TenantCode,
+  applicationId: string,
+  seal: Omit<SealedLetter, 'sealedBy' | 'sealedAtEpochSeconds' | 'signatureRef'> & {
+    readonly signatureValid: boolean;
+    readonly chainValid: boolean;
+    readonly integrityValid: boolean;
+  },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    const check = sealable(r);
+    if (!check.ok) return check;
+    if (
+      check.value.letterVersion !== seal.letterVersion ||
+      !r.letterPdfs.some((p) => p.sha256Hex === seal.sourceSha256Hex && p.letterVersion === seal.letterVersion)
+    )
+      return fail('LETTER_PDF_NOT_RENDERED', 'Render the signed letter version as a PDF first');
+    if (!seal.signatureValid || !seal.chainValid || !seal.integrityValid)
+      return fail('SEAL_NOT_VALID', 'The document engine did not validate the seal; nothing was recorded');
+    if (!/^[0-9a-f]{64}$/.test(seal.sha256Hex))
+      return fail('DOCUMENT_CONTENT_INVALID', 'A PDF is recorded by the hash of its bytes');
+    const { signatureValid: _s, chainValid: _c, integrityValid: _i, ...kept } = seal;
+    const record: SealedLetter = {
+      ...kept,
+      signatureRef: check.value.signatureRef,
+      sealedBy: actor,
+      sealedAtEpochSeconds: at,
+    };
+    r.sealedLetters.push(record);
+    recordEvent(book, r, {
+      eventType: 'LETTER_SEALED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: {
+        letterVersion: record.letterVersion,
+        sourceSha256: record.sourceSha256Hex,
+        sha256: record.sha256Hex,
+        byteLength: String(record.byteLength),
+        storage: record.storage,
+        signatureRef: record.signatureRef,
+        padesLevel: record.padesLevel,
+        longTermValidation: String(record.longTermValidation),
+        signerCommonName: record.signerCommonName,
+        issuerCommonName: record.issuerCommonName,
+        certificateSerialHex: record.certificateSerialHex,
+        environment: record.environment,
+      },
+    });
+    return ok(true);
+  });
+}
+
+/** Whether the application has a customer signature to seal and has not sealed it yet; the signed version and reference if so. */
+function sealable(r: {
+  readonly application: BusinessApplication;
+  readonly sealedLetters: readonly SealedLetter[];
+}): Result<{
+  readonly letterVersion: string;
+  readonly signatureRef: string;
+}> {
+  const signature = r.application.signature;
+  const letterVersion = r.application.offer?.letterVersion;
+  if (signature === undefined || letterVersion === undefined)
+    return fail('LETTER_NOT_SIGNED', 'The customer has not signed the letter yet');
+  if (r.sealedLetters.some((x) => x.letterVersion === letterVersion))
+    return fail('LETTER_ALREADY_SEALED', 'The signed letter is already sealed');
+  return ok({ letterVersion, signatureRef: signature.signatureRef });
+}
+
+/** The signed letter's version, its signature reference, and the latest PDF of that version, when it can be sealed. */
+export async function sealCandidate(
+  tenant: TenantCode,
+  applicationId: string,
+): Promise<Result<{ readonly letterVersion: string; readonly signatureRef: string; readonly pdf: LetterPdf }>> {
+  const v = await getApplication(tenant, applicationId);
+  if (v === undefined) return notFound(applicationId);
+  const check = sealable({ application: v.application, sealedLetters: v.sealedLetters });
+  if (!check.ok) return check;
+  const pdf = [...v.letterPdfs].reverse().find((p) => p.letterVersion === check.value.letterVersion);
+  if (pdf === undefined) return fail('LETTER_PDF_NOT_RENDERED', 'Render the signed letter version as a PDF first');
+  return ok({ ...check.value, pdf });
 }
 
 async function signAt(

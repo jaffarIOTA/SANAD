@@ -43,7 +43,7 @@ import { uploadBusinessDocument } from './business-storage.ts';
 import { confirmSigning, startSigning } from './business-signing.ts';
 import { recordFixtureCollectionResult, recordFixturePaymentResult } from './business-payments.ts';
 import { bookInLoanSystem } from './business-booking.ts';
-import { renderOfferPdf } from './business-letter-pdf.ts';
+import { renderOfferPdf, sealSignedLetter } from './business-letter-pdf.ts';
 import {
   buyCommodity,
   sellCommodityOnBehalf,
@@ -920,4 +920,10 @@ export async function renderOfferPdfAction(form: FormData): Promise<void> {
       ),
     'OFFER_PDF_RENDERED',
   );
+}
+
+/** The officer seals the signed letter's PDF with the institution's digital signature. */
+export async function sealSignedLetterAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(ctx, () => sealSignedLetter(ctx.tenant, ctx.applicationId, ctx.actor, randomUUID()), 'LETTER_SEALED');
 }
