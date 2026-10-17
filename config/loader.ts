@@ -636,3 +636,86 @@ export function loadServicingPolicy(tenant: TenantCode): Result<ServicingPolicy>
     });
   return parseServicingPolicy(raw);
 }
+
+import bankAWaslParties from './tenants/bank-a/wasl/parties.json' with { type: 'json' };
+
+/** A party by its verified commercial registration — what distinctness is matched on (M-7), never the name. */
+export interface WaslParty {
+  readonly registrationNo: string;
+  readonly nameEn: string;
+  readonly nameAr: string;
+}
+
+export interface WaslProgramme {
+  readonly programmeId: string;
+  readonly nameEn: string;
+  readonly nameAr: string;
+  readonly structureCode: 'MURABAHA';
+  readonly programmeLimitMinorUnits: bigint;
+  /** The supplier whose cleared invoices the programme finances. */
+  readonly anchor: WaslParty;
+}
+
+export interface WaslParties {
+  readonly programmes: readonly WaslProgramme[];
+  /** Distributors that draw under the programmes, by the counterparty id their requests carry. */
+  readonly distributors: readonly (WaslParty & { readonly counterpartyId: string })[];
+}
+
+const WASL_PARTIES: Readonly<Partial<Record<TenantCode, unknown>>> = { 'bank-a': bankAWaslParties };
+
+const CR = /^\d{10}$/;
+const partyOf = (raw: unknown): WaslParty | undefined => {
+  const p = (raw ?? {}) as Record<string, unknown>;
+  return typeof p['registrationNo'] === 'string' &&
+    CR.test(p['registrationNo']) &&
+    typeof p['nameEn'] === 'string' &&
+    p['nameEn'].length > 0 &&
+    typeof p['nameAr'] === 'string' &&
+    p['nameAr'].length > 0
+    ? { registrationNo: p['registrationNo'], nameEn: p['nameEn'], nameAr: p['nameAr'] }
+    : undefined;
+};
+
+/** The tenant's Wasl programmes (with their anchors) and distributors, for a tenant that runs Wasl from the workbench. */
+export function loadWaslParties(tenant: TenantCode): Result<WaslParties> {
+  const raw = WASL_PARTIES[tenant] as { programmes?: unknown; distributors?: unknown } | undefined;
+  const bad = (detail: string) => reject('OP-DETERMINACY', 'WASL_PARTIES_INVALID', detail, { tenant });
+  if (raw === undefined)
+    return reject('OP-DETERMINACY', 'WASL_PARTIES_NOT_FOUND', 'No Wasl programmes are configured for this tenant', {
+      tenant,
+    });
+  const programmes: WaslProgramme[] = [];
+  for (const p of Array.isArray(raw.programmes) ? (raw.programmes as Record<string, unknown>[]) : []) {
+    const anchor = partyOf(p['anchor']);
+    const limit = p['programmeLimitMinorUnits'];
+    if (
+      typeof p['programmeId'] !== 'string' ||
+      !/^prg-\d{4}$/.test(p['programmeId']) ||
+      typeof p['nameEn'] !== 'string' ||
+      typeof p['nameAr'] !== 'string' ||
+      p['structureCode'] !== 'MURABAHA' ||
+      typeof limit !== 'string' ||
+      !/^\d{1,15}$/.test(limit) ||
+      anchor === undefined
+    )
+      return bad('A programme needs an id, names, the MURABAHA structure, a limit in minor units and an anchor');
+    programmes.push({
+      programmeId: p['programmeId'],
+      nameEn: p['nameEn'],
+      nameAr: p['nameAr'],
+      structureCode: 'MURABAHA',
+      programmeLimitMinorUnits: BigInt(limit),
+      anchor,
+    });
+  }
+  const distributors: (WaslParty & { counterpartyId: string })[] = [];
+  for (const d of Array.isArray(raw.distributors) ? (raw.distributors as Record<string, unknown>[]) : []) {
+    const party = partyOf(d);
+    if (typeof d['counterpartyId'] !== 'string' || d['counterpartyId'].length === 0 || party === undefined)
+      return bad('A distributor needs the counterparty id its requests carry, a registration number and names');
+    distributors.push({ counterpartyId: d['counterpartyId'], ...party });
+  }
+  if (programmes.length === 0) return bad('At least one programme is configured');
+  return { ok: true, value: { programmes, distributors } };
+}

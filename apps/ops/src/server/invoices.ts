@@ -154,6 +154,42 @@ export function findClearedInvoice(invoiceUuid: string): ClearedInvoice | undefi
 }
 
 /**
+ * The cleared invoice's lines by goods classification (HS heading), as the
+ * e-invoicing authority holds them — what the Shariah board's goods register
+ * is screened against before a transaction opens (SH-11). Development data:
+ * the fixture invoices and the development book's. An invoice whose lines are
+ * not known cannot be screened, so no transaction opens on it.
+ */
+const DEVELOPMENT_GOODS: Readonly<
+  Record<string, readonly { readonly lineNo: number; readonly goodsClassificationCode: string }[]>
+> = {
+  // The fixture invoices the trade picker offers.
+  '3cf5d9a2-0000-4000-8000-000000000101': [{ lineNo: 1, goodsClassificationCode: '7216' }],
+  '3cf5d9a2-0000-4000-8000-000000000102': [{ lineNo: 1, goodsClassificationCode: '8418' }],
+  '3cf5d9a2-0000-4000-8000-000000000103': [{ lineNo: 1, goodsClassificationCode: '8609' }],
+  '3cf5d9a2-0000-4000-8000-000000000104': [{ lineNo: 1, goodsClassificationCode: '4819' }],
+  '3cf5d9a2-0000-4000-8000-000000000105': [{ lineNo: 1, goodsClassificationCode: '7610' }],
+  '3cf5d9a2-0000-4000-8000-000000000106': [{ lineNo: 1, goodsClassificationCode: '4415' }],
+  '3cf5d9a2-0000-4000-8000-000000000107': [{ lineNo: 1, goodsClassificationCode: '8502' }],
+  // The development book's requests.
+  '3cf5d9a2-0000-4000-8000-000000000001': [{ lineNo: 1, goodsClassificationCode: '7216' }],
+  '3cf5d9a2-0000-4000-8000-000000000002': [
+    { lineNo: 1, goodsClassificationCode: '7308' },
+    { lineNo: 2, goodsClassificationCode: '7318' },
+  ],
+  '3cf5d9a2-0000-4000-8000-000000000003': [{ lineNo: 1, goodsClassificationCode: '8716' }],
+  '3cf5d9a2-0000-4000-8000-000000000004': [{ lineNo: 1, goodsClassificationCode: '1006' }],
+  '3cf5d9a2-0000-4000-8000-000000000005': [{ lineNo: 1, goodsClassificationCode: '8609' }],
+  '3cf5d9a2-0000-4000-8000-000000000008': [{ lineNo: 1, goodsClassificationCode: '8471' }],
+};
+
+export function invoiceGoodsLines(
+  invoiceUuid: string,
+): readonly { readonly lineNo: number; readonly goodsClassificationCode: string }[] | undefined {
+  return DEVELOPMENT_GOODS[invoiceUuid];
+}
+
+/**
  * Why an invoice cannot be financed.
  *
  * Returned so the screen can show the invoice *and* say why it is unavailable.

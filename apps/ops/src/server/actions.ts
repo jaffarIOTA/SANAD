@@ -23,6 +23,9 @@ import type { OriginationChannel } from '@sanad/core/origination/channel.ts';
 import { licenceRefusalText } from '@sanad/core/licensing/explain.ts';
 import { newBusinessPermitted } from '@sanad/origination/licensing.ts';
 
+import type { TenantCode } from '@sanad/config/loader.ts';
+
+import { openTransactionForRequest } from './murabaha-transactions.ts';
 import { authorise, localeSegmentOf } from './session.ts';
 import { requestPrincipal } from './staff.ts';
 import { findClearedInvoice, unavailableReason } from './invoices.ts';
@@ -115,7 +118,22 @@ export async function approveAction(form: FormData): Promise<void> {
   }
 
   await settle(locale, requestId);
+  // The approval opens its transaction, in DRAFT. If opening is refused (goods the board's register cannot
+  // screen, a programme not configured), the approval stands and the request page says why, with a retry.
+  await openTransactionForRequest(staff.tenantId as TenantCode, requestId, staff.principalId);
+  revalidatePath(`/${locale}/transactions`);
   redirect(`/${locale}/requests/${requestId}`);
+}
+
+/** Open the transaction an approved request authorises, where approving did not (a refusal since put right). */
+export async function openTransactionAction(form: FormData): Promise<void> {
+  const locale = localeOf(form);
+  const requestId = field(form, 'requestId');
+  const staff = await authorise(locale, 'REVIEW', requestPath(locale, requestId));
+  const opened = await openTransactionForRequest(staff.tenantId as TenantCode, requestId, staff.principalId);
+  if (!opened.ok) failTo(`/${locale}/requests/${requestId}`, opened.error.control, opened.error.detail);
+  revalidatePath(`/${locale}/transactions`);
+  redirect(`/${locale}/transactions/${opened.value.transactionRef}`);
 }
 
 export async function returnAction(form: FormData): Promise<void> {
