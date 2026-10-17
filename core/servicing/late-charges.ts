@@ -10,11 +10,14 @@
 import { type CurrencyCode, type Money, money } from '../kernel/money.ts';
 import { type Result, ok, reject } from '../kernel/result.ts';
 import { type FacilityPosition, civilDay } from './instalment-position.ts';
+import { type ServicingSchedule, parseServicingSchedule } from './schedule.ts';
 
 export interface ServicingPolicy {
   readonly policyRef: string;
   readonly lateCharge: { readonly graceDays: number; readonly amountMinorUnits: bigint };
   readonly restructuring: { readonly maxPayments: number };
+  /** When the daily servicing cycle runs and from which day the month's bureau status is reported (./schedule.ts). */
+  readonly schedule: ServicingSchedule;
 }
 
 export function parseServicingPolicy(raw: unknown): Result<ServicingPolicy> {
@@ -36,10 +39,13 @@ export function parseServicingPolicy(raw: unknown): Result<ServicingPolicy> {
       'SERVICING_POLICY_INVALID',
       'The restructured schedule has at most 120 instalments',
     );
+  const schedule = parseServicingSchedule(r['schedule']);
+  if (!schedule.ok) return schedule;
   return ok({
     policyRef: r['policyRef'],
     lateCharge: { graceDays: grace, amountMinorUnits: BigInt(amount) },
     restructuring: { maxPayments: max },
+    schedule: schedule.value,
   });
 }
 

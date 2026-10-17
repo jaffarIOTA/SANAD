@@ -45,6 +45,7 @@ import { recordFixtureCollectionResult, recordFixturePaymentResult } from './bus
 import { bookInLoanSystem } from './business-booking.ts';
 import { renderOfferPdf, sealSignedLetter } from './business-letter-pdf.ts';
 import { readFiguresFromStatement } from './business-statement-reading.ts';
+import { runServicingCycleNow } from './servicing-scheduler.ts';
 import {
   buyCommodity,
   sellCommodityOnBehalf,
@@ -858,6 +859,17 @@ export async function recordFixtureCollectionResultAction(form: FormData): Promi
 export async function reportToBureauAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
   return finish(ctx, () => reportToBureau(ctx.tenant, ctx.applicationId, ctx.actor), 'BUREAU_STATUS_REPORTED');
+}
+
+/**
+ * Finance runs today's servicing cycle for the institution now: late charges,
+ * collections and (from the reporting day) the bureau, for every disbursed
+ * facility — what the scheduled cycle does each morning. Idempotent: a second
+ * run the same day changes nothing.
+ */
+export async function runServicingCycleAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  return finish(ctx, () => runServicingCycleNow(ctx.tenant), 'SERVICING_CYCLE_RUN');
 }
 
 // -- Servicing (S3): late charges, hardship, restructuring ---------------------------------

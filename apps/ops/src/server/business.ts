@@ -1125,6 +1125,16 @@ function daysOfIso(iso: string): bigint | undefined {
   return m === null ? undefined : daysFromCivil(BigInt(m[1] ?? '0'), BigInt(m[2] ?? '0'), BigInt(m[3] ?? '0'));
 }
 
+/** A tenant's servicing date at an instant (its own time zone), and the time zone its schedule runs in. */
+export function servicingCalendarOf(
+  tenant: TenantCode,
+): { readonly dateAt: (epochSeconds: bigint) => string; readonly timeZone: string } | undefined {
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return undefined;
+  const profile = ctx.value.profile;
+  return { dateAt: (at) => localDate(at, profile), timeZone: profile.timeZone };
+}
+
 /** The calendar date of an instant in the jurisdiction's time zone. */
 function localDate(at: bigint, profile: JurisdictionProfile): string {
   const local = at + (OFFSET_SECONDS[profile.timeZone] ?? 0n);

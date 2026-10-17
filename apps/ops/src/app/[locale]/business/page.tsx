@@ -7,6 +7,7 @@
 
 import { notFound } from 'next/navigation';
 
+import { arabicIndic } from '@sanad/core/documents/offer-letter.ts';
 import { Icon } from '@sanad/design/icons.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 
@@ -19,10 +20,24 @@ import {
 import { statusChip } from '../../../server/business-dashboard.ts';
 import { listIntakes } from '../../../server/intake.ts';
 import { staffJurisdiction } from '../../../server/jurisdiction.ts';
+import { runServicingCycleAction } from '../../../server/business-actions.ts';
+import { lastServicingCycle } from '../../../server/servicing-scheduler.ts';
 import { pageStaff } from '../../../server/session.ts';
+import { Gate } from '../Gate.tsx';
 import { developmentAttestation } from '../../../server/store.ts';
 import { screenHref } from '../PipelineDashboard.tsx';
-import { Chip, type Formatters, Id, TH, TH_END, formatters, stageRange, stageTitle } from './ui.tsx';
+import {
+  BTN_SECONDARY,
+  Chip,
+  FormContext,
+  type Formatters,
+  Id,
+  TH,
+  TH_END,
+  formatters,
+  stageRange,
+  stageTitle,
+} from './ui.tsx';
 
 type Filter = 'all' | '5' | '6' | '7' | '8' | '9' | 'closed';
 const FILTERS: readonly Filter[] = ['all', '5', '6', '7', '8', '9', 'closed'];
@@ -160,6 +175,61 @@ export default async function BusinessListPage({
           </ul>
         </section>
       )}
+
+      {/* The daily servicing cycle: what the scheduler runs each morning, runnable now by finance. */}
+      {(() => {
+        const facilities = views.filter((v) => v.application.status === 'DISBURSED').length;
+        if (facilities === 0) return null;
+        const last = lastServicingCycle(j.tenant);
+        return (
+          <section
+            className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-card border border-line bg-surface px-5 py-4 shadow-card"
+            data-servicing-cycle
+          >
+            <div className="flex min-w-0 flex-1 basis-[280px] flex-col gap-0.5">
+              <h2 className="text-[15px] font-semibold text-heading">
+                {t('Daily servicing cycle', 'دورة خدمة التمويل اليومية')}
+              </h2>
+              <p className="text-[13px] text-ink-quiet">
+                {t(
+                  `Late charges, collections and the month’s bureau status for ${f.n(facilities)} disbursed facilities. It runs each morning on the institution’s scheduler; running it now does the same, and a second run the same day changes nothing.`,
+                  `رسوم التأخير والتحصيل وحالة الشهر لدى المكتب الائتماني لعدد ${f.n(facilities)} من التمويلات المصروفة. تُنفّذ كل صباح على مُجدول المؤسسة، وتشغيلها الآن يؤدي الشيء نفسه، ولا يغيّر تشغيلها مرة ثانية في اليوم نفسه شيئاً.`,
+                )}
+              </p>
+              {last === undefined ? null : (
+                <p className="text-[12px] text-ink-quiet" data-servicing-last>
+                  {t('Last run', 'آخر تشغيل')}: {f.arabic ? arabicIndic(last.servicingDate) : last.servicingDate} ·{' '}
+                  {t(`${f.n(last.done)} done`, `${f.n(last.done)} مُنجز`)} ·{' '}
+                  {t(`${f.n(last.nothingDue)} nothing due`, `${f.n(last.nothingDue)} لا شيء مستحق`)}
+                  {last.held === 0 ? null : (
+                    <> · {t(`${f.n(last.held)} on hardship hold`, `${f.n(last.held)} معلّق للتعثر`)}</>
+                  )}
+                  {last.failed.length === 0 ? null : (
+                    <span className="font-semibold text-blocked">
+                      {' '}
+                      · {t(
+                        `${f.n(last.failed.length)} to look at`,
+                        `${f.n(last.failed.length)} بحاجة إلى مراجعة`,
+                      )}:{' '}
+                      {last.failed.map((x) => (
+                        <Id key={`${x.applicationId}-${x.task}`}>{`${x.applicationId} ${x.code}`}</Id>
+                      ))}
+                    </span>
+                  )}
+                </p>
+              )}
+            </div>
+            <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic}>
+              <form action={runServicingCycleAction}>
+                <FormContext segment={segment} applicationId="" />
+                <button type="submit" className={BTN_SECONDARY}>
+                  {t('Run today’s cycle', 'تشغيل دورة اليوم')}
+                </button>
+              </form>
+            </Gate>
+          </section>
+        );
+      })()}
 
       <section className="rounded-card border border-line bg-surface shadow-card">
         <nav aria-label={t('Stages', 'المراحل')} className="border-b border-line px-5 pt-4">
