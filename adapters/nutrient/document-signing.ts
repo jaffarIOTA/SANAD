@@ -147,7 +147,8 @@ export class NutrientDocumentSigning implements DocumentSigningPort {
     let documentId: string | undefined;
     try {
       const form = new FormData();
-      form.append('file', new Blob([params.pdf], { type: 'application/pdf' }), 'document.pdf');
+      // A copy backed by a plain ArrayBuffer: the DOM's BlobPart does not take a view over a shared buffer.
+      form.append('file', new Blob([new Uint8Array(params.pdf)], { type: 'application/pdf' }), 'document.pdf');
       const uploaded = (await (await call('/api/documents', { method: 'POST', body: form })).json()) as {
         data?: { document_id?: unknown };
       };

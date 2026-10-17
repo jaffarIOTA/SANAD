@@ -173,7 +173,9 @@ export function offerLetterHtml(letter: OfferLetter, branding?: LetterBranding):
   .validity { margin-top: 4mm; }
   .signatures { display: flex; flex-direction: column; gap: 6mm; }
   .sig .line { border-top: 0.2mm solid #333; padding-top: 1mm; margin-top: 12mm; color: #555; font-size: 9pt; }
-  .footer { position: fixed; bottom: -12mm; left: 0; right: 0; font-size: 7.5pt; color: #777; direction: ltr; text-align: center; }
+  /* In the flow, after the signatures, so it closes the last page and never sits over the text (a fixed footer
+     in the page margin was printed over the content of the second page). */
+  .footer { margin-top: 10mm; padding-top: 1.5mm; font-size: 7.5pt; color: #777; direction: ltr; text-align: center; break-inside: avoid; }
 </style>
 </head>
 <body>
