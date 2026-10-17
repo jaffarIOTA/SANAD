@@ -511,7 +511,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         href: '/business',
         readiness: live(),
         reference:
-          'Verified figures under four eyes (read figures enter only through the system path; keyed figures and corrections are verified by a second principal), documents validated by the checker, variant checklists, SME assessment run by the checker (knock-outs, 40/60 scorecard, risk, STP vs committee) — every threshold ILLUSTRATIVE until the fund supplies its policy. The bureau result is fetched through the AECB rail under the intake consent (FIXTURE until that adapter is verified; nothing typed overrides it); a partner hand-over keys it from the upstream report, labelled keyed; bank-statement facts from Open Finance sit beside the spread, confirmed under four eyes; inputs lock at submission',
+          'Verified figures under four eyes (read figures enter only through the system path — an uploaded PDF statement can be read by the document engine, its tables mapped under the tenant’s row labels, ILLUSTRATIVE; keyed figures and corrections are verified by a second principal), documents validated by the checker, variant checklists, SME assessment run by the checker (knock-outs, 40/60 scorecard, risk, STP vs committee) — every threshold ILLUSTRATIVE until the fund supplies its policy. The bureau result is fetched through the AECB rail under the intake consent (FIXTURE until that adapter is verified; nothing typed overrides it); a partner hand-over keys it from the upstream report, labelled keyed; bank-statement facts from Open Finance sit beside the spread, confirmed under four eyes; inputs lock at submission',
       },
       {
         id: 'business-security',
