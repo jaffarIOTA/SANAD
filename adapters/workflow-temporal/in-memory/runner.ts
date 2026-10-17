@@ -16,6 +16,9 @@ import type { StructureDefinition } from '../../../products/murabaha-scf/structu
 import type { TawarruqTransaction } from '../../../products/tawarruq-personal/execution.ts';
 import { createMurabahaActivities } from '../activities.ts';
 import { type TawarruqPorts, createTawarruqActivities } from '../activities-tawarruq.ts';
+import { type ServicingHost, createServicingActivities } from '../activities-servicing.ts';
+import { type ServicingDayInput, type ServicingEffects, runServicingDay } from '../programs/servicing.ts';
+import type { ServicingDayReport } from '../../../core/servicing/schedule.ts';
 import type {
   Attestation,
   EvidenceStore,
@@ -181,6 +184,28 @@ export async function runMurabahaInMemory(
   };
   const outcome = await runMurabahaSequence(fx, input);
   return { outcome, progress, slept };
+}
+
+/**
+ * One servicing day without a server: the same program and activities, the
+ * host's own application service. What the Temporal workflow does on the
+ * tenant's schedule, run now — by a test, or by the workbench's "run today's
+ * cycle" until the institution's Temporal cluster is running.
+ */
+export async function runServicingDayInMemory(
+  host: ServicingHost,
+  input: ServicingDayInput,
+): Promise<{ readonly report: ServicingDayReport; readonly progress: readonly string[] }> {
+  const acts = createServicingActivities(host);
+  const progress: string[] = [];
+  const fx: ServicingEffects = {
+    plan: () => acts.planServicingDay({ tenantId: input.tenantId }),
+    runTask: (applicationId, task) => acts.runServicingTask({ tenantId: input.tenantId, applicationId, task }),
+    progress: (s) => {
+      progress.push(s);
+    },
+  };
+  return { report: await runServicingDay(fx, input), progress };
 }
 
 export async function runTawarruqInMemory(

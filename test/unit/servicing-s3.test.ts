@@ -19,6 +19,7 @@ const policy = expectOk(
     policyRef: 'ILLUSTRATIVE test',
     lateCharge: { graceDays: 5, amountMinorUnits: '20000' },
     restructuring: { maxPayments: 60 },
+    schedule: { runAtLocal: '06:00', bureauReportingDay: 5 },
   }),
 );
 

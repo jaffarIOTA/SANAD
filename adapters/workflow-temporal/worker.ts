@@ -14,6 +14,7 @@ import { NativeConnection, Worker } from '@temporalio/worker';
 import type { OriginationPolicy } from '../../core/origination/policy.ts';
 import { createMurabahaActivities } from './activities.ts';
 import { type TawarruqPorts, createTawarruqActivities } from './activities-tawarruq.ts';
+import { type ServicingHost, createServicingActivities } from './activities-servicing.ts';
 import { SEQUENCING_TASK_QUEUE } from './adapter.ts';
 import type { SequencingPorts } from './ports.ts';
 import type { RetryInput } from './workflows/index.ts';
@@ -31,7 +32,12 @@ export function retryFor(policy: OriginationPolicy): RetryInput {
 
 export async function startSequencingWorker(
   config: WorkerConfig,
-  ports: { readonly murabaha: SequencingPorts; readonly tawarruq: TawarruqPorts },
+  ports: {
+    readonly murabaha: SequencingPorts;
+    readonly tawarruq: TawarruqPorts;
+    /** The origination service's servicing operations, for the daily cycle (activities-servicing.ts). */
+    readonly servicing: ServicingHost;
+  },
 ): Promise<Worker> {
   const connection = await NativeConnection.connect({ address: config.address });
   const worker = await Worker.create({
@@ -39,7 +45,11 @@ export async function startSequencingWorker(
     namespace: config.namespace,
     taskQueue: config.taskQueue ?? SEQUENCING_TASK_QUEUE,
     workflowsPath: fileURLToPath(new URL('./workflows/index.ts', import.meta.url)),
-    activities: { ...createMurabahaActivities(ports.murabaha), ...createTawarruqActivities(ports.tawarruq) },
+    activities: {
+      ...createMurabahaActivities(ports.murabaha),
+      ...createTawarruqActivities(ports.tawarruq),
+      ...createServicingActivities(ports.servicing),
+    },
   });
   process.stdout.write(`sequencing worker on ${config.namespace}/${config.taskQueue ?? SEQUENCING_TASK_QUEUE}\n`);
   void worker.run();

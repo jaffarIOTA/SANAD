@@ -7,7 +7,14 @@
  * what lets the outbox retry a start safely.
  */
 
-import { Client, Connection, WorkflowExecutionAlreadyStartedError, WorkflowNotFoundError } from '@temporalio/client';
+import {
+  Client,
+  Connection,
+  ScheduleAlreadyRunning,
+  ScheduleOverlapPolicy,
+  WorkflowExecutionAlreadyStartedError,
+  WorkflowNotFoundError,
+} from '@temporalio/client';
 
 import { type Result, ok, reject } from '../../core/kernel/result.ts';
 import type { WorkflowHandle, WorkflowPort } from '../../core/ports/workflow.ts';
@@ -106,6 +113,55 @@ export class TemporalWorkflowAdapter implements WorkflowPort {
       return ok(undefined);
     } catch {
       return reject('OP-DETERMINACY', 'WORKFLOW_CANCEL_FAILED', 'The cancellation was not accepted', { reason });
+    }
+  }
+
+  /**
+   * The tenant's daily servicing cycle as a Temporal Schedule (Servicing S4):
+   * `servicingDay` at the tenant's local run time, in its own time zone. One
+   * schedule per tenant (`<tenant>/servicing`); calling this again updates it
+   * to the configured time rather than adding a second. An overlapping run is
+   * skipped, and a run missed while the cluster was down is caught up within a
+   * day — the cycle is idempotent, so a catch-up does nothing twice.
+   */
+  async ensureServicingSchedule(params: {
+    readonly tenantId: string;
+    readonly runAtLocal: string;
+    readonly timeZone: string;
+    readonly retry: { readonly maxAttempts: number; readonly backoffSeconds: number };
+  }): Promise<Result<{ readonly scheduleId: string }>> {
+    const [hour, minute] = params.runAtLocal.split(':').map((x) => Number(x));
+    if (hour === undefined || minute === undefined || !Number.isInteger(hour) || !Number.isInteger(minute))
+      return reject('OP-DETERMINACY', 'SERVICING_POLICY_INVALID', 'The servicing cycle runs at a local time, HH:MM');
+    const scheduleId = TemporalWorkflowAdapter.id(params.tenantId, 'servicing');
+    const spec = { calendars: [{ hour, minute, comment: 'daily servicing cycle' }], timezone: params.timeZone };
+    const action = {
+      type: 'startWorkflow' as const,
+      workflowType: 'servicingDay',
+      taskQueue: this.taskQueue,
+      workflowId: TemporalWorkflowAdapter.id(params.tenantId, 'servicing-day'),
+      args: [{ tenantId: params.tenantId, retry: params.retry }],
+      memo: { tenantId: params.tenantId },
+    };
+    const policies = { overlap: ScheduleOverlapPolicy.SKIP, catchupWindow: '1 day' };
+    try {
+      await this.client.schedule.create({ scheduleId, spec, action, policies });
+      return ok({ scheduleId });
+    } catch (error) {
+      if (!(error instanceof ScheduleAlreadyRunning))
+        return reject('OP-DETERMINACY', 'WORKFLOW_SCHEDULE_FAILED', 'The workflow engine did not accept the schedule', {
+          tenantId: params.tenantId,
+        });
+      try {
+        await this.client.schedule
+          .getHandle(scheduleId)
+          .update((previous) => ({ ...previous, spec, action, policies }));
+        return ok({ scheduleId });
+      } catch {
+        return reject('OP-DETERMINACY', 'WORKFLOW_SCHEDULE_FAILED', 'The workflow engine did not update the schedule', {
+          tenantId: params.tenantId,
+        });
+      }
     }
   }
 
