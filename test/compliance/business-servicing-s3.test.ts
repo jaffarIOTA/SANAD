@@ -36,8 +36,10 @@ describe('late charges', () => {
     expect(v.servicing?.lateCharges.length).toBeGreaterThan(0);
     expect(v.servicing?.lateCharges.every((c) => c.treatment === 'INCOME')).toBe(true);
     expect(reason(await assessLateCharges(TENANT, ID, finance))).toBe('NO_LATE_CHARGE_DUE');
-    const n = v.servicing?.lateCharges[0]?.instalmentNumber ?? 0;
-    expect(reason(await waiveLateCharge(TENANT, ID, n, 'Customer disputed the debit date', finance))).toBe('FOUR_EYES_SELF_WAIVER');
+    const n = v.servicing?.lateCharges[0]?.scheduleNumber ?? 0;
+    expect(reason(await waiveLateCharge(TENANT, ID, n, 'Customer disputed the debit date', finance))).toBe(
+      'FOUR_EYES_SELF_WAIVER',
+    );
     const waived = expectOk(await waiveLateCharge(TENANT, ID, n, 'Customer disputed the debit date', checker));
     expect(waived.servicing?.lateCharges[0]?.waivedBy).toBe(checker);
   });
@@ -59,16 +61,30 @@ describe('restructuring', () => {
     const before = await getApplication(TENANT, ID);
     expect(before?.servicing?.position.daysPastDue).toBeGreaterThan(0);
     const proposed = expectOk(
-      await proposeRestructure(TENANT, ID, { firstDueDate: monthAhead(), numberOfPayments: 24, reason: 'Seasonal downturn; longer term agreed' }, officer),
+      await proposeRestructure(
+        TENANT,
+        ID,
+        { firstDueDate: monthAhead(), numberOfPayments: 24, reason: 'Seasonal downturn; longer term agreed' },
+        officer,
+      ),
     );
     const rs = proposed.servicing?.restructures.at(-1);
     expect(rs?.rows).toHaveLength(24);
     // Still in arrears until approved.
     expect(proposed.servicing?.position.daysPastDue).toBeGreaterThan(0);
-    expect(reason(await proposeRestructure(TENANT, ID, { firstDueDate: monthAhead(), numberOfPayments: 12, reason: 'A second proposal meanwhile' }, officer))).toBe(
-      'RESTRUCTURE_PENDING',
+    expect(
+      reason(
+        await proposeRestructure(
+          TENANT,
+          ID,
+          { firstDueDate: monthAhead(), numberOfPayments: 12, reason: 'A second proposal meanwhile' },
+          officer,
+        ),
+      ),
+    ).toBe('RESTRUCTURE_PENDING');
+    expect(reason(await approveRestructure(TENANT, ID, rs?.restructureId ?? '', officer))).toBe(
+      'FOUR_EYES_SELF_APPROVAL',
     );
-    expect(reason(await approveRestructure(TENANT, ID, rs?.restructureId ?? '', officer))).toBe('FOUR_EYES_SELF_APPROVAL');
     const approved = expectOk(await approveRestructure(TENANT, ID, rs?.restructureId ?? '', checker));
     expect(approved.servicing?.position.daysPastDue).toBe(0);
     expect(approved.servicing?.position.outstandingTotal.minorUnits).toBe(rs?.totalAfter.minorUnits);

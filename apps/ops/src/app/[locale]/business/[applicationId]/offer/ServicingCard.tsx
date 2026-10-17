@@ -150,21 +150,32 @@ export function ServicingCard({
         </table>
       </div>
 
-      <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">{t('Collections', 'التحصيل')}</h3>
+      <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">
+        {t('Collections', 'التحصيل')}
+      </h3>
       {s.collections.length === 0 ? (
         <p className="mb-3 text-[13px] text-ink-quiet">{t('Nothing presented yet.', 'لم يُقدَّم شيء بعد.')}</p>
       ) : (
-        <ul className="mb-3 flex list-none flex-col divide-y divide-line rounded-tile border border-line p-0" data-servicing-collections>
+        <ul
+          className="mb-3 flex list-none flex-col divide-y divide-line rounded-tile border border-line p-0"
+          data-servicing-collections
+        >
           {s.collections.map((c) => (
             <li key={c.idempotencyKey} className="flex flex-wrap items-center gap-3 px-4 py-2 text-[13px]">
               <span className="tabular-nums">
-                {t('Instalment', 'القسط')} {f.n(c.instalmentNumber)}
+                {t('Instalment', 'القسط')} {f.n(c.scheduleNumber)}
               </span>
               <span>{f.isoDate(c.dueDate)}</span>
               <span className="font-medium text-heading">{amount(c.amount.minorUnits)}</span>
-              <span className="text-ink-quiet">{t(CHANNEL[c.channel]?.en ?? c.channel, CHANNEL[c.channel]?.ar ?? c.channel)}</span>
+              <span className="text-ink-quiet">
+                {t(CHANNEL[c.channel]?.en ?? c.channel, CHANNEL[c.channel]?.ar ?? c.channel)}
+              </span>
               <Chip tone={c.result === 'PAID' ? 'good' : c.result === 'RETURNED' ? 'bad' : 'warn'}>
-                {c.result === 'PAID' ? t('Paid', 'مدفوع') : c.result === 'RETURNED' ? t('Returned', 'مرتجع') : t('Awaiting the channel', 'بانتظار القناة')}
+                {c.result === 'PAID'
+                  ? t('Paid', 'مدفوع')
+                  : c.result === 'RETURNED'
+                    ? t('Returned', 'مرتجع')
+                    : t('Awaiting the channel', 'بانتظار القناة')}
               </Chip>
             </li>
           ))}
@@ -268,15 +279,17 @@ export function ServicingCard({
       {/* -- S3: late charges, hardship, restructuring ------------------------------------------- */}
       <div className="mt-5 grid gap-4 lg:grid-cols-3" data-servicing-s3>
         <div className="rounded-tile border border-line p-4">
-          <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">{t('Late charges', 'رسوم التأخير')}</h3>
+          <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">
+            {t('Late charges', 'رسوم التأخير')}
+          </h3>
           {s.lateCharges.length === 0 ? (
             <p className="mb-2 text-[13px] text-ink-quiet">{t('None.', 'لا يوجد.')}</p>
           ) : (
             <ul className="mb-2 flex list-none flex-col gap-2 p-0 text-[13px]">
               {s.lateCharges.map((c) => (
-                <li key={c.instalmentNumber} className="flex flex-wrap items-center gap-2">
+                <li key={c.scheduleNumber} className="flex flex-wrap items-center gap-2">
                   <span>
-                    {t('Instalment', 'القسط')} {f.n(c.instalmentNumber)} · {amount(c.amount.minorUnits)}
+                    {t('Instalment', 'القسط')} {f.n(c.scheduleNumber)} · {amount(c.amount.minorUnits)}
                   </span>
                   <Chip tone={c.treatment === 'CHARITY' ? 'neutral' : 'warn'}>
                     {c.treatment === 'CHARITY' ? t('To charity', 'للأعمال الخيرية') : t('Fee', 'رسوم')}
@@ -284,11 +297,22 @@ export function ServicingCard({
                   {c.waivedBy !== undefined ? (
                     <Chip tone="good">{t('Waived', 'متنازَل عنها')}</Chip>
                   ) : (
-                    <Gate staff={staff} act="BUSINESS_VERIFY" arabic={f.arabic} ownWork={c.assessedBy === staff.principalId}>
+                    <Gate
+                      staff={staff}
+                      act="BUSINESS_VERIFY"
+                      arabic={f.arabic}
+                      ownWork={c.assessedBy === staff.principalId}
+                    >
                       <form action={waiveLateChargeAction} className="flex flex-wrap items-center gap-1">
                         {ctx}
-                        <input type="hidden" name="instalment" value={String(c.instalmentNumber)} />
-                        <input name="reason" required minLength={10} placeholder={t('Reason', 'السبب')} className={INPUT} />
+                        <input type="hidden" name="instalment" value={String(c.scheduleNumber)} />
+                        <input
+                          name="reason"
+                          required
+                          minLength={10}
+                          placeholder={t('Reason', 'السبب')}
+                          className={INPUT}
+                        />
                         <button type="submit" className={BTN_SMALL}>
                           {t('Waive', 'تنازل')}
                         </button>
@@ -310,13 +334,20 @@ export function ServicingCard({
         </div>
 
         <div className="rounded-tile border border-line p-4">
-          <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">{t('Hardship', 'التعثر')}</h3>
+          <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">
+            {t('Hardship', 'التعثر')}
+          </h3>
           {s.hardship !== undefined ? (
             <>
               <p className="mb-2 text-[13px] text-ink">
                 <Chip tone="warn">{t('Collections paused', 'التحصيل متوقف')}</Chip> {s.hardship.reason}
               </p>
-              <Gate staff={staff} act="BUSINESS_VERIFY" arabic={f.arabic} ownWork={s.hardship.setBy === staff.principalId}>
+              <Gate
+                staff={staff}
+                act="BUSINESS_VERIFY"
+                arabic={f.arabic}
+                ownWork={s.hardship.setBy === staff.principalId}
+              >
                 <form action={liftHardshipAction}>
                   {ctx}
                   <button type="submit" className={BTN_SMALL}>
@@ -329,7 +360,14 @@ export function ServicingCard({
             <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
               <form action={setHardshipAction} className="grid gap-2">
                 {ctx}
-                <textarea name="reason" required minLength={10} rows={2} placeholder={t('Why the customer is in hardship', 'سبب تعثر العميل')} className={INPUT} />
+                <textarea
+                  name="reason"
+                  required
+                  minLength={10}
+                  rows={2}
+                  placeholder={t('Why the customer is in hardship', 'سبب تعثر العميل')}
+                  className={INPUT}
+                />
                 <button type="submit" className={`${BTN_SMALL} justify-self-start`}>
                   {t('Place in hardship', 'تسجيل حالة تعثر')}
                 </button>
@@ -339,11 +377,14 @@ export function ServicingCard({
         </div>
 
         <div className="rounded-tile border border-line p-4">
-          <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">{t('Restructuring', 'إعادة الهيكلة')}</h3>
+          <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">
+            {t('Restructuring', 'إعادة الهيكلة')}
+          </h3>
           {s.restructures.map((rs) => (
             <div key={rs.restructureId} className="mb-2 text-[13px]">
               <p>
-                <Id>{rs.restructureId}</Id> · {t(`${f.n(rs.rows.length)} instalments from`, `${f.n(rs.rows.length)} قسطاً اعتباراً من`)}{' '}
+                <Id>{rs.restructureId}</Id> ·{' '}
+                {t(`${f.n(rs.rows.length)} instalments from`, `${f.n(rs.rows.length)} قسطاً اعتباراً من`)}{' '}
                 {f.isoDate(rs.rows[0]?.dueDate ?? rs.effectiveDate)}
               </p>
               <p className="text-ink-quiet">
@@ -352,7 +393,12 @@ export function ServicingCard({
               {rs.approvedBy !== undefined ? (
                 <Chip tone="good">{t('In force', 'سارية')}</Chip>
               ) : (
-                <Gate staff={staff} act="BUSINESS_APPROVE" arabic={f.arabic} ownWork={rs.proposedBy === staff.principalId}>
+                <Gate
+                  staff={staff}
+                  act="BUSINESS_APPROVE"
+                  arabic={f.arabic}
+                  ownWork={rs.proposedBy === staff.principalId}
+                >
                   <form action={approveRestructureAction}>
                     {ctx}
                     <input type="hidden" name="restructureId" value={rs.restructureId} />
@@ -368,9 +414,23 @@ export function ServicingCard({
             <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
               <form action={proposeRestructureAction} className="grid gap-2">
                 {ctx}
-                <input name="numberOfPayments" required inputMode="numeric" dir="ltr" placeholder={t('New instalments', 'عدد الأقساط الجديدة')} className={INPUT} />
+                <input
+                  name="numberOfPayments"
+                  required
+                  inputMode="numeric"
+                  dir="ltr"
+                  placeholder={t('New instalments', 'عدد الأقساط الجديدة')}
+                  className={INPUT}
+                />
                 <input name="firstDueDate" type="date" required dir="ltr" className={INPUT} />
-                <textarea name="reason" required minLength={10} rows={2} placeholder={t('Reason', 'السبب')} className={INPUT} />
+                <textarea
+                  name="reason"
+                  required
+                  minLength={10}
+                  rows={2}
+                  placeholder={t('Reason', 'السبب')}
+                  className={INPUT}
+                />
                 <button type="submit" className={`${BTN_SMALL} justify-self-start`}>
                   {t('Propose restructuring', 'اقتراح إعادة هيكلة')}
                 </button>
