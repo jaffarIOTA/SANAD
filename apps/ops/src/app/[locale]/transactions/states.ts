@@ -70,6 +70,23 @@ export const EVIDENCE_STATUS_LABEL: Readonly<Record<string, Words>> = {
 
 /** What a step that went through says, by the notice code the action sends back. */
 export const NOTICE: Readonly<Record<string, Words>> = {
+  COLLECTION_PRESENTED: {
+    en: 'The instalments falling due are presented to SADAD for the distributor to pay.',
+    ar: 'عُرضت الأقساط المستحقة على سداد ليدفعها الموزع.',
+  },
+  SELLER_PAYMENT_REINSTRUCTED: {
+    en: 'The seller’s payment is instructed again, as a new payment.',
+    ar: 'أُعيد توجيه دفعة البائع كدفعة جديدة.',
+  },
+  SELLER_PAYMENT_RESULT: { en: 'The payment’s result is recorded.', ar: 'سُجّلت نتيجة الدفعة.' },
+  PAYMENT_RECEIVED: {
+    en: 'The receipt is applied to what the distributor owes.',
+    ar: 'طُبّق المبلغ المحصّل على ما يدين به الموزع.',
+  },
+  PAYMENT_RETURNED: {
+    en: 'The return is recorded; the instalment can be presented again.',
+    ar: 'سُجّل الارتجاع، ويمكن عرض القسط من جديد.',
+  },
   OBLIGATION_BOOKED: {
     en: 'The obligation is booked: the schedule in Sanad, the receivable in the core banking platform.',
     ar: 'قُيّد الالتزام: الجدول في سند، والمديونية في النظام المصرفي الأساسي.',
@@ -133,8 +150,36 @@ export const BOOKING_REFUSAL: Readonly<Record<string, Words>> = {
   },
 };
 
+export const SETTLEMENT_REFUSAL: Readonly<Record<string, Words>> = {
+  NOTHING_TO_COLLECT: {
+    en: 'No instalment falls due within the collection window, or every one due is already presented.',
+    ar: 'لا يحلّ أي قسط خلال نافذة التحصيل، أو أن كل قسط مستحق معروض بالفعل.',
+  },
+  SELLER_PAYMENT_NOT_FAILED: {
+    en: 'The seller’s payment is in hand or under way; there is nothing to instruct again.',
+    ar: 'دفعة البائع منجزة أو قيد التنفيذ؛ لا شيء يُعاد توجيهه.',
+  },
+  RESULT_ALREADY_RECORDED: { en: 'That result is already recorded.', ar: 'هذه النتيجة مسجّلة بالفعل.' },
+  RESULT_OUT_OF_ORDER: {
+    en: 'That result cannot follow what was already reported.',
+    ar: 'لا يمكن أن تلي هذه النتيجة ما سبق الإبلاغ عنه.',
+  },
+  OVERPAYMENT: {
+    en: 'More than is owed was reported. It is not absorbed; operations returns the difference.',
+    ar: 'أُبلغ عن مبلغ يزيد عما هو مستحق. لا يُستوعب الفرق، وتعيده العمليات.',
+  },
+  RETURN_AFTER_SETTLEMENT: {
+    en: 'A payment came back on a settled obligation. It is not applied automatically; operations resolves it.',
+    ar: 'ارتجعت دفعة على التزام مسدّد. لا تُطبّق تلقائياً، وتعالجها العمليات.',
+  },
+  COLLECTION_NOT_FOUND: { en: 'No bill was presented under that reference.', ar: 'لم تُعرض فاتورة بهذا المرجع.' },
+  PAYMENT_NOT_FOUND: { en: 'No payment was instructed under that reference.', ar: 'لم تُوجَّه دفعة بهذا المرجع.' },
+  OBLIGATION_NOT_BOOKED: { en: 'The obligation is not booked yet.', ar: 'لم يُقيّد الالتزام بعد.' },
+};
+
 export const REFUSAL: Readonly<Record<string, Words>> = {
   ...BOOKING_REFUSAL,
+  ...SETTLEMENT_REFUSAL,
   STEP_NOT_AVAILABLE: {
     en: 'That step does not apply to the transaction as it stands. Each step follows the one before it.',
     ar: 'لا تنطبق هذه الخطوة على المعاملة في وضعها الحالي؛ كل خطوة تأتي بعد سابقتها.',

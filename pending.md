@@ -53,6 +53,15 @@ The findings go in the adapter README.
   - Contract legs are hashed canonical content; the PDF rendition through Document
     Engine and an embedded viewer in the SME portal are not built.
   - No cross-transaction evidence workspace for the board (**W6**).
+  - **W4b**, next:
+    - reconciliation against SADAD's paid-bills file (`BillCollectionPort.paid`, built but not called);
+    - late amounts into `core.charity_ledger` and the core's charity liability, with the board's computation basis;
+    - charity disbursement to board-approved recipients;
+    - Wasl transactions joining the daily servicing cycle.
+  - A return that arrives after an obligation has settled is refused for operations to resolve. There is no
+    operations queue for it yet.
+  - Wasl's payment and collection webhooks need each tenant's PAYMENTS_HUB and BILL_COLLECTION `webhook_secret`
+    in the vault. Anchor settlement IBANs in `parties.json` are ILLUSTRATIVE.
 - **ILLUSTRATIVE configuration** to replace with the institution's own:
   `config/tenants/bank-a/wasl/parties.json` (programmes, anchors, distributors,
   signatories, institution registration), `core-banking/murabaha-accounts.json`,
