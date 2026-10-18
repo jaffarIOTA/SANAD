@@ -39,6 +39,15 @@ export const ACT_REQUIREMENTS = {
   BUSINESS_APPROVE: ['CHECKER', 'SENIOR_CHECKER'],
   BUSINESS_COMMITTEE: ['CREDIT_COMMITTEE'],
   BUSINESS_DISBURSE: ['FINANCE'],
+  /**
+   * Wasl trade operations: hold the limit, execute the wa'd and the purchase, record evidence, take a gate the
+   * sequencing engine says is satisfied, make the sale offer, record a lapse. No authority passes a gate that is not.
+   */
+  TRADE_OPERATIONS: ['MAKER'],
+  /** Validate or refuse possession evidence: a checker, never the person who recorded it (the service refuses the same person). */
+  TRADE_EVIDENCE_VERIFY: ['CHECKER', 'SENIOR_CHECKER'],
+  /** Unwind an acquired position before the sale, with the goods' disposition. */
+  TRADE_UNWIND: ['CHECKER', 'SENIOR_CHECKER'],
 } as const satisfies Readonly<Record<string, readonly StaffAuthority[]>>;
 
 export type WorkbenchAct = keyof typeof ACT_REQUIREMENTS;

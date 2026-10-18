@@ -657,6 +657,10 @@ export interface WaslProgramme {
 }
 
 export interface WaslParties {
+  /** The institution: the buyer on the anchor's ownership invoice (gate 1), the seller to the distributor. */
+  readonly institution: WaslParty;
+  /** How long a sale offer stays open for the distributor's acceptance before it lapses (SH-03). */
+  readonly saleOfferValiditySeconds: number;
   readonly programmes: readonly WaslProgramme[];
   /** Distributors that draw under the programmes, by the counterparty id their requests carry. */
   readonly distributors: readonly (WaslParty & { readonly counterpartyId: string })[];
@@ -679,12 +683,18 @@ const partyOf = (raw: unknown): WaslParty | undefined => {
 
 /** The tenant's Wasl programmes (with their anchors) and distributors, for a tenant that runs Wasl from the workbench. */
 export function loadWaslParties(tenant: TenantCode): Result<WaslParties> {
-  const raw = WASL_PARTIES[tenant] as { programmes?: unknown; distributors?: unknown } | undefined;
+  const raw = WASL_PARTIES[tenant] as
+    { institution?: unknown; sequencing?: unknown; programmes?: unknown; distributors?: unknown } | undefined;
   const bad = (detail: string) => reject('OP-DETERMINACY', 'WASL_PARTIES_INVALID', detail, { tenant });
   if (raw === undefined)
     return reject('OP-DETERMINACY', 'WASL_PARTIES_NOT_FOUND', 'No Wasl programmes are configured for this tenant', {
       tenant,
     });
+  const institution = partyOf(raw.institution);
+  if (institution === undefined) return bad('The institution needs a registration number and names');
+  const validity = ((raw.sequencing ?? {}) as Record<string, unknown>)['saleOfferValiditySeconds'];
+  if (typeof validity !== 'number' || !Number.isInteger(validity) || validity < 60 || validity > 30 * 86_400)
+    return bad('A sale offer’s validity is a whole number of seconds, from a minute to thirty days');
   const programmes: WaslProgramme[] = [];
   for (const p of Array.isArray(raw.programmes) ? (raw.programmes as Record<string, unknown>[]) : []) {
     const anchor = partyOf(p['anchor']);
@@ -717,5 +727,5 @@ export function loadWaslParties(tenant: TenantCode): Result<WaslParties> {
     distributors.push({ counterpartyId: d['counterpartyId'], ...party });
   }
   if (programmes.length === 0) return bad('At least one programme is configured');
-  return { ok: true, value: { programmes, distributors } };
+  return { ok: true, value: { institution, saleOfferValiditySeconds: validity, programmes, distributors } };
 }
