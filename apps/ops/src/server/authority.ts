@@ -48,6 +48,8 @@ export const ACT_REQUIREMENTS = {
   TRADE_EVIDENCE_VERIFY: ['CHECKER', 'SENIOR_CHECKER'],
   /** Unwind an acquired position before the sale, with the goods' disposition. */
   TRADE_UNWIND: ['CHECKER', 'SENIOR_CHECKER'],
+  /** Instruct the seller's payment again after the payments hub rejected or returned it: money out, finance's act. */
+  TRADE_SETTLEMENT: ['FINANCE'],
 } as const satisfies Readonly<Record<string, readonly StaffAuthority[]>>;
 
 export type WorkbenchAct = keyof typeof ACT_REQUIREMENTS;

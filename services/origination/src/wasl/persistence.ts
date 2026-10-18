@@ -23,6 +23,7 @@ import type { Pool } from 'pg';
 
 import { type TenantCode, type WaslParties, loadBoardPositions, loadWaslParties } from '@sanad/config/loader.ts';
 import type { EvidenceRecord } from '@sanad/core/evidence/evidence.ts';
+import type { OutboxEvent } from '@sanad/core/outbox/outbox.ts';
 import { type CurrencyCode, type Money, money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import { type TsaInstant, restoreAttestedInstant } from '@sanad/core/time/tsa.ts';
@@ -352,6 +353,13 @@ export interface StepWrite {
   readonly saleOfferedAt?: TsaInstant;
   /** The obligation an executed sale books: its fixed total, the core's reference, and the schedule. */
   readonly obligation?: ObligationWrite;
+  /**
+   * What the obligation's paid amount moves by: a receipt adds, a returned payment takes off. The total never
+   * moves; the database holds paid within what is payable.
+   */
+  readonly paidDelta?: Money;
+  /** External side effects, written in the same transaction as the step that caused them (the transactional outbox). */
+  readonly outbox?: readonly OutboxEvent[];
   readonly correlationId: string;
 }
 
@@ -370,6 +378,8 @@ export interface ObligationWrite {
 /** A database refusal, said in the domain's terms: the database is the second lock on the same rule. */
 function refusalOf(error: unknown): Result<never> {
   const e = error as { code?: string; constraint?: string };
+  if (e.constraint === 'obligation_paid_within_payable' || e.constraint === 'obligation_paid_amount_minor_check')
+    return reject('OP-DETERMINACY', 'OVERPAYMENT', 'The database refused a paid amount outside what is payable');
   if (e.constraint === 'transaction_risk_interval_observed')
     return reject(
       'SH-06',
@@ -508,6 +518,26 @@ export async function recordStep(pool: Pool, tenant: TenantCode, w: StepWrite): 
             ],
           );
       }
+      if (w.paidDelta !== undefined) {
+        const moved = await db.query(
+          `update core.obligation set paid_amount_minor = paid_amount_minor + $3
+            where tenant_id = $1 and transaction_id = $2 and currency = $4`,
+          [tenantUuid, row.id, w.paidDelta.minorUnits.toString(), w.paidDelta.currency],
+        );
+        if (moved.rowCount !== 1)
+          return reject(
+            'OP-DETERMINACY',
+            'OBLIGATION_NOT_BOOKED',
+            'The transaction has no obligation to apply this to',
+          );
+      }
+      // The outbox table keys on the tenant's uuid; the events carry its code. One event per (tenant, kind, key).
+      for (const o of w.outbox ?? [])
+        await db.query(
+          `insert into core.outbox_event (tenant_id, event_id, kind, subject_ref, idempotency_key, payload, correlation_id)
+           values ($1, $2, $3, $4, $5, $6::jsonb, $7)`,
+          [tenantUuid, o.eventId, o.kind, o.subjectRef, o.idempotencyKey, JSON.stringify(o.payload), o.correlationId],
+        );
       if (w.toState !== w.expectedState || w.riskPeriodStartAt !== undefined || w.saleOfferedAt !== undefined)
         await db.query(
           `update core.transaction

@@ -32,7 +32,9 @@ import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
 import { type TransactionView, getTransaction, listTransactions, waslPool } from '@sanad/origination/wasl/book.ts';
 import { bookExecutedSale } from '@sanad/origination/wasl/booking.ts';
 import { assertionReplayGuard } from '@sanad/origination/wasl/identity.ts';
+import { civilDateOf, obligationPosition } from '@sanad/origination/wasl/settlement.ts';
 import { acceptSaleOffer, scheduleFor } from '@sanad/origination/wasl/steps.ts';
+import type { FacilityPosition } from '@sanad/core/servicing/instalment-position.ts';
 import type { Instalment } from '@sanad/products/murabaha-scf/obligation/obligation.ts';
 
 import { KsaDemonstrationTransport } from '../../../../adapters/ksa/demonstration/transport.ts';
@@ -156,14 +158,21 @@ const VISIBLE = new Set([
 export interface DistributorTransaction {
   readonly view: TransactionView;
   readonly schedule: readonly Instalment[] | undefined;
+  /** Once booked: what is paid and outstanding today (W4a). */
+  readonly position?: FacilityPosition;
 }
+
+const withPosition = (s: SmeSession, view: TransactionView): DistributorTransaction => {
+  const position = obligationPosition(view, civilDateOf(s.tenant, hostClockInstant()));
+  return { view, schedule: scheduleFor(s.tenant, view), ...(position === undefined ? {} : { position }) };
+};
 
 /** The signed-in signatory's distributor's transactions, offers first. Another distributor's are never listed. */
 export async function myTransactions(s: SmeSession): Promise<readonly DistributorTransaction[]> {
   const all = await listTransactions(s.tenant);
   return all
     .filter((v) => v.transaction.core.counterpartyId === s.counterpartyId && VISIBLE.has(v.transaction.state))
-    .map((view) => ({ view, schedule: scheduleFor(s.tenant, view) }));
+    .map((view) => withPosition(s, view));
 }
 
 /** One of the distributor's own transactions; another distributor's is not found (BOLA). */
@@ -175,7 +184,7 @@ export async function myTransaction(
   const view = await getTransaction(s.tenant, transactionRef);
   if (view === undefined || view.transaction.core.counterpartyId !== s.counterpartyId) return undefined;
   if (!VISIBLE.has(view.transaction.state)) return undefined;
-  return { view, schedule: scheduleFor(s.tenant, view) };
+  return withPosition(s, view);
 }
 
 const offerLegOf = (v: TransactionView) =>

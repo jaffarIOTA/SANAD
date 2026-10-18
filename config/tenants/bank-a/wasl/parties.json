@@ -1,7 +1,7 @@
 {
   "version": "2026-10-18.2",
   "source": "TENANT_CONFIGURATION",
-  "note": "ILLUSTRATIVE — Bank A's Wasl programmes (each with its anchor, the supplier whose cleared invoices it finances) and the distributors that draw under them, written 2026-10-17 from the development book's invoices so a transaction can open against real reference rows. Invented companies and registration numbers; none is a real entity. The institution's own programme and onboarding records replace this file before any real use. 2026-10-18 (Wasl W2): the institution itself, the buyer on the anchor's ownership invoice (gate 1 checks the cleared invoice names it), and how long a sale offer stays open for the distributor's acceptance. 2026-10-18 (Wasl W3): each distributor's legal form and its authorised signatories — the people who may sign in to the SME portal and accept a sale offer for it, by party reference (the national identity service resolves a reference to the person; no national identifier is held here). Invented references; the commercial register (Wathq) and the distributor's own board resolution replace them.",
+  "note": "ILLUSTRATIVE — Bank A's Wasl programmes (each with its anchor, the supplier whose cleared invoices it finances) and the distributors that draw under them, written 2026-10-17 from the development book's invoices so a transaction can open against real reference rows. Invented companies and registration numbers; none is a real entity. The institution's own programme and onboarding records replace this file before any real use. 2026-10-18 (Wasl W2): the institution itself, the buyer on the anchor's ownership invoice (gate 1 checks the cleared invoice names it), and how long a sale offer stays open for the distributor's acceptance. 2026-10-18 (Wasl W3): each distributor's legal form and its authorised signatories — the people who may sign in to the SME portal and accept a sale offer for it, by party reference (the national identity service resolves a reference to the person; no national identifier is held here). Invented references; the commercial register (Wathq) and the distributor's own board resolution replace them. 2026-10-18 (Wasl W4a): each anchor's settlement IBAN, where the institution pays the cost of the goods it buys — invented, in the Saudi IBAN format; the anchor's confirmed account replaces it.",
   "institution": {
     "registrationNo": "1010000100",
     "nameEn": "Bank A (illustrative)",
@@ -20,7 +20,8 @@
       "anchor": {
         "registrationNo": "1010000002",
         "nameEn": "Al-Ufuq Materials Company Limited",
-        "nameAr": "شركة الأفق للمواد المحدودة"
+        "nameAr": "شركة الأفق للمواد المحدودة",
+        "settlementIban": "SA0380000000608010167519"
       }
     },
     {
@@ -32,7 +33,8 @@
       "anchor": {
         "registrationNo": "1010000044",
         "nameEn": "Najd Logistics Company",
-        "nameAr": "شركة نجد للخدمات اللوجستية"
+        "nameAr": "شركة نجد للخدمات اللوجستية",
+        "settlementIban": "SA4420000001234567891234"
       }
     }
   ],

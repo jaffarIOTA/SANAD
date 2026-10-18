@@ -23,7 +23,16 @@ import { redirect } from 'next/navigation';
 import type { TenantCode } from '@sanad/config/loader.ts';
 import type { Result } from '@sanad/core/kernel/result.ts';
 
+import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
 import { bookExecutedSale } from '@sanad/origination/wasl/booking.ts';
+import {
+  type CollectionStatus,
+  type PaymentStatus,
+  paySellerAgain,
+  presentDueInstalments,
+  recordCollectionResult,
+  recordSellerPaymentResult,
+} from '@sanad/origination/wasl/settlement.ts';
 
 import type { WorkbenchAct } from './authority.ts';
 import {
@@ -39,6 +48,7 @@ import {
   unwindTransaction,
   validateAndReserve,
 } from './murabaha-sequencing.ts';
+import { persistencePool } from './persistence.ts';
 import { authorise, localeSegmentOf } from './session.ts';
 
 const field = (form: FormData, name: string): string => String(form.get(name) ?? '').trim();
@@ -83,6 +93,9 @@ const PLAIN_STEPS = {
   LAPSE: { act: 'TRADE_OPERATIONS', run: lapseSaleOffer, notice: 'OFFER_LAPSED' },
   // An accepted sale whose booking the core did not take when the distributor accepted: the same receivable, idempotently.
   BOOK: { act: 'TRADE_OPERATIONS', run: bookExecutedSale, notice: 'OBLIGATION_BOOKED' },
+  // W4a: the instalments falling due, presented to SADAD; the seller paid again after a rejection or return.
+  PRESENT: { act: 'TRADE_OPERATIONS', run: presentDueInstalments, notice: 'COLLECTION_PRESENTED' },
+  PAY_SELLER_AGAIN: { act: 'TRADE_SETTLEMENT', run: paySellerAgain, notice: 'SELLER_PAYMENT_REINSTRUCTED' },
 } as const satisfies Readonly<
   Record<
     string,
@@ -147,6 +160,64 @@ export async function decideEvidenceAction(form: FormData): Promise<void> {
     ctx,
     () => decidePossessionEvidence(ctx.tenant, ctx.transactionRef, ctx.actor, field(form, 'evidenceId'), decision),
     decision === 'VALID' ? 'EVIDENCE_VALIDATED' : 'EVIDENCE_REFUSED',
+  );
+}
+
+/**
+ * Stand-ins for the payments hub and SADAD answering, where a synthetic
+ * demonstration is permitted and nowhere else: the result is recorded as
+ * FIXTURE, by the same function the signed webhooks call. A real result only
+ * ever arrives by webhook.
+ */
+async function fixtureContext(form: FormData): Promise<Context | undefined> {
+  const ctx = await contextOf(form, 'SERVICING_STAND_IN');
+  return (await syntheticDemonstrationPermitted(persistencePool(), process.env)) ? ctx : undefined;
+}
+
+const PAYMENT_STATUSES: readonly PaymentStatus[] = ['ACCEPTED', 'SETTLED', 'REJECTED', 'RETURNED'];
+const COLLECTION_STATUSES: readonly CollectionStatus[] = ['PAID', 'RETURNED'];
+
+export async function fixtureSellerPaymentAction(form: FormData): Promise<void> {
+  const ctx = await fixtureContext(form);
+  if (ctx === undefined) redirect('/');
+  const status = PAYMENT_STATUSES.find((s) => s === field(form, 'status'));
+  return finish(
+    ctx,
+    () =>
+      status === undefined
+        ? Promise.resolve({ ok: false, error: { control: 'OP-DETERMINACY', reason: 'STEP_UNKNOWN', detail: '' } })
+        : recordSellerPaymentResult(
+            ctx.tenant,
+            ctx.transactionRef,
+            { idempotencyKey: field(form, 'idempotencyKey'), status, instructionRef: 'FIXTURE', source: 'FIXTURE' },
+            ctx.actor,
+          ),
+    'SELLER_PAYMENT_RESULT',
+  );
+}
+
+export async function fixtureCollectionAction(form: FormData): Promise<void> {
+  const ctx = await fixtureContext(form);
+  if (ctx === undefined) redirect('/');
+  const status = COLLECTION_STATUSES.find((s) => s === field(form, 'status'));
+  return finish(
+    ctx,
+    () =>
+      status === undefined
+        ? Promise.resolve({ ok: false, error: { control: 'OP-DETERMINACY', reason: 'STEP_UNKNOWN', detail: '' } })
+        : recordCollectionResult(
+            ctx.tenant,
+            ctx.transactionRef,
+            {
+              idempotencyKey: field(form, 'idempotencyKey'),
+              status,
+              reference: 'SADAD-FIXTURE',
+              receivedOn: field(form, 'receivedOn'),
+              source: 'FIXTURE',
+            },
+            ctx.actor,
+          ),
+    status === 'PAID' ? 'PAYMENT_RECEIVED' : 'PAYMENT_RETURNED',
   );
 }
 

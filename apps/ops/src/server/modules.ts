@@ -742,15 +742,31 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
     titleEn: 'Settlement',
     titleAr: 'التسوية',
     items: [
-      { id: 'instructions', titleEn: 'Instructions', titleAr: 'أوامر التسوية', readiness: soon(), reference: 'BR-D11' },
+      {
+        id: 'instructions',
+        titleEn: 'Instructions',
+        titleAr: 'أوامر التسوية',
+        href: '/transactions',
+        readiness: live(),
+        reference:
+          'Wasl W4a, on each transaction: the purchase instructs the cost to the anchor’s settlement account through the payments hub, on the transactional outbox, idempotently; results by signed webhook (PAYMENTS_HUB secret); a rejected or returned payment instructed again by finance under a new key. Instalments presented to SADAD as bills from seven days before they fall due (BILL_COLLECTION). FIXTURE: the KSA demonstration transport and result stand-ins (KSA-RAIL-PAYHUB-01, KSA-RAIL-SADAD-01); anchor IBANs ILLUSTRATIVE',
+      },
       {
         id: 'reconciliation',
         titleEn: 'Reconciliation',
         titleAr: 'المطابقة',
         readiness: soon(),
-        reference: 'SDD §6.10',
+        reference: 'SDD §6.10 — W4b: SADAD’s paid-bills file matched against Wasl presentations',
       },
-      { id: 'returns', titleEn: 'Returns', titleAr: 'المرتجعات', readiness: soon(), reference: 'SDD §4.4' },
+      {
+        id: 'returns',
+        titleEn: 'Returns',
+        titleAr: 'المرتجعات',
+        href: '/transactions',
+        readiness: live(),
+        reference:
+          'Wasl W4a: a returned collection takes its receipt off the obligation (the total never moves) and frees the instalment to be presented again; a return after settlement is refused for operations to resolve; a returned seller payment is instructed again by finance',
+      },
     ],
   },
   {

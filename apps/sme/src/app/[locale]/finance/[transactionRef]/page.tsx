@@ -106,6 +106,28 @@ export default async function OfferPage({
             ))}
           </ol>
         )}
+        {mine.position === undefined ? null : (
+          <dl className="mt-3 flex flex-col gap-1 border-t border-line pt-3 text-sm" data-position>
+            <div className="flex justify-between gap-3">
+              <dt className="text-ink-quiet">{t('Paid', 'المدفوع')}</dt>
+              <dd className="tabular-nums text-ink">
+                <bdi>{formatMinorUnits(mine.position.totalPaid, numerals)}</bdi>
+              </dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-ink-quiet">{t('Still owed', 'المتبقي')}</dt>
+              <dd className="font-semibold tabular-nums text-ink">
+                <bdi>{formatMinorUnits(mine.position.outstandingTotal, numerals)}</bdi>
+              </dd>
+            </div>
+            <p className="mt-1 text-xs text-ink-quiet">
+              {t(
+                'Pay through SADAD with the bill number the bank sends you. The sale price never increases; any late-payment charge goes to charity, never to the bank.',
+                'ادفع عبر سداد برقم الفاتورة الذي يرسله البنك. لا يزيد ثمن البيع أبداً، وأي غرامة تأخير تذهب إلى الخير لا إلى البنك.',
+              )}
+            </p>
+          </dl>
+        )}
       </Card>
 
       {tx.state === 'SALE_OFFERED' ? (

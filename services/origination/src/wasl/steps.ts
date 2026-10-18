@@ -31,6 +31,8 @@ import {
   loadWaslParties,
 } from '@sanad/config/loader.ts';
 import type { EvidenceRecord, EvidenceSource, EvidenceType } from '@sanad/core/evidence/evidence.ts';
+import type { Money } from '@sanad/core/kernel/money.ts';
+import type { OutboxEvent } from '@sanad/core/outbox/outbox.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import { entryFor } from '@sanad/core/products/catalogue.ts';
 import type { TsaInstant } from '@sanad/core/time/tsa.ts';
@@ -51,6 +53,7 @@ import type { Attestation, LegPreparer } from '../../../../adapters/workflow-tem
 import { SequenceRefusal } from '../../../../adapters/workflow-temporal/programs/murabaha.ts';
 import { ummAlQuraIso } from '../hijri.ts';
 import { hostClockInstant } from '../host-clock.ts';
+import { sellerSettlement } from './instructions.ts';
 import {
   type TransactionRecord,
   type TransactionView,
@@ -100,6 +103,10 @@ export interface StepOutcome {
   readonly evidence?: EvidenceRecord;
   readonly supersedes?: string;
   readonly obligation?: ObligationWrite;
+  /** What the obligation's paid amount moves by (W4: a receipt adds, a return takes off). */
+  readonly paidDelta?: Money;
+  /** External side effects this step causes, written with it (the transactional outbox). */
+  readonly outbox?: readonly OutboxEvent[];
   readonly detail?: Readonly<Record<string, string>>;
 }
 
@@ -198,19 +205,13 @@ export async function step(
     const after = out.value.transaction;
     const moved = after !== before;
     const leg = legsOf(after).length > legsOf(before).length ? legsOf(after).at(-1) : undefined;
-    const { evidence, supersedes, obligation } = out.value;
+    const { evidence, supersedes, obligation, paidDelta, outbox } = out.value;
     const event: TransactionEventRow = {
       eventType: out.value.eventType,
       fromState: moved ? before.state : null,
       toState: moved ? after.state : null,
       actor,
-      detail: {
-        ...out.value.detail,
-        ...(moved ? { state: encodeState(after) } : {}),
-        ...(evidence === undefined ? {} : { evidence: encodeEvidence(evidence) }),
-        ...(supersedes === undefined ? {} : { supersedes }),
-        ...(obligation === undefined ? {} : { obligation: encodeObligation(obligation) }),
-      },
+      detail: eventDetail(out.value, moved),
       occurredAtEpochSeconds: (await attestation.occurred()).epochSeconds,
     };
     const pool = waslPool();
@@ -224,6 +225,8 @@ export async function step(
         ...(evidence === undefined ? {} : { evidence }),
         ...(supersedes === undefined ? {} : { supersedes }),
         ...(obligation === undefined ? {} : { obligation }),
+        ...(paidDelta === undefined ? {} : { paidDelta }),
+        ...(outbox === undefined ? {} : { outbox }),
         ...(after.state === 'POSSESSION_CONFIRMED' ? { riskPeriodStartAt: after.riskPeriodStartAt } : {}),
         ...(after.state === 'SALE_OFFERED' ? { saleOfferedAt: after.saleOfferedAt } : {}),
         correlationId: before.core.correlationId,
@@ -242,6 +245,34 @@ export async function step(
     book.records.set(transactionRef, next);
     return ok(viewOf(tenant, next));
   });
+}
+
+/**
+ * What a step's event records: the step's own detail, the state it left the
+ * transaction in, and whatever it recorded — evidence, the obligation, a
+ * movement of the paid amount, the side effects it queued — so the event log
+ * alone rebuilds the transaction and shows what was instructed.
+ */
+function eventDetail(out: StepOutcome, moved: boolean): Record<string, unknown> {
+  const { evidence, supersedes, obligation, paidDelta, outbox } = out;
+  return {
+    ...out.detail,
+    ...(moved ? { state: encodeState(out.transaction) } : {}),
+    ...(evidence === undefined ? {} : { evidence: encodeEvidence(evidence) }),
+    ...(supersedes === undefined ? {} : { supersedes }),
+    ...(obligation === undefined ? {} : { obligation: encodeObligation(obligation) }),
+    ...(paidDelta === undefined ? {} : { paidDeltaMinor: paidDelta.minorUnits.toString() }),
+    ...(outbox === undefined || outbox.length === 0
+      ? {}
+      : {
+          outbox: outbox.map((o) => ({
+            kind: o.kind,
+            idempotencyKey: o.idempotencyKey,
+            subjectRef: o.subjectRef,
+            payload: o.payload,
+          })),
+        }),
+  };
 }
 
 /** The obligation as its event records it: amounts as minor-unit strings. */
@@ -319,7 +350,25 @@ const activityStep =
 /** The wa'd: the distributor's binding promise to buy the goods once the institution owns them. */
 export const executeWaad = activityStep('LEG_EXECUTED', (a, r) => a.executeLeg(r, 'WAAD'));
 /** The purchase: the institution buys the goods from the anchor. */
-export const executePurchase = activityStep('LEG_EXECUTED', (a, r) => a.executeLeg(r, 'PURCHASE'));
+export function executePurchase(
+  tenant: TenantCode,
+  transactionRef: string,
+  actor: string,
+): Promise<Result<TransactionView>> {
+  return step(tenant, transactionRef, actor, async (c) => {
+    // The seller's payment is instructed with the purchase, in the same transaction: the institution owes the cost.
+    const payment = sellerSettlement(c.parties, transactionRef, c.record.transaction.core, 0);
+    if (!payment.ok) return payment;
+    const t = await viaActivity(c, (a, r) => a.executeLeg(r, 'PURCHASE'));
+    if (!t.ok) return t;
+    return ok({
+      eventType: 'LEG_EXECUTED',
+      transaction: t.value,
+      outbox: [payment.value],
+      detail: { sellerPaymentKey: payment.value.idempotencyKey },
+    });
+  });
+}
 /** Gate 1: passes only on valid, third-party ownership evidence. */
 export const acquireOwnership = activityStep('GATE_PASSED', (a, r) => a.acquireOwnership(r), {
   gateId: 'GATE_1_OWNERSHIP',
