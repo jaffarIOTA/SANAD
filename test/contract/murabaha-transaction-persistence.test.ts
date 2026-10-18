@@ -22,7 +22,7 @@ import {
   encodeCore,
   insertOpenedTransaction,
   loadTransactions,
-} from '../../apps/ops/src/server/murabaha-persistence.ts';
+} from '../../services/origination/src/wasl/persistence.ts';
 
 const url = process.env['SANAD_TEST_DATABASE_URL'];
 const RUN = String(Date.now()).slice(-9);

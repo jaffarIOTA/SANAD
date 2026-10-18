@@ -427,14 +427,39 @@ export default async function TransactionPage({
             )}
           </p>
         );
+      case 'EXECUTED':
+        return (
+          <>
+            <p className="text-[13px] text-ink-quiet">
+              {t(
+                'The distributor accepted: the sale is concluded. Its booking did not complete — the core banking platform did not take it. Book it again: the same receivable, never a second one.',
+                'قبل الموزع وتمّ البيع، ولم يكتمل قيده لأن النظام المصرفي الأساسي لم يستلمه. أعد القيد: القيد نفسه، لا قيداً ثانياً.',
+              )}
+            </p>
+            <StepButton {...stepProps} step="BOOK">
+              {t('Book the obligation', 'قيد الالتزام')}
+            </StepButton>
+          </>
+        );
       default:
         return (
           <p className="text-[13px] text-ink-quiet">
-            {t('The sale is executed. Booking the obligation follows.', 'نُفّذ البيع، ويليه قيد الالتزام.')}
+            {t(
+              'The sale is concluded and its obligation booked. Repayments and servicing follow.',
+              'تمّ البيع وقُيّد الالتزام، وتليه التحصيلات والخدمة.',
+            )}
           </p>
         );
     }
   })();
+  const accepted = v.events.find((e) => e.eventType === 'OFFER_ACCEPTED');
+  const booked = v.events.find((e) => e.eventType === 'OBLIGATION_BOOKED');
+  const bookedDetail = booked?.detail['obligation'] as
+    | {
+        readonly bookingRef?: string;
+        readonly instalments?: readonly { dueDateGregorian: string; amountMinor: string; sequenceNumber: number }[];
+      }
+    | undefined;
 
   return (
     <div className="flex flex-col gap-6">
@@ -642,6 +667,52 @@ export default async function TransactionPage({
           </ul>
         )}
       </section>
+
+      {accepted === undefined ? null : (
+        <section className="rounded-card border border-line bg-surface px-5 py-4 shadow-card" data-obligation>
+          <h2 className="mb-2 text-[15px] font-semibold text-heading">
+            {t('Acceptance and obligation', 'القبول والالتزام')}
+          </h2>
+          <dl>
+            <Row k={t('Accepted by', 'قبِله')}>
+              <span className="identifier">{accepted.actor}</span>
+            </Row>
+            <Row k={t('Signed with', 'وُقّع عبر')}>
+              <span className="identifier text-[12px]">{String(accepted.detail['identityAssertionId'] ?? '—')}</span>
+            </Row>
+            <Row k={t('Offer instrument signed', 'مستند العرض الموقّع')}>
+              <bdi dir="ltr" className="identifier text-[11px]">
+                {String(accepted.detail['signedOfferHash'] ?? '—').slice(0, 24)}
+              </bdi>
+            </Row>
+            <Row k={t('Core banking booking', 'القيد في النظام المصرفي')}>
+              <span className="identifier">{bookedDetail?.bookingRef ?? t('not yet booked', 'لم يُقيّد بعد')}</span>
+              {booked?.detail['coreBanking'] === 'FIXTURE' ? (
+                <span className="ms-2">
+                  <FixtureBadge arabic={arabic} />
+                </span>
+              ) : null}
+            </Row>
+          </dl>
+          {bookedDetail?.instalments === undefined ? null : (
+            <ol className="mt-3 flex flex-col gap-1 text-[13px]" data-booked-schedule>
+              {bookedDetail.instalments.map((i) => (
+                <li key={i.sequenceNumber} className="flex justify-between gap-3">
+                  <bdi dir="ltr" className="identifier">
+                    {n(i.dueDateGregorian)}
+                  </bdi>
+                  <span className="font-medium text-heading">
+                    {formatMinorUnits(
+                      { minorUnits: BigInt(i.amountMinor), currency: core.pricing.salePriceAmount.currency },
+                      numerals,
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-card border border-line bg-surface px-5 py-4 shadow-card" data-trade>

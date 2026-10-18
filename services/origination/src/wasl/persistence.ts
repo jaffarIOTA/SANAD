@@ -23,7 +23,7 @@ import type { Pool } from 'pg';
 
 import { type TenantCode, type WaslParties, loadBoardPositions, loadWaslParties } from '@sanad/config/loader.ts';
 import type { EvidenceRecord } from '@sanad/core/evidence/evidence.ts';
-import { type CurrencyCode, money } from '@sanad/core/kernel/money.ts';
+import { type CurrencyCode, type Money, money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import { type TsaInstant, restoreAttestedInstant } from '@sanad/core/time/tsa.ts';
 import { tenantUuidByCode } from '@sanad/origination/credentials.ts';
@@ -350,7 +350,21 @@ export interface StepWrite {
   readonly supersedes?: string;
   readonly riskPeriodStartAt?: TsaInstant;
   readonly saleOfferedAt?: TsaInstant;
+  /** The obligation an executed sale books: its fixed total, the core's reference, and the schedule. */
+  readonly obligation?: ObligationWrite;
   readonly correlationId: string;
+}
+
+export interface ObligationWrite {
+  readonly obligationId: string;
+  readonly total: Money;
+  readonly bookingRef: string;
+  readonly instalments: readonly {
+    readonly sequenceNumber: number;
+    readonly dueDateGregorian: string;
+    readonly dueDateHijri: string;
+    readonly amount: Money;
+  }[];
 }
 
 /** A database refusal, said in the domain's terms: the database is the second lock on the same rule. */
@@ -368,6 +382,8 @@ function refusalOf(error: unknown): Result<never> {
       'RISK_PERIOD_START_UNDETERMINED',
       'The database refused possession without its attested start',
     );
+  if (e.code === '23001' && /schedule for obligation/.test(String((error as { message?: string }).message)))
+    return reject('SH-02', 'SCHEDULE_NOT_TOTAL', 'The database refused a schedule that does not sum to the total');
   if (e.constraint === 'contract_leg_one_document_per_leg')
     return reject('SH-07', 'DOCUMENT_ALREADY_BOUND_TO_A_LEG', 'The database refused a document on a second leg');
   if (e.code === '23001' || e.code === '23505' || e.code === '23514')
@@ -460,6 +476,37 @@ export async function recordStep(pool: Pool, tenant: TenantCode, w: StepWrite): 
               evidenceId: w.supersedes,
             });
         }
+      }
+      const ob = w.obligation;
+      if (ob !== undefined) {
+        // The total and the schedule in one transaction: the deferred constraint checks their sum at commit (SH-02).
+        await db.query(
+          `insert into core.obligation (id, tenant_id, transaction_id, currency, total_amount_minor, booking_ref,
+             correlation_id)
+           values ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            ob.obligationId,
+            tenantUuid,
+            row.id,
+            ob.total.currency,
+            ob.total.minorUnits.toString(),
+            ob.bookingRef,
+            correlation,
+          ],
+        );
+        for (const i of ob.instalments)
+          await db.query(
+            `insert into core.instalment (tenant_id, obligation_id, instalment_no, due_date_g, due_date_h, amount_minor)
+             values ($1, $2, $3, $4, $5, $6)`,
+            [
+              tenantUuid,
+              ob.obligationId,
+              i.sequenceNumber,
+              i.dueDateGregorian,
+              i.dueDateHijri,
+              i.amount.minorUnits.toString(),
+            ],
+          );
       }
       if (w.toState !== w.expectedState || w.riskPeriodStartAt !== undefined || w.saleOfferedAt !== undefined)
         await db.query(

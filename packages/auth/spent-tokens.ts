@@ -18,6 +18,8 @@ export const SPEND_PURPOSES = [
   'ADMIN_SESSION',
   'OPS_SESSION',
   'CONSUMER_SESSION',
+  'SME_SESSION',
+  'SME_PENDING',
 ] as const;
 export type SpendPurpose = (typeof SPEND_PURPOSES)[number];
 
