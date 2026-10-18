@@ -1,5 +1,5 @@
 /**
- * Tuum's person and lending calls answered without a network, for the
+ * Tuum's person, lending and account calls answered without a network, for the
  * synthetic demonstration (UAE M6): labelled Fixture wherever its answers are
  * shown, used only where a synthetic demonstration is permitted.
  *
@@ -23,18 +23,34 @@ export class TuumDemonstrationTransport implements RailTransport {
       return Promise.resolve({ errors: null, data: { personId: `ID-DEMO-P-${short(id.replace(/:person$/, ''))}` } });
     if (operation === 'loan.contract.create') {
       const code = typeof body['loanTypeCode'] === 'string' ? body['loanTypeCode'] : '';
-      if (code.startsWith('REFUSE'))
-        return Promise.resolve({ errors: [{ code: 'err.loanTypeNotFound' }], data: null });
+      if (code.startsWith('REFUSE')) return Promise.resolve({ errors: [{ code: 'err.loanTypeNotFound' }], data: null });
       const key = short(id.replace(/:contract$/, ''));
       return Promise.resolve({
         errors: null,
         data: {
           headerId: `ID-DEMO-C-${key}`,
-          contractNumber: `DEMO-${String(Number.parseInt(key, 16) % 9_000_000 + 1_000_000)}`,
+          contractNumber: `DEMO-${String((Number.parseInt(key, 16) % 9_000_000) + 1_000_000)}`,
           loanTypeCode: code,
           ...(code.startsWith('RATE') ? { interestRate: 99 } : {}),
         },
       });
+    }
+    // Account-shaped booking of an executed Murabaha (ADR 0007; core-banking-adapter.ts): the party, its
+    // collection account, and the receivable posted at the fixed total. Never the lending module.
+    if (operation === 'person.resolveOrCreate') {
+      const cr = typeof body['registrationNumber'] === 'string' ? body['registrationNumber'] : id;
+      return Promise.resolve({ personId: `ID-DEMO-P-${short(cr)}` });
+    }
+    if (operation === 'account.findByPurpose' || operation === 'account.create') {
+      const person = /\/persons\/([^/]+)\/accounts/.exec(envelope.url)?.[1] ?? '';
+      return Promise.resolve({
+        data: [{ accountId: `ACC-DEMO-${short(person)}` }],
+        accountId: `ACC-DEMO-${short(person)}`,
+      });
+    }
+    if (operation === 'account.postTransaction') {
+      const reference = typeof body['externalReference'] === 'string' ? body['externalReference'] : '';
+      return Promise.resolve({ transactionId: `TRX-DEMO-${short(`${id}|${reference}`)}` });
     }
     return Promise.reject(new Error(`no demonstration answer for ${operation}`));
   }

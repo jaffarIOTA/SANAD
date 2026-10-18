@@ -289,6 +289,28 @@ credentials **and** `person_api_base_url`, which is the opt-in to the live path.
   (`/api/v2/contracts/{headerId}/accept`, `…/activate`, `…/initialise-disbursement`)
   before it services, given Sanad's partner bank pays the money out.
 
+## Murabaha booking — account-shaped (Wasl W3, 2026-10-18)
+
+An executed Murabaha is held through `core-banking-adapter.ts` — the party, its
+COLLECTION account, and one posting at the fixed total with cost and profit as
+detail — never through the lending module (ADR 0007, Finding 1). Sanad holds the
+obligation and its schedule (`services/origination/src/wasl/booking.ts`). The posting
+codes and account types are tenant configuration
+(`config/tenants/<t>/core-banking/murabaha-accounts.json`, ILLUSTRATIVE).
+
+On the synthetic environment `demonstration.ts` answers the account calls
+(`person.resolveOrCreate`, `account.findByPurpose`, `account.postTransaction`),
+labelled Fixture. The live path is not wired.
+
+### Verification item TUUM-ACCT-01
+
+- Bank A's own transaction type codes for raising and settling the receivable, goods
+  inventory and the charity liability (from the transaction-types endpoint), and the
+  account type the distributor's collection account is opened under.
+- Whether `x-request-id` makes the posting idempotent across a retry (the booking is keyed
+  `wasl:<transaction>:book`).
+- That the posted receivable's balance reconciles to Sanad's obligation total (Finding 2).
+
 ## Known deviations
 
 Declared in code as `TUUM_DEVIATIONS`, so they surface in review as well as in audit.

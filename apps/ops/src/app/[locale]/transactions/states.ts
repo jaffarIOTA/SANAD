@@ -70,6 +70,10 @@ export const EVIDENCE_STATUS_LABEL: Readonly<Record<string, Words>> = {
 
 /** What a step that went through says, by the notice code the action sends back. */
 export const NOTICE: Readonly<Record<string, Words>> = {
+  OBLIGATION_BOOKED: {
+    en: 'The obligation is booked: the schedule in Sanad, the receivable in the core banking platform.',
+    ar: 'قُيّد الالتزام: الجدول في سند، والمديونية في النظام المصرفي الأساسي.',
+  },
   LIMIT_RESERVED: {
     en: 'Trade validated and the cost held against the programme.',
     ar: 'تم التحقق من التجارة وحُجزت التكلفة من حد البرنامج.',
@@ -110,7 +114,27 @@ export const NOTICE: Readonly<Record<string, Words>> = {
  * code is shown beside it. A code not here falls back to a plain statement
  * that the sequence refused the step — never a generic decline.
  */
+export const BOOKING_REFUSAL: Readonly<Record<string, Words>> = {
+  CORE_BANKING_UNAVAILABLE: {
+    en: 'The core banking platform is not connected here. Nothing was booked; the sale stays concluded.',
+    ar: 'النظام المصرفي الأساسي غير متصل هنا. لم يُقيّد شيء، ويبقى البيع قائماً.',
+  },
+  CORE_BANKING_CALL_FAILED: {
+    en: 'The core banking platform did not complete the booking. Nothing was written here; book it again.',
+    ar: 'لم يُكمل النظام المصرفي الأساسي القيد. لم يُكتب شيء هنا؛ أعد القيد.',
+  },
+  MURABAHA_ACCOUNTS_NOT_CONFIGURED: {
+    en: 'How a Murabaha is held in the core banking platform is not configured for this institution.',
+    ar: 'لم تُعدّ طريقة قيد المرابحة في النظام المصرفي الأساسي لهذه المؤسسة.',
+  },
+  SCHEDULE_NOT_TOTAL: {
+    en: 'The schedule does not sum to the fixed sale price, so nothing was booked.',
+    ar: 'لا يساوي مجموع الجدول ثمن البيع الثابت، فلم يُقيّد شيء.',
+  },
+};
+
 export const REFUSAL: Readonly<Record<string, Words>> = {
+  ...BOOKING_REFUSAL,
   STEP_NOT_AVAILABLE: {
     en: 'That step does not apply to the transaction as it stands. Each step follows the one before it.',
     ar: 'لا تنطبق هذه الخطوة على المعاملة في وضعها الحالي؛ كل خطوة تأتي بعد سابقتها.',

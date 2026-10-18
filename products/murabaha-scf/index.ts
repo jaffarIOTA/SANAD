@@ -13,6 +13,7 @@ import { type Money, money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import type { Disclosure, ProductModule, Quote, QuoteRequest } from '@sanad/core/products/module.ts';
 
+import type { Instalment } from './obligation/obligation.ts';
 import { openTransaction } from './origination/open-transaction.ts';
 import { type MurabahaPricing, priceMurabaha } from './pricing/murabaha.ts';
 import type { Draft, TransactionCore } from './sequencing/state.ts';
@@ -174,6 +175,51 @@ export const murabahaScf: ProductModule<MurabahaTerms, MurabahaQuote, MurabahaEx
     };
     return openTransaction(approved, core);
   },
+};
+
+/**
+ * The repayment schedule an executed sale books: the same split the quote
+ * disclosed, as instalments due a number of days after the transaction's
+ * start, the last on its maturity. Dates are civil dates computed from the
+ * maturity stored at opening — never from a clock — and both calendars are
+ * stored; `hijri` converts a civil date for storage, never at read time.
+ */
+export function repaymentSchedule(
+  terms: MurabahaTerms,
+  pricing: MurabahaPricing,
+  tenorDays: number,
+  maturityDateGregorian: string,
+  hijri: (isoDate: string) => string,
+): readonly Instalment[] {
+  const start = civilDays(maturityDateGregorian) - tenorDays;
+  return split(pricing.salePriceAmount, terms.instalments, tenorDays).map((f, i) => {
+    const due = civilDate(start + f.at.days);
+    return { sequenceNumber: i + 1, dueDateGregorian: due, dueDateHijri: hijri(due), amount: f.amount };
+  });
+}
+
+// Civil (proleptic Gregorian) dates as whole days since 1970-01-01, by integer arithmetic alone: this module
+// constructs no Date, so nothing here can be mistaken for, or turned into, a clock read (SH-06).
+const civilDays = (iso: string): number => {
+  const [yy = 1970, m = 1, d = 1] = iso.split('-').map((x) => Number(x));
+  const y = yy - (m <= 2 ? 1 : 0);
+  const era = Math.floor(y / 400);
+  const yoe = y - era * 400;
+  const doy = Math.floor((153 * (m + (m > 2 ? -3 : 9)) + 2) / 5) + d - 1;
+  const doe = yoe * 365 + Math.floor(yoe / 4) - Math.floor(yoe / 100) + doy;
+  return era * 146_097 + doe - 719_468;
+};
+const civilDate = (days: number): string => {
+  const z = days + 719_468;
+  const era = Math.floor(z / 146_097);
+  const doe = z - era * 146_097;
+  const yoe = Math.floor((doe - Math.floor(doe / 1460) + Math.floor(doe / 36_524) - Math.floor(doe / 146_096)) / 365);
+  const doy = doe - (365 * yoe + Math.floor(yoe / 4) - Math.floor(yoe / 100));
+  const mp = Math.floor((5 * doy + 2) / 153);
+  const d = doy - Math.floor((153 * mp + 2) / 5) + 1;
+  const m = mp + (mp < 10 ? 3 : -9);
+  const y = yoe + era * 400 + (m <= 2 ? 1 : 0);
+  return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 };
 
 /** Equal instalments in integer minor units; the remainder goes on the last one so the sum is exact. */
