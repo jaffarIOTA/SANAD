@@ -32,10 +32,14 @@ import type { StructureDefinition } from '@sanad/products/murabaha-scf/structure
 import { servicingCalendarOf } from './business.ts';
 import { ummAlQuraIso } from './hijri.ts';
 import { invoiceGoodsLines } from './invoices.ts';
+import type { EvidenceRecord } from '@sanad/core/evidence/evidence.ts';
+
 import {
   type PersistedTransaction,
   type TransactionEventRow,
   decodeCore,
+  decodeEvidence,
+  decodeState,
   encodeCore,
   insertOpenedTransaction,
   loadTransactions,
@@ -50,6 +54,8 @@ export interface TransactionRecord {
   readonly transactionRef: string;
   readonly requestRef: string;
   readonly transaction: Transaction;
+  /** Every evidence record, superseded ones included (marked), in the order recorded. */
+  readonly evidence: readonly EvidenceRecord[];
   readonly events: readonly TransactionEventRow[];
 }
 
@@ -60,7 +66,7 @@ export interface TransactionView extends TransactionRecord {
   readonly openedAtEpochSeconds: bigint;
 }
 
-interface TenantTransactions {
+export interface TenantTransactions {
   readonly records: Map<string, TransactionRecord>;
   hydrated: boolean;
   lock: Promise<unknown>;
@@ -87,20 +93,36 @@ export function resetTransactions(): void {
   books().clear();
 }
 
-/** The domain state as the event log rebuilds it. W1 opens transactions; later milestones add the steps after DRAFT. */
-function replay(persisted: PersistedTransaction): TransactionRecord | undefined {
+/**
+ * The domain state as the event log rebuilds it: the core from the opening
+ * event, then each step's resulting state (W2: `detail.state`) and each piece
+ * of evidence it recorded (`detail.evidence`, superseding `detail.supersedes`).
+ */
+export function replay(persisted: PersistedTransaction): TransactionRecord | undefined {
   const opened = persisted.events.find((e) => e.eventType === 'TRANSACTION_OPENED');
   if (opened === undefined) return undefined;
   const core = decodeCore(opened.detail['core']);
+  let transaction: Transaction = { state: 'DRAFT', core };
+  const evidence = new Map<string, EvidenceRecord>();
+  for (const e of persisted.events) {
+    if (e.detail['state'] !== undefined) transaction = decodeState(e.detail['state'], core);
+    if (e.detail['evidence'] === undefined) continue;
+    const record = decodeEvidence(e.detail['evidence']);
+    const superseded = e.detail['supersedes'];
+    const old = typeof superseded === 'string' ? evidence.get(superseded) : undefined;
+    if (old !== undefined) evidence.set(old.evidenceId, { ...old, supersededBy: record.evidenceId });
+    evidence.set(record.evidenceId, record);
+  }
   return {
     transactionRef: persisted.transactionRef,
     requestRef: persisted.requestRef,
-    transaction: { state: 'DRAFT', core },
+    transaction,
+    evidence: [...evidence.values()],
     events: persisted.events,
   };
 }
 
-async function hydrate(tenant: TenantCode): Promise<TenantTransactions> {
+export async function hydrate(tenant: TenantCode): Promise<TenantTransactions> {
   const book = bookOf(tenant);
   if (book.hydrated) return book;
   const pool = persistencePool();
@@ -113,7 +135,7 @@ async function hydrate(tenant: TenantCode): Promise<TenantTransactions> {
   return book;
 }
 
-function withLock<T>(tenant: TenantCode, work: () => Promise<T>): Promise<T> {
+export function withLock<T>(tenant: TenantCode, work: () => Promise<T>): Promise<T> {
   const book = bookOf(tenant);
   const run = book.lock.then(work, work);
   book.lock = run.catch(() => undefined);
@@ -123,11 +145,11 @@ function withLock<T>(tenant: TenantCode, work: () => Promise<T>): Promise<T> {
 const fail = (reason: string, detail: string, context?: Readonly<Record<string, string>>): Result<never> =>
   reject('OP-DETERMINACY', reason, detail, context);
 
-function structureOf(tenant: TenantCode): Result<StructureDefinition> {
+export function structureOf(tenant: TenantCode): Result<StructureDefinition> {
   return loadStructureDefinition(tenant, STRUCTURE);
 }
 
-function viewOf(tenant: TenantCode, record: TransactionRecord): TransactionView {
+export function viewOf(tenant: TenantCode, record: TransactionRecord): TransactionView {
   const opened = record.events.find((e) => e.eventType === 'TRANSACTION_OPENED');
   const structure = structureOf(tenant);
   const legs = 'legs' in record.transaction ? record.transaction.legs : [];
@@ -135,7 +157,7 @@ function viewOf(tenant: TenantCode, record: TransactionRecord): TransactionView 
     ? evaluateGates({
         definition: structure.value,
         legs,
-        evidence: [],
+        evidence: record.evidence,
         riskPeriodRequiredSeconds: record.transaction.core.riskPeriodRequiredSeconds,
         observedAt: developmentAttestation(),
       })
@@ -281,7 +303,13 @@ export async function openTransactionForRequest(
         return saved;
       }
     }
-    const record: TransactionRecord = { transactionRef, requestRef, transaction: draft.value, events: [event] };
+    const record: TransactionRecord = {
+      transactionRef,
+      requestRef,
+      transaction: draft.value,
+      evidence: [],
+      events: [event],
+    };
     book.records.set(transactionRef, record);
     return ok(viewOf(tenant, record));
   });

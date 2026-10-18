@@ -1,7 +1,15 @@
 {
   "version": "2026-10-17.1",
   "source": "TENANT_CONFIGURATION",
-  "note": "ILLUSTRATIVE — Bank A's Wasl programmes (each with its anchor, the supplier whose cleared invoices it finances) and the distributors that draw under them, written 2026-10-17 from the development book's invoices so a transaction can open against real reference rows. Invented companies and registration numbers; none is a real entity. The institution's own programme and onboarding records replace this file before any real use.",
+  "note": "ILLUSTRATIVE — Bank A's Wasl programmes (each with its anchor, the supplier whose cleared invoices it finances) and the distributors that draw under them, written 2026-10-17 from the development book's invoices so a transaction can open against real reference rows. Invented companies and registration numbers; none is a real entity. The institution's own programme and onboarding records replace this file before any real use. 2026-10-18 (Wasl W2): the institution itself, the buyer on the anchor's ownership invoice (gate 1 checks the cleared invoice names it), and how long a sale offer stays open for the distributor's acceptance.",
+  "institution": {
+    "registrationNo": "1010000100",
+    "nameEn": "Bank A (illustrative)",
+    "nameAr": "البنك أ (توضيحي)"
+  },
+  "sequencing": {
+    "saleOfferValiditySeconds": 172800
+  },
   "programmes": [
     {
       "programmeId": "prg-0001",

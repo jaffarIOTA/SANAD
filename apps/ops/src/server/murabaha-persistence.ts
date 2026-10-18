@@ -17,16 +17,19 @@
  * Every statement runs inside the tenant's scope as the runtime role
  * (`inTenant`, SR-003).
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import type { Pool } from 'pg';
 
 import { type TenantCode, type WaslParties, loadBoardPositions, loadWaslParties } from '@sanad/config/loader.ts';
+import type { EvidenceRecord } from '@sanad/core/evidence/evidence.ts';
 import { type CurrencyCode, money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
+import { type TsaInstant, restoreAttestedInstant } from '@sanad/core/time/tsa.ts';
 import { tenantUuidByCode } from '@sanad/origination/credentials.ts';
 import { type Scoped, inTenant } from '@sanad/origination/tenant-scope.ts';
-import type { TransactionCore } from '@sanad/products/murabaha-scf/sequencing/state.ts';
+import type { ContractLeg } from '@sanad/products/murabaha-scf/legs/leg.ts';
+import type { Transaction, TransactionCore } from '@sanad/products/murabaha-scf/sequencing/state.ts';
 
 export interface TransactionEventRow {
   readonly eventType: string;
@@ -76,6 +79,82 @@ export function decodeCore(raw: unknown): TransactionCore {
     },
   };
 }
+
+// -- A step's facts, as its event records them ----------------------------------------
+
+/**
+ * JSON for what a step carries beyond the core: whole bigints tagged as
+ * strings, attested instants as the three fields they were recorded with —
+ * restored through `restoreAttestedInstant`, never re-attested.
+ */
+function encodeValue(v: unknown): unknown {
+  if (typeof v === 'bigint') return { $bigint: v.toString() };
+  if (Array.isArray(v)) return v.map(encodeValue);
+  if (v !== null && typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    const keys = Object.keys(o);
+    if (
+      keys.length === 3 &&
+      typeof o['epochSeconds'] === 'bigint' &&
+      typeof o['tokenDigest'] === 'string' &&
+      typeof o['authorityId'] === 'string'
+    )
+      return {
+        $instant: {
+          epochSeconds: o['epochSeconds'].toString(),
+          tokenDigest: o['tokenDigest'],
+          authorityId: o['authorityId'],
+        },
+      };
+    return Object.fromEntries(keys.map((k) => [k, encodeValue(o[k])]));
+  }
+  return v;
+}
+
+function decodeValue(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(decodeValue);
+  if (v !== null && typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    if (typeof o['$bigint'] === 'string') return BigInt(o['$bigint']);
+    const instant = o['$instant'] as { epochSeconds: string; tokenDigest: string; authorityId: string } | undefined;
+    if (instant !== undefined)
+      return restoreAttestedInstant({
+        epochSeconds: BigInt(instant.epochSeconds),
+        tokenDigest: instant.tokenDigest,
+        authorityId: instant.authorityId,
+      });
+    return Object.fromEntries(Object.entries(o).map(([k, x]) => [k, decodeValue(x)]));
+  }
+  return v;
+}
+
+/** The state a step left the transaction in, without its core (the opening event holds that). */
+export function encodeState(t: Transaction): Record<string, unknown> {
+  const { core: _core, ...rest } = t;
+  return encodeValue(rest) as Record<string, unknown>;
+}
+
+export function decodeState(raw: unknown, core: TransactionCore): Transaction {
+  return { ...(decodeValue(raw) as Omit<Transaction, 'core'>), core } as Transaction;
+}
+
+export const encodeEvidence = (e: EvidenceRecord): Record<string, unknown> => encodeValue(e) as Record<string, unknown>;
+export const decodeEvidence = (raw: unknown): EvidenceRecord => decodeValue(raw) as EvidenceRecord;
+
+/**
+ * A name-based UUID (RFC 9562 version 8, from SHA-256) for an identifier the
+ * domain writes as text: the board's template version (`murabaha_offer@3`)
+ * goes into 0003's uuid column as the same UUID every time.
+ */
+export function nameUuid(name: string): string {
+  const h = createHash('sha256').update(`sanad:template-version:${name}`).digest();
+  h[6] = ((h[6] ?? 0) & 0x0f) | 0x80;
+  h[8] = ((h[8] ?? 0) & 0x3f) | 0x80;
+  const x = h.subarray(0, 16).toString('hex');
+  return `${x.slice(0, 8)}-${x.slice(8, 12)}-${x.slice(12, 16)}-${x.slice(16, 20)}-${x.slice(20, 32)}`;
+}
+
+const asUuid = (id: string): string => (/^[0-9a-f-]{36}$/i.test(id) ? id : randomUUID());
 
 // -- Reference rows ------------------------------------------------------------------
 
@@ -250,6 +329,152 @@ export async function insertOpenedTransaction(
         'Another transaction took that reference; open it again',
       );
     return reject('OP-DETERMINACY', 'PERSISTENCE_FAILED', 'The transaction was not written');
+  }
+}
+
+/**
+ * One step of the sequence, as written: what the step found (the state it
+ * expects), where it leaves the transaction, the leg it executed or the
+ * evidence it recorded, and its event.
+ */
+export interface StepWrite {
+  readonly transactionRef: string;
+  /** The state the step was taken from. If the row has moved meanwhile, nothing is written. */
+  readonly expectedState: string;
+  /** Where the step leaves it; the same as `expectedState` for a step that records evidence only. */
+  readonly toState: string;
+  readonly event: TransactionEventRow;
+  readonly leg?: ContractLeg;
+  readonly evidence?: EvidenceRecord;
+  /** The evidence id the new evidence supersedes (a checker's validation of an earlier record). */
+  readonly supersedes?: string;
+  readonly riskPeriodStartAt?: TsaInstant;
+  readonly saleOfferedAt?: TsaInstant;
+  readonly correlationId: string;
+}
+
+/** A database refusal, said in the domain's terms: the database is the second lock on the same rule. */
+function refusalOf(error: unknown): Result<never> {
+  const e = error as { code?: string; constraint?: string };
+  if (e.constraint === 'transaction_risk_interval_observed')
+    return reject(
+      'SH-06',
+      'RISK_PERIOD_NOT_ELAPSED',
+      'The database refused a sale offered inside the risk-holding interval',
+    );
+  if (e.constraint === 'transaction_post_possession_states_have_risk_start')
+    return reject(
+      'SH-05',
+      'RISK_PERIOD_START_UNDETERMINED',
+      'The database refused possession without its attested start',
+    );
+  if (e.constraint === 'contract_leg_one_document_per_leg')
+    return reject('SH-07', 'DOCUMENT_ALREADY_BOUND_TO_A_LEG', 'The database refused a document on a second leg');
+  if (e.code === '23001' || e.code === '23505' || e.code === '23514')
+    return reject('OP-CHAIN', 'DATABASE_REFUSED', 'The database refused the step; nothing was written', {
+      constraint: e.constraint ?? e.code,
+    });
+  return reject('OP-DETERMINACY', 'PERSISTENCE_FAILED', 'The step was not written');
+}
+
+const at = (i: TsaInstant | undefined): string | null => (i === undefined ? null : i.epochSeconds.toString());
+
+/** Write one step: the leg or evidence, the state and instants, and the event, in one tenant-scoped transaction. */
+export async function recordStep(pool: Pool, tenant: TenantCode, w: StepWrite): Promise<Result<true>> {
+  const tenantUuid = await tenantUuidByCode(pool, tenant);
+  const correlation = asUuid(w.correlationId);
+  try {
+    return await inTenant(pool, tenantUuid, async (db) => {
+      const row = (
+        await db.query<{ id: string; state: string }>(
+          `select id::text, state from core.transaction where tenant_id = $1 and transaction_ref = $2 for update`,
+          [tenantUuid, w.transactionRef],
+        )
+      ).rows[0];
+      if (row === undefined)
+        return reject('OP-DETERMINACY', 'TRANSACTION_NOT_FOUND', 'No such transaction', {
+          transactionRef: w.transactionRef,
+        });
+      if (row.state !== w.expectedState)
+        return reject('OP-DETERMINACY', 'TRANSACTION_MOVED', 'The transaction moved on meanwhile; reload it', {
+          transactionRef: w.transactionRef,
+        });
+      const leg = w.leg;
+      if (leg !== undefined)
+        await db.query(
+          `insert into core.contract_leg (id, tenant_id, transaction_id, leg_type, sequence_no, document_id,
+             content_hash, prev_leg_hash, executed_at, tsa_token_digest, tsa_token, template_version_id,
+             counterparty_role, counterparty_cr, correlation_id)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, to_timestamp($9), $10, $11, $12, $13, $14, $15)`,
+          [
+            leg.legId,
+            tenantUuid,
+            row.id,
+            leg.legType,
+            leg.sequenceNo,
+            leg.documentId,
+            leg.contentHash,
+            leg.prevLegHash ?? null,
+            leg.executedAt.epochSeconds.toString(),
+            leg.tsaTokenDigest,
+            // The token as retained. The host-clock stand-in issues none, so its labelled digest stands in (SR-006).
+            Buffer.from(leg.tsaTokenDigest, 'utf8'),
+            nameUuid(leg.templateVersionId),
+            leg.counterpartyRole,
+            leg.counterpartyCr,
+            correlation,
+          ],
+        );
+      const ev = w.evidence;
+      if (ev !== undefined) {
+        await db.query(
+          `insert into evidence.evidence (id, tenant_id, transaction_id, evidence_type, gate_satisfied, source,
+             artefact_uri, artefact_hash, captured_at, captured_tsa_digest, validation_status, validation_detail,
+             extraction_confidence_bp, correlation_id)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, to_timestamp($9), $10, $11, $12, $13, $14)`,
+          [
+            ev.evidenceId,
+            tenantUuid,
+            row.id,
+            ev.evidenceType,
+            ev.gateSatisfied,
+            ev.source,
+            ev.artefactUri,
+            ev.artefactHash,
+            ev.capturedAt.epochSeconds.toString(),
+            ev.capturedAt.tokenDigest,
+            ev.validationStatus,
+            ev.validationDetail === undefined ? null : JSON.stringify(ev.validationDetail),
+            ev.extractionConfidencePerTenThousand ?? null,
+            correlation,
+          ],
+        );
+        if (w.supersedes !== undefined) {
+          const superseded = await db.query(
+            `update evidence.evidence set superseded_by = $3
+              where tenant_id = $1 and id = $2::uuid and transaction_id = $4 and superseded_by is null`,
+            [tenantUuid, w.supersedes, ev.evidenceId, row.id],
+          );
+          if (superseded.rowCount !== 1)
+            return reject('OP-DETERMINACY', 'EVIDENCE_ALREADY_DECIDED', 'That evidence has already been decided', {
+              evidenceId: w.supersedes,
+            });
+        }
+      }
+      if (w.toState !== w.expectedState || w.riskPeriodStartAt !== undefined || w.saleOfferedAt !== undefined)
+        await db.query(
+          `update core.transaction
+              set state = $3,
+                  risk_period_start_at = coalesce(to_timestamp($4::bigint), risk_period_start_at),
+                  sale_offered_at = coalesce(to_timestamp($5::bigint), sale_offered_at)
+            where tenant_id = $1 and id = $2`,
+          [tenantUuid, row.id, w.toState, at(w.riskPeriodStartAt), at(w.saleOfferedAt)],
+        );
+      await insertEvent(db, tenantUuid, row.id, w.event, w.correlationId);
+      return ok(true as const);
+    });
+  } catch (error) {
+    return refusalOf(error);
   }
 }
 
