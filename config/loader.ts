@@ -91,6 +91,7 @@ import {
   parseTenantOnboarding,
 } from '../core/jurisdiction/profile.ts';
 import { type DocumentChecklist, parseDocumentChecklist } from '../core/documents/checklist.ts';
+import { type DocumentTypeCatalogue, parseDocumentTypeCatalogue } from '../core/documents/understanding.ts';
 import { type SmeAssessmentPolicy, parseSmeAssessmentPolicy } from '../core/decisioning/sme-assessment.ts';
 import { type Result, ok, reject } from '../core/kernel/result.ts';
 import { type ProductCatalogue, parseProductCatalogue } from '../core/products/catalogue.ts';
@@ -291,6 +292,31 @@ const CHECKLISTS: Readonly<Record<TenantCode, readonly unknown[]>> = {
 };
 
 /** The documents a programme requires of this tenant's counterparties. */
+import bankADocumentTypes from './tenants/bank-a/documents/document-types.json' with { type: 'json' };
+import fintechBDocumentTypes from './tenants/fintech-b/documents/document-types.json' with { type: 'json' };
+import smeFundAeDocumentTypes from './tenants/sme-fund-ae/documents/document-types.json' with { type: 'json' };
+
+const DOCUMENT_TYPES: Readonly<Partial<Record<TenantCode, unknown>>> = {
+  'bank-a': bankADocumentTypes,
+  'fintech-b': fintechBDocumentTypes,
+  'sme-fund-ae': smeFundAeDocumentTypes,
+};
+
+/** How a tenant's documents are recognised from their text (document intelligence, D1). */
+export function loadDocumentTypeCatalogue(tenant: TenantCode): Result<DocumentTypeCatalogue> {
+  const raw = DOCUMENT_TYPES[tenant];
+  if (raw === undefined)
+    return reject(
+      'OP-DETERMINACY',
+      'DOCUMENT_TYPES_NOT_CONFIGURED',
+      'No document types are configured for this tenant',
+      {
+        tenant,
+      },
+    );
+  return parseDocumentTypeCatalogue(raw);
+}
+
 export function loadDocumentChecklist(tenant: TenantCode, programmeId: string): Result<DocumentChecklist> {
   for (const candidate of CHECKLISTS[tenant]) {
     const parsed = parseDocumentChecklist(candidate);

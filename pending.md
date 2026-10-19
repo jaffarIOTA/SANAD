@@ -69,6 +69,21 @@ The findings go in the adapter README.
 - **Semgrep** has not been run locally on W2/W3 (not installed here). CI's gate is the
   first run.
 
+## Document intelligence (docs/DOCUMENT-INTELLIGENCE-PLAN.md)
+
+- **D1 built** on `docintel-d1-findings`: findings and classification on business uploads.
+  - The database test hasn't run locally yet because Docker was down. CI's database job runs it.
+- **D2–D5 next:**
+  - D2: checks on what the document says;
+  - D3: Tahaqoq authenticity;
+  - D4: gap requests and resume;
+  - D5: throughput view.
+- **Live reading needs:** the Document Engine configured for the tenant, V-05/V-06 verified on real Saudi and UAE
+  samples, and the catalogues (ILLUSTRATIVE) tuned against them.
+- **Images (PNG, JPEG) are not read.** They need the engine's OCR path.
+- **Wasl request documents** are attached by reference, not uploaded, so there is nothing to read until they're
+  uploaded.
+
 ## Security register items still open
 
 - **SR-021:** no branch protection on `main`; commits unsigned.

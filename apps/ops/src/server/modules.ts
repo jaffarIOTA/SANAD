@@ -707,6 +707,14 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         jurisdictions: AE,
       },
       {
+        id: 'document-reading',
+        titleEn: 'Document reading',
+        titleAr: 'قراءة المستندات',
+        readiness: live(),
+        reference:
+          'Document intelligence D1 (docs/DOCUMENT-INTELLIGENCE-PLAN.md): each uploaded business document is read — the kind recognised from its text against the tenant’s catalogue (config/tenants/<t>/documents/document-types.json, ILLUSTRATIVE), its issue, expiry and statement dates, and whether it matches the type presented — and shown to the checker beside it. Findings in evidence.document_finding, append-only; dates and outcomes only, never a number from the page. An aid, never a decision: four eyes always (product owner, 2026-10-19). Engine: rules over the institution’s document engine (LIVE once configured; V-05/V-06 for Saudi samples), else the demonstration reader labelled Fixture; an AI engine plugs in behind the same port later. Images are not read yet',
+      },
+      {
         id: 'templates',
         titleEn: 'Templates & versions',
         titleAr: 'القوالب والإصدارات',

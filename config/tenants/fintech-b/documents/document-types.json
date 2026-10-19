@@ -1,0 +1,164 @@
+{
+  "catalogueVersion": "2026-10-19.1",
+  "note": "ILLUSTRATIVE — how Saudi SME documents are recognised from their text (document intelligence D1, docs/DOCUMENT-INTELLIGENCE-PLAN.md). English labels carry most weight because the document engine reads English labels and digits reliably and rendered Arabic text not yet (adapters/nutrient/verification V-06); Arabic markers add weight where they are read. To be tuned against real samples (V-05/V-06) before relying on the classifications.",
+  "engine": "RULES",
+  "ambiguityMargin": 2,
+  "types": [
+    {
+      "kind": "COMMERCIAL_REGISTRATION",
+      "satisfies": ["COMMERCIAL_REGISTRATION"],
+      "markers": [
+        { "text": "Commercial Registration", "weight": 3 },
+        { "text": "Ministry of Commerce", "weight": 2 },
+        { "text": "CR Number", "weight": 2 },
+        { "text": "السجل التجاري", "weight": 2 },
+        { "text": "وزارة التجارة", "weight": 1 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 7,
+      "facts": [
+        { "fact": "ISSUE_DATE", "labels": ["Issue Date", "تاريخ الإصدار"] },
+        { "fact": "EXPIRY_DATE", "labels": ["Expiry Date", "تاريخ الانتهاء"] }
+      ]
+    },
+    {
+      "kind": "NATIONAL_ID",
+      "satisfies": ["OWNER_NATIONAL_ID"],
+      "markers": [
+        { "text": "National ID", "weight": 3 },
+        { "text": "Identity Card", "weight": 2 },
+        { "text": "Ministry of Interior", "weight": 2 },
+        { "text": "الهوية الوطنية", "weight": 2 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 7,
+      "facts": [{ "fact": "EXPIRY_DATE", "labels": ["Expiry Date", "Date of Expiry", "تاريخ الانتهاء"] }]
+    },
+    {
+      "kind": "NATIONAL_ADDRESS",
+      "satisfies": ["NATIONAL_ADDRESS"],
+      "markers": [
+        { "text": "National Address", "weight": 3 },
+        { "text": "Short Address", "weight": 2 },
+        { "text": "Building Number", "weight": 1 },
+        { "text": "Postal Code", "weight": 1 },
+        { "text": "العنوان الوطني", "weight": 2 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 6,
+      "facts": [{ "fact": "ISSUE_DATE", "labels": ["Issue Date", "Date", "تاريخ الإصدار"] }]
+    },
+    {
+      "kind": "BANK_STATEMENT",
+      "satisfies": ["COMPANY_BANK_STATEMENT_12M"],
+      "markers": [
+        { "text": "Account Statement", "weight": 3 },
+        { "text": "Bank Statement", "weight": 3 },
+        { "text": "Opening Balance", "weight": 2 },
+        { "text": "Closing Balance", "weight": 2 },
+        { "text": "IBAN", "weight": 1 },
+        { "text": "كشف حساب", "weight": 2 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 7,
+      "facts": [{ "fact": "STATEMENT_PERIOD", "labels": ["Statement Period", "Period", "الفترة"] }]
+    },
+    {
+      "kind": "VAT_CERTIFICATE",
+      "satisfies": ["VAT_CERTIFICATE"],
+      "markers": [
+        { "text": "VAT Registration Certificate", "weight": 3 },
+        { "text": "Value Added Tax", "weight": 2 },
+        { "text": "VAT Number", "weight": 2 },
+        { "text": "Zakat, Tax and Customs Authority", "weight": 1 },
+        { "text": "ضريبة القيمة المضافة", "weight": 2 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 7,
+      "facts": [{ "fact": "ISSUE_DATE", "labels": ["Issue Date", "Registration Date", "تاريخ الإصدار"] }]
+    },
+    {
+      "kind": "ZAKAT_CERTIFICATE",
+      "satisfies": ["ZAKAT_CERTIFICATE"],
+      "markers": [
+        { "text": "Zakat Certificate", "weight": 3 },
+        { "text": "Certificate of Zakat", "weight": 3 },
+        { "text": "Zakat, Tax and Customs Authority", "weight": 1 },
+        { "text": "شهادة الزكاة", "weight": 2 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 6,
+      "facts": [
+        { "fact": "ISSUE_DATE", "labels": ["Issue Date", "تاريخ الإصدار"] },
+        { "fact": "EXPIRY_DATE", "labels": ["Valid Until", "Expiry Date", "تاريخ الانتهاء"] }
+      ]
+    },
+    {
+      "kind": "GOSI_CERTIFICATE",
+      "satisfies": ["GOSI_CERTIFICATE"],
+      "markers": [
+        { "text": "General Organization for Social Insurance", "weight": 3 },
+        { "text": "GOSI", "weight": 2 },
+        { "text": "Social Insurance", "weight": 1 },
+        { "text": "التأمينات الاجتماعية", "weight": 2 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 6,
+      "facts": [
+        { "fact": "ISSUE_DATE", "labels": ["Issue Date", "تاريخ الإصدار"] },
+        { "fact": "EXPIRY_DATE", "labels": ["Valid Until", "Expiry Date", "تاريخ الانتهاء"] }
+      ]
+    },
+    {
+      "kind": "ARTICLES_OF_ASSOCIATION",
+      "satisfies": ["ARTICLES_OF_ASSOCIATION"],
+      "markers": [
+        { "text": "Articles of Association", "weight": 3 },
+        { "text": "Memorandum of Association", "weight": 2 },
+        { "text": "Share Capital", "weight": 1 },
+        { "text": "عقد التأسيس", "weight": 2 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 6,
+      "facts": []
+    },
+    {
+      "kind": "CHAMBER_MEMBERSHIP",
+      "satisfies": ["CHAMBER_MEMBERSHIP"],
+      "markers": [
+        { "text": "Chamber of Commerce", "weight": 3 },
+        { "text": "Membership Certificate", "weight": 2 },
+        { "text": "الغرفة التجارية", "weight": 2 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 5,
+      "facts": [{ "fact": "EXPIRY_DATE", "labels": ["Expiry Date", "Valid Until", "تاريخ الانتهاء"] }]
+    },
+    {
+      "kind": "AUDITED_FINANCIALS",
+      "satisfies": ["AUDITED_FINANCIALS_2Y"],
+      "markers": [
+        { "text": "Independent Auditor's Report", "weight": 3 },
+        { "text": "Statement of Financial Position", "weight": 2 },
+        { "text": "Statement of Profit or Loss", "weight": 1 },
+        { "text": "Balance Sheet", "weight": 1 },
+        { "text": "تقرير المراجع المستقل", "weight": 2 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 6,
+      "facts": []
+    },
+    {
+      "kind": "CREDIT_BUREAU_REPORT",
+      "satisfies": ["SIMAH_COMMERCIAL_REPORT"],
+      "markers": [
+        { "text": "SIMAH", "weight": 3 },
+        { "text": "Saudi Credit Bureau", "weight": 2 },
+        { "text": "Credit Report", "weight": 1 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 5,
+      "facts": [{ "fact": "ISSUE_DATE", "labels": ["Report Date", "Date of Report", "تاريخ التقرير"] }]
+    }
+  ]
+}
