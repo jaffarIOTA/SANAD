@@ -67,7 +67,13 @@ export interface IntakeParty {
 }
 
 /** The consents an intake captures, by the platform's consent types. */
-export type IntakeConsentType = 'IDENTITY_VERIFICATION' | 'SCREENING' | 'CREDIT_BUREAU' | 'ACCOUNT_INFORMATION';
+export type IntakeConsentType =
+  | 'IDENTITY_VERIFICATION'
+  | 'SCREENING'
+  | 'CREDIT_BUREAU'
+  | 'ACCOUNT_INFORMATION'
+  /** Checking the authenticity of the national documents the business presents (document intelligence D3). */
+  | 'DOCUMENT_VERIFICATION';
 
 /** The tax authority's answer for the business's TRN. Informational: registration is mandatory only above a threshold. */
 export interface TaxCheck {

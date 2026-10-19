@@ -156,6 +156,7 @@ import type { RateBasis, RatePeriod } from '@sanad/core/pricing/rate.ts';
 import type { ProductCatalogue } from '@sanad/core/products/catalogue.ts';
 import { buildOffer } from '@sanad/core/products/offer.ts';
 import { type TsaInstant, restoreAttestedInstant } from '@sanad/core/time/tsa.ts';
+import { findingsFor } from '@sanad/origination/documents/findings.ts';
 import { hostClockInstant } from '@sanad/origination/host-clock.ts';
 import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
 import { tenantUuidByCode } from '@sanad/origination/credentials.ts';
@@ -2796,6 +2797,7 @@ async function validateDocumentAt(
   decision: 'VALID' | 'INVALID',
   validator: string,
   at: TsaInstant,
+  resolution?: string,
 ): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
   const ctx = tenantContext(tenant);
@@ -2823,6 +2825,21 @@ async function validateDocumentAt(
     return fail('FOUR_EYES_REQUIRED', 'A document is validated by a principal other than the one who presented it', {
       documentRef,
     });
+  // Document intelligence D3: the issuer said this document is not authentic. The checker may still accept it — the
+  // issuer's record can lag, or be wrong — but never silently: accepting it takes a written resolution, kept on the
+  // event. Refusing it takes none.
+  const note = resolution?.trim() ?? '';
+  if (decision === 'VALID' && (await issuerRefuted(tenant, applicationId, doc.content?.sha256Hex))) {
+    if (note.length < 10)
+      return fail(
+        'AUTHENTICITY_UNRESOLVED',
+        'The issuer did not confirm this document; accepting it needs the checker’s written resolution',
+        { documentRef },
+      );
+    if (note.length > 500) return fail('RESOLUTION_TOO_LONG', 'A resolution is at most 500 characters');
+    const identityInNote = identityNumberIn({ resolution: note });
+    if (identityInNote !== undefined) return identityInNote;
+  }
   markValidated(r, documentRef, decision, validator);
   recordEvent(book, r, {
     eventType: 'DOCUMENT_VALIDATED',
@@ -2830,7 +2847,12 @@ async function validateDocumentAt(
     toStage: null,
     actor: validator,
     atEpochSeconds: at.epochSeconds,
-    detail: { documentType: doc.documentType, documentRef, validationStatus: decision },
+    detail: {
+      documentType: doc.documentType,
+      documentRef,
+      validationStatus: decision,
+      ...(decision === 'VALID' && note.length > 0 ? { authenticityResolution: note } : {}),
+    },
   });
   return ok(view(r, ctx.value.currency));
 }
@@ -2845,10 +2867,23 @@ export async function validateDocument(
   documentRef: string,
   decision: 'VALID' | 'INVALID',
   validator: string,
+  /** Required to accept a document its issuer did not confirm (D3); ignored otherwise. */
+  resolution?: string,
 ): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () =>
-    validateDocumentAt(tenant, applicationId, documentRef, decision, validator, developmentAttestation()),
+    validateDocumentAt(tenant, applicationId, documentRef, decision, validator, developmentAttestation(), resolution),
   );
+}
+
+/** Whether the latest reading of this document on the application has the issuer saying it is not authentic. */
+async function issuerRefuted(
+  tenant: TenantCode,
+  applicationId: string,
+  sha256Hex: string | undefined,
+): Promise<boolean> {
+  if (sha256Hex === undefined) return false;
+  const latest = (await findingsFor(tenant, { kind: 'BUSINESS_APPLICATION', ref: applicationId })).get(sha256Hex);
+  return latest?.checks.some((c) => c.check === 'AUTHENTIC' && c.outcome === 'FAIL') === true;
 }
 
 const PER_TEN_THOUSAND_MAX = 100_000n;
@@ -2994,7 +3029,7 @@ export async function recordAssessmentInputs(
  */
 export function intakeConsentFor(
   application: BusinessApplication,
-  type: 'credit_bureau' | 'account_information',
+  type: 'credit_bureau' | 'account_information' | 'document_verification',
 ): string | undefined {
   if (!application.upstreamRef.startsWith('intake:')) return undefined;
   const id = `${application.upstreamRef.slice('intake:'.length)}:entity:${type}`.toLowerCase();

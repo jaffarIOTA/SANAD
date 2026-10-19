@@ -9,7 +9,12 @@
       "titleAr": "شهادة السجل التجاري (واثق)",
       "required": true,
       "validForSeconds": 31536000,
-      "checks": [{ "check": "NOT_EXPIRED" }, { "check": "REGISTRATION_MATCHES" }, { "check": "NAME_FOUND" }]
+      "checks": [
+        { "check": "NOT_EXPIRED" },
+        { "check": "REGISTRATION_MATCHES" },
+        { "check": "NAME_FOUND" },
+        { "check": "AUTHENTIC" }
+      ]
     },
     {
       "documentType": "ARTICLES_OF_ASSOCIATION",
@@ -30,7 +35,7 @@
       "titleAr": "العنوان الوطني (سبل)",
       "required": true,
       "validForSeconds": 31536000,
-      "checks": [{ "check": "ISSUED_WITHIN", "days": 365 }]
+      "checks": [{ "check": "ISSUED_WITHIN", "days": 365 }, { "check": "AUTHENTIC" }]
     },
     {
       "documentType": "SIMAH_COMMERCIAL_REPORT",
@@ -71,7 +76,7 @@
       "titleAr": "شهادة الزكاة (هيئة الزكاة والضريبة والجمارك)",
       "required": true,
       "validForSeconds": 31536000,
-      "checks": [{ "check": "NOT_EXPIRED" }]
+      "checks": [{ "check": "NOT_EXPIRED" }, { "check": "AUTHENTIC" }]
     },
     {
       "documentType": "VAT_CERTIFICATE",

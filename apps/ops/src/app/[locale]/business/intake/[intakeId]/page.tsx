@@ -57,6 +57,7 @@ const CONSENT_WORDS: Readonly<Record<IntakeConsentType, { readonly en: string; r
   SCREENING: { en: 'Screening', ar: 'الفحص الأمني' },
   CREDIT_BUREAU: { en: 'Credit bureau', ar: 'المكتب الائتماني' },
   ACCOUNT_INFORMATION: { en: 'Bank accounts (Open Finance)', ar: 'الحسابات المصرفية (التمويل المفتوح)' },
+  DOCUMENT_VERIFICATION: { en: 'Document authenticity (Tahaqoq)', ar: 'التحقق من صحة المستندات (تحقق)' },
 };
 
 const TAX_WORDS = {
@@ -357,6 +358,17 @@ export default async function IntakePage({
             <ConsentCell segment={segment} intake={i} subject="ENTITY" type="SCREENING" open={open} f={f} />
             <ConsentCell segment={segment} intake={i} subject="ENTITY" type="CREDIT_BUREAU" open={open} f={f} />
             <ConsentCell segment={segment} intake={i} subject="ENTITY" type="ACCOUNT_INFORMATION" open={open} f={f} />
+            {/* The national-document authenticity rail is Saudi (Tahaqoq); the UAE has none configured. */}
+            {j.code === 'SA' ? (
+              <ConsentCell
+                segment={segment}
+                intake={i}
+                subject="ENTITY"
+                type="DOCUMENT_VERIFICATION"
+                open={open}
+                f={f}
+              />
+            ) : null}
           </Row>
           <Row label={t('Screening', 'الفحص الأمني')}>
             <ScreeningCell
@@ -369,7 +381,13 @@ export default async function IntakePage({
               f={f}
             />
           </Row>
-          <Row label={j.code === 'SA' ? t('Zakat certificate (ZATCA)', 'شهادة الزكاة (هيئة الزكاة والضريبة والجمارك)') : t('VAT registration', 'التسجيل الضريبي')}>
+          <Row
+            label={
+              j.code === 'SA'
+                ? t('Zakat certificate (ZATCA)', 'شهادة الزكاة (هيئة الزكاة والضريبة والجمارك)')
+                : t('VAT registration', 'التسجيل الضريبي')
+            }
+          >
             <TaxCell saudi={j.code === 'SA'} segment={segment} intake={i} open={open} f={f} />
           </Row>
         </dl>
