@@ -8,7 +8,7 @@ Last updated: 19 October 2026.
 - **Merge the stacked PRs.** Each is built on the one before; only #35 targets `main`.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
-  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60 document intelligence D1. Auto mode cannot merge.
+  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#61 document intelligence D1–D2. Auto mode cannot merge.
 - **Renew the `APICAPIKEY` GitHub secret.**
 - **Bank A's Tawarruq board ruling.** Record it in Admin. `sme-term-islamic` stays
   disabled until it's recorded.
@@ -72,8 +72,7 @@ The findings go in the adapter README.
 ## Document intelligence (docs/DOCUMENT-INTELLIGENCE-PLAN.md)
 
 - **D1 built**, PR #60: findings and classification on business uploads.
-  - The database test hasn't run locally yet because Docker was down. CI's database job runs it.
-- **D2 built**, PR stacked on #60: checks on what the document says, declared per checklist item and shown to the
+- **D2 built**, PR #61 (stacked on #60): checks on what the document says, declared per checklist item and shown to the
   checker. The checks in every checklist are ILLUSTRATIVE; each institution sets its own limits.
   - Corroboration against Wathq and GOSI waits on KSA-RAIL-WATHQ-01 and KSA-RAIL-GOSI-01.
   - The UAE seed applications' licence references (`TL-ILLUS-nnnn`) are too short to compare, so
