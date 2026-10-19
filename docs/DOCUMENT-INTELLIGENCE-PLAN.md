@@ -96,9 +96,24 @@ upload ─▶ store (object store, unchanged)
     normalised for Arabic and Latin script, and only the yes/no result is stored;
   - **corroboration:** the document agrees with what the rail returned (the CR number with Wathq, the salary band
     with GOSI). Where they disagree, the rail governs and the finding says so.
-- The checklist dates an item from the document's own date where D1 read it, and from the upload otherwise (today's
-  behaviour).
-- The checker's screen shows each check: PASS, FAIL with its reason in both languages, or UNREADABLE.
+- ~~The checklist dates an item from the document's own date where D1 read it, and from the upload otherwise.~~
+  **Withdrawn when D2 was built (19 October 2026).** Counting expiry from a date the machine read would make the
+  reading a decision, against "always four eyes". The checklist still dates an item from its capture and counts the
+  checker's validation, exactly as before. A content check is shown to the checker and changes nothing on its own.
+- The checker's screen shows each check: PASS, FAIL with what was seen and the limit, in both languages, or
+  UNREADABLE (never shown as a failure).
+
+**As built (D2):**
+
+- **Rules** live in `core/documents/document-checks.ts` and are declared per checklist item as `checks`:
+  `NOT_EXPIRED` (optional `minimumRemainingDays`), `ISSUED_WITHIN`, `PERIOD_ENDS_WITHIN`, `PERIOD_COVERS`,
+  `REGISTRATION_MATCHES` and `NAME_FOUND`. They're ILLUSTRATIVE in every tenant's checklists.
+- **Reading date:** the institution's civil date at the moment of reading. Hijri dates convert on Umm al-Qura. A
+  date that isn't a real calendar day is UNREADABLE.
+- **Registration number and name:** compared while the text is in hand; only MATCHES/DIFFERS or FOUND is kept. A
+  name that isn't found is UNREADABLE, not FAIL, because rendered Arabic may simply not have been read (V-06).
+- **Wrong type:** a document that doesn't read as the type presented has every content check UNREADABLE.
+- **Corroboration with the rails** (Wathq, GOSI) is not built. It waits on those rails' live verification.
 
 ### D3: authenticity
 
