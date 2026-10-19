@@ -1,7 +1,7 @@
 # Pending
 
 Everything waiting on someone, kept in one place. Updated as items close.
-Last updated: 18 October 2026.
+Last updated: 19 October 2026.
 
 ## Waiting on the product owner
 
@@ -73,8 +73,12 @@ The findings go in the adapter README.
 
 - **D1 built**, PR #60: findings and classification on business uploads.
   - The database test hasn't run locally yet because Docker was down. CI's database job runs it.
-- **D2–D5 next:**
-  - D2: checks on what the document says;
+- **D2 built**, PR stacked on #60: checks on what the document says, declared per checklist item and shown to the
+  checker. The checks in every checklist are ILLUSTRATIVE; each institution sets its own limits.
+  - Corroboration against Wathq and GOSI waits on KSA-RAIL-WATHQ-01 and KSA-RAIL-GOSI-01.
+  - The UAE seed applications' licence references (`TL-ILLUS-nnnn`) are too short to compare, so
+    REGISTRATION_MATCHES reads UNREADABLE for them until real licence numbers are used.
+- **D3–D5 next:**
   - D3: Tahaqoq authenticity;
   - D4: gap requests and resume;
   - D5: throughput view.

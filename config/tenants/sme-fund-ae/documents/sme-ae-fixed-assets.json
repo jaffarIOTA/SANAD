@@ -8,13 +8,15 @@
       "titleEn": "Trade licence",
       "titleAr": "الرخصة التجارية",
       "required": true,
-      "validForSeconds": 31536000
+      "validForSeconds": 31536000,
+      "checks": [{ "check": "NOT_EXPIRED" }, { "check": "REGISTRATION_MATCHES" }, { "check": "NAME_FOUND" }]
     },
     {
       "documentType": "OWNER_EMIRATES_ID",
       "titleEn": "Emirates ID of every owner",
       "titleAr": "الهوية الإماراتية لجميع الملاك",
-      "required": true
+      "required": true,
+      "checks": [{ "check": "NOT_EXPIRED" }]
     },
     {
       "documentType": "PERSONAL_BUREAU_REPORT",
@@ -28,14 +30,23 @@
       "titleEn": "Personal bank statements, 12 months",
       "titleAr": "كشوف الحساب الشخصي لاثني عشر شهرًا",
       "required": true,
-      "validForSeconds": 7776000
+      "validForSeconds": 7776000,
+      "checks": [
+        { "check": "PERIOD_COVERS", "months": 12 },
+        { "check": "PERIOD_ENDS_WITHIN", "days": 45 }
+      ]
     },
     {
       "documentType": "COMPANY_BANK_STATEMENT_12M",
       "titleEn": "Company bank statements, 12 months",
       "titleAr": "كشوف حساب المنشأة لاثني عشر شهرًا",
       "required": true,
-      "validForSeconds": 7776000
+      "validForSeconds": 7776000,
+      "checks": [
+        { "check": "PERIOD_COVERS", "months": 12 },
+        { "check": "PERIOD_ENDS_WITHIN", "days": 45 },
+        { "check": "NAME_FOUND" }
+      ]
     },
     {
       "documentType": "AUDITED_FINANCIALS_2Y",
@@ -48,14 +59,16 @@
       "titleEn": "Salary certificate",
       "titleAr": "شهادة الراتب",
       "required": true,
-      "validForSeconds": 7776000
+      "validForSeconds": 7776000,
+      "checks": [{ "check": "ISSUED_WITHIN", "days": 90 }]
     },
     {
       "documentType": "WPS_SALARY_REPORT",
       "titleEn": "WPS / MOHRE salary report",
       "titleAr": "تقرير الرواتب من نظام حماية الأجور / وزارة الموارد البشرية والتوطين",
       "required": true,
-      "validForSeconds": 7776000
+      "validForSeconds": 7776000,
+      "checks": [{ "check": "PERIOD_ENDS_WITHIN", "days": 60 }]
     },
     {
       "documentType": "SUPPLIER_QUOTATIONS",
