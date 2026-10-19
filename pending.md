@@ -34,7 +34,7 @@ The findings go in the adapter README.
 | KSA-RAIL-SADAD-01 | SADAD | |
 | KSA-RAIL-PAYHUB-01 | Payments hub | |
 | KSA-RAIL-RATEPUB-01 | Rate Publisher | |
-| KSA-RAIL-TAHAQOQ-01 | Tahaqoq | |
+| KSA-RAIL-TAHAQOQ-01 | Tahaqoq | Document authenticity (D3); also confirm what identifies a document to it |
 | KSA-RAIL-BROKER-01 | Commodity broker | |
 | UAE-RAIL-UAEPASS-01, -ICP-01, -NER-01, -AECB-01, -FTA-01, -MOHRE-01, -OPENFINANCE-01 | UAE rails | |
 | TUUM-LEND-01 | Tuum lending | Loan contracts (UAE M6, KSA K4); totals reconciliation |
@@ -77,8 +77,13 @@ The findings go in the adapter README.
   - Corroboration against Wathq and GOSI waits on KSA-RAIL-WATHQ-01 and KSA-RAIL-GOSI-01.
   - The UAE seed applications' licence references (`TL-ILLUS-nnnn`) are too short to compare, so
     REGISTRATION_MATCHES reads UNREADABLE for them until real licence numbers are used.
-- **D3–D5 next:**
-  - D3: Tahaqoq authenticity;
+- **D3 built**, PR stacked on #61: authenticity with Tahaqoq, under a new document-verification consent at Saudi
+  intake. A document the issuer doesn't confirm needs the checker's written resolution to be accepted.
+  - Fixture only until KSA-RAIL-TAHAQOQ-01. The sandbox must also answer what identifies a document to Tahaqoq;
+    today the adapter sends Sanad's own document reference.
+  - Seeded and partner-handed-over applications have no Sanad consent, so their authenticity check reads "not
+    checked: no consent".
+- **D4–D5 next:**
   - D4: gap requests and resume;
   - D5: throughput view.
 - **Live reading needs:** the Document Engine configured for the tenant, V-05/V-06 verified on real Saudi and UAE

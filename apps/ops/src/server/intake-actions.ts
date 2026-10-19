@@ -105,6 +105,7 @@ const CONSENT_TYPES: readonly IntakeConsentType[] = [
   'SCREENING',
   'CREDIT_BUREAU',
   'ACCOUNT_INFORMATION',
+  'DOCUMENT_VERIFICATION',
 ];
 
 /** Up to this many parties on the opening form (the page draws the same number of rows). */

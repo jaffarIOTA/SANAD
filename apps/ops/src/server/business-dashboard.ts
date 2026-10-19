@@ -619,6 +619,14 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
     en: 'Every mandatory document is presented before the application goes to credit assessment.',
     ar: 'يجب تقديم جميع المستندات الإلزامية قبل الإحالة إلى التقييم.',
   },
+  AUTHENTICITY_UNRESOLVED: {
+    en: 'The issuer did not confirm this document. To accept it, write how you resolved that (at least a sentence).',
+    ar: 'لم تؤكد الجهة المصدرة هذا المستند. لقبوله، اكتب كيف عالجت ذلك (جملة على الأقل).',
+  },
+  RESOLUTION_TOO_LONG: {
+    en: 'A resolution is at most 500 characters.',
+    ar: 'لا تتجاوز المعالجة ٥٠٠ حرف.',
+  },
   FOUR_EYES_REQUIRED: {
     en: 'Whoever keyed a figure or presented a document does not verify it; a second principal does (four eyes).',
     ar: 'من أدخل الرقم أو قدّم المستند لا يتحقق منه؛ يتحقق منه شخص آخر (مبدأ العيون الأربع).',

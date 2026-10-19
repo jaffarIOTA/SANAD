@@ -90,6 +90,13 @@ function checkLabel(c: CheckResult, f: Formatters): string {
         : f.t("Registration number differs from the application's", 'رقم السجل يختلف عن الطلب');
     case 'NAME_FOUND':
       return f.t('Business name found', 'اسم المنشأة موجود');
+    case 'AUTHENTIC':
+      return pass
+        ? f.t('The issuer confirms it is authentic', 'أكدت الجهة المصدرة صحته')
+        : f.t(
+            'The issuer does not confirm it: resolve before accepting',
+            'لم تؤكد الجهة المصدرة صحته: عالِج ذلك قبل القبول',
+          );
     default:
       return c.check.toLowerCase().replaceAll('_', ' ');
   }
@@ -104,11 +111,43 @@ const CHECK_NAME: Readonly<Record<string, readonly [string, string]>> = {
   NAME_FOUND: ['Business name', 'اسم المنشأة'],
 };
 
+/** Why the issuer was not asked (D3): said plainly, never as a pass or a failure. */
+const NOT_CHECKED: Readonly<Record<string, readonly [string, string]>> = {
+  NO_CONSENT: [
+    'Authenticity not checked: the business gave no consent for it at intake',
+    'لم يُتحقق من الصحة: لم تمنح المنشأة موافقة على ذلك عند الاستقبال',
+  ],
+  RAIL_UNAVAILABLE: [
+    'Authenticity not checked: the issuer’s service is not connected here',
+    'لم يُتحقق من الصحة: خدمة الجهة المصدرة غير متصلة هنا',
+  ],
+  TYPE_NOT_COVERED: [
+    'Authenticity not checked: the issuer’s service does not cover this document',
+    'لم يُتحقق من الصحة: خدمة الجهة المصدرة لا تشمل هذا المستند',
+  ],
+  REFUSED: [
+    'Authenticity not checked: the issuer’s service declined the request',
+    'لم يُتحقق من الصحة: رفضت خدمة الجهة المصدرة الطلب',
+  ],
+};
+
 const unreadableLabel = (c: CheckResult, f: Formatters): string => {
+  if (c.check === 'AUTHENTIC') {
+    const why = NOT_CHECKED[c.reason ?? 'RAIL_UNAVAILABLE'] ?? NOT_CHECKED['RAIL_UNAVAILABLE'];
+    return why === undefined ? c.check : f.t(why[0], why[1]);
+  }
   const k = CHECK_NAME[c.check];
   const name = k === undefined ? c.check : f.t(k[0], k[1]);
   return f.t(`${name}: not read, check by eye`, `${name}: لم يُقرأ، تحقّق بالنظر`);
 };
+
+function unreadText(c: StoredFindings['classification'], f: Formatters): string {
+  if (c.status === 'UNREADABLE' && c.reason === 'MEDIA_NOT_READ')
+    return f.t('Not read: images are not read yet', 'لم يُقرأ: الصور لا تُقرأ بعد');
+  if (c.status === 'UNREADABLE' && c.reason === 'NOT_READ')
+    return f.t('Not read: no document engine here', 'لم يُقرأ: لا يوجد محرك مستندات هنا');
+  return f.t('Not recognised: check it by eye', 'لم يُتعرّف عليه: تحقّق منه بالنظر');
+}
 
 export function DocumentFindings({
   findings,
@@ -131,9 +170,7 @@ export function DocumentFindings({
             `Could be: ${c.candidates.map((k) => kindLabel(k, f)).join(' / ')}`,
             `قد يكون: ${c.candidates.map((k) => kindLabel(k, f)).join(' / ')}`,
           )
-        : c.status === 'UNREADABLE' && c.reason === 'MEDIA_NOT_READ'
-          ? f.t('Not read: images are not read yet', 'لم يُقرأ: الصور لا تُقرأ بعد')
-          : f.t('Not recognised: check it by eye', 'لم يُتعرّف عليه: تحقّق منه بالنظر');
+        : unreadText(c, f);
   const tone = typeCheck?.outcome === 'PASS' ? 'good' : typeCheck?.outcome === 'FAIL' ? 'bad' : 'neutral';
   const verdict =
     typeCheck?.outcome === 'PASS'
@@ -170,6 +207,13 @@ export function DocumentFindings({
               <Chip tone={CHECK_TONE[k.outcome]}>
                 {k.outcome === 'UNREADABLE' ? unreadableLabel(k, f) : checkLabel(k, f)}
               </Chip>
+              {/* A rail's answer carries its own reference and whether it was a fixture (D3). */}
+              {k.reference === undefined ? null : (
+                <bdi dir="ltr" className="identifier ms-1 text-[11px] text-ink-quiet">
+                  {k.reference}
+                </bdi>
+              )}
+              {k.source === 'FIXTURE' && findings.source !== 'FIXTURE' ? <SourceBadge source="FIXTURE" f={f} /> : null}
             </span>
           ))}
         </span>

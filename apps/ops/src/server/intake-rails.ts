@@ -22,6 +22,7 @@ import type { IdentityVerificationPort } from '@sanad/core/ports/identity-verifi
 import type { ScreeningPort } from '@sanad/core/ports/screening.ts';
 import type { AccountInformationPort } from '@sanad/core/ports/account-information.ts';
 import type { CreditBureauPort } from '@sanad/core/ports/credit-bureau.ts';
+import type { DocumentVerificationPort } from '@sanad/core/ports/document-verification.ts';
 import type { TaxCompliancePort } from '@sanad/core/ports/tax-compliance.ts';
 import type { TsaInstant } from '@sanad/core/time/tsa.ts';
 import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
@@ -37,6 +38,7 @@ import { NerAdapter } from '../../../../adapters/uae/ner/adapter.ts';
 import { KsaDemonstrationTransport } from '../../../../adapters/ksa/demonstration/transport.ts';
 import { OpenBankingAdapter } from '../../../../adapters/ksa/open-banking/adapter.ts';
 import { SimahAdapter } from '../../../../adapters/ksa/simah/adapter.ts';
+import { TahaqoqAdapter } from '../../../../adapters/ksa/tahaqoq/adapter.ts';
 import { WathqAdapter } from '../../../../adapters/ksa/wathq/adapter.ts';
 import { YakeenAdapter } from '../../../../adapters/ksa/yakeen/adapter.ts';
 import { ZatcaTaxAdapter } from '../../../../adapters/ksa/zatca-tax/adapter.ts';
@@ -53,6 +55,11 @@ export interface KybRails {
   readonly bureau: CreditBureauPort;
   /** Open Finance account information, for the bank-statement facts at credit assessment. */
   readonly accounts: AccountInformationPort;
+  /**
+   * The issuer's authenticity service for national documents (document intelligence D3): Tahaqoq in Saudi Arabia.
+   * Absent where the jurisdiction has none configured (the UAE): an AUTHENTIC check then reads not checked.
+   */
+  readonly documents?: DocumentVerificationPort;
   readonly source: 'LIVE' | 'FIXTURE';
   /**
    * Whose rails these are. The tax check differs: the UAE's checks a tax
@@ -116,11 +123,20 @@ export async function kybRails(
     const ksa = new KsaDemonstrationTransport(now);
     return {
       registry: new WathqAdapter(demonstrationConfig(tenantId, 'BUSINESS_REGISTRY', consents, now), credentials, ksa),
-      identity: new YakeenAdapter(demonstrationConfig(tenantId, 'IDENTITY_VERIFICATION', consents, now), credentials, ksa),
+      identity: new YakeenAdapter(
+        demonstrationConfig(tenantId, 'IDENTITY_VERIFICATION', consents, now),
+        credentials,
+        ksa,
+      ),
       screening: new DemonstrationScreening(consents, attest),
       tax: new ZatcaTaxAdapter(demonstrationConfig(tenantId, 'TAX_COMPLIANCE', consents, now), credentials, ksa),
       bureau: new SimahAdapter(demonstrationConfig(tenantId, 'CREDIT_BUREAU', consents, now), credentials, ksa, attest),
       accounts: new OpenBankingAdapter(demonstrationConfig(tenantId, 'OPEN_BANKING', consents, now), credentials, ksa),
+      documents: new TahaqoqAdapter(
+        demonstrationConfig(tenantId, 'DOCUMENT_VERIFICATION', consents, now),
+        credentials,
+        ksa,
+      ),
       source: 'FIXTURE',
       jurisdiction: 'SA',
     };

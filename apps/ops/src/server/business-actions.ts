@@ -288,7 +288,16 @@ export async function validateDocumentAction(form: FormData): Promise<void> {
     return finish(ctx, refused('DOCUMENT_DECISION_INVALID', 'A document is validated as VALID or INVALID'), '');
   return finish(
     ctx,
-    () => validateDocument(ctx.tenant, ctx.applicationId, field(form, 'documentRef'), decision, ctx.actor),
+    () =>
+      validateDocument(
+        ctx.tenant,
+        ctx.applicationId,
+        field(form, 'documentRef'),
+        decision,
+        ctx.actor,
+        // Only asked for where the issuer did not confirm the document (D3); the service ignores it otherwise.
+        field(form, 'resolution'),
+      ),
     decision === 'VALID' ? 'DOCUMENT_VALIDATED' : 'DOCUMENT_REJECTED',
   );
 }

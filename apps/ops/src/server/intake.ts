@@ -279,6 +279,8 @@ const PURPOSE: Readonly<Record<IntakeConsentType, string>> = {
   CREDIT_BUREAU: 'Credit bureau enquiry for this financing application',
   ACCOUNT_INFORMATION:
     'Read the business’s bank accounts, balances and transactions through Open Finance to assess this financing application',
+  DOCUMENT_VERIFICATION:
+    'Check the authenticity of the national documents presented for this financing application with their issuer',
 };
 
 /**
