@@ -8,7 +8,7 @@ Last updated: 19 October 2026.
 - **Merge the stacked PRs.** Each is built on the one before; only #35 targets `main`.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
-  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#61 document intelligence D1–D2. Auto mode cannot merge.
+  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#62 document intelligence D1–D3. Auto mode cannot merge.
 - **Renew the `APICAPIKEY` GitHub secret.**
 - **Bank A's Tawarruq board ruling.** Record it in Admin. `sme-term-islamic` stays
   disabled until it's recorded.
@@ -77,7 +77,7 @@ The findings go in the adapter README.
   - Corroboration against Wathq and GOSI waits on KSA-RAIL-WATHQ-01 and KSA-RAIL-GOSI-01.
   - The UAE seed applications' licence references (`TL-ILLUS-nnnn`) are too short to compare, so
     REGISTRATION_MATCHES reads UNREADABLE for them until real licence numbers are used.
-- **D3 built**, PR stacked on #61: authenticity with Tahaqoq, under a new document-verification consent at Saudi
+- **D3 built**, PR #62 (stacked on #61): authenticity with Tahaqoq, under a new document-verification consent at Saudi
   intake. A document the issuer doesn't confirm needs the checker's written resolution to be accepted.
   - Fixture only until KSA-RAIL-TAHAQOQ-01. The sandbox must also answer what identifies a document to Tahaqoq;
     today the adapter sends Sanad's own document reference.
