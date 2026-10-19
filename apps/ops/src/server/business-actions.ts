@@ -43,6 +43,7 @@ import { uploadBusinessDocument } from './business-storage.ts';
 import { confirmSigning, startSigning } from './business-signing.ts';
 import { recordFixtureCollectionResult, recordFixturePaymentResult } from './business-payments.ts';
 import { bookInLoanSystem } from './business-booking.ts';
+import { requestMissingDocuments, validateDocumentAndResume } from './business-gaps.ts';
 import { renderOfferPdf, sealSignedLetter } from './business-letter-pdf.ts';
 import { readFiguresFromStatement } from './business-statement-reading.ts';
 import { runServicingCycleNow } from './servicing-scheduler.ts';
@@ -91,7 +92,6 @@ import {
   runAssessment,
   sendOffer,
   submitForAssessment,
-  validateDocument,
   verifyFigure,
   withdrawApplication,
 } from './business.ts';
@@ -289,7 +289,8 @@ export async function validateDocumentAction(form: FormData): Promise<void> {
   return finish(
     ctx,
     () =>
-      validateDocument(
+      // D4: accepting the last failing document closes an open request for documents.
+      validateDocumentAndResume(
         ctx.tenant,
         ctx.applicationId,
         field(form, 'documentRef'),
@@ -300,6 +301,12 @@ export async function validateDocumentAction(form: FormData): Promise<void> {
       ),
     decision === 'VALID' ? 'DOCUMENT_VALIDATED' : 'DOCUMENT_REJECTED',
   );
+}
+
+/** The officer asks the applicant for every document gap, by one notification on the outbox (D4). */
+export async function requestDocumentsAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(ctx, () => requestMissingDocuments(ctx.tenant, ctx.applicationId, ctx.actor), 'DOCUMENTS_REQUESTED');
 }
 
 export async function recordAssessmentInputsAction(form: FormData): Promise<void> {
