@@ -379,4 +379,25 @@ describe('the middleware', () => {
     });
     expect(middleware(signedIn).headers.get('x-middleware-next')).toBe('1');
   });
+
+  it('sends a form submitted after the session ended to sign in the way its client follows — and runs nothing', () => {
+    // A server action is called with fetch: a 303 would be followed to the sign-in page's HTML, which the client
+    // rejects as "an unexpected response". Next's own action redirect is a header on an empty plain-text body.
+    const expired = new NextRequest('http://ops.test/en/business/intake/INT-000001', {
+      method: 'POST',
+      headers: {
+        'next-action': '40abc',
+        cookie: `${STAFF_SESSION_COOKIE}=${issueStaffSession(OFFICER, 600n, now() - 3_600n).token}`,
+      },
+    });
+    const r = middleware(expired);
+    expect(r.status).toBe(200);
+    expect(r.headers.get('x-action-redirect')).toBe('/en/sign-in?reason=SESSION_REQUIRED;replace');
+    expect(r.headers.get('content-type')).toBe('text/plain');
+    expect(r.headers.get('location')).toBeNull();
+    // Not passed on: the action is not reached without a session.
+    expect(r.headers.get('x-middleware-next')).toBeNull();
+    // The dead cookie is cleared, as for a page.
+    expect(r.headers.get('set-cookie')).toContain(`${STAFF_SESSION_COOKIE}=;`);
+  });
 });
