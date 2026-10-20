@@ -180,6 +180,26 @@ upload ─▶ store (object store, unchanged)
   - how often the checker agreed with the findings.
 - No automatic acceptance (product owner, 19 October 2026). This view is what would inform revisiting that decision.
 
+**As built (D5, 20 October 2026):** `/documents/reading` in the workbench, from the "Document reading" module entry.
+The figures come from `core/documents/metrics.ts` (pure), over the signed-in person's institution's business
+applications.
+
+- **Named right first time:** the first document of each type, read as that type and accepted. It is reported with
+  the two ways it goes wrong (read as another type but accepted; read as another type and refused) and with how many
+  weren't recognised.
+- **Checks by type:** passed, failed and not made, over the latest reading of every document.
+- **The checker against the findings:**
+  - how often the checker agreed with the findings;
+  - how often the checker accepted a document despite a failed check, broken down by check: the figure to watch
+    before ever revisiting automatic acceptance;
+  - how often the checker refused a document with nothing failing.
+- **Touchpoints per application:** presentations plus requests, median and maximum.
+- **First document to a complete pack:** median and 90th percentile, for packs complete now. A pack is complete when
+  every required type's latest document has been accepted.
+- **Measurement only:** a compliance test asserts that viewing records nothing, queues nothing and changes no
+  document, and that one institution's figures never include another's documents.
+- **Not measured yet:** Wasl documents. Nothing is read there until its documents are uploaded.
+
 ## What does not change
 
 Every journey's states, gates, four-eyes rule, decision pack and audit trail stay as they are.
