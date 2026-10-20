@@ -8,7 +8,7 @@ Last updated: 19 October 2026.
 - **Merge the stacked PRs.** Each is built on the one before; only #35 targets `main`.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
-  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#63 document intelligence D1–D4. Auto mode cannot merge.
+  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5. Auto mode cannot merge.
 - **Renew the `APICAPIKEY` GitHub secret.**
 - **Bank A's Tawarruq board ruling.** Record it in Admin. `sme-term-islamic` stays
   disabled until it's recorded.
@@ -94,7 +94,7 @@ The findings go in the adapter README.
   - The stage clock doesn't pause while a case waits on the applicant. Whether it should is a policy decision for
     the product owner.
   - Wasl isn't covered until its documents are uploaded rather than referenced.
-- **D5 built**, PR stacked on #63: the throughput view at `/documents/reading`. Measurement only.
+- **D5 built**, PR #64 (stacked on #63): the throughput view at `/documents/reading`. Measurement only.
   - Revisiting "always four eyes" is the product owner's call. The view's "accepted despite a failed check" figure
     is the evidence for it, once there is live volume.
 - **Document intelligence D1–D5 is complete.** Next on the plan is Wasl **W4b**.
