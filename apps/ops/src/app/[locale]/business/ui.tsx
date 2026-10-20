@@ -306,7 +306,7 @@ export const BTN_PRIMARY =
 export const BTN_SECONDARY =
   'press inline-flex h-10 items-center justify-center gap-2 rounded-tile border border-line-strong bg-surface px-4 text-[14px] font-semibold text-heading hover:bg-sunken disabled:cursor-not-allowed disabled:text-ink-faint';
 export const BTN_SMALL =
-  'press inline-flex h-8 items-center justify-center gap-1 rounded-tile border border-line-strong bg-surface px-3 text-[13px] font-semibold text-heading hover:bg-sunken';
+  'press inline-flex h-8 items-center justify-center gap-1.5 rounded-tile border border-line-strong bg-surface px-3 text-[13px] font-semibold text-heading hover:bg-sunken disabled:cursor-not-allowed disabled:text-ink-faint aria-busy:cursor-wait';
 export const INPUT =
   'h-9 w-full min-w-0 rounded-tile border border-line-strong bg-surface px-3 text-[13px] text-ink outline-none placeholder:text-ink-faint focus:border-brand focus:ring-2 focus:ring-brand/20';
 const TH_BASE = 'py-3 pe-3 text-[12px] font-medium text-ink-quiet';
