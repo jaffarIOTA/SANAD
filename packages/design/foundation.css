@@ -371,7 +371,47 @@ html {
   transform-origin: center;
   animation: slice-in 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
+/* A submit in flight (PendingButton): a small ring, in the button's own colour. */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spinner {
+  display: inline-block;
+  inline-size: 0.85em;
+  block-size: 0.85em;
+  flex: none;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 9999px;
+  animation: spin 700ms linear infinite;
+}
+/*
+ * The row that just changed (a consent recorded, a check answered): a brief wash
+ * of the positive colour that fades to nothing, so the eye finds what moved
+ * without anything around it moving.
+ */
+@keyframes settle {
+  from {
+    background-color: var(--color-positive-wash, rgb(16 185 129 / 0.12));
+  }
+  to {
+    background-color: transparent;
+  }
+}
+.settle {
+  animation: settle 1400ms ease-out both;
+}
 @media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-inline-end-color: currentColor;
+    opacity: 0.6;
+  }
+  .settle {
+    animation: none;
+  }
   .nav-indicator,
   .card-lift,
   .press {
