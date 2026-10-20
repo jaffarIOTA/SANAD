@@ -94,7 +94,10 @@ The findings go in the adapter README.
   - The stage clock doesn't pause while a case waits on the applicant. Whether it should is a policy decision for
     the product owner.
   - Wasl isn't covered until its documents are uploaded rather than referenced.
-- **D5 next:** throughput view.
+- **D5 built**, PR stacked on #63: the throughput view at `/documents/reading`. Measurement only.
+  - Revisiting "always four eyes" is the product owner's call. The view's "accepted despite a failed check" figure
+    is the evidence for it, once there is live volume.
+- **Document intelligence D1–D5 is complete.** Next on the plan is Wasl **W4b**.
 - **Live reading needs:** the Document Engine configured for the tenant, V-05/V-06 verified on real Saudi and UAE
   samples, and the catalogues (ILLUSTRATIVE) tuned against them.
 - **Images (PNG, JPEG) are not read.** They need the engine's OCR path.
