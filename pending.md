@@ -8,7 +8,8 @@ Last updated: 21 October 2026.
 - **Merge the stacked PRs.** Each is built on the one before; only #35 targets `main`.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
-  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5. Auto mode cannot merge.
+  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2.
+  Auto mode cannot merge.
 - **Renew the `APICAPIKEY` GitHub secret.**
 - **Bank A's Tawarruq board ruling.** Record it in Admin. `sme-term-islamic` stays
   disabled until it's recorded.
@@ -62,7 +63,7 @@ The findings go in the adapter README.
     - The latest reading and its exceptions are held in memory and shown until the process restarts. Unmatched
       bills reappear at the next reading, but there is no persistent exceptions queue yet.
     - Credit-bureau reporting of Wasl facilities is not built. The cycle reports that task as not this facility's.
-  - **W4b-2 built** (stacked on #66): late amounts and the charity ledger, as decided on 21 October 2026. The cycle
+  - **W4b-2 built**, PR #67 (stacked on #66): late amounts and the charity ledger, as decided on 21 October 2026. The cycle
     proposes, an officer assesses, a second person confirms. A confirmed amount is billed on its own SADAD bill. It is
     raised to `core.charity_ledger` and the core's charity liability only when collected, then disbursed to a
     board-approved recipient after a second person approves. Ledger view at `/transactions/charity`.
