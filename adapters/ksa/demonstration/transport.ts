@@ -613,6 +613,39 @@ const billPresent: Rule = (e, now) => {
   };
 };
 
+/**
+ * Payments the demonstration's SADAD has received against bills the platform
+ * presented (Wasl W4b): a person marks a presented bill paid at SADAD, and the
+ * next paid-bills file carries it, so reconciliation runs through the real
+ * adapter and matching. Synthetic and labelled FIXTURE wherever it shows; one
+ * list per process, kept across module reloads.
+ */
+interface DemonstrationPayment {
+  readonly billNumber: string;
+  readonly amount: string;
+  readonly currency: string;
+  readonly paidAtEpochSeconds: number;
+}
+const PAID_KEY = Symbol.for('sanad.demonstration.sadadPaid');
+const demonstrationPaid = (): DemonstrationPayment[] => {
+  const g = globalThis as { [PAID_KEY]?: DemonstrationPayment[] };
+  g[PAID_KEY] ??= [];
+  return g[PAID_KEY];
+};
+
+/** Record a payment at the demonstration's SADAD against a presented bill (FIXTURE). The amount is SADAD's decimal. */
+export function recordDemonstrationSadadPayment(p: DemonstrationPayment): void {
+  if (!/^\d+\.\d{2}$/.test(p.amount) || !/^[A-Za-z0-9-]{1,40}$/.test(p.billNumber)) return;
+  if (demonstrationPaid().some((x) => x.billNumber === p.billNumber && x.paidAtEpochSeconds === p.paidAtEpochSeconds))
+    return;
+  demonstrationPaid().push(p);
+}
+
+/** Tests only: forget the demonstration's payments. */
+export function resetDemonstrationSadadPayments(): void {
+  demonstrationPaid().length = 0;
+}
+
 const billReconciliation: Rule = (e, now) => {
   const from = Date.parse(url(e).searchParams.get('fromDateTime') ?? '');
   const bill = (n: string, status: string, paidDaysAgo: number, value: string, settled: boolean) => ({
@@ -623,10 +656,18 @@ const billReconciliation: Rule = (e, now) => {
     SadadPaymentId: `SADAD-DEMO-${n}`,
     ...(settled ? { SettlementReference: `SETTLE-DEMO-${n}` } : {}),
   });
+  const recorded = demonstrationPaid().map((p) => ({
+    BillDetails: { BillerID: DEMO_SADAD_BILLER_ID, BillNumber: p.billNumber },
+    Status: 'PAID',
+    PaidAmount: { Amount: p.amount, Currency: p.currency },
+    PaymentDateTime: isoTime(p.paidAtEpochSeconds),
+    SadadPaymentId: `SADAD-DEMO-${digest(`${p.billNumber}|${String(p.paidAtEpochSeconds)}`)}`,
+  }));
   const bills = [
     bill('0001', 'SETTLED', 2, '3100.00', true),
     bill('0002', 'PAID', 0, '2325.00', false),
     { ...bill('0003', 'PRESENTED', 0, '4650.00', false), PaidAmount: undefined, PaymentDateTime: undefined },
+    ...recorded,
   ].filter((b) => b.PaymentDateTime === undefined || Number.isNaN(from) || Date.parse(b.PaymentDateTime) >= from);
   return { Data: { Bill: bills }, Links: { Self: e.url }, Meta: { TotalPages: 1 } };
 };

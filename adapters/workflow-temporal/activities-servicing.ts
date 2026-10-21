@@ -16,8 +16,10 @@ import {
   type ServicingSchedule,
   type ServicingTask,
   type TaskOutcome,
+  type TenantTask,
   outcomeOfRefusal,
   tasksForDay,
+  tenantTasksForDay,
 } from '../../core/servicing/schedule.ts';
 import type { TsaInstant } from '../../core/time/tsa.ts';
 import { SequenceRefusal } from './programs/murabaha.ts';
@@ -30,9 +32,11 @@ export interface ServicingHost {
   /** The tenant's servicing date (yyyy-mm-dd, its own time zone) at an attested instant. */
   servicingDate(tenantId: string, at: TsaInstant): Promise<string>;
   schedule(tenantId: string): Result<ServicingSchedule>;
-  /** The tenant's disbursed facilities, by application id. */
+  /** The tenant's facilities in servicing, by reference: business loans by application id, Wasl by transaction ref. */
   disbursedFacilities(tenantId: string): Promise<readonly string[]>;
   run(tenantId: string, applicationId: string, task: ServicingTask): Promise<Result<unknown>>;
+  /** A tenant-wide task (W4b). A host without one runs no tenant tasks. */
+  runTenant?(tenantId: string, task: TenantTask): Promise<Result<unknown>>;
 }
 
 interface DayRef {
@@ -48,9 +52,16 @@ export function createServicingActivities(host: ServicingHost) {
       const servicingDate = await host.servicingDate(ref.tenantId, at);
       return {
         servicingDate,
+        tenantTasks: host.runTenant === undefined ? [] : tenantTasksForDay(servicingDate),
         tasks: tasksForDay(servicingDate, schedule.value),
         facilities: await host.disbursedFacilities(ref.tenantId),
       };
+    },
+
+    async runServicingTenantTask(ref: DayRef & { readonly task: TenantTask }): Promise<TaskOutcome> {
+      if (host.runTenant === undefined) return { kind: 'NOTHING_DUE' };
+      const r = await host.runTenant(ref.tenantId, ref.task);
+      return r.ok ? { kind: 'DONE' } : outcomeOfRefusal(r.error.reason);
     },
 
     async runServicingTask(
