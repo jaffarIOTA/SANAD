@@ -39,13 +39,18 @@ import { civilDateOf } from '../civil-date.ts';
 import { hostClockInstant } from '../host-clock.ts';
 import { syntheticDemonstrationPermitted } from '../profile.ts';
 import { getTransaction, waslPool } from './book.ts';
-import { presentations, recordCollectionResult } from './settlement.ts';
+import { recordBillResult } from './collection-results.ts';
+import { lateAmounts } from './late-amounts.ts';
+import { presentations } from './settlement.ts';
 
 /** How far back each reading of the paid-bills file looks. Matching is idempotent, so overlap is harmless. */
 export const RECONCILIATION_WINDOW_DAYS = 35;
 
-/** A Wasl bill number: the transaction and the instalment (instructions.ts `instalmentBill`). */
-const WASL_BILL = /^(WT-\d{6,10})-I(\d{1,3})$/;
+/**
+ * A Wasl bill number: the transaction, then `I` and the instalment (instructions.ts `instalmentBill`) or `L` and
+ * the instalment a late amount was raised on (late-amounts.ts, W4b-2).
+ */
+const WASL_BILL = /^(WT-\d{6,10})-([IL])(\d{1,3})$/;
 
 export type ReconciliationExceptionCode =
   'TRANSACTION_NOT_FOUND' | 'NOT_PRESENTED' | 'AMOUNT_DIFFERS' | 'RECEIPT_REFUSED';
@@ -166,14 +171,18 @@ export async function reconcilePaidBills(tenant: TenantCode, actor: string): Pro
       continue;
     }
     const transactionRef = m[1] ?? '';
-    const sequenceNumber = Number(m[2]);
+    const sequenceNumber = Number(m[3]);
     const base = { billRef: bill.billRef, settlementRef: bill.settlementRef, transactionRef };
     const view = await getTransaction(tenant, transactionRef);
     if (view === undefined) {
       exceptions.push({ ...base, code: 'TRANSACTION_NOT_FOUND' });
       continue;
     }
-    const ofInstalment = presentations(view).filter((p) => p.sequenceNumber === sequenceNumber);
+    // A late amount's bill is matched to that late amount's presentations, never to the instalment's.
+    const ofInstalment =
+      m[2] === 'L'
+        ? (lateAmounts(view).find((a) => a.sequenceNumber === sequenceNumber)?.bills ?? [])
+        : presentations(view).filter((p) => p.sequenceNumber === sequenceNumber);
     if (ofInstalment.some((p) => p.result === 'PAID')) {
       alreadyRecorded += 1;
       continue;
@@ -192,7 +201,7 @@ export async function reconcilePaidBills(tenant: TenantCode, actor: string): Pro
       });
       continue;
     }
-    const r = await recordCollectionResult(
+    const r = await recordBillResult(
       tenant,
       transactionRef,
       {

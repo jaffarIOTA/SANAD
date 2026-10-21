@@ -34,6 +34,15 @@ import {
 import { approveRequest, keyRequest, submit } from '../../apps/ops/src/server/store.ts';
 import { bookExecutedSale } from '../../services/origination/src/wasl/booking.ts';
 import { assertionReplayGuard } from '../../services/origination/src/wasl/identity.ts';
+import { recordBillResult } from '../../services/origination/src/wasl/collection-results.ts';
+import {
+  approveDisbursement,
+  assessLateAmount,
+  confirmLateAmount,
+  lateAmounts,
+  proposeDisbursement,
+  proposeLateAmounts,
+} from '../../services/origination/src/wasl/late-amounts.ts';
 import { presentDueInstalments, recordCollectionResult } from '../../services/origination/src/wasl/settlement.ts';
 import { acceptSaleOffer } from '../../services/origination/src/wasl/steps.ts';
 
@@ -261,6 +270,124 @@ describe.skipIf(url === undefined)('booking an accepted Murabaha on PostgreSQL (
         (x: unknown) => x as { code?: string },
       );
     expect(e?.code).toBe('23514');
+  });
+
+  it('W4b-2: a collected late amount is raised once in core.charity_ledger, written once, and disbursed once', async () => {
+    const v = await accepted();
+    const ref = v.transactionRef;
+    advance(1);
+    const booked = expectOk(await bookExecutedSale(T, ref, MAKER));
+    // Eight days past the due date: beyond bank-a's five days' grace.
+    clock = Date.parse(`${booked.transaction.core.maturityDateGregorian}T09:00:00Z`) + 8 * 86_400_000;
+    vi.setSystemTime(clock);
+    expectOk(await proposeLateAmounts(T, ref, 'system:test-cycle'));
+    advance(1);
+    expectOk(
+      await assessLateAmount(T, ref, 'stf-maker-02', {
+        sequenceNumber: 1,
+        assessment: 'ABLE_BUT_UNWILLING',
+        note: 'n',
+      }),
+    );
+    advance(1);
+    expectOk(await confirmLateAmount(T, ref, CHECKER, 1));
+    const key = `wasl:${ref}:late:I1`;
+    const bill = await pool.query<{ kind: string; subject_ref: string }>(
+      `select kind, subject_ref from core.outbox_event where idempotency_key = $1`,
+      [key],
+    );
+    expect(bill.rows).toEqual([{ kind: 'BILL_PRESENT', subject_ref: `${ref}-L1` }]);
+    advance(1);
+    expectOk(
+      await recordBillResult(
+        T,
+        ref,
+        { idempotencyKey: key, status: 'PAID', reference: 'SADAD-DB-L', receivedOn: '2026-12-30', source: 'FIXTURE' },
+        'sadad',
+      ),
+    );
+    const ledger = async () =>
+      (
+        await pool.query<{
+          id: string;
+          amount: string;
+          reason: string;
+          account_class: string;
+          source_ref: string;
+          recipient_id: string | null;
+          paid: string;
+        }>(
+          `select c.id::text, c.amount_minor::text amount, c.reason, c.account_class, c.source_ref, c.recipient_id,
+                  o.paid_amount_minor::text paid
+             from core.charity_ledger c join core.transaction t on t.id = c.transaction_id
+             join core.obligation o on o.transaction_id = t.id where t.transaction_ref = $1`,
+          [ref],
+        )
+      ).rows;
+    const raised = await ledger();
+    expect(raised).toEqual([
+      expect.objectContaining({
+        amount: '50000',
+        reason: 'LATE_PAYMENT',
+        account_class: 'CHARITY_LIABILITY',
+        source_ref: key,
+        recipient_id: null,
+        // Never applied to the obligation: nothing was paid on it.
+        paid: '0',
+      }),
+    ]);
+    // A fresh process reads the same late amount back from the event log.
+    resetTransactions();
+    expect(lateAmounts((await getTransaction(T, ref)) as TransactionView)[0]?.status).toBe('COLLECTED');
+    const refused = async (sql: string, values: readonly unknown[], what: string) => {
+      const e = await pool.query(sql, [...values]).then(
+        () => undefined,
+        (x: unknown) => x as { code?: string; constraint?: string },
+      );
+      expect(e, `${what} was accepted`).toBeDefined();
+      return e;
+    };
+    // The same collection twice, even by the owner: refused by the unique source.
+    const twice = await refused(
+      `insert into core.charity_ledger (tenant_id, transaction_id, amount_minor, reason, computation_basis_config_key,
+         shariah_approval_id, recorded_at, source_ref, correlation_id)
+       select tenant_id, transaction_id, amount_minor, reason, computation_basis_config_key, shariah_approval_id,
+              recorded_at, source_ref, correlation_id from core.charity_ledger where id = $1::uuid`,
+      [raised[0]?.id],
+      'a second entry for one collection',
+    );
+    expect(twice?.constraint).toBe('charity_ledger_source_once');
+    // Its amount, or what raised it, never changes.
+    for (const set of [`amount_minor = amount_minor + 1`, `source_ref = 'other'`])
+      expect(
+        (await refused(`update core.charity_ledger set ${set} where id = $1::uuid`, [raised[0]?.id], set))?.code,
+      ).toBe('23001');
+
+    advance(1);
+    expectOk(await proposeDisbursement(T, ref, 'stf-finance-01', { sequenceNumber: 1, recipientId: 'chr-a-01' }));
+    advance(1);
+    expectOk(await approveDisbursement(T, ref, CHECKER, 1));
+    expect((await ledger())[0]).toMatchObject({ recipient_id: 'chr-a-01' });
+    const pay = await pool.query<{ kind: string; payload: Record<string, string> }>(
+      `select kind, payload from core.outbox_event where idempotency_key = $1`,
+      [`wasl:${ref}:charity:I1:pay`],
+    );
+    expect(pay.rows).toEqual([
+      expect.objectContaining({
+        kind: 'PAYMENT_DISBURSE',
+        payload: expect.objectContaining({ beneficiaryIban: 'SA1380000000000000000101', minorUnits: '50000' }),
+      }),
+    ]);
+    // Disbursed once: a second completion is refused by the write-once trigger.
+    expect(
+      (
+        await refused(
+          `update core.charity_ledger set recipient_id = 'chr-a-02' where id = $1::uuid`,
+          [raised[0]?.id],
+          'a second disbursement',
+        )
+      )?.code,
+    ).toBe('23001');
   });
 
   it('the portal’s identity assertions are accepted once per tenant, by tenant code (SR-007)', async () => {
