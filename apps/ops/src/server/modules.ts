@@ -802,7 +802,8 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         titleEn: 'Hardship',
         titleAr: 'التعثّر والإعسار',
         readiness: soon(),
-        reference: 'SH-14 · BR-E05',
+        reference:
+          'SH-14 · BR-E05 — Wasl W4b-2: an assessment of inability, confirmed by a second person, closes a late amount as hardship and it is never billed; the hardship process itself (suspending collections, a plan) is not built for Wasl',
       },
       {
         id: 'embedded-collection',
@@ -839,8 +840,10 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         id: 'purification',
         titleEn: 'Charity ledger & purification',
         titleAr: 'سجل الخير والتطهير',
-        readiness: soon(),
-        reference: 'SH-13 · BR-F06 — domain built',
+        href: '/transactions/charity',
+        readiness: live(),
+        reference:
+          'SH-13 · SH-14 · BR-F06 — Wasl W4b-2: the daily cycle proposes one late amount per instalment unpaid beyond the board’s grace days, at the board’s fixed amount; an officer records able-but-unwilling or unable, a second person confirms (unable: hardship, never billed); a confirmed amount is billed through SADAD on its own bill, never on the obligation; on collection it is raised to core.charity_ledger and the core’s charity liability together, never income; disbursed to a board-approved recipient by finance’s proposal and a second person’s approval, through the payments hub. Ruling, amount, grace and recipients ILLUSTRATIVE (board-positions.json); FIXTURE until KSA-RAIL-SADAD-01, KSA-RAIL-PAYHUB-01 and TUUM-ACCT-01. Purification of non-compliant income identified by review is not built',
       },
     ],
   },

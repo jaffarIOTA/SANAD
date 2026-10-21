@@ -15,7 +15,7 @@ import type { ReactNode } from 'react';
 
 import { notFound } from 'next/navigation';
 
-import type { TenantCode } from '@sanad/config/loader.ts';
+import { type TenantCode, loadBoardPositions } from '@sanad/config/loader.ts';
 import { arabicIndic } from '@sanad/core/documents/offer-letter.ts';
 import { defaultNumerals, formatMinorUnits } from '@sanad/design/Money.tsx';
 import {
@@ -35,6 +35,7 @@ import { civilDateOf } from '@sanad/origination/wasl/settlement.ts';
 
 import { ummAlQura } from '../../../../server/hijri.ts';
 import { persistencePool } from '../../../../server/persistence.ts';
+import { LateAmounts } from './LateAmounts.tsx';
 import { Settlement } from './Settlement.tsx';
 import { POSSESSION_SOURCES, possessionEvidenceTypes, recorderOf } from '../../../../server/murabaha-sequencing.ts';
 import { getTransaction } from '../../../../server/murabaha-transactions.ts';
@@ -165,6 +166,7 @@ export default async function TransactionPage({
   if (v === undefined) notFound();
   const fixtures = await syntheticDemonstrationPermitted(persistencePool(), process.env);
   const asOf = civilDateOf(tenant, hostClockInstant());
+  const board = loadBoardPositions(tenant);
   const tx = v.transaction;
   const core = tx.core;
   const p = core.pricing;
@@ -723,6 +725,15 @@ export default async function TransactionPage({
       )}
 
       <Settlement view={v} segment={segment} arabic={arabic} staff={staff} fixtures={fixtures} asOf={asOf} />
+      <LateAmounts
+        view={v}
+        segment={segment}
+        arabic={arabic}
+        staff={staff}
+        fixtures={fixtures}
+        asOf={asOf}
+        ruling={board.ok ? board.value.lateAmounts : undefined}
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-card border border-line bg-surface px-5 py-4 shadow-card" data-trade>
