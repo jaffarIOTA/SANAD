@@ -18,6 +18,7 @@ import { obligationPosition, presentations, sellerPayments } from '@sanad/origin
 
 import {
   fixtureCollectionAction,
+  fixtureSadadFileAction,
   fixtureSellerPaymentAction,
   sequenceStepAction,
 } from '../../../../server/transaction-actions.ts';
@@ -214,6 +215,16 @@ export function Settlement({
                             </form>
                           ),
                         )}
+                        {b.result === undefined ? (
+                          // W4b: paid at SADAD but not yet told by webhook; the end-of-day paid file will carry it.
+                          <form action={fixtureSadadFileAction}>
+                            {hidden}
+                            <input type="hidden" name="idempotencyKey" value={b.idempotencyKey} />
+                            <button type="submit" className="text-[12px] text-brand underline" data-fixture-sadad-file>
+                              {t("Fixture: paid in SADAD's file", 'تجريبي: مدفوعة في ملف سداد')}
+                            </button>
+                          </form>
+                        ) : null}
                       </span>
                     </Gate>
                   ) : null}

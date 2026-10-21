@@ -140,6 +140,7 @@ export async function servicingDay(
   setHandler(progressQuery, () => progress);
   const fx: ServicingEffects = {
     plan: () => acts.planServicingDay({ tenantId: input.tenantId }),
+    runTenantTask: (task) => acts.runServicingTenantTask({ tenantId: input.tenantId, task }),
     runTask: (applicationId, task) => acts.runServicingTask({ tenantId: input.tenantId, applicationId, task }),
     progress: (step) => {
       progress = step;

@@ -53,11 +53,21 @@ The findings go in the adapter README.
   - Contract legs are hashed canonical content; the PDF rendition through Document
     Engine and an embedded viewer in the SME portal are not built.
   - No cross-transaction evidence workspace for the board (**W6**).
-  - **W4b**, next:
-    - reconciliation against SADAD's paid-bills file (`BillCollectionPort.paid`, built but not called);
-    - late amounts into `core.charity_ledger` and the core's charity liability, with the board's computation basis;
-    - charity disbursement to board-approved recipients;
-    - Wasl transactions joining the daily servicing cycle.
+  - **W4b-1 built**, PR #66 (stacked on #65): SADAD paid-bills reconciliation (`/transactions/reconciliation`), and Wasl in
+    the daily servicing cycle (reconciliation first, then collections).
+    - FIXTURE until KSA-RAIL-SADAD-01. Each tenant's SADAD **biller id** must be configured before it can go live.
+    - The latest reading and its exceptions are held in memory and shown until the process restarts. Unmatched
+      bills reappear at the next reading, but there is no persistent exceptions queue yet.
+    - Credit-bureau reporting of Wasl facilities is not built. The cycle reports that task as not this facility's.
+  - **W4b-2 next** (decided with the product owner on 21 October 2026):
+    - the cycle **proposes** a late amount on an instalment overdue past the grace period;
+    - an officer records whether the distributor was able but unwilling, or unable (hardship), and a **second
+      person confirms**;
+    - a confirmed amount is billed through SADAD as its own bill, and raised to `core.charity_ledger` and the core's
+      charity liability **only when collected**;
+    - then disbursement to board-approved recipients.
+    - Needs from the board: the late-amount computation basis, the grace period, and the approved recipients. These
+      go in `board-positions.json` (ILLUSTRATIVE until the board rules).
   - A return that arrives after an obligation has settled is refused for operations to resolve. There is no
     operations queue for it yet.
   - Wasl's payment and collection webhooks need each tenant's PAYMENTS_HUB and BILL_COLLECTION `webhook_secret`
@@ -97,7 +107,7 @@ The findings go in the adapter README.
 - **D5 built**, PR #64 (stacked on #63): the throughput view at `/documents/reading`. Measurement only.
   - Revisiting "always four eyes" is the product owner's call. The view's "accepted despite a failed check" figure
     is the evidence for it, once there is live volume.
-- **Document intelligence D1–D5 is complete.** Next on the plan is Wasl **W4b**.
+- **Document intelligence D1–D5 is complete.**
 - **Live reading needs:** the Document Engine configured for the tenant, V-05/V-06 verified on real Saudi and UAE
   samples, and the catalogues (ILLUSTRATIVE) tuned against them.
 - **Images (PNG, JPEG) are not read.** They need the engine's OCR path.

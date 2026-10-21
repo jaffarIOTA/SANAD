@@ -765,8 +765,10 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         id: 'reconciliation',
         titleEn: 'Reconciliation',
         titleAr: 'المطابقة',
-        readiness: soon(),
-        reference: 'SDD §6.10 — W4b: SADAD’s paid-bills file matched against Wasl presentations',
+        readiness: live(),
+        href: '/transactions/reconciliation',
+        reference:
+          'SDD §6.10 — Wasl W4b: SADAD’s paid-bills file read over a 35-day window and matched to Wasl presentations; exact matches applied through the webhook’s own receipt path (once, whichever arrives first), everything else an exception for operations; first task of the daily servicing cycle. FIXTURE until KSA-RAIL-SADAD-01 (biller id not yet configured)',
       },
       {
         id: 'returns',
