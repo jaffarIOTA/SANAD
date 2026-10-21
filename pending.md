@@ -53,7 +53,7 @@ The findings go in the adapter README.
   - Contract legs are hashed canonical content; the PDF rendition through Document
     Engine and an embedded viewer in the SME portal are not built.
   - No cross-transaction evidence workspace for the board (**W6**).
-  - **W4b-1 built**, PR stacked on #65: SADAD paid-bills reconciliation (`/transactions/reconciliation`), and Wasl in
+  - **W4b-1 built**, PR #66 (stacked on #65): SADAD paid-bills reconciliation (`/transactions/reconciliation`), and Wasl in
     the daily servicing cycle (reconciliation first, then collections).
     - FIXTURE until KSA-RAIL-SADAD-01. Each tenant's SADAD **biller id** must be configured before it can go live.
     - The latest reading and its exceptions are held in memory and shown until the process restarts. Unmatched
