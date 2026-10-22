@@ -11,13 +11,14 @@
 import { notFound } from 'next/navigation';
 import type { ReactElement } from 'react';
 
-import { type TenantCode, loadWaslParties } from '@sanad/config/loader.ts';
+import type { TenantCode } from '@sanad/config/loader.ts';
 import { defaultNumerals, formatMinorUnits } from '@sanad/design/Money.tsx';
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, FIELD_INPUT, FIELD_TEXTAREA } from '@sanad/design/primitives.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 import { hostClockInstant } from '@sanad/origination/host-clock.ts';
 import { hydrate, waslPool } from '@sanad/origination/wasl/book.ts';
 import { resolveConcentration } from '@sanad/origination/wasl/concentration.ts';
+import { resolveWaslParties } from '@sanad/origination/wasl/configuration.ts';
 import { exposureOf } from '@sanad/origination/wasl/exposure.ts';
 import { facilitiesFrom, facilityApprovals } from '@sanad/origination/wasl/facilities.ts';
 
@@ -43,7 +44,7 @@ export default async function FacilitiesPage({
   const staff = await pageStaff(segment);
   if (staff.tenantId === undefined) notFound();
   const tenant = staff.tenantId as TenantCode;
-  const parties = loadWaslParties(tenant);
+  const parties = await resolveWaslParties(tenant);
   const said = notice === undefined ? undefined : NOTICE[notice];
   const refused = reason === undefined ? undefined : (REFUSAL[reason] ?? { en: reason, ar: reason });
   const amount = (minorUnits: bigint) => (

@@ -28,7 +28,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { type TenantCode, loadMurabahaAccounts, loadWaslParties } from '@sanad/config/loader.ts';
+import { type TenantCode, loadMurabahaAccounts } from '@sanad/config/loader.ts';
 import { type Result, ok } from '@sanad/core/kernel/result.ts';
 import type { CoreBankingProvider } from '@sanad/core/ports/core-banking.ts';
 import { SecretValue } from '@sanad/core/ports/credentials.ts';
@@ -114,9 +114,7 @@ export function bookExecutedSale(
       instalments,
     });
     if (!obligation.ok) return obligation;
-    const parties = loadWaslParties(c.tenant);
-    if (!parties.ok) return parties;
-    const distributor = parties.value.distributors.find((d) => d.counterpartyId === core.counterpartyId);
+    const distributor = c.parties.distributors.find((d) => d.counterpartyId === core.counterpartyId);
     if (distributor === undefined)
       return fail('COUNTERPARTY_NOT_CONFIGURED', 'The distributor on this transaction is not onboarded');
 

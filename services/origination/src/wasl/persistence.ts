@@ -231,7 +231,7 @@ export async function referenceRows(
     `insert into core.programme (tenant_id, anchor_id, code, structure_code, structure_definition_id, currency,
        programme_limit_minor, shariah_approval_id, state, correlation_id)
      values ($1, $2, $3, 'MURABAHA', $4, $5, $6, $7, 'ACTIVE', $8)
-     on conflict (tenant_id, code) do nothing`,
+     on conflict (tenant_id, code) do update set programme_limit_minor = excluded.programme_limit_minor`,
     [
       tenantUuid,
       anchorId,
@@ -274,9 +274,11 @@ export async function insertOpenedTransaction(
     readonly requestRef: string;
     readonly core: TransactionCore;
     readonly event: TransactionEventRow;
+    /** The programmes in force (configuration.ts `resolveWaslParties`); the checked-in file where none is given. */
+    readonly parties?: WaslParties;
   },
 ): Promise<Result<true>> {
-  const parties = loadWaslParties(tenant);
+  const parties = opened.parties === undefined ? loadWaslParties(tenant) : { ok: true as const, value: opened.parties };
   if (!parties.ok) return parties;
   const tenantUuid = await tenantUuidByCode(pool, tenant);
   const { core } = opened;

@@ -11,7 +11,6 @@ import { notFound, redirect } from 'next/navigation';
 
 import type { TenantCode } from '@sanad/config/loader.ts';
 import {
-  BUTTON_DANGER,
   BUTTON_PRIMARY,
   Card,
   ControlRejection,
@@ -23,34 +22,21 @@ import {
 import { defaultNumerals, formatMinorUnits } from '@sanad/design/Money.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 
-import { decideRevisionAction, proposeConcentrationAction } from '../../../server/actions.ts';
+import { RevisionList } from '../RevisionList.tsx';
+import { type NoticeWords, RevisionNotice } from '../RevisionNotice.tsx';
+import { proposeConcentrationAction } from '../../../server/actions.ts';
 import { percentOf, resolveConcentrationWithSource } from '../../../server/concentration.ts';
 import { listTenants, store } from '../../../server/credentials.ts';
 import { listRevisions } from '../../../server/revisions.ts';
 import { currentAdmin } from '../../../server/session.ts';
 import { configurableTenants, displayedTenant } from '../../../server/tenant-scope.ts';
 
-const NOTICE: Readonly<Record<string, { en: string; ar: string; tone: 'settled' | 'blocked' }>> = {
-  PROPOSED: {
-    en: 'Proposed. It takes effect only when a different administrator approves it.',
-    ar: 'اقتُرح. لا يسري إلا بعد اعتماد مدير آخر.',
-    tone: 'settled',
-  },
+const NOTICE: NoticeWords = {
   APPROVED: {
     en: 'Approved. Trades are checked against it from its effective moment.',
     ar: 'اعتُمد. تُفحص الصفقات وفقه من لحظة نفاذه.',
     tone: 'settled',
   },
-  REJECTED: { en: 'Rejected, with the reason recorded.', ar: 'رُفض وسُجّل السبب.', tone: 'settled' },
-  NO_DATABASE: {
-    en: 'No database is configured; revisions live in the database.',
-    ar: 'لا توجد قاعدة بيانات مهيأة.',
-    tone: 'blocked',
-  },
-  PROPOSE_FAILED: { en: 'The database refused the proposal.', ar: 'رفضت قاعدة البيانات الاقتراح.', tone: 'blocked' },
-  DECIDE_FAILED: { en: 'The database refused the decision.', ar: 'رفضت قاعدة البيانات القرار.', tone: 'blocked' },
-  REJECTION_REASON_REQUIRED: { en: 'A rejection says why.', ar: 'الرفض يحتاج سبباً.', tone: 'blocked' },
-  EFFECTIVE_FROM_MALFORMED: { en: 'The effective date is not a date.', ar: 'تاريخ النفاذ غير صالح.', tone: 'blocked' },
   'REFUSED:TRADE_CAP_REQUIRED': {
     en: 'A single-trade cap that applies needs its amount in riyals.',
     ar: 'الحد الأقصى للصفقة الواحدة المطبّق يحتاج مبلغه بالريال.',
@@ -66,15 +52,7 @@ const NOTICE: Readonly<Record<string, { en: string; ar: string; tone: 'settled' 
     ar: 'نصيب الجهة الراعية نسبة من ٠٫٠١ إلى ١٠٠ بخانتين عشريتين على الأكثر.',
     tone: 'blocked',
   },
-  'REFUSED:FOUR_EYES_SELF_DECISION': {
-    en: 'Four eyes: you proposed this revision, so you may not decide it.',
-    ar: 'أربع أعين: أنت من اقترح هذه المراجعة فلا تقرر فيها.',
-    tone: 'blocked',
-  },
 };
-
-const fmt = (iso: string, locale: string): string =>
-  new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
 
 export default async function ConcentrationAdminPage({
   params,
@@ -104,17 +82,6 @@ export default async function ConcentrationAdminPage({
   );
   const policy = resolved.policy.ok ? resolved.policy.value : undefined;
   const revisions = s.kind === 'READY' ? await listRevisions(s.pool, tenantCode, 'CONCENTRATION') : [];
-  const n =
-    notice === undefined
-      ? undefined
-      : (NOTICE[notice] ??
-        (notice.startsWith('REFUSED:')
-          ? {
-              en: `Refused before proposal: ${notice.slice(8)}`,
-              ar: `رُفض قبل الاقتراح: ${notice.slice(8)}`,
-              tone: 'blocked' as const,
-            }
-          : undefined));
   const applied = (on: boolean, value: string) => (on ? value : arabic ? 'غير مطبّق' : 'not applied');
 
   return (
@@ -159,17 +126,7 @@ export default async function ConcentrationAdminPage({
         ) : null}
       </div>
 
-      {n === undefined ? null : n.tone === 'settled' ? (
-        <p role="status" className="rounded-tile bg-disc-teal px-5 py-4 text-[15px] text-positive">
-          {arabic ? n.ar : n.en}
-        </p>
-      ) : (
-        <ControlRejection
-          control="OP-DETERMINACY"
-          explanation={arabic ? n.ar : n.en}
-          controlLabel={arabic ? 'الضابط' : 'Control'}
-        />
-      )}
+      <RevisionNotice notice={notice} words={NOTICE} arabic={arabic} />
 
       {policy === undefined ? (
         <Card>
@@ -211,80 +168,15 @@ export default async function ConcentrationAdminPage({
             </dl>
           </Card>
 
-          <Card>
-            <h3 className="text-[16px] font-semibold text-heading">{arabic ? 'المراجعات' : 'Revisions'}</h3>
-            {revisions.length === 0 ? (
-              <p className="mt-3 text-[15px] text-ink-quiet">{arabic ? 'لا مراجعات بعد.' : 'No revisions yet.'}</p>
-            ) : (
-              <ul className="mt-4 flex list-none flex-col divide-y divide-line p-0">
-                {revisions.map((r) => (
-                  <li
-                    key={r.id}
-                    className="flex flex-wrap items-center justify-between gap-4 py-4 first:pt-0 last:pb-0"
-                  >
-                    <span className="flex min-w-0 flex-col gap-1">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="text-[15px] font-medium text-heading">{r.summary}</span>
-                        <Status
-                          tone={r.status === 'APPROVED' ? 'settled' : r.status === 'REJECTED' ? 'blocked' : 'progress'}
-                          label={r.status.toLowerCase()}
-                        />
-                      </span>
-                      <span className="text-[13px] text-ink-quiet">
-                        {arabic ? 'نافذة من' : 'effective'} {fmt(r.effectiveFrom, locale)} ·{' '}
-                        {arabic ? 'اقترحها' : 'proposed by'} <span className="identifier">{r.proposedBy}</span>
-                        {r.decidedBy !== null && r.decidedAt !== null ? (
-                          <>
-                            {' · '}
-                            {r.status === 'APPROVED'
-                              ? arabic
-                                ? 'اعتمدها'
-                                : 'approved by'
-                              : arabic
-                                ? 'رفضها'
-                                : 'rejected by'}{' '}
-                            <span className="identifier">{r.decidedBy}</span> {fmt(r.decidedAt, locale)}
-                            {r.rejectionReason !== null ? ` — ${r.rejectionReason}` : ''}
-                          </>
-                        ) : null}
-                      </span>
-                    </span>
-                    {r.status === 'PROPOSED' ? (
-                      <form action={decideRevisionAction} className="flex flex-wrap items-center gap-2">
-                        <input type="hidden" name="locale" value={segment} />
-                        <input type="hidden" name="tenant" value={tenantCode} />
-                        <input type="hidden" name="area" value="concentration" />
-                        <input type="hidden" name="revisionId" value={r.id} />
-                        <input
-                          name="reason"
-                          placeholder={arabic ? 'سبب الرفض' : 'reason, if rejecting'}
-                          className={`${FIELD_INPUT} mt-0 h-[38px] w-[220px] text-[14px]`}
-                        />
-                        <button
-                          type="submit"
-                          name="decision"
-                          value="reject"
-                          disabled={r.proposedBy === admin.principalId}
-                          className={`${BUTTON_DANGER} h-[38px] px-4 text-[14px] disabled:opacity-40`}
-                        >
-                          {arabic ? 'رفض' : 'Reject'}
-                        </button>
-                        <button
-                          type="submit"
-                          name="decision"
-                          value="approve"
-                          disabled={r.proposedBy === admin.principalId}
-                          className={`${BUTTON_PRIMARY} h-[38px] min-w-0 px-4 text-[14px] disabled:opacity-40`}
-                        >
-                          {arabic ? 'اعتماد' : 'Approve'}
-                        </button>
-                      </form>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+          <RevisionList
+            revisions={revisions}
+            area="concentration"
+            segment={segment}
+            locale={locale}
+            tenantCode={tenantCode}
+            principalId={admin.principalId}
+            arabic={arabic}
+          />
 
           <Card>
             <h3 className="text-[16px] font-semibold text-heading">{arabic ? 'اقتراح تغيير' : 'Propose a change'}</h3>

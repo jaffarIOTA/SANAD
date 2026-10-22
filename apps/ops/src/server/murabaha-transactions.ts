@@ -15,12 +15,7 @@
  * Opening stays here because it reads the workbench's approved requests.
  * One transaction per request: opening twice returns the one already open.
  */
-import {
-  type TenantCode,
-  loadBoardPositions,
-  loadCreditPolicyVersions,
-  loadProductCatalogue,
-} from '@sanad/config/loader.ts';
+import { type TenantCode, loadCreditPolicyVersions, loadProductCatalogue } from '@sanad/config/loader.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import { resolvePricingInputs } from '@sanad/core/pricing/quotation.ts';
 import { entryFor } from '@sanad/core/products/catalogue.ts';
@@ -35,6 +30,7 @@ import {
   waslPool,
   withLock,
 } from '@sanad/origination/wasl/book.ts';
+import { resolveBoard, resolveWaslParties } from '@sanad/origination/wasl/configuration.ts';
 import { type TransactionEventRow, encodeCore, insertOpenedTransaction } from '@sanad/origination/wasl/persistence.ts';
 
 import { servicingCalendarOf } from './business.ts';
@@ -111,8 +107,11 @@ export async function openTransactionForRequest(
 
     const structure = structureOf(tenant);
     if (!structure.ok) return structure;
-    const board = loadBoardPositions(tenant);
+    // The board's goods register as it stands now, an approved Admin revision included (W5b).
+    const board = (await resolveBoard(tenant)).value;
     if (!board.ok) return board;
+    const parties = await resolveWaslParties(tenant);
+    if (!parties.ok) return parties;
     const riskGate = structure.value.gates.find((g) => g.id === 'GATE_3_RISK_PERIOD');
     if (riskGate?.kind !== 'ELAPSE')
       return fail('STRUCTURE_HAS_NO_RISK_PERIOD', 'The structure declares no risk-holding interval');
@@ -161,6 +160,7 @@ export async function openTransactionForRequest(
         requestRef,
         core: draft.value.core,
         event,
+        parties: parties.value,
       });
       // Another process opened a transaction meanwhile: the next attempt reloads the book and takes the next reference.
       if (!saved.ok) return saved;

@@ -27,6 +27,7 @@ import { tenantUuidByCode } from '../credentials.ts';
 import { hostClockInstant } from '../host-clock.ts';
 import { inTenant } from '../tenant-scope.ts';
 import { hydrate, structureOf, waslPool, withLock } from './book.ts';
+import { resolveWaslParties } from './configuration.ts';
 import { exposureOf } from './exposure.ts';
 import { referenceRows } from './persistence.ts';
 
@@ -188,7 +189,8 @@ export function proposeFacility(
   },
 ): Promise<Result<FacilityApproval>> {
   return withLock(tenant, async () => {
-    const parties = loadWaslParties(tenant);
+    // The programme as it stands now: its limit may have been revised in Admin (W5b).
+    const parties = await resolveWaslParties(tenant);
     if (!parties.ok) return parties;
     const found = partiesOf(parties.value, input.counterpartyId, input.programmeId);
     if (!found.ok) return found;
@@ -281,8 +283,12 @@ export function decideFacility(
     const note = input.note.trim().slice(0, 1000);
     if (!input.approve && note.length < 3) return fail('REJECTION_REASON_REQUIRED', 'A rejection says why');
     if (input.approve) {
-      const parties = loadWaslParties(tenant);
+      const parties = await resolveWaslParties(tenant);
       if (!parties.ok) return parties;
+      const programme = parties.value.programmes.find((p) => p.programmeId === proposal.programmeId);
+      // The programme may have been revised since the proposal: a facility is never larger than it is now.
+      if (programme === undefined || proposal.limit.minorUnits > programme.programmeLimitMinorUnits)
+        return reject('OP-LIMIT', 'FACILITY_ABOVE_PROGRAMME', 'A facility is never more than its programme’s limit');
       const book = await hydrate(tenant);
       const held = exposureOf(
         [...book.records.values()],

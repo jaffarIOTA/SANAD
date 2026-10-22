@@ -855,7 +855,15 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
     titleEn: 'Programmes',
     titleAr: 'البرامج',
     items: [
-      { id: 'anchors', titleEn: 'Anchors', titleAr: 'الشركات الراعية', readiness: soon(), reference: 'BR-A01' },
+      {
+        id: 'anchors',
+        titleEn: 'Anchors',
+        titleAr: 'الشركات الراعية',
+        href: '/programmes#anchors',
+        readiness: live(),
+        reference:
+          'BR-A01 — Wasl W5b: each anchor with its programmes, what they hold and their share of the book (the sum of programme limits). Anchors change with their programmes in Admin → Programmes, four eyes; a programme that has traded keeps its anchor',
+      },
       {
         id: 'facilities',
         titleEn: 'Facilities & limits',
@@ -869,11 +877,20 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         id: 'programmes',
         titleEn: 'Programmes',
         titleAr: 'البرامج',
-        readiness: soon(),
+        href: '/programmes',
+        readiness: live(),
         reference:
-          'BR-A02 — Wasl W5b: programme and anchor screens; programmes are configuration (parties.json) until then',
+          'BR-A02 — Wasl W5b: each programme in force with its limit, holdings, facilities and transactions. Programmes, limits and anchors are a PROGRAMMES revision in Admin → Programmes (four eyes), checked against exposure at proposal and again at approval: no removal while in use, no new anchor once traded, no limit below holdings or below a facility. Every Wasl step reads the programmes in force. ILLUSTRATIVE file fallback',
       },
-      { id: 'goods', titleEn: 'Goods register', titleAr: 'سجل البضائع', readiness: soon(), reference: 'SH-11' },
+      {
+        id: 'goods',
+        titleEn: 'Goods register',
+        titleAr: 'سجل البضائع',
+        href: '/goods',
+        readiness: live(),
+        reference:
+          'SH-11 · SR-025 — Wasl W5b: the board’s excluded headings in force, and the headings financed. Changed in Admin → Goods register as a BOARD_POSITIONS revision (four eyes); transaction opening and every Wasl step now read the board positions in force, not the file',
+      },
       {
         id: 'commodity',
         titleEn: 'Commodity brokers',

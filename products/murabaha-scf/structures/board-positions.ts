@@ -114,6 +114,29 @@ export function parseBoardPositions(input: unknown): Result<BoardPositions> {
   });
 }
 
+/**
+ * The positions as configuration JSON: what a BOARD_POSITIONS revision carries and `parseBoardPositions` reads back
+ * unchanged. A revision that changes the goods register carries every other position as it stood.
+ */
+export function boardPositionsToJson(b: BoardPositions): Record<string, unknown> {
+  return {
+    shariahApprovalRef: b.shariahApprovalRef,
+    minimumRiskPeriodSeconds: b.minimumRiskPeriodSeconds,
+    excludedGoods: b.excludedGoods.map((g) => ({ ...g })),
+    approvedTemplates: b.approvedTemplates.map((t) => ({ ...t })),
+    ...(b.lateAmounts === undefined
+      ? {}
+      : {
+          lateAmounts: {
+            computationBasisKey: b.lateAmounts.computationBasisKey,
+            graceDays: b.lateAmounts.graceDays,
+            amountPerInstalmentMinorUnits: b.lateAmounts.amountPerInstalmentMinorUnits.toString(),
+            approvedRecipients: b.lateAmounts.approvedRecipients.map((r) => ({ ...r })),
+          },
+        }),
+  };
+}
+
 const SAUDI_IBAN = /^SA\d{22}$/;
 
 /** The late-amount ruling, or null where any part of it is malformed: a ruling half-read is not applied. */

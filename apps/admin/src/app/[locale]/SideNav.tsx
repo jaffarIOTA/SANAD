@@ -67,6 +67,22 @@ export const AREAS: readonly Area[] = [
     state: 'LIVE',
   },
   {
+    id: 'programmes',
+    href: '/programmes',
+    icon: 'building',
+    en: 'Programmes & anchors',
+    ar: 'البرامج والجهات الراعية',
+    state: 'LIVE',
+  },
+  {
+    id: 'goods',
+    href: '/goods',
+    icon: 'store',
+    en: 'Goods register',
+    ar: 'سجل البضائع المستبعدة',
+    state: 'LIVE',
+  },
+  {
     id: 'concentration',
     href: '/concentration',
     icon: 'shield-check',

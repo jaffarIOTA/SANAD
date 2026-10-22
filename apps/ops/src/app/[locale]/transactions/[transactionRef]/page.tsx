@@ -15,7 +15,8 @@ import type { ReactNode } from 'react';
 
 import { notFound } from 'next/navigation';
 
-import { type TenantCode, loadBoardPositions } from '@sanad/config/loader.ts';
+import type { TenantCode } from '@sanad/config/loader.ts';
+import { resolveBoard } from '@sanad/origination/wasl/configuration.ts';
 import { arabicIndic } from '@sanad/core/documents/offer-letter.ts';
 import { defaultNumerals, formatMinorUnits } from '@sanad/design/Money.tsx';
 import {
@@ -166,7 +167,7 @@ export default async function TransactionPage({
   if (v === undefined) notFound();
   const fixtures = await syntheticDemonstrationPermitted(persistencePool(), process.env);
   const asOf = civilDateOf(tenant, hostClockInstant());
-  const board = loadBoardPositions(tenant);
+  const board = (await resolveBoard(tenant)).value;
   const tx = v.transaction;
   const core = tx.core;
   const p = core.pricing;

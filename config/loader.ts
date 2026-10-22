@@ -730,6 +730,69 @@ const partyOf = (raw: unknown): WaslParty | undefined => {
     : undefined;
 };
 
+/**
+ * A tenant's Wasl programmes with their anchors: the file's `programmes`, or the payload of a PROGRAMMES revision
+ * (Wasl W5b), read by the same rules. At least one; ids unique; one anchor per registration number named the same
+ * way wherever it appears.
+ */
+export function parseWaslProgrammes(raw: unknown): Result<readonly WaslProgramme[]> {
+  const bad = (detail: string) => reject('OP-DETERMINACY', 'WASL_PROGRAMMES_INVALID', detail);
+  if (!Array.isArray(raw) || raw.length === 0) return bad('At least one programme is configured');
+  const programmes: WaslProgramme[] = [];
+  for (const p of raw as Record<string, unknown>[]) {
+    const anchorParty = partyOf(p['anchor']);
+    const iban = ((p['anchor'] ?? {}) as Record<string, unknown>)['settlementIban'];
+    const anchor =
+      anchorParty !== undefined && typeof iban === 'string' && SA_IBAN.test(iban)
+        ? { ...anchorParty, settlementIban: iban }
+        : undefined;
+    const limit = p['programmeLimitMinorUnits'];
+    if (
+      typeof p['programmeId'] !== 'string' ||
+      !/^prg-\d{4}$/.test(p['programmeId']) ||
+      typeof p['nameEn'] !== 'string' ||
+      p['nameEn'].trim().length === 0 ||
+      typeof p['nameAr'] !== 'string' ||
+      p['nameAr'].trim().length === 0 ||
+      p['structureCode'] !== 'MURABAHA' ||
+      typeof limit !== 'string' ||
+      !/^\d{1,15}$/.test(limit) ||
+      anchor === undefined
+    )
+      return bad(
+        'A programme needs an id, names, the MURABAHA structure, a limit in minor units and an anchor with its settlement IBAN',
+      );
+    if (programmes.some((x) => x.programmeId === p['programmeId'])) return bad('Each programme id appears once');
+    const sameAnchor = programmes.find((x) => x.anchor.registrationNo === anchor.registrationNo);
+    if (
+      sameAnchor !== undefined &&
+      (sameAnchor.anchor.nameEn !== anchor.nameEn || sameAnchor.anchor.nameAr !== anchor.nameAr)
+    )
+      return bad('An anchor is named the same way in every programme it anchors');
+    programmes.push({
+      programmeId: p['programmeId'],
+      nameEn: p['nameEn'],
+      nameAr: p['nameAr'],
+      structureCode: 'MURABAHA',
+      programmeLimitMinorUnits: BigInt(limit),
+      anchor,
+    });
+  }
+  return { ok: true, value: programmes };
+}
+
+/** Programmes as configuration JSON: what a PROGRAMMES revision carries and `parseWaslProgrammes` reads back. */
+export function waslProgrammesToJson(programmes: readonly WaslProgramme[]): unknown[] {
+  return programmes.map((p) => ({
+    programmeId: p.programmeId,
+    nameEn: p.nameEn,
+    nameAr: p.nameAr,
+    structureCode: p.structureCode,
+    programmeLimitMinorUnits: p.programmeLimitMinorUnits.toString(),
+    anchor: { ...p.anchor },
+  }));
+}
+
 /** The tenant's Wasl programmes (with their anchors) and distributors, for a tenant that runs Wasl from the workbench. */
 export function loadWaslParties(tenant: TenantCode): Result<WaslParties> {
   const raw = WASL_PARTIES[tenant] as
@@ -744,37 +807,9 @@ export function loadWaslParties(tenant: TenantCode): Result<WaslParties> {
   const validity = ((raw.sequencing ?? {}) as Record<string, unknown>)['saleOfferValiditySeconds'];
   if (typeof validity !== 'number' || !Number.isInteger(validity) || validity < 60 || validity > 30 * 86_400)
     return bad('A sale offer’s validity is a whole number of seconds, from a minute to thirty days');
-  const programmes: WaslProgramme[] = [];
-  for (const p of Array.isArray(raw.programmes) ? (raw.programmes as Record<string, unknown>[]) : []) {
-    const anchorParty = partyOf(p['anchor']);
-    const iban = ((p['anchor'] ?? {}) as Record<string, unknown>)['settlementIban'];
-    const anchor =
-      anchorParty !== undefined && typeof iban === 'string' && SA_IBAN.test(iban)
-        ? { ...anchorParty, settlementIban: iban }
-        : undefined;
-    const limit = p['programmeLimitMinorUnits'];
-    if (
-      typeof p['programmeId'] !== 'string' ||
-      !/^prg-\d{4}$/.test(p['programmeId']) ||
-      typeof p['nameEn'] !== 'string' ||
-      typeof p['nameAr'] !== 'string' ||
-      p['structureCode'] !== 'MURABAHA' ||
-      typeof limit !== 'string' ||
-      !/^\d{1,15}$/.test(limit) ||
-      anchor === undefined
-    )
-      return bad(
-        'A programme needs an id, names, the MURABAHA structure, a limit in minor units and an anchor with its settlement IBAN',
-      );
-    programmes.push({
-      programmeId: p['programmeId'],
-      nameEn: p['nameEn'],
-      nameAr: p['nameAr'],
-      structureCode: 'MURABAHA',
-      programmeLimitMinorUnits: BigInt(limit),
-      anchor,
-    });
-  }
+  const parsed = parseWaslProgrammes(raw.programmes);
+  if (!parsed.ok) return bad(parsed.error.detail);
+  const programmes = parsed.value;
   const distributors: WaslDistributor[] = [];
   const seenSignatories = new Set<string>();
   for (const d of Array.isArray(raw.distributors) ? (raw.distributors as Record<string, unknown>[]) : []) {

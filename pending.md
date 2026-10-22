@@ -71,7 +71,26 @@ The findings go in the adapter README.
       no reservation, so their facility isn't moved, though their invoice is registered at purchase.
     - Facilities can't be suspended yet; a lower approved limit is the only way to restrict one. Limits are in SAR only.
     - **Not reviewed in a browser** in RTL or LTR: `/facilities` and Admin → Concentration (the W4b-2 screens neither).
-    - **W5b next:** the Programmes, Anchors and Goods register screens.
+  - **W5b built** (stacked on #68): programmes, anchors and the goods register, editable in Admin under four eyes, as
+    decided on 22 October 2026.
+    - **Admin → Programmes & anchors** (new revision area `PROGRAMMES`, migration 0032) adds, changes or removes one
+      programme: names, limit, anchor and the anchor's settlement IBAN. The change is checked against live exposure at
+      proposal and again at approval: no removal while a transaction or facility refers to it, no new anchor once it
+      has traded, no limit below what it holds or below a facility in it.
+    - **Admin → Goods register** adds or removes one HS heading, as a `BOARD_POSITIONS` revision that carries every
+      other board position as it stood (the late-amount ruling included).
+    - **Fixed:** until W5b, every Wasl step, booking, facilities and transaction opening read the board positions and
+      programmes from the **file**. An approved board revision would not have bound a Wasl trade. They now all read the
+      configuration in force (`services/origination/src/wasl/configuration.ts`).
+    - Workbench `/programmes` (programmes, anchors and their share of the book) and `/goods` (the register in force,
+      and the headings financed) are read-only views.
+    - **A new programme also needs its terms in the product catalogue** (Admin → Products & modules) before a
+      transaction can open on it, and facilities approved for its distributors. A new anchor's CR and IBAN are typed
+      in, with no Wathq or bank verification (KSA-RAIL-WATHQ-01).
+    - Distributors and the institution itself stay in `parties.json` (onboarding is not built).
+    - A goods-register change binds new transactions only. Transactions already open keep the screening they had.
+    - **Not reviewed in a browser** in RTL or LTR: Admin → Programmes & anchors, Admin → Goods register, workbench
+      `/programmes` and `/goods`.
   - Contract legs are hashed canonical content; the PDF rendition through Document
     Engine and an embedded viewer in the SME portal are not built.
   - No cross-transaction evidence workspace for the board (**W6**).

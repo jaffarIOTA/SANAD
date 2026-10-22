@@ -26,7 +26,9 @@ export type RevisionArea =
   | 'STRUCTURES'
   | 'BOARD_POSITIONS'
   // Which concentration rules apply to a trade, and their values (Wasl W5a).
-  | 'CONCENTRATION';
+  | 'CONCENTRATION'
+  // Trade programmes, their limits and their anchors (Wasl W5b).
+  | 'PROGRAMMES';
 export type RevisionStatus = 'PROPOSED' | 'APPROVED' | 'REJECTED';
 
 export interface Revision<T = unknown> {

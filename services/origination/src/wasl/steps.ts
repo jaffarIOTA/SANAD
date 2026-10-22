@@ -23,13 +23,7 @@
  */
 import { createHash, randomUUID } from 'node:crypto';
 
-import {
-  type TenantCode,
-  type WaslParties,
-  loadBoardPositions,
-  loadProductCatalogue,
-  loadWaslParties,
-} from '@sanad/config/loader.ts';
+import { type TenantCode, type WaslParties, loadProductCatalogue } from '@sanad/config/loader.ts';
 import type { EvidenceRecord, EvidenceSource, EvidenceType } from '@sanad/core/evidence/evidence.ts';
 import type { Money } from '@sanad/core/kernel/money.ts';
 import type { OutboxEvent } from '@sanad/core/outbox/outbox.ts';
@@ -55,6 +49,7 @@ import { SequenceRefusal } from '../../../../adapters/workflow-temporal/programs
 import { ummAlQuraIso } from '../hijri.ts';
 import { hostClockInstant } from '../host-clock.ts';
 import { resolveConcentration } from './concentration.ts';
+import { resolveBoard, resolveWaslParties } from './configuration.ts';
 import { HOLDING, PURCHASED, exposureOf } from './exposure.ts';
 import { facilityFor } from './facilities.ts';
 import { sellerSettlement } from './instructions.ts';
@@ -184,11 +179,12 @@ export async function step(
     const book = await hydrate(tenant);
     const record = book.records.get(transactionRef);
     if (record === undefined) return fail('TRANSACTION_NOT_FOUND', 'No such transaction', { transactionRef });
-    const parties = loadWaslParties(tenant);
+    // The programmes and the board's positions in force now: an approved Admin revision binds from its moment (W5b).
+    const parties = await resolveWaslParties(tenant);
     if (!parties.ok) return parties;
     const structure = structureOf(tenant);
     if (!structure.ok) return structure;
-    const board = loadBoardPositions(tenant);
+    const board = (await resolveBoard(tenant)).value;
     if (!board.ok) return board;
     const terms = termsAtOpening(tenant, record);
     if (!terms.ok) return terms;

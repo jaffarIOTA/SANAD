@@ -8,7 +8,8 @@
 import { notFound } from 'next/navigation';
 import type { ReactElement } from 'react';
 
-import { type TenantCode, loadBoardPositions } from '@sanad/config/loader.ts';
+import type { TenantCode } from '@sanad/config/loader.ts';
+import { resolveBoard } from '@sanad/origination/wasl/configuration.ts';
 import { defaultNumerals, formatMinorUnits } from '@sanad/design/Money.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 import { listTransactions } from '@sanad/origination/wasl/book.ts';
@@ -30,7 +31,7 @@ export default async function CharityLedgerPage({
   const staff = await pageStaff(segment);
   if (staff.tenantId === undefined) notFound();
   const tenant = staff.tenantId as TenantCode;
-  const board = loadBoardPositions(tenant);
+  const board = (await resolveBoard(tenant)).value;
   const ruling = board.ok ? board.value.lateAmounts : undefined;
   let holdings: ReturnType<typeof charityHoldings> = [];
   try {
