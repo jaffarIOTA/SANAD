@@ -35,6 +35,7 @@ import {
 } from '@sanad/origination/wasl/settlement.ts';
 import { getTransaction } from '@sanad/origination/wasl/book.ts';
 import { recordBillResult } from '@sanad/origination/wasl/collection-results.ts';
+import { decideFacility, proposeFacility } from '@sanad/origination/wasl/facilities.ts';
 import {
   approveDisbursement,
   assessLateAmount,
@@ -279,6 +280,53 @@ export async function reconcileAction(form: FormData): Promise<void> {
   const base = await contextOf(form, 'TRADE_SETTLEMENT');
   const ctx = { ...base, path: `/${base.locale}/transactions/reconciliation` };
   return finish(ctx, () => reconcilePaidBills(ctx.tenant, ctx.actor), 'RECONCILED');
+}
+
+// -- Facilities (W5a) ---------------------------------------------------------------------
+
+/** Back to the facilities page with a notice, or with the refusal's reason code only. */
+async function facilityFinish(locale: string, change: () => Promise<Result<unknown>>, notice: string): Promise<never> {
+  const result = await change();
+  revalidatePath(`/${locale}/facilities`);
+  const query = result.ok
+    ? new URLSearchParams({ notice })
+    : new URLSearchParams({ control: result.error.control, reason: result.error.reason });
+  redirect(`/${locale}/facilities?${query.toString()}`);
+}
+
+/** A credit officer proposes a distributor's limit in a programme. The amount is whole riyals, read as minor units. */
+export async function proposeFacilityAction(form: FormData): Promise<void> {
+  const locale = localeSegmentOf(field(form, 'locale') || 'en');
+  const staff = await authorise(locale, 'FACILITY_PROPOSE', `/${locale}/facilities`);
+  const riyals = field(form, 'limitRiyals').replace(/[^\d]/g, '');
+  return facilityFinish(
+    locale,
+    () =>
+      proposeFacility(staff.tenantId as TenantCode, staff.principalId, {
+        counterpartyId: field(form, 'counterpartyId').slice(0, 200),
+        programmeId: field(form, 'programmeId').slice(0, 20),
+        limitMinorUnits: /^\d{1,13}$/.test(riyals) ? BigInt(riyals) * 100n : 0n,
+        rationale: field(form, 'rationale').slice(0, 1000),
+      }),
+    'FACILITY_PROPOSED',
+  );
+}
+
+/** A different person approves or rejects a proposed facility. */
+export async function decideFacilityAction(form: FormData): Promise<void> {
+  const locale = localeSegmentOf(field(form, 'locale') || 'en');
+  const staff = await authorise(locale, 'FACILITY_APPROVE', `/${locale}/facilities`);
+  const approve = field(form, 'decision') === 'APPROVE';
+  return facilityFinish(
+    locale,
+    () =>
+      decideFacility(staff.tenantId as TenantCode, staff.principalId, {
+        approvalId: field(form, 'approvalId').slice(0, 64),
+        approve,
+        note: field(form, 'note').slice(0, 1000),
+      }),
+    approve ? 'FACILITY_APPROVED' : 'FACILITY_REJECTED',
+  );
 }
 
 // -- Late amounts and charity (W4b-2) ----------------------------------------------------
