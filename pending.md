@@ -8,7 +8,7 @@ Last updated: 21 October 2026.
 - **Merge the stacked PRs.** Each is built on the one before; only #35 targets `main`.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
-  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2 · #68 Wasl W5a.
+  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2 · #68–#69 Wasl W5a, W5b.
   Auto mode cannot merge.
 - **Renew the `APICAPIKEY` GitHub secret.**
 - **Bank A's Tawarruq board ruling.** Record it in Admin. `sme-term-islamic` stays
@@ -71,7 +71,7 @@ The findings go in the adapter README.
       no reservation, so their facility isn't moved, though their invoice is registered at purchase.
     - Facilities can't be suspended yet; a lower approved limit is the only way to restrict one. Limits are in SAR only.
     - **Not reviewed in a browser** in RTL or LTR: `/facilities` and Admin → Concentration (the W4b-2 screens neither).
-  - **W5b built** (stacked on #68): programmes, anchors and the goods register, editable in Admin under four eyes, as
+  - **W5b built**, PR #69 (stacked on #68): programmes, anchors and the goods register, editable in Admin under four eyes, as
     decided on 22 October 2026.
     - **Admin → Programmes & anchors** (new revision area `PROGRAMMES`, migration 0032) adds, changes or removes one
       programme: names, limit, anchor and the anchor's settlement IBAN. The change is checked against live exposure at
