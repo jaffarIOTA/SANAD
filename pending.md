@@ -8,7 +8,7 @@ Last updated: 21 October 2026.
 - **Merge the stacked PRs.** Each is built on the one before; only #35 targets `main`.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
-  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2.
+  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2 · #68 Wasl W5a.
   Auto mode cannot merge.
 - **Renew the `APICAPIKEY` GitHub secret.**
 - **Bank A's Tawarruq board ruling.** Record it in Admin. `sme-term-islamic` stays
@@ -52,7 +52,7 @@ The findings go in the adapter README.
 - **Standalone Temporal worker process.** Needs import-alias resolution. Today the
   servicing cycle runs from the pipeline.
 - **Wasl.**
-  - **W5a built** (stacked on #67): distributor facilities, limits, concentration and the financed-invoice registry,
+  - **W5a built**, PR #68 (stacked on #67): distributor facilities, limits, concentration and the financed-invoice registry,
     as decided on 22 October 2026.
     - **Facilities:** credit proposes a distributor's limit in a programme and a second person approves it at
       `/facilities`. This writes `core.facility_approval` and `core.facility` (migration 0031). No facility, no trade.
