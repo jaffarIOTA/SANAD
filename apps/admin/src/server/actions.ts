@@ -27,6 +27,8 @@ import { type RevisionArea, proposeRevision as proposePure } from '@sanad/core/c
 import { deploymentProfile, identityFromForm, resolveStaffIdentity } from './identity.ts';
 import { parseStaffIdentity } from '@sanad/core/config/staff-identity.ts';
 import { policyWithPartner, resolveOriginationPolicy } from './partners.ts';
+import { policyFromForm } from './concentration.ts';
+import { parseConcentrationPolicy } from '@sanad/products/murabaha-scf/limits/drawdown-limits.ts';
 import { parseOriginationPolicy } from '@sanad/core/origination/policy.ts';
 import { catalogueForTenant, loadProductCatalogue } from '@sanad/config/loader.ts';
 import { randomUUID } from 'node:crypto';
@@ -309,12 +311,15 @@ const REVISION_AREA_OF_SCREEN = {
   rails: 'RAILS',
   identity: 'STAFF_IDENTITY',
   partners: 'ORIGINATION_POLICY',
+  concentration: 'CONCENTRATION',
 } as const satisfies Record<string, RevisionArea>;
 
 export async function decideRevisionAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
   const areaField = field(form, 'area');
-  const area = areaField === 'rails' || areaField === 'identity' || areaField === 'partners' ? areaField : 'products';
+  const area = Object.hasOwn(REVISION_AREA_OF_SCREEN, areaField)
+    ? (areaField as keyof typeof REVISION_AREA_OF_SCREEN)
+    : 'products';
   const admin = await currentAdmin();
   if (admin === undefined) redirect(`/${locale}`);
   const tenant = configurableTenant(admin, field(form, 'tenant'));
@@ -525,6 +530,62 @@ export async function proposePartnerChangeAction(form: FormData): Promise<void> 
     await proposeRevision(s.pool, {
       tenantCode: tenant,
       area: 'ORIGINATION_POLICY',
+      payload: changed.value.payload,
+      summary,
+      effectiveFromEpochSeconds,
+      proposedBy: admin?.principalId ?? '',
+      correlationId: randomUUID(),
+    });
+  } catch {
+    return back(to, 'PROPOSE_FAILED');
+  }
+  back(to, 'PROPOSED');
+}
+
+/**
+ * Propose the institution's concentration rules (Wasl W5a): the whole policy, checked by the production parser, in
+ * force only once a different administrator approves it, from its effective moment.
+ */
+export async function proposeConcentrationAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'ar';
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${locale}`);
+  const tenant = configurableTenant(admin, field(form, 'tenant'));
+  if (tenant === undefined) return back(`/${locale}/concentration`, 'TENANT_UNKNOWN');
+  const to = `/${locale}/concentration?tenant=${encodeURIComponent(tenant)}`;
+  const s = store();
+  if (s.kind !== 'READY') return back(to, 'NO_DATABASE');
+  const effectiveRaw = field(form, 'effectiveFrom');
+  const effectiveMs = effectiveRaw === '' ? Date.now() : Date.parse(effectiveRaw);
+  if (!Number.isFinite(effectiveMs)) return back(to, 'EFFECTIVE_FROM_MALFORMED');
+  const changed = policyFromForm({
+    policyRef: field(form, 'policyRef'),
+    tradeCapEnabled: field(form, 'tradeCapEnabled') === 'on',
+    tradeCapRiyals: field(form, 'tradeCapRiyals'),
+    distributorShareEnabled: field(form, 'distributorShareEnabled') === 'on',
+    distributorSharePercent: field(form, 'distributorSharePercent'),
+    anchorShareEnabled: field(form, 'anchorShareEnabled') === 'on',
+    anchorSharePercent: field(form, 'anchorSharePercent'),
+  });
+  if (!changed.ok) return back(to, `REFUSED:${changed.error.reason}`);
+  const summary = field(form, 'summary');
+  const effectiveFromEpochSeconds = BigInt(Math.floor(effectiveMs / 1000));
+  const checked = proposePure({
+    id: randomUUID(),
+    tenantId: tenant,
+    area: 'CONCENTRATION',
+    rawPayload: changed.value.payload,
+    summary,
+    effectiveFromEpochSeconds,
+    proposedBy: admin?.principalId ?? '',
+    proposedAtEpochSeconds: nowEpoch(),
+    parse: parseConcentrationPolicy,
+  });
+  if (!checked.ok) return back(to, `REFUSED:${checked.error.reason}`);
+  try {
+    await proposeRevision(s.pool, {
+      tenantCode: tenant,
+      area: 'CONCENTRATION',
       payload: changed.value.payload,
       summary,
       effectiveFromEpochSeconds,

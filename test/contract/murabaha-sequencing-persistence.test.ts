@@ -35,6 +35,7 @@ import {
   resetTransactions,
 } from '../../apps/ops/src/server/murabaha-transactions.ts';
 import { approveRequest, keyRequest, submit } from '../../apps/ops/src/server/store.ts';
+import { approveTestFacilities } from '../support/wasl-facilities.ts';
 
 const url = process.env['SANAD_TEST_DATABASE_URL'];
 const RUN = String(Date.now()).slice(-8);
@@ -111,11 +112,13 @@ describe.skipIf(url === undefined)('the Murabaha sequence on PostgreSQL (Wasl W2
   afterAll(async () => {
     await pool.end();
   });
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.stubEnv('SANAD_DATABASE_URL', url ?? '');
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(clock);
     resetTransactions();
+    // W5a: no facility, no trade. Approved once in this database; later runs find it in force.
+    await approveTestFacilities();
   });
   afterEach(() => {
     vi.useRealTimers();

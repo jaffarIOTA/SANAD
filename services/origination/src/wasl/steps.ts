@@ -38,6 +38,7 @@ import { entryFor } from '@sanad/core/products/catalogue.ts';
 import type { TsaInstant } from '@sanad/core/time/tsa.ts';
 import { type MurabahaTerms, murabahaScf, repaymentSchedule } from '@sanad/products/murabaha-scf/index.ts';
 import type { ContractLeg, LegType } from '@sanad/products/murabaha-scf/legs/leg.ts';
+import { checkDrawdown } from '@sanad/products/murabaha-scf/limits/drawdown-limits.ts';
 import type { Instalment } from '@sanad/products/murabaha-scf/obligation/obligation.ts';
 import { verifyProspectiveParties } from '@sanad/products/murabaha-scf/parties/distinctness.ts';
 import type { Transaction, TransactionCore } from '@sanad/products/murabaha-scf/sequencing/state.ts';
@@ -53,6 +54,9 @@ import type { Attestation, LegPreparer } from '../../../../adapters/workflow-tem
 import { SequenceRefusal } from '../../../../adapters/workflow-temporal/programs/murabaha.ts';
 import { ummAlQuraIso } from '../hijri.ts';
 import { hostClockInstant } from '../host-clock.ts';
+import { resolveConcentration } from './concentration.ts';
+import { HOLDING, PURCHASED, exposureOf } from './exposure.ts';
+import { facilityFor } from './facilities.ts';
 import { sellerSettlement } from './instructions.ts';
 import {
   type TransactionRecord,
@@ -66,6 +70,7 @@ import {
 } from './book.ts';
 import {
   type CharityWrite,
+  type LimitMovement,
   type ObligationWrite,
   type TransactionEventRow,
   encodeEvidence,
@@ -209,6 +214,16 @@ export async function step(
     const moved = after !== before;
     const leg = legsOf(after).length > legsOf(before).length ? legsOf(after).at(-1) : undefined;
     const { evidence, supersedes, obligation, paidDelta, outbox, charity } = out.value;
+    // Buying the goods finances the invoice, once (SH-10): checked here for every path to the purchase, and again
+    // by the registry's unique constraint as the purchase is written.
+    if (after.state === 'PURCHASE_EXECUTED' && before.state !== 'PURCHASE_EXECUTED') {
+      const other = invoiceFinancedBy(record, [...book.records.values()]);
+      if (other !== undefined)
+        return reject('SH-10', 'DUPLICATE_FINANCING', 'This invoice is already financed by another transaction', {
+          existingReference: other,
+        });
+    }
+    const limit = limitMovement(before.state, after.state);
     const event: TransactionEventRow = {
       eventType: out.value.eventType,
       fromState: moved ? before.state : null,
@@ -231,6 +246,7 @@ export async function step(
         ...(paidDelta === undefined ? {} : { paidDelta }),
         ...(outbox === undefined ? {} : { outbox }),
         ...(charity === undefined ? {} : { charity }),
+        ...(limit === undefined ? {} : { limit }),
         ...(after.state === 'POSSESSION_CONFIRMED' ? { riskPeriodStartAt: after.riskPeriodStartAt } : {}),
         ...(after.state === 'SALE_OFFERED' ? { saleOfferedAt: after.saleOfferedAt } : {}),
         correlationId: before.core.correlationId,
@@ -249,6 +265,32 @@ export async function step(
     book.records.set(transactionRef, next);
     return ok(viewOf(tenant, next));
   });
+}
+
+/**
+ * What a move between states does to the distributor's facility in the database (W5a): the hold at trade
+ * validation; the hold consumed into utilisation when the goods are bought; the hold released by an unwind before
+ * the purchase; utilisation repaid by settlement or by an unwind after the purchase. Nothing for any other move.
+ */
+export function limitMovement(from: string, to: string): LimitMovement | undefined {
+  if (from === to) return undefined;
+  if (to === 'LIMIT_RESERVED') return 'HOLD';
+  if (to === 'PURCHASE_EXECUTED') return 'CONSUME';
+  if (to === 'UNWIND') return PURCHASED.has(from) ? 'REPAY' : 'RELEASE';
+  if (to === 'SETTLED') return 'REPAY';
+  return undefined;
+}
+
+/** Another transaction financing the same invoice, from its hold on (SH-10): its reference, or undefined. */
+function invoiceFinancedBy(record: TransactionRecord, book: readonly TransactionRecord[]): string | undefined {
+  const invoice = record.transaction.core.tradeReference.invoiceUuid;
+  if (invoice === undefined) return undefined;
+  return book.find(
+    (r) =>
+      r.transactionRef !== record.transactionRef &&
+      r.transaction.core.tradeReference.invoiceUuid === invoice &&
+      (HOLDING.has(r.transaction.state) || PURCHASED.has(r.transaction.state)),
+  )?.transactionRef;
 }
 
 /**
@@ -534,37 +576,26 @@ function legPreparer(c: StepContext): LegPreparer {
 
 // -- Trade validation and the limit ---------------------------------------------------
 
-/** States in which a transaction's cost counts against its programme: from the hold until it is settled or unwound. */
-const HOLDING: ReadonlySet<string> = new Set([
-  'LIMIT_RESERVED',
-  'WAAD_EXECUTED',
-  'PURCHASE_EXECUTED',
-  'OWNERSHIP_ACQUIRED',
-  'POSSESSION_CONFIRMED',
-  'SALE_OFFERED',
-  'OFFER_LAPSED',
-  'EXECUTED',
-  'ACTIVE',
-  'DELINQUENT',
-  'HARDSHIP',
-  'RESCHEDULED',
-]);
-
 /**
- * Validate the trade and hold its cost against the programme. A trade whose
- * parties are not distinct is REJECTED, for good; a programme without room
- * is refused and the transaction stays in DRAFT, to be tried again.
- * Facility-level holds (core.facility, core.limit_reservation) come with W5.
+ * Validate the trade and hold its cost (W5a). A trade whose parties are not
+ * distinct is REJECTED, for good. An invoice already financed by another
+ * transaction is refused (SH-10). Then the cost must fit the distributor's
+ * approved facility, the programme's limit and the concentration rules the
+ * institution has chosen (products/murabaha-scf/limits/drawdown-limits.ts);
+ * the first it does not fit refuses it, nothing is held, and the transaction
+ * stays in DRAFT, to be tried again. With a database, the hold is also a
+ * `core.limit_reservation` against the facility, whose capacity trigger is
+ * the second lock (persistence.ts).
  */
 export function validateAndReserve(
   tenant: TenantCode,
   transactionRef: string,
   actor: string,
 ): Promise<Result<TransactionView>> {
-  return step(tenant, transactionRef, actor, (c) => Promise.resolve(tradeValidation(c, transactionRef)));
+  return step(tenant, transactionRef, actor, (c) => tradeValidation(c, transactionRef));
 }
 
-function tradeValidation(c: StepContext, transactionRef: string): Result<StepOutcome> {
+async function tradeValidation(c: StepContext, transactionRef: string): Promise<Result<StepOutcome>> {
   const t = c.record.transaction;
   if (t.state !== 'DRAFT') return notNow(t.state);
   const validating = submit(t);
@@ -576,20 +607,45 @@ function tradeValidation(c: StepContext, transactionRef: string): Result<StepOut
   const programme = c.parties.programmes.find((p) => p.programmeId === t.core.programmeId);
   if (programme === undefined)
     return fail('PROGRAMME_NOT_CONFIGURED', 'The transaction names a programme that is not configured');
+  const financed = financedElsewhere(c);
+  if (financed !== undefined)
+    return reject('SH-10', 'DUPLICATE_FINANCING', 'This invoice is already financed by another transaction', {
+      existingReference: financed,
+    });
+  const at = await c.attestation.attest();
+  const policy = await resolveConcentration(waslPool(), c.tenant, at.epochSeconds);
+  if (!policy.ok) return policy;
+  const facility = await facilityFor(c.tenant, t.core.counterpartyId, programme.programmeId);
+  const exposure = exposureOf(c.book, c.parties, t.core.counterpartyId, programme.programmeId);
   const cost = t.core.pricing.costAmount.minorUnits;
-  const held = c.book
-    .filter((r) => r.transaction.core.programmeId === programme.programmeId && HOLDING.has(r.transaction.state))
-    .reduce((s, r) => s + r.transaction.core.pricing.costAmount.minorUnits, 0n);
-  if (held + cost > programme.programmeLimitMinorUnits)
-    return reject('OP-LIMIT', 'PROGRAMME_LIMIT_EXCEEDED', 'The programme has no room for this cost; nothing was held', {
+  const fits = checkDrawdown(
+    {
+      ...exposure,
+      cost,
+      facilityLimit: facility?.limit.minorUnits,
+      programmeLimit: programme.programmeLimitMinorUnits,
+    },
+    policy.value,
+  );
+  if (!fits.ok)
+    return reject(fits.error.control, fits.error.reason, `${fits.error.detail}; nothing was held`, {
       programmeId: programme.programmeId,
+      ...(fits.error.context ?? {}),
     });
   return ok({
     eventType: 'LIMIT_RESERVED',
-    transaction: reserveLimit(validating, `programme:${programme.programmeId}:${transactionRef}`),
-    detail: { heldAgainst: 'PROGRAMME_LIMIT', programmeId: programme.programmeId, amountMinor: cost.toString() },
+    transaction: reserveLimit(validating, `facility:${programme.programmeId}:${transactionRef}`),
+    detail: {
+      heldAgainst: 'FACILITY',
+      programmeId: programme.programmeId,
+      facilityApprovalId: facility?.approvalId ?? '',
+      amountMinor: cost.toString(),
+      concentrationPolicy: policy.value.policyRef,
+    },
   });
 }
+
+const financedElsewhere = (c: StepContext): string | undefined => invoiceFinancedBy(c.record, c.book);
 
 // -- Gate 2: who may decide possession evidence ----------------------------------------
 

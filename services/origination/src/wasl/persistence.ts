@@ -169,12 +169,21 @@ async function idOf(db: Scoped, sql: string, values: readonly unknown[]): Promis
   return (await db.query<{ id: string }>(sql, values)).rows[0]?.id;
 }
 
-/** The approval, programme (with its anchor) and distributor rows a transaction points at, written once from configuration. */
-async function referenceRows(
+/** What the reference rows are found by: a transaction's core, or a facility's distributor and programme (W5a). */
+export type ReferenceKey = Pick<
+  TransactionCore,
+  'programmeId' | 'counterpartyId' | 'shariahApprovalId' | 'structureDefinitionId'
+> & { readonly currency: string };
+
+/**
+ * The approval, programme (with its anchor) and distributor rows a transaction or a facility points at, written
+ * once from configuration.
+ */
+export async function referenceRows(
   db: Scoped,
   tenantUuid: string,
   tenant: TenantCode,
-  core: TransactionCore,
+  core: ReferenceKey,
   parties: WaslParties,
 ): Promise<Result<ReferenceIds>> {
   const board = loadBoardPositions(tenant);
@@ -228,7 +237,7 @@ async function referenceRows(
       anchorId,
       programme.programmeId,
       core.structureDefinitionId,
-      core.pricing.costAmount.currency,
+      core.currency,
       programme.programmeLimitMinorUnits.toString(),
       approvalId,
       correlation,
@@ -274,7 +283,13 @@ export async function insertOpenedTransaction(
   const trade = core.tradeReference;
   try {
     return await inTenant(pool, tenantUuid, async (db) => {
-      const refs = await referenceRows(db, tenantUuid, tenant, core, parties.value);
+      const refs = await referenceRows(
+        db,
+        tenantUuid,
+        tenant,
+        { ...core, currency: core.pricing.costAmount.currency },
+        parties.value,
+      );
       if (!refs.ok) return refs;
       const correlation = /^[0-9a-f-]{36}$/i.test(core.correlationId) ? core.correlationId : randomUUID();
       const row = await idOf(
@@ -362,8 +377,23 @@ export interface StepWrite {
   readonly outbox?: readonly OutboxEvent[];
   /** A charity ledger entry raised, or its disbursement completed (W4b-2). */
   readonly charity?: CharityWrite;
+  /** What the move does to the distributor's facility (W5a; steps.ts `limitMovement`). */
+  readonly limit?: LimitMovement;
   readonly correlationId: string;
 }
+
+/**
+ * The facility in the database (0004, 0031): HOLD a reservation for the cost at trade validation; CONSUME it into
+ * utilisation at the purchase, registering the invoice as financed (SH-10); RELEASE it on an unwind before the
+ * purchase; REPAY the utilisation on settlement or an unwind after it.
+ */
+export type LimitMovement = 'HOLD' | 'CONSUME' | 'RELEASE' | 'REPAY';
+
+/**
+ * The expiry 0004 requires of a reservation. A Wasl hold does not lapse on it: it counts against the facility until
+ * the purchase consumes it or an unwind releases it, so capacity is never overstated.
+ */
+const HOLD_STANDS_SECONDS = 30 * 86_400;
 
 /**
  * The segregated charity ledger (0003, 0030): an entry raised when a late
@@ -420,6 +450,10 @@ function refusalOf(error: unknown): Result<never> {
     return reject('SH-02', 'SCHEDULE_NOT_TOTAL', 'The database refused a schedule that does not sum to the total');
   if (e.constraint === 'contract_leg_one_document_per_leg')
     return reject('SH-07', 'DOCUMENT_ALREADY_BOUND_TO_A_LEG', 'The database refused a document on a second leg');
+  if (e.constraint === 'financed_invoice_unique')
+    return reject('SH-10', 'DUPLICATE_FINANCING', 'The database refused financing an invoice a second time');
+  if (e.code === '23001' && /over-committed/.test(String((error as { message?: string }).message)))
+    return reject('OP-LIMIT', 'FACILITY_LIMIT_EXCEEDED', 'The database refused a hold beyond the facility');
   if (e.constraint === 'charity_ledger_source_once')
     return reject('SH-13', 'CHARITY_ALREADY_RAISED', 'The database refused a second charity entry for one collection');
   if (e.code === '23001' || e.code === '23505' || e.code === '23514')
@@ -561,6 +595,10 @@ export async function recordStep(pool: Pool, tenant: TenantCode, w: StepWrite): 
         const written = await writeCharity(db, tenantUuid, row.id, w.charity, correlation);
         if (!written.ok) return written;
       }
+      if (w.limit !== undefined) {
+        const moved = await moveLimit(db, tenantUuid, row.id, w.limit, w.event.occurredAtEpochSeconds, correlation);
+        if (!moved.ok) return moved;
+      }
       // The outbox table keys on the tenant's uuid; the events carry its code. One event per (tenant, kind, key).
       for (const o of w.outbox ?? [])
         await db.query(
@@ -583,6 +621,92 @@ export async function recordStep(pool: Pool, tenant: TenantCode, w: StepWrite): 
   } catch (error) {
     return refusalOf(error);
   }
+}
+
+/**
+ * Move the facility inside the step's transaction. The capacity triggers (0004, 0031) check the facility at commit.
+ * A transaction held before W5a has no reservation: its later moves leave the facility alone, and the purchase still
+ * registers its invoice.
+ */
+async function moveLimit(
+  db: Scoped,
+  tenantUuid: string,
+  transactionId: string,
+  movement: LimitMovement,
+  atEpochSeconds: bigint,
+  correlation: string,
+): Promise<Result<true>> {
+  const at = atEpochSeconds.toString();
+  // The facility row first, FOR UPDATE, before any reservation or utilisation is written: every writer on a facility
+  // then queues on that one lock. Taken later — after an insert's foreign-key share lock — two writers upgrading at
+  // commit (the capacity triggers' own FOR UPDATE) deadlock each other.
+  await db.query(
+    movement === 'HOLD'
+      ? `select f.id from core.facility f join core.transaction t
+           on f.tenant_id = t.tenant_id and f.counterparty_id = t.counterparty_id and f.programme_id = t.programme_id
+          where t.tenant_id = $1 and t.id = $2 for update of f`
+      : `select f.id from core.facility f join core.limit_reservation r on r.facility_id = f.id
+          where r.tenant_id = $1 and r.transaction_id = $2 for update of f`,
+    [tenantUuid, transactionId],
+  );
+  if (movement === 'HOLD') {
+    const held = await db.query(
+      `insert into core.limit_reservation (tenant_id, facility_id, transaction_id, amount_minor, state, held_at,
+         expires_at, correlation_id)
+       select t.tenant_id, f.id, t.id, t.cost_amount_minor, 'HELD', to_timestamp($3::bigint),
+              to_timestamp($3::bigint + $4::bigint), $5
+         from core.transaction t
+         join core.facility f on f.tenant_id = t.tenant_id and f.counterparty_id = t.counterparty_id
+                             and f.programme_id = t.programme_id and f.state = 'ACTIVE'
+        where t.tenant_id = $1 and t.id = $2`,
+      [tenantUuid, transactionId, at, String(HOLD_STANDS_SECONDS), correlation],
+    );
+    return held.rowCount === 1
+      ? ok(true)
+      : reject('OP-LIMIT', 'NO_FACILITY', 'The database has no active facility for this distributor and programme');
+  }
+  if (movement === 'RELEASE') {
+    await db.query(
+      `update core.limit_reservation set state = 'RELEASED', settled_at = to_timestamp($3::bigint)
+        where tenant_id = $1 and transaction_id = $2 and state = 'HELD'`,
+      [tenantUuid, transactionId, at],
+    );
+    return ok(true);
+  }
+  if (movement === 'CONSUME') {
+    const consumed = await db.query<{ facility_id: string }>(
+      `update core.limit_reservation set state = 'CONSUMED', settled_at = to_timestamp($3::bigint)
+        where tenant_id = $1 and transaction_id = $2 and state = 'HELD'
+        returning facility_id::text`,
+      [tenantUuid, transactionId, at],
+    );
+    const facility = consumed.rows[0]?.facility_id;
+    if (facility !== undefined)
+      await db.query(
+        `update core.facility f set utilised_minor = f.utilised_minor + t.cost_amount_minor, updated_at = now()
+           from core.transaction t where f.tenant_id = $1 and f.id = $2::uuid and t.id = $3`,
+        [tenantUuid, facility, transactionId],
+      );
+    // The registry has no ON CONFLICT: a second financing of the invoice is the control firing (0003).
+    await db.query(
+      `insert into core.financed_invoice_registry (tenant_id, invoice_uuid, invoice_hash, issuer_cr, recipient_cr,
+         financed_amount_minor, currency, transaction_id, financed_at, correlation_id)
+       select t.tenant_id, t.trade_invoice_uuid, coalesce(t.trade_invoice_hash, ''), t.trade_issuer_cr,
+              t.trade_recipient_cr, t.cost_amount_minor, t.currency, t.id, to_timestamp($3::bigint), $4
+         from core.transaction t where t.tenant_id = $1 and t.id = $2 and t.trade_invoice_uuid is not null`,
+      [tenantUuid, transactionId, at, correlation],
+    );
+    return ok(true);
+  }
+  // REPAY: the utilisation this transaction consumed, back to its facility.
+  await db.query(
+    `update core.facility f set utilised_minor = f.utilised_minor - t.cost_amount_minor, updated_at = now()
+       from core.transaction t, core.limit_reservation r
+      where t.tenant_id = $1 and t.id = $2 and r.transaction_id = t.id and r.state = 'CONSUMED'
+        and f.id = r.facility_id`,
+    [tenantUuid, transactionId],
+  );
+  return ok(true);
 }
 
 /** Raise a charity entry, or complete its disbursement, inside the step's transaction. */

@@ -66,6 +66,14 @@ export const AREAS: readonly Area[] = [
     ar: 'صلاحيات الشركاء',
     state: 'LIVE',
   },
+  {
+    id: 'concentration',
+    href: '/concentration',
+    icon: 'shield-check',
+    en: 'Concentration',
+    ar: 'قواعد التركّز',
+    state: 'LIVE',
+  },
 ];
 
 export function SideNav({

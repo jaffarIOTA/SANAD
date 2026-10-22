@@ -69,6 +69,11 @@ import {
   parseBoardPositions,
   structureWithinBoard,
 } from '../products/murabaha-scf/structures/board-positions.ts';
+import {
+  type ConcentrationPolicy,
+  NO_CONCENTRATION_RULES,
+  parseConcentrationPolicy,
+} from '../products/murabaha-scf/limits/drawdown-limits.ts';
 import { type CreditPolicy, parseCreditPolicy } from '../core/decisioning/policy.ts';
 import {
   type AdapterCatalogue,
@@ -820,6 +825,19 @@ export function signatoryOf(
     }
   }
   return undefined;
+}
+
+import bankAWaslConcentration from './tenants/bank-a/wasl/concentration.json' with { type: 'json' };
+
+const WASL_CONCENTRATION: Readonly<Partial<Record<TenantCode, unknown>>> = { 'bank-a': bankAWaslConcentration };
+
+/**
+ * The concentration rules the institution has chosen for Wasl trades, as checked in (W5a): the fallback until a
+ * CONCENTRATION revision is approved in Admin. An institution with none configured has chosen no rule.
+ */
+export function loadWaslConcentration(tenant: TenantCode): Result<ConcentrationPolicy> {
+  const raw = WASL_CONCENTRATION[tenant];
+  return raw === undefined ? { ok: true, value: NO_CONCENTRATION_RULES } : parseConcentrationPolicy(raw);
 }
 
 import bankAMurabahaAccounts from './tenants/bank-a/core-banking/murabaha-accounts.json' with { type: 'json' };

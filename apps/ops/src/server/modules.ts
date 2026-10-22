@@ -857,11 +857,21 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
     items: [
       { id: 'anchors', titleEn: 'Anchors', titleAr: 'الشركات الراعية', readiness: soon(), reference: 'BR-A01' },
       {
+        id: 'facilities',
+        titleEn: 'Facilities & limits',
+        titleAr: 'التسهيلات والحدود',
+        href: '/facilities',
+        readiness: live(),
+        reference:
+          'BR-A02 · SDD §6.7 — Wasl W5a: each distributor draws in a programme only within a facility proposed by credit and approved by a different person (core.facility_approval, core.facility); a trade’s cost is held against the facility, then the programme, then the concentration rules the institution chose in Admin → Concentration (single-trade cap, distributor share of programme, anchor share of book), first refusal wins and nothing is held; holds are core.limit_reservation rows consumed at purchase, released on an unwind before it, repaid on settlement or a later unwind, under the database’s capacity triggers; the invoice is registered as financed at purchase (SH-10). Limits and rules ILLUSTRATIVE',
+      },
+      {
         id: 'programmes',
-        titleEn: 'Programmes & limits',
-        titleAr: 'البرامج والحدود',
+        titleEn: 'Programmes',
+        titleAr: 'البرامج',
         readiness: soon(),
-        reference: 'BR-A02',
+        reference:
+          'BR-A02 — Wasl W5b: programme and anchor screens; programmes are configuration (parties.json) until then',
       },
       { id: 'goods', titleEn: 'Goods register', titleAr: 'سجل البضائع', readiness: soon(), reference: 'SH-11' },
       {
