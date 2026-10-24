@@ -31,6 +31,7 @@ import fintechBIdentity from './tenants/fintech-b/identity/staff-identity.json' 
 import saSmeDefinition from './regulatory/sa/sme-definition.json' with { type: 'json' };
 import aeSmeDefinition from './regulatory/ae/sme-definition.json' with { type: 'json' };
 import aeBeneficialOwnership from './regulatory/ae/beneficial-ownership.json' with { type: 'json' };
+import saBeneficialOwnership from './regulatory/sa/beneficial-ownership.json' with { type: 'json' };
 // Named ksa/uae, not sa/ae: a file called `sa.json` is a cloud service-account key by convention, and the secret scanner rightly refuses one.
 import saJurisdiction from './jurisdictions/ksa.json' with { type: 'json' };
 import aeJurisdiction from './jurisdictions/uae.json' with { type: 'json' };
@@ -42,6 +43,19 @@ import fundAeRails from './tenants/sme-fund-ae/rails/rails.json' with { type: 'j
 import fundAeIdentity from './tenants/sme-fund-ae/identity/staff-identity.json' with { type: 'json' };
 import fundAeOrigination from './tenants/sme-fund-ae/origination/policy.json' with { type: 'json' };
 import fundAeSmeAssessment from './tenants/sme-fund-ae/credit-policy/sme-assessment.json' with { type: 'json' };
+// KSA K2: the Saudi tenants' SME policies (ILLUSTRATIVE, adapted from the UAE fund's).
+import bankASmeAssessment from './tenants/bank-a/credit-policy/sme-assessment.json' with { type: 'json' };
+import bankAOfferPolicy from './tenants/bank-a/credit-policy/offer-policy.json' with { type: 'json' };
+import bankASecurityPolicy from './tenants/bank-a/credit-policy/security.json' with { type: 'json' };
+import bankADecisionPackPolicy from './tenants/bank-a/credit-policy/decision-pack.json' with { type: 'json' };
+import bankALoanProducts from './tenants/bank-a/core-banking/loan-products.json' with { type: 'json' };
+import bankAChecklistSmeTerm from './tenants/bank-a/documents/sme-sa-term.json' with { type: 'json' };
+import fintechBSmeAssessment from './tenants/fintech-b/credit-policy/sme-assessment.json' with { type: 'json' };
+import fintechBOfferPolicy from './tenants/fintech-b/credit-policy/offer-policy.json' with { type: 'json' };
+import fintechBSecurityPolicy from './tenants/fintech-b/credit-policy/security.json' with { type: 'json' };
+import fintechBDecisionPackPolicy from './tenants/fintech-b/credit-policy/decision-pack.json' with { type: 'json' };
+import fintechBLoanProducts from './tenants/fintech-b/core-banking/loan-products.json' with { type: 'json' };
+import fintechBChecklistSmeTerm from './tenants/fintech-b/documents/sme-sa-term.json' with { type: 'json' };
 import fundAeChecklistSmallLoan from './tenants/sme-fund-ae/documents/sme-ae-small-loan.json' with { type: 'json' };
 import fundAeChecklistWorkingCapital from './tenants/sme-fund-ae/documents/sme-ae-working-capital.json' with { type: 'json' };
 import fundAeChecklistFixedAssets from './tenants/sme-fund-ae/documents/sme-ae-fixed-assets.json' with { type: 'json' };
@@ -55,6 +69,11 @@ import {
   parseBoardPositions,
   structureWithinBoard,
 } from '../products/murabaha-scf/structures/board-positions.ts';
+import {
+  type ConcentrationPolicy,
+  NO_CONCENTRATION_RULES,
+  parseConcentrationPolicy,
+} from '../products/murabaha-scf/limits/drawdown-limits.ts';
 import { type CreditPolicy, parseCreditPolicy } from '../core/decisioning/policy.ts';
 import {
   type AdapterCatalogue,
@@ -77,6 +96,7 @@ import {
   parseTenantOnboarding,
 } from '../core/jurisdiction/profile.ts';
 import { type DocumentChecklist, parseDocumentChecklist } from '../core/documents/checklist.ts';
+import { type DocumentTypeCatalogue, parseDocumentTypeCatalogue } from '../core/documents/understanding.ts';
 import { type SmeAssessmentPolicy, parseSmeAssessmentPolicy } from '../core/decisioning/sme-assessment.ts';
 import { type Result, ok, reject } from '../core/kernel/result.ts';
 import { type ProductCatalogue, parseProductCatalogue } from '../core/products/catalogue.ts';
@@ -132,7 +152,10 @@ export interface BeneficialOwnershipRule {
   readonly citation: string;
 }
 
-const BENEFICIAL_OWNERSHIP: Readonly<Partial<Record<JurisdictionCode, unknown>>> = { AE: aeBeneficialOwnership };
+const BENEFICIAL_OWNERSHIP: Readonly<Partial<Record<JurisdictionCode, unknown>>> = {
+  AE: aeBeneficialOwnership,
+  SA: saBeneficialOwnership,
+};
 
 /**
  * The beneficial-owner rule for a tenant's jurisdiction. A jurisdiction without
@@ -258,8 +281,8 @@ export function loadOriginationPolicy(tenant: TenantCode): Result<OriginationPol
 }
 
 const CHECKLISTS: Readonly<Record<TenantCode, readonly unknown[]>> = {
-  'bank-a': [bankAChecklist],
-  'fintech-b': [fintechBChecklist],
+  'bank-a': [bankAChecklist, bankAChecklistSmeTerm],
+  'fintech-b': [fintechBChecklist, fintechBChecklistSmeTerm],
   // One checklist per SME product variant, keyed by the variant's documentChecklistRef
   // (config/tenants/sme-fund-ae/products/catalogue.json): sme-ae-small-loan, sme-ae-working-capital,
   // sme-ae-fixed-assets, sme-ae-expansion, sme-ae-first-time-founders, sme-ae-advanced-tech.
@@ -274,6 +297,31 @@ const CHECKLISTS: Readonly<Record<TenantCode, readonly unknown[]>> = {
 };
 
 /** The documents a programme requires of this tenant's counterparties. */
+import bankADocumentTypes from './tenants/bank-a/documents/document-types.json' with { type: 'json' };
+import fintechBDocumentTypes from './tenants/fintech-b/documents/document-types.json' with { type: 'json' };
+import smeFundAeDocumentTypes from './tenants/sme-fund-ae/documents/document-types.json' with { type: 'json' };
+
+const DOCUMENT_TYPES: Readonly<Partial<Record<TenantCode, unknown>>> = {
+  'bank-a': bankADocumentTypes,
+  'fintech-b': fintechBDocumentTypes,
+  'sme-fund-ae': smeFundAeDocumentTypes,
+};
+
+/** How a tenant's documents are recognised from their text (document intelligence, D1). */
+export function loadDocumentTypeCatalogue(tenant: TenantCode): Result<DocumentTypeCatalogue> {
+  const raw = DOCUMENT_TYPES[tenant];
+  if (raw === undefined)
+    return reject(
+      'OP-DETERMINACY',
+      'DOCUMENT_TYPES_NOT_CONFIGURED',
+      'No document types are configured for this tenant',
+      {
+        tenant,
+      },
+    );
+  return parseDocumentTypeCatalogue(raw);
+}
+
 export function loadDocumentChecklist(tenant: TenantCode, programmeId: string): Result<DocumentChecklist> {
   for (const candidate of CHECKLISTS[tenant]) {
     const parsed = parseDocumentChecklist(candidate);
@@ -308,7 +356,11 @@ export const CHECKLIST_TENANT_CODES: readonly TenantCode[] = TENANT_CODES.filter
 );
 
 /** The SME credit assessment policy (knock-outs, scorecard, risk bands, route) for a tenant that has one. */
-const SME_ASSESSMENT_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = { 'sme-fund-ae': fundAeSmeAssessment };
+const SME_ASSESSMENT_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = {
+  'sme-fund-ae': fundAeSmeAssessment,
+  'bank-a': bankASmeAssessment,
+  'fintech-b': fintechBSmeAssessment,
+};
 
 export function loadSmeAssessmentPolicy(tenant: TenantCode): Result<SmeAssessmentPolicy> {
   const raw = SME_ASSESSMENT_POLICIES[tenant];
@@ -395,7 +447,11 @@ export function loadAllForTenant(tenant: TenantCode): Result<{
 import fundAeOfferPolicy from './tenants/sme-fund-ae/credit-policy/offer-policy.json' with { type: 'json' };
 import { type OfferDatePolicy, parseOfferDatePolicy } from '../core/origination/business-application.ts';
 
-const OFFER_DATE_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = { 'sme-fund-ae': fundAeOfferPolicy };
+const OFFER_DATE_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = {
+  'sme-fund-ae': fundAeOfferPolicy,
+  'bank-a': bankAOfferPolicy,
+  'fintech-b': fintechBOfferPolicy,
+};
 
 /** The bounds and defaults for the dates on a business offer, for a tenant that configures them. */
 export function loadOfferDatePolicy(tenant: TenantCode): Result<OfferDatePolicy> {
@@ -405,4 +461,492 @@ export function loadOfferDatePolicy(tenant: TenantCode): Result<OfferDatePolicy>
       tenant,
     });
   return parseOfferDatePolicy(raw);
+}
+
+import fundAeSecurityPolicy from './tenants/sme-fund-ae/credit-policy/security.json' with { type: 'json' };
+import { type SecurityPolicy, parseSecurityPolicy } from '../core/origination/security-register.ts';
+
+const SECURITY_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = {
+  'sme-fund-ae': fundAeSecurityPolicy,
+  'bank-a': bankASecurityPolicy,
+  'fintech-b': fintechBSecurityPolicy,
+};
+
+/** The collateral haircuts, valuation age and the requirement behind each catalogue collateral code, for a tenant that configures them. */
+export function loadSecurityPolicy(tenant: TenantCode): Result<SecurityPolicy> {
+  const raw = SECURITY_POLICIES[tenant];
+  if (raw === undefined)
+    return reject('OP-DETERMINACY', 'SECURITY_POLICY_NOT_FOUND', 'No security policy is configured for this tenant', {
+      tenant,
+    });
+  return parseSecurityPolicy(raw);
+}
+
+import fundAeDecisionPackPolicy from './tenants/sme-fund-ae/credit-policy/decision-pack.json' with { type: 'json' };
+import { type DecisionPackPolicy, parseDecisionPackPolicy } from '../core/origination/decision-pack.ts';
+
+const DECISION_PACK_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = {
+  'sme-fund-ae': fundAeDecisionPackPolicy,
+  'bank-a': bankADecisionPackPolicy,
+  'fintech-b': fintechBDecisionPackPolicy,
+};
+
+/** The covenant templates and the longest condition subsequent, for a tenant that configures them. */
+export function loadDecisionPackPolicy(tenant: TenantCode): Result<DecisionPackPolicy> {
+  const raw = DECISION_PACK_POLICIES[tenant];
+  if (raw === undefined)
+    return reject(
+      'OP-DETERMINACY',
+      'DECISION_PACK_POLICY_NOT_FOUND',
+      'No decision-pack policy is configured for this tenant',
+      {
+        tenant,
+      },
+    );
+  return parseDecisionPackPolicy(raw);
+}
+
+import fundAeStatementReading from './tenants/sme-fund-ae/credit-policy/statement-reading.json' with { type: 'json' };
+import bankAStatementReading from './tenants/bank-a/credit-policy/statement-reading.json' with { type: 'json' };
+import fintechBStatementReading from './tenants/fintech-b/credit-policy/statement-reading.json' with { type: 'json' };
+import { type StatementReadingPolicy, parseStatementReadingPolicy } from '../core/documents/statement-figures.ts';
+
+const STATEMENT_READING_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = {
+  'sme-fund-ae': fundAeStatementReading,
+  'bank-a': bankAStatementReading,
+  'fintech-b': fintechBStatementReading,
+};
+
+/** Which documents' tables are read, the row labels for each metric, and the confidence floor. */
+export function loadStatementReadingPolicy(tenant: TenantCode): Result<StatementReadingPolicy> {
+  const raw = STATEMENT_READING_POLICIES[tenant];
+  if (raw === undefined)
+    return reject(
+      'OP-DETERMINACY',
+      'STATEMENT_POLICY_NOT_FOUND',
+      'No statement-reading policy is configured for this tenant',
+      {
+        tenant,
+      },
+    );
+  return parseStatementReadingPolicy(raw);
+}
+
+import sanadInterimBrand from './branding/sanad-interim.json' with { type: 'json' };
+import fundAeLetterBranding from './tenants/sme-fund-ae/documents/letter-branding.json' with { type: 'json' };
+import bankALetterBranding from './tenants/bank-a/documents/letter-branding.json' with { type: 'json' };
+import fintechBLetterBranding from './tenants/fintech-b/documents/letter-branding.json' with { type: 'json' };
+import type { LetterBranding } from '../core/documents/offer-letter-html.ts';
+
+const BRANDS: Readonly<Record<string, unknown>> = { 'sanad-interim': sanadInterimBrand };
+const LETTER_BRANDING: Readonly<Partial<Record<TenantCode, { readonly brand?: unknown }>>> = {
+  'sme-fund-ae': fundAeLetterBranding,
+  'bank-a': bankALetterBranding,
+  'fintech-b': fintechBLetterBranding,
+};
+
+/**
+ * The letterhead a tenant's letters carry, and whether its mark is owned or
+ * interim. An interim mark is printed only where a synthetic demonstration is
+ * permitted (docs/brand/README.md); that decision belongs to the caller.
+ */
+export function loadLetterBranding(
+  tenant: TenantCode,
+): Result<{ readonly branding: LetterBranding; readonly markStatus: 'OWNED' | 'INTERIM_SYNTHETIC_ONLY' } | undefined> {
+  const named = LETTER_BRANDING[tenant]?.brand;
+  if (named === undefined) return { ok: true, value: undefined };
+  const raw = typeof named === 'string' ? BRANDS[named] : undefined;
+  if (typeof raw !== 'object' || raw === null)
+    return reject('OP-DETERMINACY', 'LETTER_BRANDING_INVALID', 'The tenant names a brand that is not configured', {
+      tenant,
+    });
+  const b = raw as Record<string, unknown>;
+  const text = (k: string) => (typeof b[k] === 'string' ? (b[k] as string) : undefined);
+  const [logoEnSvg, logoArSvg, accent, heading, markStatus] = [
+    text('logoEnSvg'),
+    text('logoArSvg'),
+    text('accent'),
+    text('heading'),
+    text('markStatus'),
+  ];
+  if (
+    logoEnSvg === undefined ||
+    logoArSvg === undefined ||
+    accent === undefined ||
+    heading === undefined ||
+    (markStatus !== 'OWNED' && markStatus !== 'INTERIM_SYNTHETIC_ONLY')
+  )
+    return reject(
+      'OP-DETERMINACY',
+      'LETTER_BRANDING_INVALID',
+      'The brand is missing a logo, a colour or its mark status',
+      {
+        tenant,
+      },
+    );
+  return { ok: true, value: { branding: { logoEnSvg, logoArSvg, accent, heading }, markStatus } };
+}
+
+import fundAeLoanProducts from './tenants/sme-fund-ae/core-banking/loan-products.json' with { type: 'json' };
+
+/** Which loan-system product code books each rate-priced Sanad product, for a tenant that books loans in its loan system. */
+export interface LoanBookingConfig {
+  readonly adapter: string;
+  readonly policyRef: string;
+  readonly products: Readonly<Record<string, { readonly loanTypeCode: string }>>;
+}
+
+const LOAN_BOOKING: Readonly<Partial<Record<TenantCode, unknown>>> = {
+  'sme-fund-ae': fundAeLoanProducts,
+  'bank-a': bankALoanProducts,
+  'fintech-b': fintechBLoanProducts,
+};
+
+export function loadLoanBookingConfig(tenant: TenantCode): Result<LoanBookingConfig> {
+  const raw = LOAN_BOOKING[tenant] as Record<string, unknown> | undefined;
+  if (raw === undefined)
+    return reject(
+      'OP-DETERMINACY',
+      'LOAN_BOOKING_NOT_CONFIGURED',
+      'No loan-system product mapping is configured for this tenant',
+      {
+        tenant,
+      },
+    );
+  const products = raw['products'];
+  if (
+    typeof raw['adapter'] !== 'string' ||
+    typeof raw['policyRef'] !== 'string' ||
+    products === null ||
+    typeof products !== 'object'
+  )
+    return reject('OP-DETERMINACY', 'LOAN_BOOKING_NOT_CONFIGURED', 'The loan-system product mapping is malformed', {
+      tenant,
+    });
+  for (const [code, v] of Object.entries(products as Record<string, unknown>)) {
+    const t = (v as Record<string, unknown> | null)?.['loanTypeCode'];
+    if (typeof t !== 'string' || t.trim() === '')
+      return reject(
+        'OP-DETERMINACY',
+        'LOAN_BOOKING_NOT_CONFIGURED',
+        'Each product names its loan-system product code',
+        { code },
+      );
+    if (code === 'murabaha-scf')
+      return reject(
+        'OP-DETERMINACY',
+        'LOAN_BOOKING_NOT_CONFIGURED',
+        'A Murabaha product is never booked as a loan contract',
+        { code },
+      );
+  }
+  return ok({
+    adapter: raw['adapter'],
+    policyRef: raw['policyRef'],
+    products: products as Record<string, { readonly loanTypeCode: string }>,
+  });
+}
+
+import fundAeServicingPolicy from './tenants/sme-fund-ae/credit-policy/servicing.json' with { type: 'json' };
+import bankAServicingPolicy from './tenants/bank-a/credit-policy/servicing.json' with { type: 'json' };
+import fintechBServicingPolicy from './tenants/fintech-b/credit-policy/servicing.json' with { type: 'json' };
+import { type ServicingPolicy, parseServicingPolicy } from '../core/servicing/late-charges.ts';
+
+const SERVICING_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = {
+  'sme-fund-ae': fundAeServicingPolicy,
+  'bank-a': bankAServicingPolicy,
+  'fintech-b': fintechBServicingPolicy,
+};
+
+/** Late charges and restructuring limits, for a tenant that services its facilities. */
+export function loadServicingPolicy(tenant: TenantCode): Result<ServicingPolicy> {
+  const raw = SERVICING_POLICIES[tenant];
+  if (raw === undefined)
+    return reject('OP-DETERMINACY', 'SERVICING_POLICY_NOT_FOUND', 'No servicing policy is configured for this tenant', {
+      tenant,
+    });
+  return parseServicingPolicy(raw);
+}
+
+import bankAWaslParties from './tenants/bank-a/wasl/parties.json' with { type: 'json' };
+
+/** A party by its verified commercial registration — what distinctness is matched on (M-7), never the name. */
+export interface WaslParty {
+  readonly registrationNo: string;
+  readonly nameEn: string;
+  readonly nameAr: string;
+}
+
+export interface WaslProgramme {
+  readonly programmeId: string;
+  readonly nameEn: string;
+  readonly nameAr: string;
+  readonly structureCode: 'MURABAHA';
+  readonly programmeLimitMinorUnits: bigint;
+  /** The supplier whose cleared invoices the programme finances, and the account the institution pays it at. */
+  readonly anchor: WaslParty & { readonly settlementIban: string };
+}
+
+/** A Saudi IBAN: SA, two check digits, twenty characters (bank code and account). */
+const SA_IBAN = /^SA\d{2}[0-9A-Z]{20}$/;
+
+export interface WaslParties {
+  /** The institution: the buyer on the anchor's ownership invoice (gate 1), the seller to the distributor. */
+  readonly institution: WaslParty;
+  /** How long a sale offer stays open for the distributor's acceptance before it lapses (SH-03). */
+  readonly saleOfferValiditySeconds: number;
+  readonly programmes: readonly WaslProgramme[];
+  /** Distributors that draw under the programmes, by the counterparty id their requests carry. */
+  readonly distributors: readonly WaslDistributor[];
+}
+
+/** A person who may act for a distributor in the SME portal, by party reference — never a national identifier. */
+export interface WaslSignatory {
+  readonly partyRef: string;
+  readonly nameEn: string;
+  readonly nameAr: string;
+}
+
+export interface WaslDistributor extends WaslParty {
+  readonly counterpartyId: string;
+  /** As the core banking party master records it. */
+  readonly legalForm: string;
+  /** Who may accept a sale offer for the distributor (W3). */
+  readonly signatories: readonly WaslSignatory[];
+}
+
+const WASL_PARTIES: Readonly<Partial<Record<TenantCode, unknown>>> = { 'bank-a': bankAWaslParties };
+
+const CR = /^\d{10}$/;
+const partyOf = (raw: unknown): WaslParty | undefined => {
+  const p = (raw ?? {}) as Record<string, unknown>;
+  return typeof p['registrationNo'] === 'string' &&
+    CR.test(p['registrationNo']) &&
+    typeof p['nameEn'] === 'string' &&
+    p['nameEn'].length > 0 &&
+    typeof p['nameAr'] === 'string' &&
+    p['nameAr'].length > 0
+    ? { registrationNo: p['registrationNo'], nameEn: p['nameEn'], nameAr: p['nameAr'] }
+    : undefined;
+};
+
+/**
+ * A tenant's Wasl programmes with their anchors: the file's `programmes`, or the payload of a PROGRAMMES revision
+ * (Wasl W5b), read by the same rules. At least one; ids unique; one anchor per registration number named the same
+ * way wherever it appears.
+ */
+export function parseWaslProgrammes(raw: unknown): Result<readonly WaslProgramme[]> {
+  const bad = (detail: string) => reject('OP-DETERMINACY', 'WASL_PROGRAMMES_INVALID', detail);
+  if (!Array.isArray(raw) || raw.length === 0) return bad('At least one programme is configured');
+  const programmes: WaslProgramme[] = [];
+  for (const p of raw as Record<string, unknown>[]) {
+    const anchorParty = partyOf(p['anchor']);
+    const iban = ((p['anchor'] ?? {}) as Record<string, unknown>)['settlementIban'];
+    const anchor =
+      anchorParty !== undefined && typeof iban === 'string' && SA_IBAN.test(iban)
+        ? { ...anchorParty, settlementIban: iban }
+        : undefined;
+    const limit = p['programmeLimitMinorUnits'];
+    if (
+      typeof p['programmeId'] !== 'string' ||
+      !/^prg-\d{4}$/.test(p['programmeId']) ||
+      typeof p['nameEn'] !== 'string' ||
+      p['nameEn'].trim().length === 0 ||
+      typeof p['nameAr'] !== 'string' ||
+      p['nameAr'].trim().length === 0 ||
+      p['structureCode'] !== 'MURABAHA' ||
+      typeof limit !== 'string' ||
+      !/^\d{1,15}$/.test(limit) ||
+      anchor === undefined
+    )
+      return bad(
+        'A programme needs an id, names, the MURABAHA structure, a limit in minor units and an anchor with its settlement IBAN',
+      );
+    if (programmes.some((x) => x.programmeId === p['programmeId'])) return bad('Each programme id appears once');
+    const sameAnchor = programmes.find((x) => x.anchor.registrationNo === anchor.registrationNo);
+    if (
+      sameAnchor !== undefined &&
+      (sameAnchor.anchor.nameEn !== anchor.nameEn || sameAnchor.anchor.nameAr !== anchor.nameAr)
+    )
+      return bad('An anchor is named the same way in every programme it anchors');
+    programmes.push({
+      programmeId: p['programmeId'],
+      nameEn: p['nameEn'],
+      nameAr: p['nameAr'],
+      structureCode: 'MURABAHA',
+      programmeLimitMinorUnits: BigInt(limit),
+      anchor,
+    });
+  }
+  return { ok: true, value: programmes };
+}
+
+/** Programmes as configuration JSON: what a PROGRAMMES revision carries and `parseWaslProgrammes` reads back. */
+export function waslProgrammesToJson(programmes: readonly WaslProgramme[]): unknown[] {
+  return programmes.map((p) => ({
+    programmeId: p.programmeId,
+    nameEn: p.nameEn,
+    nameAr: p.nameAr,
+    structureCode: p.structureCode,
+    programmeLimitMinorUnits: p.programmeLimitMinorUnits.toString(),
+    anchor: { ...p.anchor },
+  }));
+}
+
+/** The tenant's Wasl programmes (with their anchors) and distributors, for a tenant that runs Wasl from the workbench. */
+export function loadWaslParties(tenant: TenantCode): Result<WaslParties> {
+  const raw = WASL_PARTIES[tenant] as
+    { institution?: unknown; sequencing?: unknown; programmes?: unknown; distributors?: unknown } | undefined;
+  const bad = (detail: string) => reject('OP-DETERMINACY', 'WASL_PARTIES_INVALID', detail, { tenant });
+  if (raw === undefined)
+    return reject('OP-DETERMINACY', 'WASL_PARTIES_NOT_FOUND', 'No Wasl programmes are configured for this tenant', {
+      tenant,
+    });
+  const institution = partyOf(raw.institution);
+  if (institution === undefined) return bad('The institution needs a registration number and names');
+  const validity = ((raw.sequencing ?? {}) as Record<string, unknown>)['saleOfferValiditySeconds'];
+  if (typeof validity !== 'number' || !Number.isInteger(validity) || validity < 60 || validity > 30 * 86_400)
+    return bad('A sale offer’s validity is a whole number of seconds, from a minute to thirty days');
+  const parsed = parseWaslProgrammes(raw.programmes);
+  if (!parsed.ok) return bad(parsed.error.detail);
+  const programmes = parsed.value;
+  const distributors: WaslDistributor[] = [];
+  const seenSignatories = new Set<string>();
+  for (const d of Array.isArray(raw.distributors) ? (raw.distributors as Record<string, unknown>[]) : []) {
+    const party = partyOf(d);
+    if (typeof d['counterpartyId'] !== 'string' || d['counterpartyId'].length === 0 || party === undefined)
+      return bad('A distributor needs the counterparty id its requests carry, a registration number and names');
+    if (typeof d['legalForm'] !== 'string' || !/^[A-Z_]{2,40}$/.test(d['legalForm']))
+      return bad('A distributor needs its legal form');
+    const signatories: WaslSignatory[] = [];
+    for (const s of Array.isArray(d['signatories']) ? (d['signatories'] as Record<string, unknown>[]) : []) {
+      const partyRef = s['partyRef'];
+      if (
+        typeof partyRef !== 'string' ||
+        !SIGNATORY_REF.test(partyRef) ||
+        typeof s['nameEn'] !== 'string' ||
+        typeof s['nameAr'] !== 'string'
+      )
+        return bad('A signatory needs a party reference and names');
+      // One person signs for one distributor here: the portal's session names the company the person acts for.
+      if (seenSignatories.has(partyRef)) return bad('A signatory is configured for more than one distributor');
+      seenSignatories.add(partyRef);
+      signatories.push({ partyRef, nameEn: s['nameEn'], nameAr: s['nameAr'] });
+    }
+    distributors.push({ counterpartyId: d['counterpartyId'], ...party, legalForm: d['legalForm'], signatories });
+  }
+  if (programmes.length === 0) return bad('At least one programme is configured');
+  return { ok: true, value: { institution, saleOfferValiditySeconds: validity, programmes, distributors } };
+}
+
+/** A party reference: what the national identity service authenticates, never the national identifier itself. */
+const SIGNATORY_REF = /^[a-z0-9][a-z0-9-]{2,63}$/;
+
+/**
+ * The distributor an authorised signatory acts for, across the tenants that run Wasl: the tenant comes from
+ * this configuration, never from what the person typed. Undefined when the reference signs for no one.
+ */
+export function signatoryOf(
+  partyRef: string,
+):
+  | { readonly tenant: TenantCode; readonly distributor: WaslDistributor; readonly signatory: WaslSignatory }
+  | undefined {
+  for (const tenant of Object.keys(WASL_PARTIES) as TenantCode[]) {
+    const parties = loadWaslParties(tenant);
+    if (!parties.ok) continue;
+    for (const distributor of parties.value.distributors) {
+      const signatory = distributor.signatories.find((s) => s.partyRef === partyRef);
+      if (signatory !== undefined) return { tenant, distributor, signatory };
+    }
+  }
+  return undefined;
+}
+
+import bankAWaslConcentration from './tenants/bank-a/wasl/concentration.json' with { type: 'json' };
+
+const WASL_CONCENTRATION: Readonly<Partial<Record<TenantCode, unknown>>> = { 'bank-a': bankAWaslConcentration };
+
+/**
+ * The concentration rules the institution has chosen for Wasl trades, as checked in (W5a): the fallback until a
+ * CONCENTRATION revision is approved in Admin. An institution with none configured has chosen no rule.
+ */
+export function loadWaslConcentration(tenant: TenantCode): Result<ConcentrationPolicy> {
+  const raw = WASL_CONCENTRATION[tenant];
+  return raw === undefined ? { ok: true, value: NO_CONCENTRATION_RULES } : parseConcentrationPolicy(raw);
+}
+
+import bankAMurabahaAccounts from './tenants/bank-a/core-banking/murabaha-accounts.json' with { type: 'json' };
+
+/** How an executed Murabaha is held in the core banking platform: account-shaped, never a loan contract (ADR 0007). */
+export interface MurabahaAccountsConfig {
+  readonly adapter: 'TUUM';
+  readonly policyRef: string;
+  readonly channelCode: string;
+  readonly accountPurposeCodes: Readonly<Record<string, string>>;
+  readonly institutionAccounts: Readonly<Record<string, string>>;
+  readonly transactionTypeCodes: {
+    readonly murabahaReceivableRaise: string;
+    readonly murabahaReceivableSettle: string;
+    readonly goodsInventoryAcquire: string;
+    readonly goodsInventoryRelease: string;
+    readonly charityLiabilityRaise: string;
+  };
+}
+
+const MURABAHA_ACCOUNTS: Readonly<Partial<Record<TenantCode, unknown>>> = { 'bank-a': bankAMurabahaAccounts };
+
+const stringMap = (v: unknown): Readonly<Record<string, string>> | undefined =>
+  v !== null && typeof v === 'object' && Object.values(v).every((x) => typeof x === 'string' && x.length > 0)
+    ? (v as Record<string, string>)
+    : undefined;
+
+export function loadMurabahaAccounts(tenant: TenantCode): Result<MurabahaAccountsConfig> {
+  const raw = MURABAHA_ACCOUNTS[tenant] as Record<string, unknown> | undefined;
+  const bad = () =>
+    reject(
+      'OP-DETERMINACY',
+      'MURABAHA_ACCOUNTS_NOT_CONFIGURED',
+      'How a Murabaha is held in the core is not configured',
+      {
+        tenant,
+      },
+    );
+  if (raw === undefined) return bad();
+  const purposes = stringMap(raw['accountPurposeCodes']);
+  const institution = stringMap(raw['institutionAccounts']);
+  const codes = stringMap(raw['transactionTypeCodes']);
+  const keys = [
+    'murabahaReceivableRaise',
+    'murabahaReceivableSettle',
+    'goodsInventoryAcquire',
+    'goodsInventoryRelease',
+    'charityLiabilityRaise',
+  ] as const;
+  if (
+    raw['adapter'] !== 'TUUM' ||
+    typeof raw['policyRef'] !== 'string' ||
+    typeof raw['channelCode'] !== 'string' ||
+    purposes === undefined ||
+    purposes['COLLECTION'] === undefined ||
+    institution === undefined ||
+    codes === undefined ||
+    !keys.every((k) => codes[k] !== undefined) ||
+    // Late amounts are a charity liability; no code may name revenue (SH-13).
+    Object.keys(codes).some((k) => /revenue|income/i.test(k))
+  )
+    return bad();
+  return ok({
+    adapter: 'TUUM',
+    policyRef: raw['policyRef'],
+    channelCode: raw['channelCode'],
+    accountPurposeCodes: purposes,
+    institutionAccounts: institution,
+    transactionTypeCodes: {
+      murabahaReceivableRaise: codes['murabahaReceivableRaise'] ?? '',
+      murabahaReceivableSettle: codes['murabahaReceivableSettle'] ?? '',
+      goodsInventoryAcquire: codes['goodsInventoryAcquire'] ?? '',
+      goodsInventoryRelease: codes['goodsInventoryRelease'] ?? '',
+      charityLiabilityRaise: codes['charityLiabilityRaise'] ?? '',
+    },
+  });
 }

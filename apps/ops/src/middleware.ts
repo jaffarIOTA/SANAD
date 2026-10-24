@@ -59,6 +59,24 @@ export function frontDoor(pathname: string, cookieValue: string | undefined, now
   };
 }
 
+/**
+ * How the front door sends someone to sign in. A page gets a 303. A form's
+ * server action (it carries a `Next-Action` header) cannot: its client calls it
+ * with `fetch`, which follows a 303 to the sign-in page's HTML and rejects that
+ * as "an unexpected response" — what an officer saw when the session ended
+ * mid-form. The action gets Next's own redirect instead, an `x-action-redirect`
+ * header on an empty plain-text body, which its client follows as a full
+ * navigation. Either way the action itself does not run here.
+ */
+export function signInRedirect(
+  location: string,
+  serverAction: boolean,
+): { readonly status: number; readonly headers: Readonly<Record<string, string>> } {
+  return serverAction
+    ? { status: 200, headers: { 'x-action-redirect': `${location};replace`, 'content-type': 'text/plain' } }
+    : { status: 303, headers: { location } };
+}
+
 /** Every response carries the security headers (SR-027); a staff sign-in form may lead to the identity provider. */
 const SECURITY = { formActionOrigins: staffFormActionOrigins(), development: isDevelopment() } as const;
 
@@ -66,7 +84,11 @@ export function middleware(request: NextRequest): NextResponse {
   return withSecurityHeaders(request, SECURITY, (pass) => {
     const decision = frontDoor(request.nextUrl.pathname, request.cookies.get(STAFF_SESSION_COOKIE)?.value, epochNow());
     if (decision.kind === 'PASS') return pass();
-    const response = NextResponse.redirect(new URL(decision.location, request.url), 303);
+    const target = signInRedirect(decision.location, request.headers.has('next-action'));
+    const response =
+      target.status === 303
+        ? NextResponse.redirect(new URL(decision.location, request.url), 303)
+        : new NextResponse(null, { status: target.status, headers: target.headers });
     if (decision.clearCookie) response.cookies.delete(STAFF_SESSION_COOKIE);
     return response;
   });

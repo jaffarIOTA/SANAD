@@ -1,0 +1,36 @@
+{
+  "policyId": "sme-direct-lending-security-sa",
+  "version": "0.1.0",
+  "source": "TENANT_CREDIT_POLICY",
+  "policyRef": "ILLUSTRATIVE — Fintech B's placeholder, adapted 2026-10-15 from the UAE fund's illustrative security; not an approved policy and not a SAMA requirement. The institution replaces it before any real use",
+  "haircutsPerTenThousand": {
+    "REAL_ESTATE": 3000,
+    "VEHICLE": 5000,
+    "EQUIPMENT": 5000,
+    "INVENTORY": 6000,
+    "RECEIVABLES": 4000,
+    "CASH_DEPOSIT": 0,
+    "FINANCED_ASSET": 5000,
+    "PROMISSORY_NOTE": 10000,
+    "INSURANCE_ASSIGNMENT": 10000,
+    "OTHER": 10000
+  },
+  "maxValuationAgeDays": 365,
+  "requirements": {
+    "PERSONAL_GUARANTEE": {
+      "kind": "GUARANTEE_FROM_EACH_OWNER"
+    },
+    "PROMISSORY_NOTE": {
+      "kind": "COLLATERAL",
+      "collateralKind": "PROMISSORY_NOTE"
+    },
+    "UNDERLYING_ASSET": {
+      "kind": "COLLATERAL",
+      "collateralKind": "FINANCED_ASSET"
+    },
+    "INSURANCE": {
+      "kind": "COLLATERAL",
+      "collateralKind": "INSURANCE_ASSIGNMENT"
+    }
+  }
+}

@@ -16,6 +16,12 @@
 import type { Pool } from 'pg';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { preparePayee } from '../support/business-closing.ts';
+
+import { justifyDeviations } from '../support/business-decision-pack.ts';
+
+import { meetSecurityRequirements } from '../support/business-security.ts';
+
 import type { FinancialMetric } from '@sanad/core/applicant/financials.ts';
 import { money } from '@sanad/core/kernel/money.ts';
 import { type Result, expectOk } from '@sanad/core/kernel/result.ts';
@@ -41,6 +47,8 @@ import {
   type HandoverRequest,
   READ_FIGURE_SOURCES,
   SEED_PRINCIPALS,
+  addCondition,
+  addCovenant,
   checklistStatus,
   committeeApprovalDefaults,
   decideInCommittee,
@@ -56,6 +64,8 @@ import {
   recordSigned,
   resetBusinessStore,
   runAssessment,
+  satisfyCondition,
+  verifyCondition,
   sendOffer,
   submitForAssessment,
   validateDocument,
@@ -477,8 +487,19 @@ async function driveToCommittee(): Promise<void> {
     expectOk(await validateDocument(TENANT, ID, documentRef, 'VALID', checker));
   }
   expectOk(await recordAssessmentInputs(TENANT, ID, INPUTS, officer));
+  // UAE M3: everything else is ready, so the only refusal left is the security the variant requires.
+  const early = await submitForAssessment(TENANT, ID, officer);
+  expect(early.ok ? 'submitted' : early.error.reason).toBe('SECURITY_INCOMPLETE');
+  await meetSecurityRequirements(TENANT, ID, officer, checker, INPUTS.collateralValueMinorUnits, BigInt(Math.floor(Date.now() / 1000)) - 86_400n);
   expectOk(await submitForAssessment(TENANT, ID, officer));
   const assessed = expectOk(await runAssessment(TENANT, ID, checker));
+  // UAE M4: the committee cannot approve over a deviation nobody has justified.
+  const unjustified = await decideInCommittee(TENANT, ID, { decidedBy: committee, approved: true, reason: 'Within risk-aligned terms' });
+  expect(unjustified.ok ? 'approved' : unjustified.error.reason).toBe('DEVIATIONS_UNJUSTIFIED');
+  await justifyDeviations(TENANT, ID, checker);
+  // A condition precedent and a covenant on the pack: the offer letter states both.
+  expectOk(await addCondition(TENANT, ID, { kind: 'PRECEDENT', textEn: 'Board resolution approving the facility', textAr: 'قرار مجلس الإدارة بالموافقة على التمويل' }, checker));
+  expectOk(await addCovenant(TENANT, ID, 'DSCR_MIN', checker));
   expect(assessed.application.status).toBe('IN_COMMITTEE');
   expect(assessed.latestAssessment?.assessment.riskLevel).toBe('LOW');
 }
@@ -561,6 +582,13 @@ describe('the partner’s prototype through the service: 5,000,000 / 72 requeste
       await generateOffer(TENANT, ID, officer, { disbursementDate: '2029-08-04', firstDueDate: '2029-09-10' }),
     );
     const offer = offered.latestOffer;
+    expect(offer?.letter.conditions.map((c) => c.en)).toEqual(
+      expect.arrayContaining([
+        'Before first drawdown: Board resolution approving the facility',
+        expect.stringMatching(/^Covenant: Debt-service cover of at least 1\.40×/),
+      ]),
+    );
+    expect(offered.pack.frozen?.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(offer?.terms.facilityAmount).toEqual(aed(200_000_000n));
     expect(offer?.terms.months).toBe(60);
     expect(offer?.terms.monthlyInstalment.minorUnits).toBe(3_462_918n);
@@ -588,6 +616,16 @@ describe('the partner’s prototype through the service: 5,000,000 / 72 requeste
     expectOk(await sendOffer(TENANT, ID, officer));
     expectOk(await recordSigned(TENANT, ID, { letterVersion: offer?.letter.version ?? '' }, officer));
     vi.setSystemTime(new Date('2029-08-04T06:00:00Z'));
+    await preparePayee(TENANT, ID, officer, checker);
+    // UAE M5a: the condition precedent on the pack is evidenced and verified by two people before money moves.
+    const blocked = await recordDisbursed(TENANT, ID, finance);
+    expect(blocked.ok ? 'disbursed' : blocked.error.reason).toBe('CONDITIONS_PRECEDENT_OUTSTANDING');
+    const cp = (await getApplication(TENANT, ID))?.pack.conditions.find((c) => c.kind === 'PRECEDENT');
+    const evidence = (await getApplication(TENANT, ID))?.documents[0]?.documentRef ?? '';
+    expectOk(await satisfyCondition(TENANT, ID, cp?.conditionId ?? '', evidence, officer));
+    const self = await verifyCondition(TENANT, ID, cp?.conditionId ?? '', officer);
+    expect(self.ok ? 'verified' : self.error.reason).toBe('FOUR_EYES_SELF_CONFIRMATION');
+    expectOk(await verifyCondition(TENANT, ID, cp?.conditionId ?? '', checker));
     expectOk(await recordDisbursed(TENANT, ID, finance));
     const payment = queuedBusinessNotifications().find((e) => e.subjectRef === ID && e.kind === 'PAYMENT_DISBURSE');
     expect(payment?.payload['minorUnits']).toBe('200000000');

@@ -19,7 +19,17 @@ import {
   store,
 } from './credentials.ts';
 import { catalogueWithAddition, catalogueWithChange, checkProposal, resolveProductCatalogue } from './products.ts';
-import { decideRevision, listRevisions, proposeRevision } from './revisions.ts';
+import { decideRevision, listRevisions, proposeRevision, revisionPayload } from './revisions.ts';
+import {
+  boardWithGoodsChange,
+  checkProgrammesChange,
+  programmesWithChange,
+  resolveBoard,
+  resolveProgrammes,
+} from './wasl-configuration.ts';
+import { type TenantCode, parseWaslProgrammes } from '@sanad/config/loader.ts';
+import type { Result } from '@sanad/core/kernel/result.ts';
+import { parseBoardPositions } from '@sanad/products/murabaha-scf/structures/board-positions.ts';
 import { railsWithChange, resolveRailsConfiguration } from './rails.ts';
 import { parseRailsConfiguration } from '@sanad/core/config/rails.ts';
 import { ADAPTER_CATALOGUE } from '@sanad/adapters/catalogue.ts';
@@ -27,6 +37,8 @@ import { type RevisionArea, proposeRevision as proposePure } from '@sanad/core/c
 import { deploymentProfile, identityFromForm, resolveStaffIdentity } from './identity.ts';
 import { parseStaffIdentity } from '@sanad/core/config/staff-identity.ts';
 import { policyWithPartner, resolveOriginationPolicy } from './partners.ts';
+import { policyFromForm } from './concentration.ts';
+import { parseConcentrationPolicy } from '@sanad/products/murabaha-scf/limits/drawdown-limits.ts';
 import { parseOriginationPolicy } from '@sanad/core/origination/policy.ts';
 import { catalogueForTenant, loadProductCatalogue } from '@sanad/config/loader.ts';
 import { randomUUID } from 'node:crypto';
@@ -309,12 +321,17 @@ const REVISION_AREA_OF_SCREEN = {
   rails: 'RAILS',
   identity: 'STAFF_IDENTITY',
   partners: 'ORIGINATION_POLICY',
+  concentration: 'CONCENTRATION',
+  programmes: 'PROGRAMMES',
+  goods: 'BOARD_POSITIONS',
 } as const satisfies Record<string, RevisionArea>;
 
 export async function decideRevisionAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
   const areaField = field(form, 'area');
-  const area = areaField === 'rails' || areaField === 'identity' || areaField === 'partners' ? areaField : 'products';
+  const area = Object.hasOwn(REVISION_AREA_OF_SCREEN, areaField)
+    ? (areaField as keyof typeof REVISION_AREA_OF_SCREEN)
+    : 'products';
   const admin = await currentAdmin();
   if (admin === undefined) redirect(`/${locale}`);
   const tenant = configurableTenant(admin, field(form, 'tenant'));
@@ -330,6 +347,13 @@ export async function decideRevisionAction(form: FormData): Promise<void> {
   const approve = field(form, 'decision') === 'approve';
   const reason = field(form, 'reason');
   if (!approve && reason.length < 3) return back(to, 'REJECTION_REASON_REQUIRED');
+  // Exposure may have moved since the proposal: a programme change is checked against the book again (W5b).
+  if (approve && revisionArea === 'PROGRAMMES') {
+    const proposed = parseWaslProgrammes(await revisionPayload(s.pool, tenant, id));
+    if (!proposed.ok) return back(to, 'DECIDE_FAILED');
+    const fits = await checkProgrammesChange(tenant as TenantCode, proposed.value);
+    if (!fits.ok) return back(to, `REFUSED:${fits.error.reason}`);
+  }
   try {
     await decideRevision(s.pool, {
       id,
@@ -535,6 +559,155 @@ export async function proposePartnerChangeAction(form: FormData): Promise<void> 
     return back(to, 'PROPOSE_FAILED');
   }
   back(to, 'PROPOSED');
+}
+
+/**
+ * Propose the institution's concentration rules (Wasl W5a): the whole policy, checked by the production parser, in
+ * force only once a different administrator approves it, from its effective moment.
+ */
+export async function proposeConcentrationAction(form: FormData): Promise<void> {
+  const locale = field(form, 'locale') || 'ar';
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${locale}`);
+  const tenant = configurableTenant(admin, field(form, 'tenant'));
+  if (tenant === undefined) return back(`/${locale}/concentration`, 'TENANT_UNKNOWN');
+  const to = `/${locale}/concentration?tenant=${encodeURIComponent(tenant)}`;
+  const s = store();
+  if (s.kind !== 'READY') return back(to, 'NO_DATABASE');
+  const effectiveRaw = field(form, 'effectiveFrom');
+  const effectiveMs = effectiveRaw === '' ? Date.now() : Date.parse(effectiveRaw);
+  if (!Number.isFinite(effectiveMs)) return back(to, 'EFFECTIVE_FROM_MALFORMED');
+  const changed = policyFromForm({
+    policyRef: field(form, 'policyRef'),
+    tradeCapEnabled: field(form, 'tradeCapEnabled') === 'on',
+    tradeCapRiyals: field(form, 'tradeCapRiyals'),
+    distributorShareEnabled: field(form, 'distributorShareEnabled') === 'on',
+    distributorSharePercent: field(form, 'distributorSharePercent'),
+    anchorShareEnabled: field(form, 'anchorShareEnabled') === 'on',
+    anchorSharePercent: field(form, 'anchorSharePercent'),
+  });
+  if (!changed.ok) return back(to, `REFUSED:${changed.error.reason}`);
+  const summary = field(form, 'summary');
+  const effectiveFromEpochSeconds = BigInt(Math.floor(effectiveMs / 1000));
+  const checked = proposePure({
+    id: randomUUID(),
+    tenantId: tenant,
+    area: 'CONCENTRATION',
+    rawPayload: changed.value.payload,
+    summary,
+    effectiveFromEpochSeconds,
+    proposedBy: admin?.principalId ?? '',
+    proposedAtEpochSeconds: nowEpoch(),
+    parse: parseConcentrationPolicy,
+  });
+  if (!checked.ok) return back(to, `REFUSED:${checked.error.reason}`);
+  try {
+    await proposeRevision(s.pool, {
+      tenantCode: tenant,
+      area: 'CONCENTRATION',
+      payload: changed.value.payload,
+      summary,
+      effectiveFromEpochSeconds,
+      proposedBy: admin?.principalId ?? '',
+      correlationId: randomUUID(),
+    });
+  } catch {
+    return back(to, 'PROPOSE_FAILED');
+  }
+  back(to, 'PROPOSED');
+}
+
+/** What every Wasl configuration proposal shares: who, which institution, when it takes effect, and the four eyes. */
+async function proposeWaslRevision(
+  form: FormData,
+  screen: 'programmes' | 'goods',
+  build: (
+    tenant: TenantCode,
+  ) => Promise<
+    | { readonly ok: true; readonly payload: unknown; readonly parse: (raw: unknown) => Result<unknown> }
+    | { readonly ok: false; readonly notice: string }
+  >,
+): Promise<void> {
+  const locale = field(form, 'locale') || 'ar';
+  const admin = await currentAdmin();
+  if (admin === undefined) redirect(`/${locale}`);
+  const tenant = configurableTenant(admin, field(form, 'tenant'));
+  if (tenant === undefined) return back(`/${locale}/${screen}`, 'TENANT_UNKNOWN');
+  const to = `/${locale}/${screen}?tenant=${encodeURIComponent(tenant)}`;
+  const s = store();
+  if (s.kind !== 'READY') return back(to, 'NO_DATABASE');
+  const effectiveRaw = field(form, 'effectiveFrom');
+  const effectiveMs = effectiveRaw === '' ? Date.now() : Date.parse(effectiveRaw);
+  if (!Number.isFinite(effectiveMs)) return back(to, 'EFFECTIVE_FROM_MALFORMED');
+  const built = await build(tenant as TenantCode);
+  if (!built.ok) return back(to, built.notice);
+  const area = REVISION_AREA_OF_SCREEN[screen];
+  const summary = field(form, 'summary');
+  const effectiveFromEpochSeconds = BigInt(Math.floor(effectiveMs / 1000));
+  const checked = proposePure({
+    id: randomUUID(),
+    tenantId: tenant,
+    area,
+    rawPayload: built.payload,
+    summary,
+    effectiveFromEpochSeconds,
+    proposedBy: admin?.principalId ?? '',
+    proposedAtEpochSeconds: nowEpoch(),
+    parse: built.parse,
+  });
+  if (!checked.ok) return back(to, `REFUSED:${checked.error.reason}`);
+  try {
+    await proposeRevision(s.pool, {
+      tenantCode: tenant,
+      area,
+      payload: built.payload,
+      summary,
+      effectiveFromEpochSeconds,
+      proposedBy: admin?.principalId ?? '',
+      correlationId: randomUUID(),
+    });
+  } catch {
+    return back(to, 'PROPOSE_FAILED');
+  }
+  back(to, 'PROPOSED');
+}
+
+/** Propose adding, changing or removing one programme (Wasl W5b), checked against what the book holds now. */
+export async function proposeProgrammeChangeAction(form: FormData): Promise<void> {
+  return proposeWaslRevision(form, 'programmes', async (tenant) => {
+    const current = await resolveProgrammes(tenant);
+    if (!current.value.ok) return { ok: false, notice: 'PROGRAMMES_UNREADABLE' };
+    const changed = programmesWithChange(current.value.value, {
+      action: field(form, 'action') === 'REMOVE' ? 'REMOVE' : 'SAVE',
+      programmeId: field(form, 'programmeId'),
+      nameEn: field(form, 'nameEn'),
+      nameAr: field(form, 'nameAr'),
+      limitRiyals: field(form, 'limitRiyals'),
+      anchorRegistrationNo: field(form, 'anchorRegistrationNo'),
+      anchorNameEn: field(form, 'anchorNameEn'),
+      anchorNameAr: field(form, 'anchorNameAr'),
+      anchorSettlementIban: field(form, 'anchorSettlementIban'),
+    });
+    if (!changed.ok) return { ok: false, notice: `REFUSED:${changed.error.reason}` };
+    const fits = await checkProgrammesChange(tenant, changed.value.parsed);
+    if (!fits.ok) return { ok: false, notice: `REFUSED:${fits.error.reason}` };
+    return { ok: true, payload: changed.value.payload, parse: parseWaslProgrammes };
+  });
+}
+
+/** Propose adding a heading to, or removing one from, the board's excluded-goods register (Wasl W5b). */
+export async function proposeGoodsChangeAction(form: FormData): Promise<void> {
+  return proposeWaslRevision(form, 'goods', async (tenant) => {
+    const current = await resolveBoard(tenant);
+    if (!current.value.ok) return { ok: false, notice: 'BOARD_UNREADABLE' };
+    const changed = boardWithGoodsChange(current.value.value, {
+      action: field(form, 'action') === 'REMOVE' ? 'REMOVE' : 'ADD',
+      code: field(form, 'code'),
+      description: field(form, 'description'),
+    });
+    if (!changed.ok) return { ok: false, notice: `REFUSED:${changed.error.reason}` };
+    return { ok: true, payload: changed.value.payload, parse: parseBoardPositions };
+  });
 }
 
 /** Licence files are small; anything larger is not one. */

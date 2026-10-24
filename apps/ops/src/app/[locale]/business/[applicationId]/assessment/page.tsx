@@ -38,6 +38,7 @@ import {
   type CommitteeApprovalDefaults,
   type BureauSource,
   committeeApprovalDefaults,
+  decisionPack,
   getApplication,
   intakeConsentFor,
   syncBusiness,
@@ -138,6 +139,8 @@ const BUREAU_SOURCE_WORDS: Readonly<Record<BureauSource, { readonly en: string; 
   KEYED_FROM_UPSTREAM_REPORT: { en: 'Keyed from the upstream report', ar: 'مُدخلة من تقرير الجهة المُحيلة' },
   AECB_RAIL_FIXTURE: { en: 'AECB rail (fixture)', ar: 'الربط مع المكتب (تجريبي)' },
   AECB_RAIL_LIVE: { en: 'AECB rail', ar: 'الربط مع المكتب' },
+  SIMAH_RAIL_FIXTURE: { en: 'SIMAH rail (fixture)', ar: 'الربط مع سمة (تجريبي)' },
+  SIMAH_RAIL_LIVE: { en: 'SIMAH rail', ar: 'الربط مع سمة' },
 };
 
 /** A weight per ten thousand as a whole percentage where it is one: 4000 → '40%'. */
@@ -175,6 +178,9 @@ export default async function CreditAssessmentPage({
   // The committee form's starting figures and the limits beside them, from the server; the page only shows them.
   const approvalDefaults =
     a.status === 'IN_COMMITTEE' ? await committeeApprovalDefaults(j.tenant, applicationId) : undefined;
+  // Deviations still to justify in the decision pack: the committee cannot approve until there are none.
+  const pack = a.status === 'IN_COMMITTEE' ? await decisionPack(j.tenant, applicationId) : undefined;
+  const unjustified = pack?.ok === true ? pack.value.deviations.filter((d) => d.justification === undefined).length : 0;
   // Inputs are recorded while the application is open (RECEIVED, SPREADING) and lock at submission; from then on they are shown read-only.
   const inputsOpen = ['RECEIVED', 'SPREADING'].includes(a.status);
   const fact = (name: string, value: unknown): string => f.digits(formatFact(name, value as bigint, f.arabic));
@@ -579,6 +585,17 @@ export default async function CreditAssessmentPage({
           </SectionCard>
 
           <CreditNotesCard segment={segment} view={view} staff={staff} f={f} />
+          {unjustified > 0 ? (
+            <p className="rounded-tile border border-attention/40 bg-attention-wash px-4 py-3 text-[13px] text-ink" data-pack-pending>
+              {t(
+                `${f.n(unjustified)} deviation(s) from policy still need a justification before the committee can approve.`,
+                `${f.n(unjustified)} استثناء من السياسة ما زال بحاجة إلى مبرر قبل أن تعتمد اللجنة.`,
+              )}{' '}
+              <a href={`/${segment}/business/${encodeURIComponent(a.applicationId)}/decision`} className="font-medium text-brand hover:underline">
+                {t('Open the decision pack', 'فتح حزمة القرار')}
+              </a>
+            </p>
+          ) : null}
           <DecisionCard segment={segment} view={view} staff={staff} f={f} approvalDefaults={approvalDefaults} />
         </>
       )}
@@ -891,9 +908,15 @@ function InputsCard({
           <Field label={t('Audited financials', 'قوائم مالية مدققة')}>
             {inputs.auditedFinancialsAvailable ? t('Available', 'متوفرة') : t('Not available', 'غير متوفرة')}
           </Field>
-          <Field label={t('Collateral value', 'قيمة الضمان')}>
+          <Field label={t('Collateral value (keyed)', 'قيمة الضمان (مُدخلة)')}>
             <bdi className="tabular-nums">{f.money(inputs.collateralValue.minorUnits)}</bdi>{' '}
             <span className="text-[12px] font-normal text-ink-quiet">{f.cur}</span>
+            <span className="mt-1 block text-[11px] font-normal text-ink-quiet" data-collateral-source>
+              {t(
+                'Scoring uses the confirmed security register instead wherever it holds valued collateral.',
+                'يعتمد التقييم على سجل الضمانات المؤكد بدلاً منها متى تضمّن ضماناً عينياً ذا قيمة.',
+              )}
+            </span>
           </Field>
         </dl>
       )}
@@ -983,7 +1006,10 @@ function InputsCard({
                 inputs?.failedFilesRatePerTenThousand.toString(),
               )}
               <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-quiet">
-                {t(`Collateral value (${f.cur})`, `قيمة الضمان (${f.cur})`)}
+                {t(
+                  `Collateral value (${f.cur}) — used only where the security register holds no valued collateral`,
+                  `قيمة الضمان (${f.cur}) — تُستخدم فقط إن خلا سجل الضمانات من ضمان عيني ذي قيمة`,
+                )}
                 <input
                   name="collateralValue"
                   required

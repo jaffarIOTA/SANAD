@@ -11,6 +11,14 @@
 import type { Pool } from 'pg';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { expectOk } from '@sanad/core/kernel/result.ts';
+
+import { preparePayee } from '../support/business-closing.ts';
+
+import { justifyDeviations } from '../support/business-decision-pack.ts';
+
+import { meetSecurityRequirements } from '../support/business-security.ts';
+
 import { loadOfferDatePolicy } from '@sanad/config/loader.ts';
 import offerPolicyJson from '@sanad/config/tenants/sme-fund-ae/credit-policy/offer-policy.json' with { type: 'json' };
 import type { FinancialMetric } from '@sanad/core/applicant/financials.ts';
@@ -39,7 +47,11 @@ import {
   proposeFigures,
   queuedBusinessNotifications,
   recordAssessmentInputs,
+  confirmPayee,
+  planTranches,
   recordDisbursed,
+  recordPayee,
+  recordPaymentResult,
   recordPortfolioStatus,
   recordSigned,
   resetBusinessStore,
@@ -165,14 +177,21 @@ async function presentAndValidateDocuments(): Promise<void> {
   }
 }
 
+/** The security the variant requires, recorded by the officer and confirmed by the checker (UAE M3), at the keyed collateral value. */
+async function meetSecurity(): Promise<void> {
+  await meetSecurityRequirements(TENANT, ID, officer, checker, INPUTS.collateralValueMinorUnits, BigInt(Math.floor(Date.now() / 1000)) - 86_400n);
+}
+
 /** Hand-over to a committee approval, through the real functions. */
 async function driveToApproved(): Promise<void> {
   expect((await handOver(TENANT, handover(), 'upstream-record-dev-01')).ok).toBe(true);
   await spreadAndVerify();
   await presentAndValidateDocuments();
+  await meetSecurity();
   expect((await recordAssessmentInputs(TENANT, ID, INPUTS, officer)).ok).toBe(true);
   expect((await submitForAssessment(TENANT, ID, officer)).ok).toBe(true);
   expect((await runAssessment(TENANT, ID, checker)).ok).toBe(true);
+  await justifyDeviations(TENANT, ID, checker);
   expect(
     (await decideInCommittee(TENANT, ID, { decidedBy: committee, approved: true, reason: 'Within risk-aligned terms' }))
       .ok,
@@ -234,6 +253,7 @@ describe('the business-application service — full journey in memory', () => {
 
     expectRefused(await submitForAssessment(TENANT, ID, officer), 'DOCUMENTS_MISSING');
     await presentAndValidateDocuments();
+    await meetSecurity();
     const complete = await checklistStatus(TENANT, ID);
     expect(complete.ok && complete.value.complete).toBe(true);
     if (complete.ok) expect(complete.value.checklist.programmeId).toBe('sme-ae-small-loan');
@@ -243,6 +263,7 @@ describe('the business-application service — full journey in memory', () => {
     expect(submitted.ok && submitted.value.application.status).toBe('SUBMITTED');
 
     const assessed = await runAssessment(TENANT, ID, checker);
+    await justifyDeviations(TENANT, ID, checker);
     expect(assessed.ok).toBe(true);
     if (!assessed.ok) return;
     // AED 800,000 is above the straight-through maximum: the committee decides.
@@ -304,6 +325,7 @@ describe('the business-application service — full journey in memory', () => {
     expect(signed.ok && signed.value.application.status).toBe('SIGNED');
     if (signed.ok) expect(signed.value.application.signature?.signatureRef).toMatch(/^uaepass-fixture:/);
 
+    await preparePayee(TENANT, ID, officer, checker);
     const disbursed = await recordDisbursed(TENANT, ID, finance);
     expect(disbursed.ok && disbursed.value.application.status).toBe('DISBURSED');
     if (disbursed.ok) {
@@ -557,6 +579,7 @@ describe('#7 assessment inputs: consent-bound, locked at submission, scored by s
     await handOver(TENANT, handover(), 'upstream');
     await spreadAndVerify();
     await presentAndValidateDocuments();
+    await meetSecurity();
     await recordAssessmentInputs(TENANT, ID, INPUTS, officer);
     expect((await submitForAssessment(TENANT, ID, officer)).ok).toBe(true);
     expectRefused(
@@ -569,6 +592,7 @@ describe('#7 assessment inputs: consent-bound, locked at submission, scored by s
     await handOver(TENANT, handover(), 'upstream');
     await spreadAndVerify();
     await presentAndValidateDocuments();
+    await meetSecurity();
     expectRefused(await submitForAssessment(TENANT, ID, officer), 'ASSESSMENT_INPUTS_MISSING');
     expect((await recordAssessmentInputs(TENANT, ID, INPUTS, officer)).ok).toBe(true);
     expect((await submitForAssessment(TENANT, ID, officer)).ok).toBe(true);
@@ -602,7 +626,9 @@ describe('#11 offer dates within the fund’s configured (ILLUSTRATIVE) bounds',
       'OFFER_POLICY_MALFORMED',
     );
     expectRefused(parseOfferDatePolicy({ ...offerPolicyJson, policyRef: '' }), 'OFFER_POLICY_MALFORMED');
-    expectRefused(loadOfferDatePolicy('bank-a'), 'OFFER_POLICY_NOT_FOUND');
+    // KSA K2: each Saudi tenant has its own offer-date policy, marked ILLUSTRATIVE like the fund's.
+    const bankA = loadOfferDatePolicy('bank-a');
+    expect(bankA.ok && bankA.value.policyRef).toMatch(/^ILLUSTRATIVE/);
     // The constants are gone from the service: nothing but the policy carries a bound.
     expect(Object.keys(businessModule)).not.toContain('OFFER_DATE_BOUNDS');
   });
@@ -648,6 +674,74 @@ describe('#11 offer dates within the fund’s configured (ILLUSTRATIVE) bounds',
 });
 
 describe('#12 #13 disbursement: a distinct finance principal, payment and bureau report queued', () => {
+  it('UAE M5b: draws the facility in tranches, each its own instruction; a rejected payment is re-released only to a re-confirmed payee', async () => {
+    await driveToApproved();
+    const offered = await generateOffer(TENANT, ID, officer, { disbursementDate: isoAfter(0), firstDueDate: isoAfter(30) });
+    const facility = offered.ok ? (offered.value.latestOffer?.terms.facilityAmount.minorUnits ?? 0n) : 0n;
+    const half = facility / 2n;
+    const reason = (r: { ok: boolean; error?: { reason: string } }) => (r.ok ? 'accepted' : r.error?.reason);
+    // A plan that does not add up, or runs out of order, is refused.
+    expect(reason(await planTranches(TENANT, ID, [{ amountMinorUnits: half }], officer))).toBe('TRANCHES_NOT_FACILITY');
+    expect(
+      reason(
+        await planTranches(
+          TENANT,
+          ID,
+          [
+            { amountMinorUnits: half, plannedDate: isoAfter(5) },
+            { amountMinorUnits: facility - half, plannedDate: isoAfter(1) },
+          ],
+          officer,
+        ),
+      ),
+    ).toBe('TRANCHES_INVALID');
+    expectOk(
+      await planTranches(TENANT, ID, [{ amountMinorUnits: half }, { amountMinorUnits: facility - half, plannedDate: isoAfter(0) }], officer),
+    );
+    const sent = await sendOffer(TENANT, ID, officer);
+    await recordSigned(TENANT, ID, { letterVersion: sent.ok ? (sent.value.application.offer?.letterVersion ?? '') : '' }, officer);
+    await preparePayee(TENANT, ID, officer, checker);
+
+    const first = expectOk(await recordDisbursed(TENANT, ID, finance));
+    expect(first.application.status).toBe('DISBURSED');
+    const second = expectOk(await recordDisbursed(TENANT, ID, finance));
+    expect(second.closing.tranches?.map((t) => t.status)).toEqual(['RELEASED', 'RELEASED']);
+    expect(reason(await recordDisbursed(TENANT, ID, finance))).toBe('NO_TRANCHE_TO_RELEASE');
+    const payments = queuedBusinessNotifications().filter((e) => e.subjectRef === ID && e.kind === 'PAYMENT_DISBURSE');
+    expect(payments.map((p) => [p.idempotencyKey, p.payload['minorUnits']])).toEqual([
+      [`business:${ID}:disburse`, half.toString()],
+      [`business:${ID}:disburse:T2`, (facility - half).toString()],
+    ]);
+    // One bureau report for the facility, not one per tranche.
+    expect(queuedBusinessNotifications().filter((e) => e.subjectRef === ID && e.kind === 'BUREAU_REPORT')).toHaveLength(1);
+
+    // The bank settles T1 and rejects T2 (account closed).
+    expectOk(await recordPaymentResult(TENANT, ID, { idempotencyKey: `business:${ID}:disburse`, status: 'SETTLED', source: 'FIXTURE' }, 'partner-bank'));
+    const rejected = expectOk(
+      await recordPaymentResult(
+        TENANT,
+        ID,
+        { idempotencyKey: `business:${ID}:disburse:T2`, status: 'REJECTED', reasonCode: 'AC04', source: 'FIXTURE' },
+        'partner-bank',
+      ),
+    );
+    expect(rejected.closing.tranches?.map((t) => t.status)).toEqual(['SETTLED', 'FAILED']);
+    // The same result again records nothing new.
+    const again = expectOk(
+      await recordPaymentResult(TENANT, ID, { idempotencyKey: `business:${ID}:disburse`, status: 'SETTLED', source: 'FIXTURE' }, 'partner-bank'),
+    );
+    expect(again.events.filter((e) => e.eventType === 'PAYMENT_RESULT_RECORDED')).toHaveLength(2);
+
+    // The failure withdrew the payee confirmation: nothing is re-released until a second person confirms the account again.
+    expect(rejected.closing.payee?.confirmedBy).toBeUndefined();
+    expect(reason(await recordDisbursed(TENANT, ID, finance))).toBe('PAYEE_NOT_CONFIRMED');
+    const doc = rejected.documents[0]?.documentRef ?? '';
+    expectOk(await recordPayee(TENANT, ID, { iban: 'AE070331234567890123456', accountName: 'Corrected LLC', evidenceRef: doc }, officer));
+    expectOk(await confirmPayee(TENANT, ID, checker));
+    const retried = expectOk(await recordDisbursed(TENANT, ID, finance));
+    expect(retried.closing.tranches?.[1]).toMatchObject({ status: 'RELEASED', releases: 2, idempotencyKey: `business:${ID}:disburse:T2:R1` });
+  });
+
   beforeEach(() => resetBusinessStore({ seed: false }));
 
   it('#6 refuses a disbursement earlier than the signed offer’s planned disbursement date, queuing nothing', async () => {
@@ -660,6 +754,7 @@ describe('#12 #13 disbursement: a distinct finance principal, payment and bureau
       { letterVersion: sent.ok ? (sent.value.application.offer?.letterVersion ?? '') : '' },
       officer,
     );
+    await preparePayee(TENANT, ID, officer, checker);
     const early = await recordDisbursed(TENANT, ID, finance);
     expectRefused(early, 'DISBURSEMENT_BEFORE_PLANNED_DATE');
     if (!early.ok) expect(early.error.context).toMatchObject({ plannedDate: isoAfter(14), actualDate: isoAfter(0) });
@@ -684,6 +779,7 @@ describe('#12 #13 disbursement: a distinct finance principal, payment and bureau
     expectRefused(await recordDisbursed(TENANT, ID, officer), 'FOUR_EYES_DISBURSEMENT');
     expect(queuedBusinessNotifications().filter((e) => e.kind === 'PAYMENT_DISBURSE')).toHaveLength(0);
 
+    await preparePayee(TENANT, ID, officer, checker);
     const paid = await recordDisbursed(TENANT, ID, finance);
     expect(paid.ok && paid.value.application.status).toBe('DISBURSED');
     const payment = queuedBusinessNotifications().filter((e) => e.subjectRef === ID && e.kind === 'PAYMENT_DISBURSE');
@@ -693,6 +789,8 @@ describe('#12 #13 disbursement: a distinct finance principal, payment and bureau
     expect(payment[0]?.payload).toMatchObject({
       rail: 'PARTNER_BANK',
       beneficiaryRef: ID,
+      // UAE M5a: paid to the confirmed payee account, by IBAN.
+      beneficiaryIban: 'AE070331234567890123456',
       minorUnits: '80000000',
       currency: 'AED',
     });

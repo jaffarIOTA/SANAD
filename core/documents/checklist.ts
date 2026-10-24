@@ -11,6 +11,7 @@
 
 import { type Result, ok, reject } from '../kernel/result.ts';
 import type { TsaInstant } from '../time/tsa.ts';
+import { type DocumentCheckRule, parseCheckRules } from './document-checks.ts';
 
 export interface ChecklistItem {
   readonly documentType: string;
@@ -19,6 +20,12 @@ export interface ChecklistItem {
   readonly required: boolean;
   /** Seconds from capture after which the document must be re-obtained. Absent = never. */
   readonly validForSeconds?: number;
+  /**
+   * Checks on what the document says (document intelligence D2): shown to the
+   * checker, never counted here — the checklist's status is the person's
+   * decision and the capture date, as it always was.
+   */
+  readonly checks?: readonly DocumentCheckRule[];
 }
 
 export interface DocumentChecklist {
@@ -98,12 +105,15 @@ export function parseDocumentChecklist(input: unknown): Result<DocumentChecklist
         { where },
       );
     }
+    const checks = parseCheckRules(it['checks'], where);
+    if (!checks.ok) return checks;
     items.push({
       documentType: it['documentType'],
       titleEn: it['titleEn'],
       titleAr: it['titleAr'],
       required: it['required'],
       ...(it['validForSeconds'] === undefined ? {} : { validForSeconds: it['validForSeconds'] as number }),
+      ...(checks.value.length === 0 ? {} : { checks: checks.value }),
     });
   }
   return ok({ tenantId: input['tenantId'], programmeId: input['programmeId'], version: input['version'], items });

@@ -11,7 +11,10 @@
  *   is refused (SH-06);
  * - an invoice line whose goods classification is on the register is refused
  *   when the transaction opens (SH-11);
- * - a leg is rendered only against an approved template version (SH-17).
+ * - a leg is rendered only against an approved template version (SH-17);
+ * - a late amount is proposed, billed and given to charity only on the basis,
+ *   after the grace and to the recipients the board ruled (SH-13), and not at
+ *   all where it has ruled none.
  *
  * The values themselves are the board's. Nothing here decides them.
  */
@@ -31,6 +34,29 @@ export interface ApprovedTemplate {
   readonly templateVersionId: string;
 }
 
+/** A charity the board approved to receive late amounts. Its account is where a disbursement is paid. */
+export interface ApprovedRecipient {
+  readonly recipientId: string;
+  readonly nameAr: string;
+  readonly nameEn: string;
+  readonly iban: string;
+}
+
+/**
+ * The board's ruling on late amounts (SH-13, SH-14): a fixed amount per
+ * instalment left unpaid beyond the grace days, held for charity and never the
+ * institution's income, and the recipients it may be given to. A fixed amount
+ * on purpose: the board rules the amount, not a proportion of the debt.
+ */
+export interface LateAmountPositions {
+  /** Names the ruling an amount was computed under; recorded on every charity entry. */
+  readonly computationBasisKey: string;
+  /** Whole days after the due date before an unpaid instalment attracts a late amount. */
+  readonly graceDays: number;
+  readonly amountPerInstalmentMinorUnits: bigint;
+  readonly approvedRecipients: readonly ApprovedRecipient[];
+}
+
 export interface BoardPositions {
   readonly shariahApprovalRef: string;
   /** The shortest risk-holding interval the board accepts, in seconds. A structure may require longer, never shorter. */
@@ -38,6 +64,8 @@ export interface BoardPositions {
   /** Goods classification codes the board excludes. */
   readonly excludedGoods: readonly ExcludedGoods[];
   readonly approvedTemplates: readonly ApprovedTemplate[];
+  /** Absent where the board has ruled no late amounts: none is ever proposed. */
+  readonly lateAmounts?: LateAmountPositions;
 }
 
 export interface InvoiceLineGoods {
@@ -51,7 +79,7 @@ const text = (v: unknown): v is string => typeof v === 'string' && v.trim().leng
 export function parseBoardPositions(input: unknown): Result<BoardPositions> {
   const bad = (reason: string) => reject('OP-DETERMINACY', reason, 'The board positions do not load', { reason });
   if (!isRecord(input)) return bad('BOARD_POSITIONS_MALFORMED');
-  const { shariahApprovalRef, minimumRiskPeriodSeconds, excludedGoods, approvedTemplates } = input;
+  const { shariahApprovalRef, minimumRiskPeriodSeconds, excludedGoods, approvedTemplates, lateAmounts } = input;
   if (!text(shariahApprovalRef)) return bad('BOARD_APPROVAL_REF_REQUIRED');
   if (
     typeof minimumRiskPeriodSeconds !== 'number' ||
@@ -69,6 +97,8 @@ export function parseBoardPositions(input: unknown): Result<BoardPositions> {
     !approvedTemplates.every((t) => isRecord(t) && text(t['document']) && text(t['templateVersionId']))
   )
     return bad('BOARD_TEMPLATES_INVALID');
+  const late = lateAmounts === undefined ? undefined : parseLateAmounts(lateAmounts);
+  if (late === null) return bad('BOARD_LATE_AMOUNTS_INVALID');
   return ok({
     shariahApprovalRef,
     minimumRiskPeriodSeconds,
@@ -80,7 +110,72 @@ export function parseBoardPositions(input: unknown): Result<BoardPositions> {
       document: String(t['document']),
       templateVersionId: String(t['templateVersionId']),
     })),
+    ...(late === undefined ? {} : { lateAmounts: late }),
   });
+}
+
+/**
+ * The positions as configuration JSON: what a BOARD_POSITIONS revision carries and `parseBoardPositions` reads back
+ * unchanged. A revision that changes the goods register carries every other position as it stood.
+ */
+export function boardPositionsToJson(b: BoardPositions): Record<string, unknown> {
+  return {
+    shariahApprovalRef: b.shariahApprovalRef,
+    minimumRiskPeriodSeconds: b.minimumRiskPeriodSeconds,
+    excludedGoods: b.excludedGoods.map((g) => ({ ...g })),
+    approvedTemplates: b.approvedTemplates.map((t) => ({ ...t })),
+    ...(b.lateAmounts === undefined
+      ? {}
+      : {
+          lateAmounts: {
+            computationBasisKey: b.lateAmounts.computationBasisKey,
+            graceDays: b.lateAmounts.graceDays,
+            amountPerInstalmentMinorUnits: b.lateAmounts.amountPerInstalmentMinorUnits.toString(),
+            approvedRecipients: b.lateAmounts.approvedRecipients.map((r) => ({ ...r })),
+          },
+        }),
+  };
+}
+
+const SAUDI_IBAN = /^SA\d{22}$/;
+
+/** The late-amount ruling, or null where any part of it is malformed: a ruling half-read is not applied. */
+function parseLateAmounts(input: unknown): LateAmountPositions | null {
+  if (!isRecord(input)) return null;
+  const { computationBasisKey, graceDays, amountPerInstalmentMinorUnits, approvedRecipients } = input;
+  if (!text(computationBasisKey)) return null;
+  if (typeof graceDays !== 'number' || !Number.isInteger(graceDays) || graceDays < 0 || graceDays > 90) return null;
+  if (typeof amountPerInstalmentMinorUnits !== 'string' || !/^[1-9]\d{0,11}$/.test(amountPerInstalmentMinorUnits))
+    return null;
+  if (
+    !Array.isArray(approvedRecipients) ||
+    !approvedRecipients.every(
+      (r) =>
+        isRecord(r) &&
+        text(r['recipientId']) &&
+        text(r['nameAr']) &&
+        text(r['nameEn']) &&
+        typeof r['iban'] === 'string' &&
+        SAUDI_IBAN.test(r['iban']),
+    )
+  )
+    return null;
+  const ids = approvedRecipients.map((r) => String((r as Record<string, unknown>)['recipientId']));
+  if (new Set(ids).size !== ids.length) return null;
+  return {
+    computationBasisKey,
+    graceDays,
+    amountPerInstalmentMinorUnits: BigInt(amountPerInstalmentMinorUnits),
+    approvedRecipients: approvedRecipients.map((r) => {
+      const x = r as Record<string, unknown>;
+      return {
+        recipientId: String(x['recipientId']),
+        nameAr: String(x['nameAr']),
+        nameEn: String(x['nameEn']),
+        iban: String(x['iban']),
+      };
+    }),
+  };
 }
 
 /** A structure is in force only under the board's approval and at or above its risk floor. */

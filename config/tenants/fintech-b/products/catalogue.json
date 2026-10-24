@@ -114,19 +114,38 @@
             "maxContributionPerTenThousand": 10000,
             "minYearsInOperation": 0,
             "purposes": [
-              { "code": "WORKING_CAPITAL", "labelEn": "Working capital", "labelAr": "رأس المال العامل" },
+              {
+                "code": "WORKING_CAPITAL",
+                "labelEn": "Working capital",
+                "labelAr": "رأس المال العامل"
+              },
               {
                 "code": "CAPEX_OPEX",
                 "labelEn": "Capital and operating expenditure",
                 "labelAr": "النفقات الرأسمالية والتشغيلية"
               }
             ],
-            "collateral": [],
-            "note": "ILLUSTRATIVE — the former single term sheet converted to one variant (2026-10-08); purposes, grace and contribution band are placeholders until the company's SME product paper is supplied"
+            "collateral": [
+              {
+                "code": "PERSONAL_GUARANTEE",
+                "labelEn": "Personal guarantee of the owners",
+                "labelAr": "الكفالة الشخصية للملاك"
+              },
+              {
+                "code": "PROMISSORY_NOTE",
+                "labelEn": "Promissory note",
+                "labelAr": "سند لأمر"
+              }
+            ],
+            "note": "ILLUSTRATIVE — the former single term sheet converted to one variant (2026-10-08); purposes, grace and contribution band are placeholders until the company's SME product paper is supplied",
+            "documentChecklistRef": "sme-sa-term"
           }
         ],
         "credit": {
-          "eligibleSizes": ["MICRO", "SMALL"],
+          "eligibleSizes": [
+            "MICRO",
+            "SMALL"
+          ],
           "minDebtServiceCoverPerTenThousand": 13000,
           "maxFinancingShareOfRevenuePerTenThousand": 2000,
           "source": "TENANT_CREDIT_POLICY",
@@ -168,19 +187,38 @@
             "maxContributionPerTenThousand": 10000,
             "minYearsInOperation": 0,
             "purposes": [
-              { "code": "WORKING_CAPITAL", "labelEn": "Working capital", "labelAr": "رأس المال العامل" },
+              {
+                "code": "WORKING_CAPITAL",
+                "labelEn": "Working capital",
+                "labelAr": "رأس المال العامل"
+              },
               {
                 "code": "CAPEX_OPEX",
                 "labelEn": "Capital and operating expenditure",
                 "labelAr": "النفقات الرأسمالية والتشغيلية"
               }
             ],
-            "collateral": [],
-            "note": "ILLUSTRATIVE — the former single term sheet converted to one variant (2026-10-08); purposes, grace and contribution band are placeholders until the company's SME product paper is supplied"
+            "collateral": [
+              {
+                "code": "PERSONAL_GUARANTEE",
+                "labelEn": "Personal guarantee of the owners",
+                "labelAr": "الكفالة الشخصية للملاك"
+              },
+              {
+                "code": "PROMISSORY_NOTE",
+                "labelEn": "Promissory note",
+                "labelAr": "سند لأمر"
+              }
+            ],
+            "note": "ILLUSTRATIVE — the former single term sheet converted to one variant (2026-10-08); purposes, grace and contribution band are placeholders until the company's SME product paper is supplied",
+            "documentChecklistRef": "sme-sa-term"
           }
         ],
         "credit": {
-          "eligibleSizes": ["MICRO", "SMALL"],
+          "eligibleSizes": [
+            "MICRO",
+            "SMALL"
+          ],
           "minDebtServiceCoverPerTenThousand": 13000,
           "maxFinancingShareOfRevenuePerTenThousand": 2000,
           "source": "TENANT_CREDIT_POLICY",

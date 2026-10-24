@@ -1,0 +1,109 @@
+{
+  "version": "2026-10-18.2",
+  "source": "TENANT_CONFIGURATION",
+  "note": "ILLUSTRATIVE — Bank A's Wasl programmes (each with its anchor, the supplier whose cleared invoices it finances) and the distributors that draw under them, written 2026-10-17 from the development book's invoices so a transaction can open against real reference rows. Invented companies and registration numbers; none is a real entity. The institution's own programme and onboarding records replace this file before any real use. 2026-10-18 (Wasl W2): the institution itself, the buyer on the anchor's ownership invoice (gate 1 checks the cleared invoice names it), and how long a sale offer stays open for the distributor's acceptance. 2026-10-18 (Wasl W3): each distributor's legal form and its authorised signatories — the people who may sign in to the SME portal and accept a sale offer for it, by party reference (the national identity service resolves a reference to the person; no national identifier is held here). Invented references; the commercial register (Wathq) and the distributor's own board resolution replace them. 2026-10-18 (Wasl W4a): each anchor's settlement IBAN, where the institution pays the cost of the goods it buys — invented, in the Saudi IBAN format; the anchor's confirmed account replaces it.",
+  "institution": {
+    "registrationNo": "1010000100",
+    "nameEn": "Bank A (illustrative)",
+    "nameAr": "البنك أ (توضيحي)"
+  },
+  "sequencing": {
+    "saleOfferValiditySeconds": 172800
+  },
+  "programmes": [
+    {
+      "programmeId": "prg-0001",
+      "nameEn": "Al-Ufuq materials distributor programme",
+      "nameAr": "برنامج موزعي الأفق للمواد",
+      "structureCode": "MURABAHA",
+      "programmeLimitMinorUnits": "5000000000",
+      "anchor": {
+        "registrationNo": "1010000002",
+        "nameEn": "Al-Ufuq Materials Company Limited",
+        "nameAr": "شركة الأفق للمواد المحدودة",
+        "settlementIban": "SA0380000000608010167519"
+      }
+    },
+    {
+      "programmeId": "prg-0002",
+      "nameEn": "Najd logistics distributor programme",
+      "nameAr": "برنامج موزعي نجد للخدمات اللوجستية",
+      "structureCode": "MURABAHA",
+      "programmeLimitMinorUnits": "2500000000",
+      "anchor": {
+        "registrationNo": "1010000044",
+        "nameEn": "Najd Logistics Company",
+        "nameAr": "شركة نجد للخدمات اللوجستية",
+        "settlementIban": "SA4420000001234567891234"
+      }
+    }
+  ],
+  "distributors": [
+    {
+      "counterpartyId": "Rawabi Industrial Supplies Establishment",
+      "registrationNo": "4030000003",
+      "nameEn": "Rawabi Industrial Supplies Establishment",
+      "nameAr": "مؤسسة روابي للتوريدات الصناعية",
+      "legalForm": "ESTABLISHMENT",
+      "signatories": [
+        { "partyRef": "sig-rawabi-01", "nameEn": "Rawabi's owner (illustrative)", "nameAr": "مالك روابي (توضيحي)" }
+      ]
+    },
+    {
+      "counterpartyId": "Tamam Foodstuff Trading Company",
+      "registrationNo": "7001000019",
+      "nameEn": "Tamam Foodstuff Trading Company",
+      "nameAr": "شركة تمام لتجارة المواد الغذائية",
+      "legalForm": "LLC",
+      "signatories": [
+        {
+          "partyRef": "sig-tamam-01",
+          "nameEn": "Tamam's general manager (illustrative)",
+          "nameAr": "المدير العام لتمام (توضيحي)"
+        }
+      ]
+    },
+    {
+      "counterpartyId": "Bahr Al-Khaleej Shipping Establishment",
+      "registrationNo": "1010000077",
+      "nameEn": "Bahr Al-Khaleej Shipping Establishment",
+      "nameAr": "مؤسسة بحر الخليج للشحن",
+      "legalForm": "ESTABLISHMENT",
+      "signatories": [
+        {
+          "partyRef": "sig-bahr-01",
+          "nameEn": "Bahr Al-Khaleej's owner (illustrative)",
+          "nameAr": "مالك بحر الخليج (توضيحي)"
+        }
+      ]
+    },
+    {
+      "counterpartyId": "Najd Logistics Company",
+      "registrationNo": "1010000044",
+      "nameEn": "Najd Logistics Company",
+      "nameAr": "شركة نجد للخدمات اللوجستية",
+      "legalForm": "LLC",
+      "signatories": [
+        {
+          "partyRef": "sig-najd-01",
+          "nameEn": "Najd's general manager (illustrative)",
+          "nameAr": "المدير العام لنجد (توضيحي)"
+        }
+      ]
+    },
+    {
+      "counterpartyId": "Al-Ufuq Materials Company Limited",
+      "registrationNo": "1010000002",
+      "nameEn": "Al-Ufuq Materials Company Limited",
+      "nameAr": "شركة الأفق للمواد المحدودة",
+      "legalForm": "LLC",
+      "signatories": [
+        {
+          "partyRef": "sig-ufuq-01",
+          "nameEn": "Al-Ufuq's general manager (illustrative)",
+          "nameAr": "المدير العام للأفق (توضيحي)"
+        }
+      ]
+    }
+  ]
+}

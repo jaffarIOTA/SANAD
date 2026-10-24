@@ -126,6 +126,16 @@ export function statusChip(v: BusinessApplicationView, nowEpochSeconds: bigint):
       tone: 'bad',
     };
   if (a.status === 'DISBURSED') return { code: 'ON_TRACK', en: 'On track', ar: 'منتظم', tone: 'good' };
+  // D4: a case waiting on the applicant says so; one whose documents just came back is ready for the officer again.
+  if (v.documentRequest?.status === 'AWAITING')
+    return {
+      code: 'AWAITING_DOCUMENTS',
+      en: `Awaiting ${String(v.documentRequest.count)} documents from the applicant`,
+      ar: `بانتظار ${String(v.documentRequest.count)} مستندات من مقدم الطلب`,
+      tone: 'warn',
+    };
+  if (v.documentRequest?.status === 'RECEIVED')
+    return { code: 'DOCUMENTS_RECEIVED', en: 'Documents received — ready', ar: 'وصلت المستندات — جاهز', tone: 'good' };
 
   const clock = stageClock(v, nowEpochSeconds);
   const ofTarget = (en: string, ar: string): StatusChip => {
@@ -430,6 +440,10 @@ export const arabicDigits = (s: string): string =>
 
 export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar: string }>> = {
   FIGURE_PROPOSED: { en: 'Figure recorded. It is used once verified.', ar: 'سُجّل الرقم، ويُعتمد بعد التحقق منه.' },
+  STATEMENT_READ: {
+    en: 'Figures read from the statement. Verify each one against the document before it is used.',
+    ar: 'قُرئت الأرقام من القوائم المالية. تحقّق من كل رقم مقابل المستند قبل اعتماده.',
+  },
   FIGURE_VERIFIED: { en: 'Figure verified.', ar: 'تم التحقق من الرقم.' },
   FIGURE_CORRECTED: {
     en: 'Correction recorded. The corrected figure is verified by a second principal.',
@@ -438,6 +452,106 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
   DOCUMENT_PRESENTED: {
     en: 'Document recorded by reference. It counts once the checker validates it.',
     ar: 'سُجّل المستند بمرجعه، ويُحتسب بعد تحقق المراجِع منه.',
+  },
+  OFFER_PDF_RENDERED: {
+    en: 'Letter rendered as a PDF and stored by its fingerprint.',
+    ar: 'أُصدر الخطاب بصيغة PDF وحُفظ ببصمته.',
+  },
+  LETTER_SEALED: {
+    en: 'Signed letter sealed with the institution’s digital signature and stored by its fingerprint.',
+    ar: 'خُتم الخطاب الموقّع بالتوقيع الرقمي للمؤسسة وحُفظ ببصمته.',
+  },
+  LATE_CHARGES_ASSESSED: { en: 'Late charges assessed.', ar: 'احتُسبت رسوم التأخير.' },
+  LATE_CHARGE_WAIVED: { en: 'Late charge waived.', ar: 'تم التنازل عن رسوم التأخير.' },
+  HARDSHIP_SET: {
+    en: 'Hardship recorded: collections and late charges paused.',
+    ar: 'سُجّلت حالة التعثر: أوقف التحصيل ورسوم التأخير.',
+  },
+  HARDSHIP_LIFTED: { en: 'Hardship lifted.', ar: 'رُفعت حالة التعثر.' },
+  RESTRUCTURE_PROPOSED: {
+    en: 'Restructuring proposed. It takes effect once a second person approves it.',
+    ar: 'اقتُرحت إعادة الهيكلة، وتسري بعد اعتمادها من شخص آخر.',
+  },
+  RESTRUCTURE_APPROVED: {
+    en: 'Restructuring approved: the new schedule applies.',
+    ar: 'اعتُمدت إعادة الهيكلة: يسري الجدول الجديد.',
+  },
+  COLLECTIONS_PRESENTED: {
+    en: 'Instalments presented for collection. Each result arrives from the channel.',
+    ar: 'قُدّمت الأقساط للتحصيل، وتصل نتيجة كل منها من القناة.',
+  },
+  COLLECTION_RESULT_RECORDED: { en: 'Collection result recorded.', ar: 'سُجّلت نتيجة التحصيل.' },
+  SERVICING_CYCLE_RUN: {
+    en: 'Today’s servicing cycle ran. Running it again today changes nothing.',
+    ar: 'نُفّذت دورة خدمة التمويل لليوم. ولا يغيّر تشغيلها مجدداً اليوم شيئاً.',
+  },
+  BUREAU_STATUS_REPORTED: {
+    en: 'This month’s status queued for the credit bureau.',
+    ar: 'أُدرجت حالة هذا الشهر للإبلاغ إلى المكتب الائتماني.',
+  },
+  REPAYMENT_RECORDED: {
+    en: 'Repayment recorded. A manual receipt counts once a second person confirms it against the statement.',
+    ar: 'سُجّل السداد. يُحتسب المبلغ المُدخل يدوياً بعد تأكيده من شخص آخر مقابل الكشف.',
+  },
+  REPAYMENT_CONFIRMED: { en: 'Repayment confirmed.', ar: 'تم تأكيد السداد.' },
+  TAWARRUQ_COMMODITY_PURCHASED: {
+    en: 'Commodity bought from the broker at the quoted cost.',
+    ar: 'اشتُريت السلعة من الوسيط بالتكلفة المسعّرة.',
+  },
+  TAWARRUQ_SOLD_TO_CUSTOMER: {
+    en: 'Commodity sold to the customer for the deferred price.',
+    ar: 'بيعت السلعة للعميل بالثمن المؤجل.',
+  },
+  TAWARRUQ_TITLE_TRANSFERRED: { en: 'Title passed to the customer.', ar: 'انتقلت الملكية إلى العميل.' },
+  TAWARRUQ_PROCEEDS_REALISED: {
+    en: 'Commodity sold on; the proceeds are ready to pay.',
+    ar: 'بيعت السلعة للغير، والحصيلة جاهزة للصرف.',
+  },
+  LOAN_BOOKED: {
+    en: 'Booked in the loan system. The loan account number is recorded.',
+    ar: 'سُجّل في نظام القروض، وحُفظ رقم حساب التمويل.',
+  },
+  TRANCHES_PLANNED: { en: 'Drawdown plan recorded.', ar: 'سُجّلت خطة السحب.' },
+  TRANCHE_RELEASED: {
+    en: 'Tranche released to the partner bank. Its result arrives as the bank’s status report.',
+    ar: 'صُرفت الدفعة إلى البنك الشريك، وتصل نتيجتها في تقرير حالة البنك.',
+  },
+  PAYMENT_RESULT_RECORDED: { en: 'Bank result recorded.', ar: 'سُجّلت نتيجة البنك.' },
+  SIGNING_STARTED: {
+    en: 'Signing opened at the identity service. Check for the signature once the signatory has signed.',
+    ar: 'بدأ التوقيع لدى خدمة الهوية. تحقّق من التوقيع بعد أن يوقّع المفوّض.',
+  },
+  SIGNED_THROUGH_IDENTITY: { en: 'Signature confirmed by the identity service.', ar: 'أكدت خدمة الهوية التوقيع.' },
+  CP_SATISFIED: {
+    en: 'Evidence recorded. The condition counts once a second person verifies it.',
+    ar: 'سُجّل الدليل، ويُحتسب الشرط بعد تحقق شخص آخر منه.',
+  },
+  CP_VERIFIED: { en: 'Condition precedent verified.', ar: 'تم التحقق من الشرط المسبق.' },
+  PAYEE_RECORDED: {
+    en: 'Payee account recorded. It is used once a second person confirms it.',
+    ar: 'سُجّل حساب المستفيد، ويُعتمد بعد تأكيده من شخص آخر.',
+  },
+  PAYEE_CONFIRMED: { en: 'Payee account confirmed.', ar: 'تم تأكيد حساب المستفيد.' },
+  CONDITION_ADDED: { en: 'Condition attached to the decision pack.', ar: 'أُضيف الشرط إلى حزمة القرار.' },
+  COVENANT_ADDED: { en: 'Covenant attached to the decision pack.', ar: 'أُضيف التعهد إلى حزمة القرار.' },
+  PACK_ITEM_WITHDRAWN: { en: 'Withdrawn from the decision pack.', ar: 'سُحب من حزمة القرار.' },
+  DEVIATION_JUSTIFIED: { en: 'Justification recorded.', ar: 'سُجّل المبرر.' },
+  COLLATERAL_RECORDED: {
+    en: 'Collateral recorded. It counts once a second person confirms it.',
+    ar: 'سُجّل الضمان، ويُحتسب بعد تأكيده من شخص آخر.',
+  },
+  GUARANTEE_RECORDED: {
+    en: 'Guarantee recorded. It counts once a second person confirms it.',
+    ar: 'سُجّلت الكفالة، وتُحتسب بعد تأكيدها من شخص آخر.',
+  },
+  SECURITY_CONFIRMED: {
+    en: 'Confirmed. It now counts towards the security.',
+    ar: 'تم التأكيد، ويُحتسب الآن ضمن الضمانات.',
+  },
+  SECURITY_WITHDRAWN: { en: 'Withdrawn. It no longer counts.', ar: 'سُحب البند، ولم يعد يُحتسب.' },
+  DOCUMENT_UPLOADED: {
+    en: 'File uploaded and recorded by its fingerprint. It counts once the checker validates it.',
+    ar: 'رُفع الملف وسُجّل ببصمته، ويُحتسب بعد تحقق المراجِع منه.',
   },
   DOCUMENT_VALIDATED: { en: 'Document validated.', ar: 'تم التحقق من المستند واعتماده.' },
   DOCUMENT_REJECTED: {
@@ -489,6 +603,10 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
   },
   INTAKE_WITHDRAWN: { en: 'Application withdrawn.', ar: 'سُحب الطلب.' },
   OFFER_GENERATED: { en: 'Offer letter generated.', ar: 'أُعدّ خطاب العرض.' },
+  DOCUMENTS_REQUESTED: {
+    en: 'Documents requested: the notification to the applicant is queued on the outbox.',
+    ar: 'طُلبت المستندات: الإشعار إلى مقدم الطلب في قائمة الإرسال.',
+  },
   OFFER_SENT: {
     en: 'Offer sent: the notification is queued on the outbox.',
     ar: 'أُرسل العرض: الإشعار في قائمة الإرسال.',
@@ -514,6 +632,26 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
   DOCUMENTS_MISSING: {
     en: 'Every mandatory document is presented before the application goes to credit assessment.',
     ar: 'يجب تقديم جميع المستندات الإلزامية قبل الإحالة إلى التقييم.',
+  },
+  NO_DOCUMENT_GAPS: {
+    en: 'Nothing to request: every required document is in, and none is failing a check.',
+    ar: 'لا شيء لطلبه: جميع المستندات الإلزامية مقدَّمة، ولا يفشل أي منها في فحص.',
+  },
+  NO_CONTACT_CHANNEL: {
+    en: 'The applicant has no email or mobile on record to send the request to.',
+    ar: 'لا يوجد لمقدم الطلب بريد إلكتروني أو جوال مسجّل لإرسال الطلب إليه.',
+  },
+  NO_OPEN_DOCUMENT_REQUEST: {
+    en: 'No request for documents is open on this application.',
+    ar: 'لا يوجد طلب مستندات مفتوح على هذا الطلب.',
+  },
+  AUTHENTICITY_UNRESOLVED: {
+    en: 'The issuer did not confirm this document. To accept it, write how you resolved that (at least a sentence).',
+    ar: 'لم تؤكد الجهة المصدرة هذا المستند. لقبوله، اكتب كيف عالجت ذلك (جملة على الأقل).',
+  },
+  RESOLUTION_TOO_LONG: {
+    en: 'A resolution is at most 500 characters.',
+    ar: 'لا تتجاوز المعالجة ٥٠٠ حرف.',
   },
   FOUR_EYES_REQUIRED: {
     en: 'Whoever keyed a figure or presented a document does not verify it; a second principal does (four eyes).',
@@ -870,6 +1008,415 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
   TRN_NOT_RECORDED: {
     en: 'Record the business’s tax registration number before checking it.',
     ar: 'سجّل رقم التسجيل الضريبي للمنشأة قبل التحقق منه.',
+  },
+  // Offer letter PDF. A refusal here stored nothing.
+  DOCUMENT_ENGINE_UNAVAILABLE: {
+    en: 'The document engine did not render the letter, so nothing was stored. The preview below is the letter.',
+    ar: 'لم يُصدر محرك المستندات الخطاب، فلم يُحفظ شيء. المعاينة أدناه هي الخطاب.',
+  },
+  // Reading figures from a statement. A refusal here proposed nothing; the figures can still be keyed by hand.
+  DOCUMENT_READING_UNAVAILABLE: {
+    en: 'The document engine did not read the statement, so nothing was proposed. Key the figures from the statement.',
+    ar: 'لم يقرأ محرك المستندات القوائم المالية، فلم يُقترح شيء. أدخل الأرقام من القوائم يدويًا.',
+  },
+  STATEMENT_TYPE_NOT_READ: {
+    en: 'Figures are read only from the financial statements your institution’s policy names.',
+    ar: 'لا تُقرأ الأرقام إلا من القوائم المالية التي تحددها سياسة مؤسستك.',
+  },
+  STATEMENT_NOT_UPLOADED_PDF: {
+    en: 'Only an uploaded PDF statement can be read. Upload the file, or key the figures.',
+    ar: 'لا يُقرأ إلا ملف PDF مرفوع للقوائم المالية. ارفع الملف أو أدخل الأرقام يدويًا.',
+  },
+  STATEMENT_NOTHING_READ: {
+    en: 'No figure could be read with enough confidence. Key the figures from the statement.',
+    ar: 'تعذّرت قراءة أي رقم بثقة كافية. أدخل الأرقام من القوائم المالية يدويًا.',
+  },
+  STATEMENT_SCALE_NOT_UNITS: {
+    en: 'The statement is presented in thousands or millions. Key its figures by hand so the scale is applied by a person.',
+    ar: 'القوائم معروضة بالآلاف أو الملايين. أدخل أرقامها يدويًا ليطبّق المقياسَ شخصٌ.',
+  },
+  STATEMENT_POLICY_NOT_FOUND: {
+    en: 'No statement-reading policy is configured for your institution, so nothing was read.',
+    ar: 'لم تُضبط سياسة لقراءة القوائم المالية لمؤسستك، فلم يُقرأ شيء.',
+  },
+  STATEMENT_POLICY_INVALID: {
+    en: 'Your institution’s statement-reading policy is not valid, so nothing was read. Report this to the administrator.',
+    ar: 'سياسة قراءة القوائم المالية لمؤسستك غير صالحة، فلم يُقرأ شيء. أبلغ مسؤول النظام.',
+  },
+  // Sealing the signed letter. A refusal here sealed and stored nothing.
+  DOCUMENT_SIGNING_UNAVAILABLE: {
+    en: 'The document engine or the signing service did not seal the letter, so nothing was stored. Try again.',
+    ar: 'لم يختم محرك المستندات أو خدمة التوقيع الخطاب، فلم يُحفظ شيء. أعد المحاولة.',
+  },
+  LETTER_NOT_SIGNED: {
+    en: 'The letter is sealed only after the customer has signed it.',
+    ar: 'لا يُختم الخطاب إلا بعد أن يوقّعه العميل.',
+  },
+  LETTER_ALREADY_SEALED: { en: 'The signed letter is already sealed.', ar: 'الخطاب الموقّع مختوم بالفعل.' },
+  LETTER_PDF_NOT_RENDERED: {
+    en: 'Render the signed letter version as a PDF first; the seal goes on that PDF.',
+    ar: 'أصدر نسخة PDF من إصدار الخطاب الموقّع أولًا؛ فالختم يوضع على ذلك الملف.',
+  },
+  SEAL_NOT_VALID: {
+    en: 'The seal did not validate (signature, certificate chain or integrity), so it was not recorded.',
+    ar: 'لم يُتحقق من صحة الختم (التوقيع أو سلسلة الشهادات أو سلامة الملف)، فلم يُسجَّل.',
+  },
+  // Servicing (S3). A refusal here charged, waived and restructured nothing.
+  SERVICING_REASON_REQUIRED: {
+    en: 'State the reason in 10 to 500 characters.',
+    ar: 'اذكر السبب في عشرة أحرف إلى خمسمئة حرف.',
+  },
+  NO_LATE_CHARGE_DUE: {
+    en: 'No instalment is overdue beyond the grace days and not yet charged.',
+    ar: 'لا يوجد قسط متأخر بعد أيام السماح لم تُحتسب عليه رسوم.',
+  },
+  LATE_CHARGE_NOT_FOUND: { en: 'No such late charge is outstanding.', ar: 'لا توجد رسوم تأخير قائمة بهذا الوصف.' },
+  FOUR_EYES_SELF_WAIVER: {
+    en: 'You assessed this charge; another person waives it.',
+    ar: 'أنت من احتسب هذه الرسوم؛ يتنازل عنها شخص آخر.',
+  },
+  HARDSHIP_HOLD: {
+    en: 'Collections and late charges are paused while the customer is in hardship.',
+    ar: 'التحصيل ورسوم التأخير متوقفة ما دام العميل في حالة تعثر.',
+  },
+  HARDSHIP_ALREADY_SET: { en: 'The customer is already in hardship.', ar: 'العميل في حالة تعثر مسبقاً.' },
+  HARDSHIP_NOT_SET: { en: 'The customer is not in hardship.', ar: 'العميل ليس في حالة تعثر.' },
+  RESTRUCTURE_PENDING: {
+    en: 'A restructuring is already awaiting approval.',
+    ar: 'توجد إعادة هيكلة بانتظار الاعتماد.',
+  },
+  RESTRUCTURE_NOT_FOUND: { en: 'No such restructuring.', ar: 'لا توجد إعادة هيكلة بهذا الوصف.' },
+  RESTRUCTURE_ALREADY_APPROVED: {
+    en: 'This restructuring is already approved.',
+    ar: 'إعادة الهيكلة هذه معتمدة مسبقاً.',
+  },
+  RESTRUCTURE_TERMS_INVALID: {
+    en: 'The new schedule needs a whole number of instalments within the policy’s limit, the first falling after today.',
+    ar: 'يحتاج الجدول الجديد إلى عدد صحيح من الأقساط ضمن حد السياسة، أولها بعد اليوم.',
+  },
+  NOTHING_TO_RESTRUCTURE: {
+    en: 'Nothing is owed, so there is nothing to restructure.',
+    ar: 'لا يوجد مستحق، فلا شيء يُعاد هيكلته.',
+  },
+  TOTAL_WOULD_CHANGE: {
+    en: 'An Islamic facility is restructured without changing what is owed.',
+    ar: 'يُعاد هيكلة التمويل الإسلامي دون تغيير المبلغ المستحق.',
+  },
+  SERVICING_POLICY_INVALID: {
+    en: 'The institution’s servicing policy is not readable.',
+    ar: 'تعذّرت قراءة سياسة خدمة التمويل لدى المؤسسة.',
+  },
+  SERVICING_POLICY_NOT_FOUND: {
+    en: 'No servicing policy is configured for this institution.',
+    ar: 'لا توجد سياسة خدمة تمويل مهيأة لهذه المؤسسة.',
+  },
+  // Servicing (S2). A refusal here presented and reported nothing.
+  NOTHING_TO_COLLECT: { en: 'No instalment is due for collection now.', ar: 'لا يوجد قسط مستحق للتحصيل الآن.' },
+  SERVICING_CYCLE_FAILED: {
+    en: 'The servicing cycle stopped before the end. What it finished is recorded; running it again continues safely.',
+    ar: 'توقفت دورة خدمة التمويل قبل اكتمالها. ما أُنجز منها مسجّل، وإعادة تشغيلها تكمل بأمان.',
+  },
+  COLLECTION_NOT_FOUND: {
+    en: 'No presented instalment matches that result.',
+    ar: 'لا يوجد قسط مُقدَّم يطابق هذه النتيجة.',
+  },
+  BUREAU_ALREADY_REPORTED: {
+    en: 'This month’s status is already reported to the bureau.',
+    ar: 'حالة هذا الشهر مُبلَّغة للمكتب الائتماني مسبقاً.',
+  },
+  // Servicing (S1). A refusal here recorded nothing.
+  REPAYMENT_AMOUNT_INVALID: { en: 'A repayment is a positive amount.', ar: 'السداد مبلغ موجب.' },
+  REPAYMENT_DATE_INVALID: {
+    en: 'A repayment is dated between disbursement and today.',
+    ar: 'يكون تاريخ السداد بين الصرف واليوم.',
+  },
+  REPAYMENT_REF_INVALID: {
+    en: 'Record the bank’s or channel’s reference for the receipt.',
+    ar: 'سجّل مرجع البنك أو القناة للمبلغ المستلم.',
+  },
+  REPAYMENT_DUPLICATE: { en: 'This receipt is already recorded.', ar: 'هذا المبلغ مُسجَّل مسبقاً.' },
+  REPAYMENT_NOT_FOUND: { en: 'That repayment is not on the facility.', ar: 'هذا السداد غير موجود على التمويل.' },
+  REPAYMENT_ALREADY_CONFIRMED: { en: 'That repayment is already confirmed.', ar: 'هذا السداد مؤكَّد مسبقاً.' },
+  // Tawarruq execution (KSA K4). A refusal here bought, sold and paid nothing.
+  NOT_TAWARRUQ: { en: 'This application is not a Tawarruq.', ar: 'هذا الطلب ليس تورقاً.' },
+  TAWARRUQ_BEFORE_SIGNATURE: {
+    en: 'The commodity is bought only once the customer has signed.',
+    ar: 'لا تُشترى السلعة إلا بعد توقيع العميل.',
+  },
+  TAWARRUQ_STEP_OUT_OF_ORDER: {
+    en: 'The Tawarruq steps run in order: buy, sell to the customer, transfer title, sell on.',
+    ar: 'تجري خطوات التورق بالترتيب: الشراء، ثم البيع للعميل، ثم نقل الملكية، ثم البيع للغير.',
+  },
+  TAWARRUQ_INCOMPLETE: {
+    en: 'The proceeds are paid only after the commodity is bought, sold to the customer, title has passed and it is sold on.',
+    ar: 'لا تُصرف الحصيلة إلا بعد شراء السلعة وبيعها للعميل ونقل ملكيتها وبيعها للغير.',
+  },
+  TRANCHES_NOT_PERMITTED: {
+    en: 'A Tawarruq pays its proceeds once; it is not drawn in tranches.',
+    ar: 'يُصرف التورق دفعة واحدة؛ ولا يُسحب على دفعات.',
+  },
+  BROKER_REFUSED: {
+    en: 'The commodity broker did not confirm the step, so nothing was recorded.',
+    ar: 'لم يؤكد وسيط السلع الخطوة، فلم يُسجَّل شيء.',
+  },
+  // Booking in the loan system (UAE M6). A refusal here booked nothing.
+  LOAN_ALREADY_BOOKED: {
+    en: 'This loan is already booked in the loan system.',
+    ar: 'هذا التمويل مُسجَّل مسبقاً في نظام القروض.',
+  },
+  LOAN_BOOKING_REF_INVALID: {
+    en: 'The loan system returned no usable reference, so nothing was recorded.',
+    ar: 'لم يُرجع نظام القروض مرجعاً صالحاً، فلم يُسجَّل شيء.',
+  },
+  LOAN_PRODUCT_NOT_MAPPED: {
+    en: 'This product has no loan-system product code configured, so it cannot be booked.',
+    ar: 'لا يوجد رمز منتج في نظام القروض مهيأ لهذا المنتج، فلا يمكن تسجيله.',
+  },
+  LOAN_BOOKING_NOT_CONFIGURED: {
+    en: 'No loan-system product mapping is configured for this institution.',
+    ar: 'لا توجد مطابقة لمنتجات نظام القروض مهيأة لهذه المؤسسة.',
+  },
+  LOAN_BOOKING_REFUSED: {
+    en: 'The loan system did not book the loan. Nothing was recorded; check the product set-up in the loan system.',
+    ar: 'لم يسجّل نظام القروض التمويل، ولم يُسجَّل شيء. تحقّق من إعداد المنتج في نظام القروض.',
+  },
+  LOAN_RATE_MISMATCH: {
+    en: 'The loan system answered with a different interest rate from the one the borrower signed for, so the booking was refused. The signed rate is the contract’s rate.',
+    ar: 'أجاب نظام القروض بمعدل ربح مختلف عن المعدل الذي وقّع عليه المقترض، فرُفض التسجيل. المعدل الموقّع هو معدل العقد.',
+  },
+  LOAN_BOOKING_INVALID: { en: 'The booking terms are incomplete.', ar: 'شروط التسجيل غير مكتملة.' },
+  // Tranches and payment results (UAE M5b). A refusal here paid nothing.
+  TRANCHES_LOCKED: {
+    en: 'The drawdown plan changes only before the first release.',
+    ar: 'لا تتغير خطة السحب إلا قبل الصرف الأول.',
+  },
+  TRANCHES_INVALID: {
+    en: 'A plan is 1 to 12 positive tranches, dated in order and not before the offer’s disbursement date.',
+    ar: 'الخطة من دفعة إلى اثنتي عشرة دفعة موجبة، بتواريخ متتالية لا تسبق تاريخ الصرف في العرض.',
+  },
+  TRANCHES_NOT_FACILITY: {
+    en: 'The tranches must add up to the facility amount exactly.',
+    ar: 'يجب أن يساوي مجموع الدفعات مبلغ التمويل تماماً.',
+  },
+  NO_TRANCHE_TO_RELEASE: { en: 'Every tranche of the facility has been released.', ar: 'صُرفت جميع دفعات التمويل.' },
+  PAYMENT_NOT_FOUND: {
+    en: 'No released tranche carries that payment instruction.',
+    ar: 'لا توجد دفعة مصروفة تحمل أمر الدفع هذا.',
+  },
+  PAYMENT_STATUS_INVALID: {
+    en: 'The bank’s status report was not usable; nothing was recorded.',
+    ar: 'تقرير حالة البنك غير صالح، فلم يُسجَّل شيء.',
+  },
+  // Closing (UAE M5a). A refusal here signed, recorded and paid nothing.
+  CLOSING_LOCKED: {
+    en: 'Closing steps are recorded between approval and disbursement.',
+    ar: 'تُسجَّل خطوات الإغلاق بين الاعتماد والصرف.',
+  },
+  SIGNING_REF_INVALID: {
+    en: 'The identity service returned no usable reference, so nothing was recorded.',
+    ar: 'لم تُرجع خدمة الهوية مرجعاً صالحاً، فلم يُسجَّل شيء.',
+  },
+  SIGNING_NOT_STARTED: { en: 'Open the signing first.', ar: 'ابدأ التوقيع أولاً.' },
+  SIGNING_EXPIRED: {
+    en: 'The signing window has passed. Open a new one.',
+    ar: 'انقضت مهلة التوقيع. ابدأ توقيعاً جديداً.',
+  },
+  SIGNATURE_PENDING: {
+    en: 'The signatory has not signed yet. Check again once they have.',
+    ar: 'لم يوقّع المفوّض بعد. تحقّق مرة أخرى بعد توقيعه.',
+  },
+  SIGNATURE_REFUSED: {
+    en: 'The identity service did not confirm a signature (refused, cancelled, or at too low an assurance level). Open a new signing.',
+    ar: 'لم تؤكد خدمة الهوية التوقيع (رُفض أو أُلغي أو بمستوى توثيق غير كافٍ). ابدأ توقيعاً جديداً.',
+  },
+  CONDITION_NOT_FOUND: {
+    en: 'That condition precedent is not on the approved pack.',
+    ar: 'هذا الشرط المسبق غير موجود في الحزمة المعتمدة.',
+  },
+  CONDITION_ALREADY_VERIFIED: {
+    en: 'That condition precedent is already verified.',
+    ar: 'هذا الشرط المسبق مُتحقَّق منه مسبقاً.',
+  },
+  CONDITION_NOT_SATISFIED: {
+    en: 'Evidence the condition precedent first.',
+    ar: 'قدّم دليل استيفاء الشرط المسبق أولاً.',
+  },
+  CONDITIONS_PRECEDENT_OUTSTANDING: {
+    en: 'Every condition precedent must be evidenced and verified by a second person before drawdown.',
+    ar: 'يجب تقديم دليل كل شرط مسبق والتحقق منه من شخص آخر قبل السحب.',
+  },
+  PAYEE_NAME_INVALID: {
+    en: 'Give the account holder’s name, 2 to 140 characters.',
+    ar: 'اذكر اسم صاحب الحساب، من حرفين إلى مئة وأربعين حرفاً.',
+  },
+  PAYEE_NOT_RECORDED: { en: 'Record the payee account first.', ar: 'سجّل حساب المستفيد أولاً.' },
+  PAYEE_ALREADY_CONFIRMED: { en: 'The payee account is already confirmed.', ar: 'حساب المستفيد مؤكَّد مسبقاً.' },
+  PAYEE_NOT_CONFIRMED: {
+    en: 'The payee account must be recorded and confirmed by a second person before disbursement.',
+    ar: 'يجب تسجيل حساب المستفيد وتأكيده من شخص آخر قبل الصرف.',
+  },
+  FOUR_EYES_PAYEE: {
+    en: 'You recorded the payee account; another finance user releases the payment.',
+    ar: 'أنت من سجّل حساب المستفيد؛ يصرف الدفعة موظف مالية آخر.',
+  },
+  IBAN_INVALID: {
+    en: 'That is not a valid IBAN for this country: check the country code, the length and the check digits.',
+    ar: 'رقم الآيبان غير صالح لهذا البلد: تحقّق من رمز البلد والطول وأرقام التحقق.',
+  },
+  IBAN_COUNTRY_UNSUPPORTED: {
+    en: 'There is no IBAN rule for this institution’s country.',
+    ar: 'لا توجد قاعدة آيبان لبلد هذه المؤسسة.',
+  },
+  // The decision pack (UAE M4). A refusal here changed nothing.
+  DECISION_PACK_LOCKED: {
+    en: 'The decision pack changes only between assessment and approval, and not once a committee member has approved it.',
+    ar: 'لا تُعدَّل حزمة القرار إلا بين التقييم والاعتماد، ولا بعد موافقة أحد أعضاء اللجنة عليها.',
+  },
+  CONDITIONS_ABOVE_RISK_MAXIMUM: {
+    en: 'The risk band allows no more conditions and covenants. Withdraw one to attach another.',
+    ar: 'لا تسمح فئة المخاطر بمزيد من الشروط والتعهدات. اسحب أحدها لإضافة غيره.',
+  },
+  CONDITION_KIND_INVALID: { en: 'A condition is precedent or subsequent.', ar: 'الشرط إما مسبق أو لاحق.' },
+  CONDITION_TEXT_INVALID: {
+    en: 'State the condition in both languages, 3 to 300 characters each: English in English, Arabic in Arabic.',
+    ar: 'اكتب الشرط باللغتين، من ثلاثة أحرف إلى ثلاثمئة لكل منهما: الإنجليزية بالإنجليزية والعربية بالعربية.',
+  },
+  CONDITION_DUE_INVALID: {
+    en: 'A condition subsequent is due a whole number of days after first drawdown, within the policy’s limit; a condition precedent has no due days.',
+    ar: 'يُستحق الشرط اللاحق خلال عدد صحيح من الأيام بعد السحب الأول ضمن حد السياسة؛ ولا أيام استحقاق للشرط المسبق.',
+  },
+  COVENANT_UNKNOWN: { en: 'Choose a covenant from the institution’s list.', ar: 'اختر تعهداً من قائمة المؤسسة.' },
+  COVENANT_DUPLICATE: { en: 'This covenant is already attached.', ar: 'هذا التعهد مُضاف مسبقاً.' },
+  PACK_ITEM_NOT_FOUND: {
+    en: 'That condition or covenant is not on the pack.',
+    ar: 'هذا الشرط أو التعهد غير موجود في الحزمة.',
+  },
+  DEVIATION_NOT_FOUND: { en: 'The assessment records no such deviation.', ar: 'لا يسجّل التقييم هذا الاستثناء.' },
+  JUSTIFICATION_LENGTH: {
+    en: 'State the mitigant in 10 to 1000 characters.',
+    ar: 'اذكر العامل المخفِّف في عشرة أحرف إلى ألف حرف.',
+  },
+  DEVIATIONS_UNJUSTIFIED: {
+    en: 'Every deviation from policy must be justified in the decision pack before the committee approves.',
+    ar: 'يجب تبرير كل استثناء من السياسة في حزمة القرار قبل اعتماد اللجنة.',
+  },
+  FOUR_EYES_SELF_JUSTIFICATION: {
+    en: 'You justified a deviation on this case; another committee member approves it.',
+    ar: 'لقد بررت استثناءً في هذا الطلب؛ يعتمده عضو آخر في اللجنة.',
+  },
+  DECISION_PACK_POLICY_INVALID: {
+    en: 'The institution’s decision-pack policy is not readable, so nothing was changed.',
+    ar: 'تعذّرت قراءة سياسة حزمة القرار لدى المؤسسة، فلم يُعدَّل شيء.',
+  },
+  DECISION_PACK_POLICY_NOT_FOUND: {
+    en: 'No decision-pack policy is configured for this institution.',
+    ar: 'لا توجد سياسة لحزمة القرار مهيأة لهذه المؤسسة.',
+  },
+  // The security register (UAE M3). A refusal here recorded nothing.
+  SECURITY_LOCKED: {
+    en: 'The security register changes only before the application is submitted.',
+    ar: 'لا يُعدَّل سجل الضمانات إلا قبل إحالة الطلب.',
+  },
+  SECURITY_INCOMPLETE: {
+    en: 'Every security the product requires must be recorded and confirmed by a second person before submitting. The security section says which are outstanding.',
+    ar: 'يجب تسجيل كل ضمان يتطلبه المنتج وتأكيده من شخص آخر قبل الإحالة. يوضح قسم الضمانات ما لم يكتمل.',
+  },
+  SECURITY_EVIDENCE_NOT_ON_FILE: {
+    en: 'Attach the valuation report or deed to the application first, then name it here.',
+    ar: 'أرفق تقرير التقييم أو سند الضمان بالطلب أولاً، ثم اختره هنا.',
+  },
+  SECURITY_ITEM_NOT_FOUND: {
+    en: 'That item is not in the security register.',
+    ar: 'هذا البند غير موجود في سجل الضمانات.',
+  },
+  SECURITY_ITEM_WITHDRAWN: {
+    en: 'That item has been withdrawn. Record it again if it still applies.',
+    ar: 'سُحب هذا البند. سجّله مرة أخرى إن كان لا يزال قائماً.',
+  },
+  SECURITY_ALREADY_CONFIRMED: { en: 'That item is already confirmed.', ar: 'هذا البند مؤكَّد مسبقاً.' },
+  VALUATION_STALE: {
+    en: 'The valuation is older than the policy allows. Record the item again with a current valuation.',
+    ar: 'التقييم أقدم مما تسمح به السياسة. سجّل البند مجدداً بتقييم حديث.',
+  },
+  VALUATION_IN_FUTURE: { en: 'A valuation is dated today or earlier.', ar: 'يكون تاريخ التقييم اليوم أو قبله.' },
+  COLLATERAL_KIND_INVALID: { en: 'Choose a kind of collateral from the list.', ar: 'اختر نوع الضمان من القائمة.' },
+  COLLATERAL_DESCRIPTION_INVALID: {
+    en: 'Describe the asset in 3 to 120 characters.',
+    ar: 'صِف الأصل في ثلاثة أحرف إلى مئة وعشرين حرفاً.',
+  },
+  COLLATERAL_VALUE_INVALID: { en: 'The market value is a positive amount.', ar: 'القيمة السوقية مبلغ موجب.' },
+  COLLATERAL_REF_INVALID: {
+    en: 'The valuer and the evidence are recorded by reference: letters, digits and : . _ / - only.',
+    ar: 'يُسجَّل المقيِّم والمستند بمرجعهما: حروف وأرقام والرموز : . _ / - فقط.',
+  },
+  CHARGE_STATUS_INVALID: {
+    en: 'A charge is registered, pending or not applicable.',
+    ar: 'يكون الرهن مسجَّلاً أو قيد التسجيل أو غير منطبق.',
+  },
+  CHARGE_REF_REQUIRED: {
+    en: 'A registered charge carries the registry’s reference.',
+    ar: 'يحمل الرهن المسجَّل مرجع جهة التسجيل.',
+  },
+  GUARANTOR_KIND_INVALID: { en: 'A guarantor is a person or a company.', ar: 'الكفيل شخص أو شركة.' },
+  GUARANTOR_REF_INVALID: {
+    en: 'The guarantor and the deed are recorded by reference.',
+    ar: 'يُسجَّل الكفيل وسند الكفالة بمرجعهما.',
+  },
+  GUARANTOR_NOT_AN_OWNER: {
+    en: 'A personal guarantor is one of the applicant’s owners.',
+    ar: 'الكفيل الشخصي أحد ملّاك المنشأة المتقدمة.',
+  },
+  GUARANTOR_NAME_INVALID: {
+    en: 'Name the guarantor company in 2 to 120 characters.',
+    ar: 'اذكر اسم الشركة الكفيلة في حرفين إلى مئة وعشرين حرفاً.',
+  },
+  GUARANTEE_LIMIT_INVALID: { en: 'A limited guarantee has a positive limit.', ar: 'للكفالة المحدودة سقف موجب.' },
+  GUARANTEE_DUPLICATE: {
+    en: 'This guarantor already has a guarantee on the application. Withdraw it to replace it.',
+    ar: 'لهذا الكفيل كفالة على الطلب مسبقاً. اسحبها لاستبدالها.',
+  },
+  IDENTITY_NUMBER_IN_FREE_TEXT: {
+    en: 'No identity number belongs in this record. Use the party’s reference instead.',
+    ar: 'لا يُدرَج رقم هوية في هذا السجل. استخدم مرجع الطرف بدلاً منه.',
+  },
+  SECURITY_POLICY_INVALID: {
+    en: 'The institution’s security policy is not readable, so nothing was recorded.',
+    ar: 'تعذّرت قراءة سياسة الضمانات لدى المؤسسة، فلم يُسجَّل شيء.',
+  },
+  SECURITY_POLICY_NOT_FOUND: {
+    en: 'No security policy is configured for this institution, so the register cannot be checked.',
+    ar: 'لا توجد سياسة ضمانات مهيأة لهذه المؤسسة، فلا يمكن التحقق من السجل.',
+  },
+  DATE_MALFORMED: { en: 'Enter the date as year-month-day.', ar: 'أدخل التاريخ بصيغة السنة-الشهر-اليوم.' },
+  // Document upload. A refusal here stored and presented nothing.
+  UPLOAD_EMPTY: { en: 'Choose a file to upload.', ar: 'اختر ملفاً لرفعه.' },
+  UPLOAD_TOO_LARGE: {
+    en: 'The file is larger than 10 MB. Nothing was stored.',
+    ar: 'حجم الملف يتجاوز ١٠ ميغابايت. لم يُحفظ شيء.',
+  },
+  UPLOAD_TYPE_NOT_ACCEPTED: {
+    en: 'Only PDF, PNG and JPEG files are accepted, judged by the file’s content rather than its name. Nothing was stored.',
+    ar: 'تُقبل ملفات PDF وPNG وJPEG فقط، ويُحكم على نوعها من محتواها لا من اسمها. لم يُحفظ شيء.',
+  },
+  STORAGE_UNAVAILABLE: {
+    en: 'The document store is not available, so nothing was stored or recorded. Try again, or attach the document by reference.',
+    ar: 'مخزن المستندات غير متاح، فلم يُحفظ أو يُسجَّل شيء. أعد المحاولة، أو أرفق المستند بمرجعه.',
+  },
+  OBJECT_TAMPERED: {
+    en: 'The stored letter PDF no longer matches its fingerprint, so nothing was sealed. Render the letter again and report this.',
+    ar: 'لم يعد ملف PDF المحفوظ للخطاب مطابقًا لبصمته، فلم يُختم شيء. أصدر الخطاب مجددًا وأبلغ عن ذلك.',
+  },
+  OBJECT_HASH_MISMATCH: {
+    en: 'The file changed while it was being stored. Nothing was recorded; upload it again.',
+    ar: 'تغيّر الملف أثناء حفظه. لم يُسجَّل شيء؛ ارفعه مرة أخرى.',
+  },
+  OBJECT_KEY_INVALID: {
+    en: 'The file could not be filed against this application. Nothing was stored.',
+    ar: 'تعذّر حفظ الملف على هذا الطلب. لم يُحفظ شيء.',
+  },
+  DOCUMENT_CONTENT_INVALID: {
+    en: 'The file’s fingerprint was not usable. Nothing was recorded.',
+    ar: 'بصمة الملف غير صالحة. لم يُسجَّل شيء.',
   },
   // The credit-assessment rails. A refusal here fetched and recorded nothing.
   BUREAU_CONSENT_NOT_IN_SANAD: {

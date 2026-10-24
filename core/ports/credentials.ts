@@ -37,7 +37,8 @@ export type CredentialProviderName =
   | 'PAYMENTS_HUB'
   | 'RATE_PUBLISHER'
   | 'COMMODITY_BROKER'
-  | 'WORKFLOW_ENGINE';
+  | 'WORKFLOW_ENGINE'
+  | 'OBJECT_STORAGE';
 
 export type Environment = 'sandbox' | 'uat' | 'production';
 

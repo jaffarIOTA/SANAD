@@ -1,0 +1,444 @@
+/**
+ * Servicing (S1): where a disbursed facility stands against its signed
+ * schedule — each instalment paid, part-paid, due or overdue; arrears, days
+ * past due and what is still owed — from confirmed receipts only. A manual
+ * receipt is recorded by finance and counts once a second person confirms it.
+ * The loan system's last reported status is set beside Sanad's; a difference
+ * is flagged, never overwritten. The card computes nothing.
+ */
+import type { ReactElement } from 'react';
+
+import { delinquencyBucket } from '@sanad/core/servicing/instalment-position.ts';
+
+import {
+  approveRestructureAction,
+  assessLateChargesAction,
+  liftHardshipAction,
+  proposeRestructureAction,
+  setHardshipAction,
+  waiveLateChargeAction,
+  confirmRepaymentAction,
+  presentCollectionsAction,
+  recordFixtureCollectionResultAction,
+  recordRepaymentAction,
+  reportToBureauAction,
+} from '../../../../../server/business-actions.ts';
+import type { getApplication } from '../../../../../server/business.ts';
+import type { StaffPrincipal } from '../../../../../server/staff.ts';
+import { Gate } from '../../../Gate.tsx';
+import { BTN_SMALL, Chip, Field, FormContext, type Formatters, INPUT, Id, SectionCard, TH, TH_END } from '../../ui.tsx';
+
+type View = NonNullable<Awaited<ReturnType<typeof getApplication>>>;
+
+const STATE: Readonly<
+  Record<string, { readonly en: string; readonly ar: string; readonly tone: 'good' | 'warn' | 'bad' | 'neutral' }>
+> = {
+  PAID: { en: 'Paid', ar: 'مدفوع', tone: 'good' },
+  PART_PAID: { en: 'Part paid', ar: 'مدفوع جزئياً', tone: 'warn' },
+  DUE: { en: 'Due today', ar: 'مستحق اليوم', tone: 'warn' },
+  OVERDUE: { en: 'Overdue', ar: 'متأخر', tone: 'bad' },
+  FUTURE: { en: 'Not yet due', ar: 'لم يستحق بعد', tone: 'neutral' },
+};
+
+const CHANNEL: Readonly<Record<string, { readonly en: string; readonly ar: string }>> = {
+  MANUAL: { en: 'Manual', ar: 'يدوي' },
+  SADAD: { en: 'SADAD', ar: 'سداد' },
+  PARTNER_BANK: { en: 'Partner bank', ar: 'البنك الشريك' },
+  PAYMENTS_HUB: { en: 'Payments hub', ar: 'منصة المدفوعات' },
+};
+
+export function ServicingCard({
+  segment,
+  view,
+  staff,
+  f,
+  fixtureResults,
+}: {
+  readonly segment: string;
+  readonly view: View;
+  readonly staff: StaffPrincipal;
+  readonly f: Formatters;
+  /** On the synthetic site, where no channel is connected, finance may record a collection result marked Fixture. */
+  readonly fixtureResults: boolean;
+}): ReactElement | null {
+  const s = view.servicing;
+  if (s === undefined) return null;
+  const { t } = f;
+  const p = s.position;
+  const amount = (minor: bigint) => (
+    <>
+      <bdi className="tabular-nums">{f.money(minor)}</bdi>{' '}
+      <span className="text-[12px] font-normal text-ink-quiet">{f.cur}</span>
+    </>
+  );
+  const bucket = delinquencyBucket(p.daysPastDue);
+  const ctx = <FormContext segment={segment} applicationId={view.application.applicationId} screen="offer" />;
+  return (
+    <SectionCard
+      id="servicing"
+      title={t('Servicing', 'خدمة التمويل')}
+      note={t(
+        'Against the signed schedule, from confirmed receipts, as of today. Oldest instalment first; within an instalment, the charge before principal.',
+        'مقابل الجدول الموقّع، من المبالغ المؤكدة، حتى اليوم. يُسدَّد الأقدم أولاً، وفي كل قسط العائد قبل الأصل.',
+      )}
+      aside={
+        <Chip tone={p.daysPastDue > 0 ? 'bad' : 'good'}>
+          {p.daysPastDue > 0
+            ? t(`${f.n(p.daysPastDue)} days past due (${bucket})`, `متأخر ${f.n(p.daysPastDue)} يوماً (${bucket})`)
+            : t('Current', 'منتظم')}
+        </Chip>
+      }
+    >
+      <dl className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-servicing-position>
+        <Field label={t('Arrears', 'المتأخرات')}>{amount(p.arrears.minorUnits)}</Field>
+        <Field label={t('Paid to date', 'المدفوع حتى الآن')}>{amount(p.totalPaid.minorUnits)}</Field>
+        <Field label={t('Principal outstanding', 'الأصل القائم')}>{amount(p.outstandingPrincipal.minorUnits)}</Field>
+        <Field label={t('Next instalment', 'القسط التالي')}>
+          {p.nextDue === undefined ? (
+            t('Repaid in full', 'مسدّد بالكامل')
+          ) : (
+            <span>
+              {f.isoDate(p.nextDue.dueDate)} · {amount(p.nextDue.outstanding.minorUnits)}
+            </span>
+          )}
+        </Field>
+      </dl>
+
+      {s.reconciliation === undefined ? null : (
+        <p className="mb-4 flex flex-wrap items-center gap-2 text-[13px]" data-servicing-reconciliation>
+          <Chip tone={s.reconciliation.matches ? 'good' : 'bad'}>
+            {s.reconciliation.matches
+              ? t('Agrees with the loan system', 'يتطابق مع نظام القروض')
+              : t('Differs from the loan system', 'يختلف عن نظام القروض')}
+          </Chip>
+          <span className="text-ink-quiet">
+            {t(
+              `Loan system: ${f.n(s.reconciliation.loanSystemDaysPastDue)} days past due; Sanad: ${f.n(s.reconciliation.sanadDaysPastDue)}.`,
+              `نظام القروض: ${f.n(s.reconciliation.loanSystemDaysPastDue)} يوماً؛ سند: ${f.n(s.reconciliation.sanadDaysPastDue)}.`,
+            )}
+          </span>
+        </p>
+      )}
+
+      <div className="mb-5 max-h-[360px] overflow-auto rounded-tile border border-line">
+        <table className="w-full min-w-[560px] border-collapse text-[13px]" data-servicing-instalments>
+          <thead>
+            <tr>
+              <th className={TH}>#</th>
+              <th className={TH}>{t('Due', 'الاستحقاق')}</th>
+              <th className={TH_END}>{t('Instalment', 'القسط')}</th>
+              <th className={TH_END}>{t('Paid', 'المدفوع')}</th>
+              <th className={TH_END}>{t('Status', 'الحالة')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {p.instalments.map((i) => {
+              const st = STATE[i.state] ?? { en: i.state, ar: i.state, tone: 'neutral' as const };
+              return (
+                <tr key={i.number} className="border-t border-line">
+                  <td className="py-1.5 pe-3 ps-3 tabular-nums">{f.n(i.number)}</td>
+                  <td className="py-1.5 pe-3">{f.isoDate(i.dueDate)}</td>
+                  <td className="py-1.5 pe-3 text-end">{amount(i.amount.minorUnits)}</td>
+                  <td className="py-1.5 pe-3 text-end">{amount(i.paid.minorUnits)}</td>
+                  <td className="py-1.5 pe-3 text-end">
+                    <Chip tone={st.tone}>{t(st.en, st.ar)}</Chip>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">
+        {t('Collections', 'التحصيل')}
+      </h3>
+      {s.collections.length === 0 ? (
+        <p className="mb-3 text-[13px] text-ink-quiet">{t('Nothing presented yet.', 'لم يُقدَّم شيء بعد.')}</p>
+      ) : (
+        <ul
+          className="mb-3 flex list-none flex-col divide-y divide-line rounded-tile border border-line p-0"
+          data-servicing-collections
+        >
+          {s.collections.map((c) => (
+            <li key={c.idempotencyKey} className="flex flex-wrap items-center gap-3 px-4 py-2 text-[13px]">
+              <span className="tabular-nums">
+                {t('Instalment', 'القسط')} {f.n(c.scheduleNumber)}
+              </span>
+              <span>{f.isoDate(c.dueDate)}</span>
+              <span className="font-medium text-heading">{amount(c.amount.minorUnits)}</span>
+              <span className="text-ink-quiet">
+                {t(CHANNEL[c.channel]?.en ?? c.channel, CHANNEL[c.channel]?.ar ?? c.channel)}
+              </span>
+              <Chip tone={c.result === 'PAID' ? 'good' : c.result === 'RETURNED' ? 'bad' : 'warn'}>
+                {c.result === 'PAID'
+                  ? t('Paid', 'مدفوع')
+                  : c.result === 'RETURNED'
+                    ? t('Returned', 'مرتجع')
+                    : t('Awaiting the channel', 'بانتظار القناة')}
+              </Chip>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic}>
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          <form action={presentCollectionsAction}>
+            {ctx}
+            <button type="submit" className={BTN_SMALL}>
+              {t('Present due instalments for collection', 'تقديم الأقساط المستحقة للتحصيل')}
+            </button>
+          </form>
+          <form action={reportToBureauAction}>
+            {ctx}
+            <button type="submit" className={BTN_SMALL}>
+              {t('Report this month to the bureau', 'إبلاغ المكتب الائتماني بحالة هذا الشهر')}
+            </button>
+          </form>
+          {fixtureResults && s.collections.some((c) => c.result === undefined)
+            ? (['PAID', 'RETURNED'] as const).map((st) => (
+                <form key={st} action={recordFixtureCollectionResultAction}>
+                  {ctx}
+                  <input type="hidden" name="status" value={st} />
+                  <button type="submit" className={BTN_SMALL} data-fixture-collection>
+                    {st === 'PAID' ? t('Fixture: paid', 'تجريبي: مدفوع') : t('Fixture: returned', 'تجريبي: مرتجع')}
+                  </button>
+                </form>
+              ))
+            : null}
+        </div>
+      </Gate>
+
+      <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">
+        {t('Receipts', 'المبالغ المستلمة')}
+      </h3>
+      {s.repayments.length === 0 ? (
+        <p className="mb-4 text-[13px] text-ink-quiet">{t('None yet.', 'لا يوجد بعد.')}</p>
+      ) : (
+        <ul
+          className="mb-4 flex list-none flex-col divide-y divide-line rounded-tile border border-line p-0"
+          data-servicing-receipts
+        >
+          {s.repayments.map((rp) => (
+            <li key={rp.repaymentId} className="flex flex-wrap items-center gap-3 px-4 py-2.5 text-[13px]">
+              <Id>{rp.repaymentId}</Id>
+              <span>{f.isoDate(rp.receivedOn)}</span>
+              <span className="font-medium text-heading">{amount(rp.amount.minorUnits)}</span>
+              <span className="text-ink-quiet">
+                {t(CHANNEL[rp.channel]?.en ?? rp.channel, CHANNEL[rp.channel]?.ar ?? rp.channel)}
+              </span>
+              <Id className="text-[11px] text-ink-quiet">{rp.reference}</Id>
+              {rp.confirmedBy !== undefined ? (
+                <Chip tone="good">{t('Counted', 'محتسب')}</Chip>
+              ) : (
+                <Gate
+                  staff={staff}
+                  act="BUSINESS_VERIFY"
+                  arabic={f.arabic}
+                  ownWork={rp.recordedBy === staff.principalId}
+                >
+                  <form action={confirmRepaymentAction}>
+                    {ctx}
+                    <input type="hidden" name="repaymentId" value={rp.repaymentId} />
+                    <button type="submit" className={BTN_SMALL}>
+                      {t('Confirm against the statement', 'تأكيد مقابل الكشف')}
+                    </button>
+                  </form>
+                </Gate>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic}>
+        <details className="rounded-tile border border-line p-4" data-record-repayment>
+          <summary className="cursor-pointer select-none text-[14px] font-semibold text-heading">
+            {t('Record a receipt seen on the bank statement', 'تسجيل مبلغ ظاهر في كشف البنك')}
+          </summary>
+          <form action={recordRepaymentAction} className="mt-3 grid gap-3 sm:grid-cols-3">
+            {ctx}
+            <label className="grid gap-1 text-[13px]">
+              {t(`Amount (${f.cur})`, `المبلغ (${f.cur})`)}
+              <input name="amount" required inputMode="decimal" dir="ltr" className={INPUT} />
+            </label>
+            <label className="grid gap-1 text-[13px]">
+              {t('Value date', 'تاريخ القيمة')}
+              <input name="receivedOn" type="date" required dir="ltr" className={INPUT} />
+            </label>
+            <label className="grid gap-1 text-[13px]">
+              {t('Bank reference', 'مرجع البنك')}
+              <input name="reference" required dir="ltr" className={INPUT} />
+            </label>
+            <button type="submit" className={`${BTN_SMALL} sm:col-span-3 sm:justify-self-start`}>
+              {t('Record receipt', 'تسجيل المبلغ')}
+            </button>
+          </form>
+        </details>
+      </Gate>
+
+      {/* -- S3: late charges, hardship, restructuring ------------------------------------------- */}
+      <div className="mt-5 grid gap-4 lg:grid-cols-3" data-servicing-s3>
+        <div className="rounded-tile border border-line p-4">
+          <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">
+            {t('Late charges', 'رسوم التأخير')}
+          </h3>
+          {s.lateCharges.length === 0 ? (
+            <p className="mb-2 text-[13px] text-ink-quiet">{t('None.', 'لا يوجد.')}</p>
+          ) : (
+            <ul className="mb-2 flex list-none flex-col gap-2 p-0 text-[13px]">
+              {s.lateCharges.map((c) => (
+                <li key={c.scheduleNumber} className="flex flex-wrap items-center gap-2">
+                  <span>
+                    {t('Instalment', 'القسط')} {f.n(c.scheduleNumber)} · {amount(c.amount.minorUnits)}
+                  </span>
+                  <Chip tone={c.treatment === 'CHARITY' ? 'neutral' : 'warn'}>
+                    {c.treatment === 'CHARITY' ? t('To charity', 'للأعمال الخيرية') : t('Fee', 'رسوم')}
+                  </Chip>
+                  {c.waivedBy !== undefined ? (
+                    <Chip tone="good">{t('Waived', 'متنازَل عنها')}</Chip>
+                  ) : (
+                    <Gate
+                      staff={staff}
+                      act="BUSINESS_VERIFY"
+                      arabic={f.arabic}
+                      ownWork={c.assessedBy === staff.principalId}
+                    >
+                      <form action={waiveLateChargeAction} className="flex flex-wrap items-center gap-1">
+                        {ctx}
+                        <input type="hidden" name="instalment" value={String(c.scheduleNumber)} />
+                        <input
+                          name="reason"
+                          required
+                          minLength={10}
+                          placeholder={t('Reason', 'السبب')}
+                          className={INPUT}
+                        />
+                        <button type="submit" className={BTN_SMALL}>
+                          {t('Waive', 'تنازل')}
+                        </button>
+                      </form>
+                    </Gate>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic}>
+            <form action={assessLateChargesAction}>
+              {ctx}
+              <button type="submit" className={BTN_SMALL}>
+                {t('Assess late charges', 'احتساب رسوم التأخير')}
+              </button>
+            </form>
+          </Gate>
+        </div>
+
+        <div className="rounded-tile border border-line p-4">
+          <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">
+            {t('Hardship', 'التعثر')}
+          </h3>
+          {s.hardship !== undefined ? (
+            <>
+              <p className="mb-2 text-[13px] text-ink">
+                <Chip tone="warn">{t('Collections paused', 'التحصيل متوقف')}</Chip> {s.hardship.reason}
+              </p>
+              <Gate
+                staff={staff}
+                act="BUSINESS_VERIFY"
+                arabic={f.arabic}
+                ownWork={s.hardship.setBy === staff.principalId}
+              >
+                <form action={liftHardshipAction}>
+                  {ctx}
+                  <button type="submit" className={BTN_SMALL}>
+                    {t('Lift hardship', 'رفع حالة التعثر')}
+                  </button>
+                </form>
+              </Gate>
+            </>
+          ) : (
+            <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+              <form action={setHardshipAction} className="grid gap-2">
+                {ctx}
+                <textarea
+                  name="reason"
+                  required
+                  minLength={10}
+                  rows={2}
+                  placeholder={t('Why the customer is in hardship', 'سبب تعثر العميل')}
+                  className={INPUT}
+                />
+                <button type="submit" className={`${BTN_SMALL} justify-self-start`}>
+                  {t('Place in hardship', 'تسجيل حالة تعثر')}
+                </button>
+              </form>
+            </Gate>
+          )}
+        </div>
+
+        <div className="rounded-tile border border-line p-4">
+          <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">
+            {t('Restructuring', 'إعادة الهيكلة')}
+          </h3>
+          {s.restructures.map((rs) => (
+            <div key={rs.restructureId} className="mb-2 text-[13px]">
+              <p>
+                <Id>{rs.restructureId}</Id> ·{' '}
+                {t(`${f.n(rs.rows.length)} instalments from`, `${f.n(rs.rows.length)} قسطاً اعتباراً من`)}{' '}
+                {f.isoDate(rs.rows[0]?.dueDate ?? rs.effectiveDate)}
+              </p>
+              <p className="text-ink-quiet">
+                {t('Owed', 'المستحق')} {amount(rs.outstandingBefore.minorUnits)} → {amount(rs.totalAfter.minorUnits)}
+              </p>
+              {rs.approvedBy !== undefined ? (
+                <Chip tone="good">{t('In force', 'سارية')}</Chip>
+              ) : (
+                <Gate
+                  staff={staff}
+                  act="BUSINESS_APPROVE"
+                  arabic={f.arabic}
+                  ownWork={rs.proposedBy === staff.principalId}
+                >
+                  <form action={approveRestructureAction}>
+                    {ctx}
+                    <input type="hidden" name="restructureId" value={rs.restructureId} />
+                    <button type="submit" className={BTN_SMALL}>
+                      {t('Approve restructuring', 'اعتماد إعادة الهيكلة')}
+                    </button>
+                  </form>
+                </Gate>
+              )}
+            </div>
+          ))}
+          {s.restructures.some((x) => x.approvedBy === undefined) ? null : (
+            <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+              <form action={proposeRestructureAction} className="grid gap-2">
+                {ctx}
+                <input
+                  name="numberOfPayments"
+                  required
+                  inputMode="numeric"
+                  dir="ltr"
+                  placeholder={t('New instalments', 'عدد الأقساط الجديدة')}
+                  className={INPUT}
+                />
+                <input name="firstDueDate" type="date" required dir="ltr" className={INPUT} />
+                <textarea
+                  name="reason"
+                  required
+                  minLength={10}
+                  rows={2}
+                  placeholder={t('Reason', 'السبب')}
+                  className={INPUT}
+                />
+                <button type="submit" className={`${BTN_SMALL} justify-self-start`}>
+                  {t('Propose restructuring', 'اقتراح إعادة هيكلة')}
+                </button>
+              </form>
+            </Gate>
+          )}
+        </div>
+      </div>
+    </SectionCard>
+  );
+}

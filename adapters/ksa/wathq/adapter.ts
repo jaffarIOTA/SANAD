@@ -106,7 +106,8 @@ export class WathqAdapter extends RailAdapter implements BusinessRegistryPort {
       activityCodes.push(code);
     }
     const now = BigInt(this.config.nowEpochSeconds());
-    const lookupRef = `wathq:${nationalNumber ?? p.commercialRegistration}:${now.toString()}`;
+    // The retrieval time in base 36: unique and ordered, and never a run of ten digits that reads as a national id.
+    const lookupRef = `wathq:${nationalNumber ?? p.commercialRegistration}:t${now.toString(36)}`;
     const capital = sar(obj(obj(v['capital'])?.['stockCapital'])?.['paidAmount'] ?? obj(v['capital'])?.['paidAmount']);
     const registered = str(v['issueDateGregorian']);
     return ok({

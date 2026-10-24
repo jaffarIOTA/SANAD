@@ -116,3 +116,47 @@ describe('the store and a worker pass', () => {
     expect(claimedTwice[0].length + claimedTwice[1].length).toBe(1);
   });
 });
+
+describe('UAE M5a: a disbursement to an IBAN', () => {
+  it('hands the payee account to the payments port with the instruction', async () => {
+    const seen: unknown[] = [];
+    const ports = developmentDispatchPorts([]);
+    const payments = {
+      ...ports.payments,
+      disburse: (p: Parameters<typeof ports.payments.disburse>[0]) => {
+        seen.push(p.beneficiaryAccount);
+        return ports.payments.disburse(p);
+      },
+    };
+    await dispatchOnce(
+      event({ payload: { beneficiaryRef: 'app-1', beneficiaryIban: 'AE070331234567890123456', minorUnits: '5000000', currency: 'AED' } }),
+      { ...ports, payments },
+      policy,
+      1,
+    );
+    await dispatchOnce(event(), { ...ports, payments }, policy, 1);
+    expect(seen).toEqual([{ iban: 'AE070331234567890123456' }, undefined]);
+  });
+});
+
+describe('SR-050: a payment the bank rejected is not delivered', () => {
+  const answering = (status: string) => {
+    const ports = developmentDispatchPorts([]);
+    return {
+      ...ports,
+      payments: {
+        ...ports.payments,
+        disburse: () =>
+          Promise.resolve({
+            ok: true as const,
+            value: { kind: 'ANSWERED' as const, value: { instructionRef: 'pay-1', status: status as 'ACCEPTED', acceptedAtEpochSeconds: 1n } },
+          }),
+      },
+    };
+  };
+  it('REJECTED is a dead letter for a person; ACCEPTED and SETTLED are delivered', async () => {
+    expect(await dispatchOnce(event(), answering('REJECTED'), policy, 1)).toEqual({ kind: 'DEAD', reason: 'payment rejected: pay-1' });
+    expect((await dispatchOnce(event(), answering('ACCEPTED'), policy, 1)).kind).toBe('DELIVERED');
+    expect((await dispatchOnce(event(), answering('SETTLED'), policy, 1)).kind).toBe('DELIVERED');
+  });
+});

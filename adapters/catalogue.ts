@@ -37,6 +37,7 @@ export const ADAPTER_CATALOGUE: AdapterCatalogue = {
   CERTIFICATION_SERVICE_PROVIDER: ['CSP'],
   TIMESTAMP_AUTHORITY: ['TSA'],
   WORKFLOW_ENGINE: ['WORKFLOW_ENGINE'],
+  OBJECT_STORAGE: ['S3_STORAGE'],
 };
 
 /** Bilingual labels for the admin surface. Capability names, the vendor codes speak for themselves. */
@@ -63,4 +64,5 @@ export const CAPABILITY_LABELS: Readonly<
   CERTIFICATION_SERVICE_PROVIDER: { en: 'Certification service provider', ar: 'مقدّم خدمات التصديق' },
   TIMESTAMP_AUTHORITY: { en: 'Timestamping authority', ar: 'هيئة الختم الزمني' },
   WORKFLOW_ENGINE: { en: 'Workflow engine', ar: 'محرك سير العمل' },
+  OBJECT_STORAGE: { en: 'Document storage', ar: 'تخزين المستندات' },
 };

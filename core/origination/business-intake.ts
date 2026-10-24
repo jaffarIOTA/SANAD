@@ -20,7 +20,7 @@
 import type { CurrencyCode, Money } from '../kernel/money.ts';
 import { type Result, ok, reject } from '../kernel/result.ts';
 
-import { containsIdentityNumber } from './business-application.ts';
+import { REGISTRATION_FIELDS, containsIdentityNumber } from './business-application.ts';
 
 export type IntakeStatus = 'DRAFT' | 'HANDED_OVER' | 'DECLINED' | 'WITHDRAWN';
 
@@ -67,7 +67,13 @@ export interface IntakeParty {
 }
 
 /** The consents an intake captures, by the platform's consent types. */
-export type IntakeConsentType = 'IDENTITY_VERIFICATION' | 'SCREENING' | 'CREDIT_BUREAU' | 'ACCOUNT_INFORMATION';
+export type IntakeConsentType =
+  | 'IDENTITY_VERIFICATION'
+  | 'SCREENING'
+  | 'CREDIT_BUREAU'
+  | 'ACCOUNT_INFORMATION'
+  /** Checking the authenticity of the national documents the business presents (document intelligence D3). */
+  | 'DOCUMENT_VERIFICATION';
 
 /** The tax authority's answer for the business's TRN. Informational: registration is mandatory only above a threshold. */
 export interface TaxCheck {
@@ -98,7 +104,11 @@ export interface UboDeclaration {
 
 export interface IntakeEntity {
   readonly tradeLicence: string;
-  /** The licensing authority's code (DED, DET, ADDED, a free zone) — a code, not a name. */
+  /**
+   * The registration number: a UAE trade licence, or a Saudi commercial registration (CR).
+   * The name is the UAE's; the value is whichever the jurisdiction issues.
+   */
+  /** The issuing authority's code (UAE: DED, DET, ADDED, a free zone; Saudi Arabia: MOC) — a code, not a name. */
   readonly issuingAuthority: string;
   readonly businessNameEn: string;
   readonly businessNameAr?: string;
@@ -262,7 +272,7 @@ export function openIntake(
   if (owned > 10_000) return bad('OWNERSHIP_ABOVE_WHOLE', 'Ownership adds up to at most 100%');
   if (!input.parties.some((p) => p.role !== 'OWNER'))
     return bad('SIGNATORY_REQUIRED', 'At least one party is authorised to sign for the business');
-  if (containsIdentityNumber(input))
+  if (containsIdentityNumber(input, REGISTRATION_FIELDS, input.entity.tradeLicence))
     return bad('IDENTITY_NUMBER_IN_PAYLOAD', 'An identity number does not belong in the intake; record a reference');
 
   const intake: BusinessIntake = {
@@ -526,10 +536,12 @@ export function recordTaxCheck(
   check: Omit<TaxCheck, 'atEpochSeconds'>,
   actor: string,
   at: bigint,
+  /** Saudi Arabia: the zakat certificate is checked by the commercial registration, so no tax number is needed. */
+  byRegistration = false,
 ): Result<IntakeTransition> {
   const o = open(intake, 'Record the tax registration check');
   if (!o.ok) return o;
-  if (intake.entity.taxRegistrationNumber === undefined)
+  if (!byRegistration && intake.entity.taxRegistrationNumber === undefined)
     return bad('TRN_NOT_RECORDED', 'The tax registration is checked by the TRN recorded at intake');
   const r = checkRef(check.reference);
   if (!r.ok) return r;

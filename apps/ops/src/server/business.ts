@@ -46,6 +46,9 @@ import {
   loadSmeAssessmentPolicy,
   loadSmeDefinition,
   loadTenantOnboarding,
+  loadSecurityPolicy,
+  loadDecisionPackPolicy,
+  loadServicingPolicy,
 } from '@sanad/config/loader.ts';
 import {
   type FigureSourceKind,
@@ -79,9 +82,38 @@ import {
   isChecklistComplete,
 } from '@sanad/core/documents/checklist.ts';
 import { type OfferLetter, buildOfferLetter } from '@sanad/core/documents/offer-letter.ts';
+import { ummAlQura } from './hijri.ts';
 import type { JurisdictionProfile } from '@sanad/core/jurisdiction/profile.ts';
+import type { StorableMediaType } from '@sanad/core/ports/object-storage.ts';
+import {
+  type CollateralEntry,
+  type CollateralItem,
+  type Guarantee,
+  type GuaranteeEntry,
+  type SecurityPosition,
+  type SecurityRegister,
+  lendingValue,
+  securityPosition,
+  validateCollateralEntry,
+  validateGuaranteeEntry,
+  valuationCurrent,
+} from '@sanad/core/origination/security-register.ts';
+import {
+  type Condition,
+  type ConditionEntry,
+  type Covenant,
+  type Deviation,
+  type Justification,
+  attachedCount,
+  covenantTemplate,
+  deviationsOf,
+  packDigest,
+  validateCondition,
+  validateJustification,
+} from '@sanad/core/origination/decision-pack.ts';
 import { type CurrencyCode, type Money, money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
+import { maskIban, validateIban } from '@sanad/core/kernel/iban.ts';
 import {
   type OfferNotificationRecipient,
   type OfferNotifications,
@@ -102,6 +134,7 @@ import {
   type Transition,
   approveStraightThrough as approveStraightThroughCore,
   approvedTermsOf,
+  REGISTRATION_FIELDS,
   containsIdentityNumber,
   decideInCommittee as decideInCommitteeCore,
   defaultApprovedTerms,
@@ -123,11 +156,32 @@ import type { RateBasis, RatePeriod } from '@sanad/core/pricing/rate.ts';
 import type { ProductCatalogue } from '@sanad/core/products/catalogue.ts';
 import { buildOffer } from '@sanad/core/products/offer.ts';
 import { type TsaInstant, restoreAttestedInstant } from '@sanad/core/time/tsa.ts';
+import { type DocumentGap, gapSetKey } from '@sanad/core/documents/gaps.ts';
+import { findingsFor } from '@sanad/origination/documents/findings.ts';
 import { hostClockInstant } from '@sanad/origination/host-clock.ts';
 import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
 import { tenantUuidByCode } from '@sanad/origination/credentials.ts';
 import { type NewBusinessAct, newBusinessRefusal } from '@sanad/origination/licensing.ts';
 import { smeTermConventional } from '@sanad/products/sme-term-conventional/index.ts';
+import { smeTermIslamic } from '@sanad/products/sme-term-islamic/index.ts';
+import {
+  type SmeIslamicCore,
+  purchaseCommodity,
+  realiseProceeds,
+  sellToCustomer,
+  transferTitle,
+  open as openTawarruq,
+} from '@sanad/products/sme-term-islamic/execution.ts';
+import type { SmeIslamicQuote } from '@sanad/products/sme-term-islamic/pricing.ts';
+import type { CommodityLot } from '@sanad/core/ports/commodity-broker.ts';
+import {
+  type FacilityPosition,
+  type ScheduledInstalment,
+  civilDay,
+  facilityPosition,
+} from '@sanad/core/servicing/instalment-position.ts';
+import { lateChargesDue } from '@sanad/core/servicing/late-charges.ts';
+import { reamortise, respreadPrice } from '@sanad/core/servicing/restructure.ts';
 import type { SmeVariant } from '@sanad/products/sme-term-conventional/variants.ts';
 
 import { postgresOutboxStore } from '../../../../services/outbox/src/postgres-store.ts';
@@ -142,6 +196,7 @@ import {
   saveBusinessChanges,
 } from './business-persistence.ts';
 import { persistencePool, persistenceUrl } from './persistence.ts';
+import { publishedBenchmark } from './rate-rails.ts';
 import { developmentAttestation } from './store.ts';
 
 export type { ApplicationEvent, FigureRow } from './business-persistence.ts';
@@ -289,6 +344,17 @@ export interface BusinessDocument {
   readonly validationStatus: PresentedDocument['validationStatus'];
   readonly presentedBy: string;
   readonly validatedBy?: string;
+  /** Present when the document was uploaded rather than referenced: the stored bytes' hash, size, type and store. */
+  readonly content?: DocumentContent;
+}
+
+/** An uploaded document's stored bytes, by hash. The bytes themselves live in the object store, never here. */
+export interface DocumentContent {
+  readonly sha256Hex: string;
+  readonly byteLength: number;
+  readonly mediaType: StorableMediaType;
+  /** FIXTURE: the in-memory demonstration store, labelled on screen. LIVE: the tenant's configured store. */
+  readonly storage: 'FIXTURE' | 'LIVE';
 }
 
 /**
@@ -336,7 +402,8 @@ export interface AssessmentInputs {
  *   AECB_RAIL_LIVE              fetched through the bureau rail from the live bureau
  * Records written before the rail existed said AECB_FIXTURE and meant keyed; they read as KEYED.
  */
-export type BureauSource = 'KEYED_FROM_UPSTREAM_REPORT' | 'AECB_RAIL_FIXTURE' | 'AECB_RAIL_LIVE';
+export type BureauSource =
+  'KEYED_FROM_UPSTREAM_REPORT' | 'AECB_RAIL_FIXTURE' | 'AECB_RAIL_LIVE' | 'SIMAH_RAIL_FIXTURE' | 'SIMAH_RAIL_LIVE';
 
 export type AssessmentInputsEntry = Omit<
   AssessmentInputs,
@@ -465,12 +532,37 @@ export interface BusinessApplicationView {
   readonly assessmentInputs?: AssessmentInputs;
   readonly bureauFetch?: BureauFetch;
   readonly bankFacts?: BankStatementFacts;
+  /** The collateral offered and the guarantees given, withdrawn items included. */
+  readonly security: SecurityRegister;
+  /** Conditions and covenants attached, deviation justifications, and the digest frozen at approval. */
+  readonly pack: DecisionPackRecord;
+  /** Closing (UAE M5): the signing in progress, each condition precedent's evidence, and the payee account. */
+  readonly closing: ClosingRecord;
+  /** The loan as booked in the institution's loan system (UAE M6), once it is. */
+  readonly booking?: LoanBookingRecord;
+  /** Servicing (S1): repayments received and the position against the signed schedule, once disbursed. */
+  readonly servicing?: ServicingView;
+  /** The offer letters rendered as PDF, by letter version (the PDF is a rendition; the version is the letter). */
+  readonly letterPdfs: readonly LetterPdf[];
+  /** The signed letter sealed with the institution's digital signature, once it is. */
+  readonly sealedLetters: readonly SealedLetter[];
   readonly assessments: readonly AssessmentRun[];
   readonly latestAssessment?: AssessmentRun;
   readonly offers: readonly OfferRun[];
   readonly latestOffer?: OfferRun;
   readonly portfolio?: PortfolioStatus;
+  /** The latest request to the applicant for documents (D4), while it is open or just answered. */
+  readonly documentRequest?: DocumentRequestState;
   readonly events: readonly ApplicationEvent[];
+}
+
+export interface DocumentRequestState {
+  readonly status: 'AWAITING' | 'RECEIVED';
+  readonly requestedAtEpochSeconds: bigint;
+  /** The gap set asked for, as codes (`gapSetKey`). */
+  readonly gapSet: string;
+  readonly count: number;
+  readonly receivedAtEpochSeconds?: bigint;
 }
 
 export interface FigureReadiness {
@@ -530,6 +622,225 @@ export interface ReadFigureEntry extends OfficerFigureEntry {
 /** Both kinds, as the internal recorder takes them. */
 type FigureProposalEntry = OfficerFigureEntry & { readonly sourceKind: FigureSourceKind };
 
+export interface FrozenPack {
+  readonly digest: string;
+  readonly atEpochSeconds: bigint;
+}
+
+export interface DecisionPackRecord {
+  readonly conditions: readonly Condition[];
+  readonly covenants: readonly Covenant[];
+  readonly justifications: Readonly<Record<string, Justification>>;
+  readonly frozen?: FrozenPack;
+}
+
+export interface SigningInProgress {
+  readonly transactionRef: string;
+  /** The letter version (its SHA-256) the signing intent was opened on. */
+  readonly letterVersion: string;
+  readonly expiresAtEpochSeconds: bigint;
+  readonly startedBy: string;
+  readonly source: 'LIVE' | 'FIXTURE';
+}
+
+export interface SignerRecord {
+  readonly assertionId: string;
+  /** The identity service's reference for the person who signed. Never an identity number. */
+  readonly identityRef: string;
+  readonly source: 'LIVE' | 'FIXTURE';
+}
+
+export interface CpEvidence {
+  readonly evidenceRef: string;
+  readonly satisfiedBy: string;
+  readonly satisfiedAtEpochSeconds: bigint;
+  readonly verifiedBy?: string;
+}
+
+export interface Payee {
+  /** Electronic form, validated (country, length, mod 97). Shown masked except to the person confirming it. */
+  readonly iban: string;
+  readonly accountName: string;
+  /** The bank letter or statement header proving the account, as a document on the application. */
+  readonly evidenceRef: string;
+  readonly recordedBy: string;
+  readonly recordedAtEpochSeconds: bigint;
+  readonly confirmedBy?: string;
+}
+
+export type RepaymentChannel = 'MANUAL' | 'SADAD' | 'PARTNER_BANK' | 'PAYMENTS_HUB';
+
+/** A receipt against the facility. A manual one counts once a second person confirms it; a rail's is confirmed by the rail. */
+export interface RepaymentRecord {
+  readonly repaymentId: string;
+  /** yyyy-mm-dd: the value date. */
+  readonly receivedOn: string;
+  readonly amount: Money;
+  /** The channel's reference (the bank's, SADAD's), unique per facility. */
+  readonly reference: string;
+  readonly channel: RepaymentChannel;
+  readonly recordedBy: string;
+  readonly confirmedBy?: string;
+  readonly source: 'LIVE' | 'FIXTURE';
+}
+
+/** An instalment presented for collection: a SADAD bill (Saudi Arabia) or a direct collection by the partner bank (UAE). */
+export interface CollectionRecord {
+  readonly scheduleNumber: number;
+  readonly idempotencyKey: string;
+  readonly channel: 'SADAD' | 'PARTNER_BANK';
+  readonly amount: Money;
+  readonly dueDate: string;
+  readonly presentedBy: string;
+  readonly presentedAtEpochSeconds: bigint;
+  readonly result?: 'PAID' | 'RETURNED';
+}
+
+export interface LateChargeRecord {
+  readonly scheduleNumber: number;
+  readonly amount: Money;
+  /** INCOME for a term loan; CHARITY for an Islamic facility — never the institution's income. */
+  readonly treatment: 'INCOME' | 'CHARITY';
+  readonly assessedBy: string;
+  readonly assessedAtEpochSeconds: bigint;
+  readonly waivedBy?: string;
+  readonly waiverReason?: string;
+}
+
+/** Collections and late charges paused while the customer is in hardship, with the reason; lifted by a second person. */
+export interface HardshipRecord {
+  readonly reason: string;
+  readonly setBy: string;
+  readonly setAtEpochSeconds: bigint;
+}
+
+export interface RestructureRecord {
+  readonly restructureId: string;
+  readonly effectiveDate: string;
+  readonly rows: readonly ScheduledInstalment[];
+  /** What was owed on the day, and what the new schedule asks: equal for an Islamic facility, never more. */
+  readonly outstandingBefore: Money;
+  readonly totalAfter: Money;
+  readonly proposedBy: string;
+  readonly approvedBy?: string;
+  readonly reason: string;
+}
+
+export interface ServicingView {
+  readonly repayments: readonly RepaymentRecord[];
+  readonly collections: readonly CollectionRecord[];
+  /** The months (yyyy-mm) whose status has been reported to the credit bureau. */
+  readonly bureauReports: readonly string[];
+  readonly lateCharges: readonly LateChargeRecord[];
+  readonly hardship?: HardshipRecord;
+  readonly restructures: readonly RestructureRecord[];
+  /** Against the signed schedule, confirmed repayments only, as of today in the tenant's time zone. */
+  readonly position: FacilityPosition;
+  /** The loan system's last reported status, set against Sanad's own: a difference is flagged, never overwritten. */
+  readonly reconciliation?: {
+    readonly loanSystemDaysPastDue: number;
+    readonly sanadDaysPastDue: number;
+    readonly matches: boolean;
+  };
+}
+
+export interface LetterPdf {
+  /** The letter's version: the SHA-256 of its content, which is what the customer signs. */
+  readonly letterVersion: string;
+  /** The PDF's own SHA-256, under which its bytes are stored. */
+  readonly sha256Hex: string;
+  readonly byteLength: number;
+  readonly storage: 'LIVE' | 'FIXTURE';
+  readonly renderedBy: string;
+  readonly renderedAtEpochSeconds: bigint;
+}
+
+export interface SealedLetter {
+  /** The letter version the customer signed. */
+  readonly letterVersion: string;
+  /** The SHA-256 of the rendered PDF that was sealed. */
+  readonly sourceSha256Hex: string;
+  /** The SHA-256 of the sealed PDF (the signed revision), under which its bytes are stored. */
+  readonly sha256Hex: string;
+  readonly byteLength: number;
+  readonly storage: 'LIVE' | 'FIXTURE';
+  /** The customer's signature it seals (the identity service's reference). */
+  readonly signatureRef: string;
+  readonly padesLevel: string;
+  readonly longTermValidation: boolean;
+  readonly signerCommonName: string;
+  readonly issuerCommonName: string;
+  readonly certificateSerialHex: string;
+  /** The signing environment: a sandbox certificate is plumbing, not a signature anyone should rely on. */
+  readonly environment: 'sandbox' | 'uat' | 'production';
+  readonly sealedBy: string;
+  readonly sealedAtEpochSeconds: bigint;
+}
+
+export interface LoanBookingRecord {
+  /** The loan system's account number for the loan, as staff and statements show it. */
+  readonly loanAccountNumber: string;
+  readonly contractRef: string;
+  readonly customerRef: string;
+  /** The loan system's product code it was booked under. */
+  readonly productCode: string;
+  readonly source: 'LIVE' | 'FIXTURE';
+  readonly bookedBy: string;
+  readonly bookedAtEpochSeconds: bigint;
+}
+
+export type TrancheStatus = 'PLANNED' | 'RELEASED' | 'SETTLED' | 'FAILED';
+
+/** One drawdown of the facility, paid by one instruction (re-instructed under a new key after a failure). */
+export interface Tranche {
+  readonly trancheId: string;
+  readonly amount: Money;
+  /** The civil date (yyyy-mm-dd) it may be released from; the first defaults to the signed offer's disbursement date. */
+  readonly plannedDate?: string;
+  readonly status: TrancheStatus;
+  /** How many instructions have gone out for it. */
+  readonly releases: number;
+  readonly idempotencyKey?: string;
+  readonly releasedBy?: string;
+  readonly instructionRef?: string;
+  readonly failureCode?: string;
+  readonly failedAtEpochSeconds?: bigint;
+}
+
+export interface ClosingRecord {
+  readonly signing?: SigningInProgress;
+  readonly signer?: SignerRecord;
+  readonly cps: Readonly<Record<string, CpEvidence>>;
+  readonly payee?: Payee;
+  /** The drawdown plan; absent until planned or first released (then one tranche of the whole facility). */
+  readonly tranches?: readonly Tranche[];
+  /** Tawarruq only (KSA K4): the commodity steps between signature and disbursement. */
+  readonly tawarruq?: TawarruqRecord;
+}
+
+/**
+ * A Tawarruq's execution, step by step, as products/sme-term-islamic validates
+ * it: the institution buys the commodity at exactly the quoted cost, sells it
+ * to the customer for the deferred price on a signed instrument, title passes,
+ * and the customer (or the institution as agent, where the board permits) sells
+ * it on for cash — the proceeds the customer receives. Each step attested
+ * strictly after the one before.
+ */
+export interface TawarruqRecord {
+  readonly state: 'COMMODITY_PURCHASED' | 'SOLD_TO_CUSTOMER' | 'TITLE_TRANSFERRED' | 'PROCEEDS_REALISED';
+  readonly lot: CommodityLot;
+  readonly purchasedAt: TsaInstant;
+  readonly saleDocumentRef?: string;
+  readonly soldAt?: TsaInstant;
+  readonly transferRef?: string;
+  readonly transferredAt?: TsaInstant;
+  readonly saleRef?: string;
+  readonly proceeds?: Money;
+  readonly agencyRef?: string;
+  readonly realisedAt?: TsaInstant;
+  readonly source: 'LIVE' | 'FIXTURE';
+}
+
 // =============================================================================
 // State
 // =============================================================================
@@ -542,6 +853,33 @@ interface BusinessRecord {
   inputs?: AssessmentInputs;
   bureauFetch?: BureauFetch;
   bankFacts?: BankStatementFacts;
+  security: { collateral: CollateralItem[]; guarantees: Guarantee[] };
+  pack: {
+    conditions: Condition[];
+    covenants: Covenant[];
+    justifications: Record<string, Justification>;
+    frozen?: FrozenPack;
+  };
+  closing: {
+    signing?: SigningInProgress;
+    signer?: SignerRecord;
+    cps: Record<string, CpEvidence>;
+    payee?: Payee;
+    tranches?: Tranche[];
+    tawarruq?: TawarruqRecord;
+  };
+  booking?: LoanBookingRecord;
+  letterPdfs: LetterPdf[];
+  sealedLetters: SealedLetter[];
+  servicing: {
+    repayments: RepaymentRecord[];
+    collections: CollectionRecord[];
+    bureauReports: string[];
+    settledReported?: true;
+    lateCharges: LateChargeRecord[];
+    hardship?: HardshipRecord;
+    restructures: RestructureRecord[];
+  };
   assessments: AssessmentRun[];
   offers: OfferRun[];
   events: ApplicationEvent[];
@@ -716,8 +1054,24 @@ async function catalogueFor(tenant: TenantCode, at: TsaInstant): Promise<Result<
 interface ProductContext {
   readonly entry: ProductCatalogue['entries'][number];
   readonly variant: SmeVariant;
-  readonly terms: Parameters<typeof smeTermConventional.quote>[0];
+  readonly terms: Parameters<typeof smeTermConventional.quote>[0] | Parameters<typeof smeTermIslamic.quote>[0];
+  /** The product module that quotes and discloses it. */
+  readonly module: typeof smeTermConventional | typeof smeTermIslamic;
 }
+
+/**
+ * The SME product modules a business application is quoted through: the
+ * conventional term loan and, where the tenant's catalogue enables it under
+ * its board's ruling (core/products/catalogue.ts refuses it otherwise), the
+ * Tawarruq module (KSA K4). The modules share the variant and SME rules.
+ */
+const SME_MODULES: Readonly<Record<string, typeof smeTermConventional | typeof smeTermIslamic>> = {
+  [smeTermConventional.descriptor.code]: smeTermConventional,
+  [smeTermIslamic.descriptor.code]: smeTermIslamic,
+};
+
+/** Whether a business application's product is the Tawarruq module: sold for a deferred price, closed by the commodity steps. */
+export const isTawarruq = (productCode: string): boolean => productCode === smeTermIslamic.descriptor.code;
 
 /**
  * The catalogue entry, its parsed term sheet and the variant. Only the
@@ -738,17 +1092,16 @@ async function productFor(
     return fail('PRODUCT_NOT_IN_CATALOGUE', 'The product is not enabled in this institution’s catalogue', {
       productCode,
     });
-  if (productCode !== smeTermConventional.descriptor.code)
-    return fail(
-      'PRODUCT_NOT_QUOTED_HERE',
-      'Business applications are quoted through the conventional SME module only',
-      { productCode },
-    );
-  const terms = smeTermConventional.validateTerms(entry.terms);
+  const module = SME_MODULES[productCode];
+  if (module === undefined)
+    return fail('PRODUCT_NOT_QUOTED_HERE', 'Business applications are quoted through the SME modules only', {
+      productCode,
+    });
+  const terms = module.validateTerms(entry.terms);
   if (!terms.ok) return terms;
   const variant = terms.value.variants.find((v) => v.code === variantCode);
   if (variant === undefined) return fail('VARIANT_UNKNOWN', 'No such variant of this product', { variantCode });
-  return ok({ entry, variant, terms: terms.value });
+  return ok({ entry, variant: variant as SmeVariant, terms: terms.value, module });
 }
 
 // -- dates (integer civil-date arithmetic) -------------------------------------
@@ -783,6 +1136,16 @@ const isoOfDays = (days: bigint): string => {
 function daysOfIso(iso: string): bigint | undefined {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   return m === null ? undefined : daysFromCivil(BigInt(m[1] ?? '0'), BigInt(m[2] ?? '0'), BigInt(m[3] ?? '0'));
+}
+
+/** A tenant's servicing date at an instant (its own time zone), and the time zone its schedule runs in. */
+export function servicingCalendarOf(
+  tenant: TenantCode,
+): { readonly dateAt: (epochSeconds: bigint) => string; readonly timeZone: string } | undefined {
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return undefined;
+  const profile = ctx.value.profile;
+  return { dateAt: (at) => localDate(at, profile), timeZone: profile.timeZone };
 }
 
 /** The calendar date of an instant in the jurisdiction's time zone. */
@@ -916,8 +1279,11 @@ function addFigureRow(book: TenantBook, record: BusinessRecord, row: FigureRow):
 function view(record: BusinessRecord, currency: CurrencyCode): BusinessApplicationView {
   const latestAssessment = record.assessments[record.assessments.length - 1];
   const latestOffer = record.offers[record.offers.length - 1];
+  const servicing = servicingOf(record);
   const inCollections =
-    record.application.status === 'DISBURSED' && record.portfolio !== undefined && record.portfolio.daysPastDue > 0;
+    record.application.status === 'DISBURSED' &&
+    ((record.portfolio !== undefined && record.portfolio.daysPastDue > 0) ||
+      (servicing?.position.daysPastDue ?? 0) > 0);
   const approvedTerms = approvedTermsOf(record.application);
   return {
     application: record.application,
@@ -934,13 +1300,61 @@ function view(record: BusinessRecord, currency: CurrencyCode): BusinessApplicati
     ...(record.inputs === undefined ? {} : { assessmentInputs: record.inputs }),
     ...(record.bureauFetch === undefined ? {} : { bureauFetch: record.bureauFetch }),
     ...(record.bankFacts === undefined ? {} : { bankFacts: record.bankFacts }),
+    security: { collateral: [...record.security.collateral], guarantees: [...record.security.guarantees] },
+    pack: {
+      conditions: [...record.pack.conditions],
+      covenants: [...record.pack.covenants],
+      justifications: { ...record.pack.justifications },
+      ...(record.pack.frozen === undefined ? {} : { frozen: record.pack.frozen }),
+    },
+    closing: {
+      ...(record.closing.signing === undefined ? {} : { signing: record.closing.signing }),
+      ...(record.closing.signer === undefined ? {} : { signer: record.closing.signer }),
+      cps: { ...record.closing.cps },
+      ...(record.closing.payee === undefined ? {} : { payee: record.closing.payee }),
+      ...(record.closing.tranches === undefined ? {} : { tranches: [...record.closing.tranches] }),
+      ...(record.closing.tawarruq === undefined ? {} : { tawarruq: record.closing.tawarruq }),
+    },
+    ...(record.booking === undefined ? {} : { booking: record.booking }),
+    ...(servicing === undefined ? {} : { servicing }),
+    letterPdfs: [...record.letterPdfs],
+    sealedLetters: [...record.sealedLetters],
     assessments: [...record.assessments],
     ...(latestAssessment === undefined ? {} : { latestAssessment }),
     offers: [...record.offers],
     ...(latestOffer === undefined ? {} : { latestOffer }),
     ...(record.portfolio === undefined ? {} : { portfolio: record.portfolio }),
+    ...documentRequestOf(record),
     events: [...record.events],
   };
+}
+
+/**
+ * Where the latest request for documents stands (D4), from the events: AWAITING
+ * until the documents that close it arrive; RECEIVED while that arrival is the
+ * latest thing on the case, so the officer's queue shows it ready again.
+ */
+function documentRequestOf(record: BusinessRecord): { documentRequest?: DocumentRequestState } {
+  const events = [...record.events].sort((a, b) => a.sequence - b.sequence);
+  const at = events.findLastIndex((e) => e.eventType === 'DOCUMENTS_REQUESTED');
+  const requested = events[at];
+  if (requested === undefined) return {};
+  const base = {
+    requestedAtEpochSeconds: requested.atEpochSeconds,
+    gapSet: requested.detail['gaps'] ?? '',
+    count: Number(requested.detail['count'] ?? '0'),
+  };
+  const received = events.slice(at + 1).findIndex((e) => e.eventType === 'DOCUMENTS_RECEIVED');
+  if (received < 0) return { documentRequest: { ...base, status: 'AWAITING' } };
+  return at + 1 + received === events.length - 1
+    ? {
+        documentRequest: {
+          ...base,
+          status: 'RECEIVED',
+          receivedAtEpochSeconds: events[at + 1 + received]?.atEpochSeconds ?? 0n,
+        },
+      }
+    : {};
 }
 
 // =============================================================================
@@ -972,7 +1386,7 @@ async function loadInto(tenant: TenantCode, book: TenantBook): Promise<void> {
   if (
     book.records.size === 0 &&
     !book.seeded &&
-    tenant === SEED_TENANT &&
+    SEED_BOOKS[tenant] !== undefined &&
     (pool === undefined || (await illustrativeSeedPermitted(pool)))
   ) {
     book.seeded = true;
@@ -991,6 +1405,12 @@ function restoreBook(book: TenantBook, persisted: Awaited<ReturnType<typeof load
       contact: { partyRef: firstOwner },
       figures: [],
       documents: [],
+      security: { collateral: [], guarantees: [] },
+      pack: { conditions: [], covenants: [], justifications: {} },
+      closing: { cps: {} },
+      servicing: { repayments: [], collections: [], bureauReports: [], lateCharges: [], restructures: [] },
+      letterPdfs: [],
+      sealedLetters: [],
       assessments: [],
       offers: [],
       events: [],
@@ -1055,7 +1475,160 @@ function restoreBook(book: TenantBook, persisted: Awaited<ReturnType<typeof load
 /** Rebuilds what is recorded only as an event: contact, documents, assessment inputs, portfolio status. */
 /** A stored bureau source: the old AECB_FIXTURE (and an absent one) meant keyed from the upstream report. */
 function bureauSourceOf(stored: string | undefined): BureauSource {
-  return stored === 'AECB_RAIL_FIXTURE' || stored === 'AECB_RAIL_LIVE' ? stored : 'KEYED_FROM_UPSTREAM_REPORT';
+  return stored === 'AECB_RAIL_FIXTURE' ||
+    stored === 'AECB_RAIL_LIVE' ||
+    stored === 'SIMAH_RAIL_FIXTURE' ||
+    stored === 'SIMAH_RAIL_LIVE'
+    ? stored
+    : 'KEYED_FROM_UPSTREAM_REPORT';
+}
+
+function contentOf(d: Readonly<Record<string, string>>): DocumentContent {
+  const type = d['contentType'];
+  return {
+    sha256Hex: d['contentSha256'] ?? '',
+    byteLength: Number.parseInt(d['contentBytes'] ?? '0', 10),
+    mediaType: type === 'image/png' || type === 'image/jpeg' ? type : 'application/pdf',
+    storage: d['contentStorage'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+  };
+}
+
+// -- the security register (UAE M3) -------------------------------------------
+
+function collateralFromDetail(
+  d: Readonly<Record<string, string>>,
+  currency: CurrencyCode,
+  e: ApplicationEvent,
+): CollateralItem {
+  const charge = d['charge'];
+  return {
+    itemId: d['itemId'] ?? '',
+    kind: (d['kind'] ?? 'OTHER') as CollateralItem['kind'],
+    description: d['description'] ?? '',
+    marketValue: money(BigInt(d['marketValueMinorUnits'] ?? '0'), currency),
+    valuedAtEpochSeconds: BigInt(d['valuedAtEpoch'] ?? '0'),
+    valuerRef: d['valuerRef'] ?? '',
+    ...(d['evidenceRef'] === undefined ? {} : { evidenceRef: d['evidenceRef'] }),
+    charge: charge === 'REGISTERED' || charge === 'PENDING' ? charge : 'NOT_APPLICABLE',
+    ...(d['chargeRef'] === undefined ? {} : { chargeRef: d['chargeRef'] }),
+    recordedBy: e.actor,
+    recordedAtEpochSeconds: e.atEpochSeconds,
+  };
+}
+
+function guaranteeFromDetail(
+  d: Readonly<Record<string, string>>,
+  currency: CurrencyCode,
+  e: ApplicationEvent,
+): Guarantee {
+  const limit = d['limitMinorUnits'];
+  return {
+    guaranteeId: d['itemId'] ?? '',
+    guarantorKind: d['guarantorKind'] === 'CORPORATE' ? 'CORPORATE' : 'PERSONAL',
+    guarantorRef: d['guarantorRef'] ?? '',
+    guarantorName: d['guarantorName'] ?? '',
+    limit: limit === undefined ? { kind: 'UNLIMITED' } : { kind: 'LIMITED', amount: money(BigInt(limit), currency) },
+    ...(d['deedRef'] === undefined ? {} : { deedRef: d['deedRef'] }),
+    recordedBy: e.actor,
+    recordedAtEpochSeconds: e.atEpochSeconds,
+  };
+}
+
+type SecurityMark =
+  { readonly confirmedBy: string; readonly confirmedAtEpochSeconds: bigint } | { readonly withdrawnBy: string };
+
+function updateSecurityItem(r: BusinessRecord, itemId: string, mark: SecurityMark): void {
+  const c = r.security.collateral.findIndex((i) => i.itemId === itemId);
+  if (c >= 0) {
+    r.security.collateral[c] = { ...(r.security.collateral[c] as CollateralItem), ...mark };
+    return;
+  }
+  const g = r.security.guarantees.findIndex((i) => i.guaranteeId === itemId);
+  if (g >= 0) r.security.guarantees[g] = { ...(r.security.guarantees[g] as Guarantee), ...mark };
+}
+
+const nextSecurityId = (prefix: 'COL' | 'GUA', taken: number): string =>
+  `${prefix}-${String(taken + 1).padStart(3, '0')}`;
+
+// -- the decision pack (UAE M4) -----------------------------------------------
+
+function conditionFromDetail(d: Readonly<Record<string, string>>, e: ApplicationEvent): Condition {
+  const due = d['dueDaysAfterDisbursement'];
+  return {
+    conditionId: d['itemId'] ?? '',
+    kind: d['kind'] === 'SUBSEQUENT' ? 'SUBSEQUENT' : 'PRECEDENT',
+    textEn: d['textEn'] ?? '',
+    textAr: d['textAr'] ?? '',
+    ...(due === undefined ? {} : { dueDaysAfterDisbursement: Number.parseInt(due, 10) }),
+    addedBy: e.actor,
+    addedAtEpochSeconds: e.atEpochSeconds,
+  };
+}
+
+/** A covenant replays from the template as it stood when attached, never from today's policy. */
+function covenantFromDetail(d: Readonly<Record<string, string>>, e: ApplicationEvent): Covenant {
+  const kind = d['kind'] === 'FINANCIAL' || d['kind'] === 'NEGATIVE' ? d['kind'] : 'INFORMATION';
+  const frequency = d['frequency'];
+  return {
+    covenantId: d['itemId'] ?? '',
+    template: {
+      code: d['code'] ?? '',
+      kind,
+      ...(d['metric'] === undefined ? {} : { metric: d['metric'] }),
+      ...(d['minimumPerTenThousand'] === undefined
+        ? {}
+        : { minimumPerTenThousand: Number.parseInt(d['minimumPerTenThousand'], 10) }),
+      ...(frequency === 'QUARTERLY' || frequency === 'SEMI_ANNUAL' || frequency === 'ANNUAL' ? { frequency } : {}),
+      labelEn: d['labelEn'] ?? '',
+      labelAr: d['labelAr'] ?? '',
+    },
+    addedBy: e.actor,
+    addedAtEpochSeconds: e.atEpochSeconds,
+  };
+}
+
+function withdrawPackItemIn(r: BusinessRecord, itemId: string, actor: string): boolean {
+  const c = r.pack.conditions.findIndex((x) => x.conditionId === itemId && x.withdrawnBy === undefined);
+  if (c >= 0) {
+    r.pack.conditions[c] = { ...(r.pack.conditions[c] as Condition), withdrawnBy: actor };
+    return true;
+  }
+  const v = r.pack.covenants.findIndex((x) => x.covenantId === itemId && x.withdrawnBy === undefined);
+  if (v >= 0) {
+    r.pack.covenants[v] = { ...(r.pack.covenants[v] as Covenant), withdrawnBy: actor };
+    return true;
+  }
+  return false;
+}
+
+// -- tranches and payment results (UAE M5b) ------------------------------------
+
+/** A failed payment withdraws the payee confirmation: a second person confirms the account (corrected or not) before money goes again. */
+function withdrawPayeeConfirmation(r: BusinessRecord): void {
+  if (r.closing.payee === undefined) return;
+  const { confirmedBy: _withdrawn, ...unconfirmed } = r.closing.payee;
+  r.closing.payee = unconfirmed;
+}
+
+function updateTranche(r: BusinessRecord, trancheId: string, f: (t: Tranche) => Tranche): void {
+  const i = (r.closing.tranches ?? []).findIndex((t) => t.trancheId === trancheId);
+  if (i < 0 || r.closing.tranches === undefined) return;
+  r.closing.tranches[i] = f(r.closing.tranches[i] as Tranche);
+}
+
+/** A bank status on a released tranche: settled, or failed (rejected, returned). Accepted changes only the reference. */
+function applyPaymentResult(
+  t: Tranche,
+  status: string,
+  instructionRef: string | undefined,
+  reasonCode: string | undefined,
+  at: bigint,
+): Tranche {
+  const ref = instructionRef === undefined ? {} : { instructionRef };
+  if (status === 'SETTLED') return { ...t, ...ref, status: 'SETTLED' };
+  if (status === 'REJECTED' || status === 'RETURNED')
+    return { ...t, ...ref, status: 'FAILED', failureCode: reasonCode ?? status, failedAtEpochSeconds: at };
+  return { ...t, ...ref };
 }
 
 function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
@@ -1079,6 +1652,7 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
           authorityId: d['capturedAuthority'] ?? '',
         }),
         presentedBy: e.actor,
+        ...(d['contentSha256'] === undefined ? {} : { content: contentOf(d) }),
       });
       return;
     case 'DOCUMENT_VALIDATED':
@@ -1146,6 +1720,301 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
     case 'BANK_STATEMENTS_CONFIRMED':
       if (r.bankFacts !== undefined)
         r.bankFacts = { ...r.bankFacts, confirmedBy: e.actor, confirmedAtEpochSeconds: e.atEpochSeconds };
+      return;
+    case 'COLLATERAL_RECORDED':
+      r.security.collateral.push(collateralFromDetail(d, r.application.requested.currency, e));
+      return;
+    case 'GUARANTEE_RECORDED':
+      r.security.guarantees.push(guaranteeFromDetail(d, r.application.requested.currency, e));
+      return;
+    case 'SECURITY_CONFIRMED':
+      updateSecurityItem(r, d['itemId'] ?? '', { confirmedBy: e.actor, confirmedAtEpochSeconds: e.atEpochSeconds });
+      return;
+    case 'SECURITY_WITHDRAWN':
+      updateSecurityItem(r, d['itemId'] ?? '', { withdrawnBy: e.actor });
+      return;
+    case 'CONDITION_ADDED':
+      r.pack.conditions.push(conditionFromDetail(d, e));
+      return;
+    case 'COVENANT_ADDED':
+      r.pack.covenants.push(covenantFromDetail(d, e));
+      return;
+    case 'PACK_ITEM_WITHDRAWN':
+      withdrawPackItemIn(r, d['itemId'] ?? '', e.actor);
+      return;
+    case 'DEVIATION_JUSTIFIED':
+      r.pack.justifications[d['code'] ?? ''] = { text: d['text'] ?? '', by: e.actor, atEpochSeconds: e.atEpochSeconds };
+      return;
+    case 'DECISION_PACK_FROZEN':
+      r.pack.frozen = { digest: d['digest'] ?? '', atEpochSeconds: e.atEpochSeconds };
+      return;
+    case 'SIGNING_STARTED':
+      r.closing.signing = {
+        transactionRef: d['transactionRef'] ?? '',
+        letterVersion: d['letterVersion'] ?? '',
+        expiresAtEpochSeconds: BigInt(d['expiresAtEpoch'] ?? '0'),
+        startedBy: e.actor,
+        source: d['source'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+      };
+      return;
+    case 'SIGNING_ENDED':
+      delete r.closing.signing;
+      return;
+    case 'SIGNER_VERIFIED':
+      delete r.closing.signing;
+      r.closing.signer = {
+        assertionId: d['assertionId'] ?? '',
+        identityRef: d['identityRef'] ?? '',
+        source: d['source'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+      };
+      return;
+    case 'CP_SATISFIED':
+      r.closing.cps[d['conditionId'] ?? ''] = {
+        evidenceRef: d['evidenceRef'] ?? '',
+        satisfiedBy: e.actor,
+        satisfiedAtEpochSeconds: e.atEpochSeconds,
+      };
+      return;
+    case 'CP_VERIFIED': {
+      const cp = r.closing.cps[d['conditionId'] ?? ''];
+      if (cp !== undefined) r.closing.cps[d['conditionId'] ?? ''] = { ...cp, verifiedBy: e.actor };
+      return;
+    }
+    case 'PAYEE_RECORDED':
+      r.closing.payee = {
+        iban: d['iban'] ?? '',
+        accountName: d['accountName'] ?? '',
+        evidenceRef: d['evidenceRef'] ?? '',
+        recordedBy: e.actor,
+        recordedAtEpochSeconds: e.atEpochSeconds,
+      };
+      return;
+    case 'PAYEE_CONFIRMED':
+      if (r.closing.payee !== undefined) r.closing.payee = { ...r.closing.payee, confirmedBy: e.actor };
+      return;
+    case 'TAWARRUQ_STEP': {
+      const at = restoreAttestedInstant({
+        epochSeconds: BigInt(d['atEpoch'] ?? '0'),
+        tokenDigest: d['tokenDigest'] || 'replayed',
+        authorityId: d['authority'] || 'replayed',
+      });
+      const currency = r.application.requested.currency;
+      const step = d['step'];
+      if (step === 'COMMODITY_PURCHASED')
+        r.closing.tawarruq = {
+          state: 'COMMODITY_PURCHASED',
+          lot: {
+            lotRef: d['lotRef'] ?? '',
+            commodityCode: d['commodityCode'] ?? '',
+            quantity: d['quantity'] ?? '',
+            unit: d['unit'] ?? '',
+            price: money(BigInt(d['priceMinorUnits'] ?? '0'), currency),
+            confirmedAtEpochSeconds: BigInt(d['brokerConfirmedAt'] ?? '0'),
+          },
+          purchasedAt: at,
+          source: d['source'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+        };
+      else if (r.closing.tawarruq !== undefined && step === 'SOLD_TO_CUSTOMER')
+        r.closing.tawarruq = {
+          ...r.closing.tawarruq,
+          state: 'SOLD_TO_CUSTOMER',
+          saleDocumentRef: d['saleDocumentRef'] ?? '',
+          soldAt: at,
+        };
+      else if (r.closing.tawarruq !== undefined && step === 'TITLE_TRANSFERRED')
+        r.closing.tawarruq = {
+          ...r.closing.tawarruq,
+          state: 'TITLE_TRANSFERRED',
+          transferRef: d['transferRef'] ?? '',
+          transferredAt: at,
+        };
+      else if (r.closing.tawarruq !== undefined && step === 'PROCEEDS_REALISED')
+        r.closing.tawarruq = {
+          ...r.closing.tawarruq,
+          state: 'PROCEEDS_REALISED',
+          saleRef: d['saleRef'] ?? '',
+          proceeds: money(BigInt(d['proceedsMinorUnits'] ?? '0'), currency),
+          ...(d['agencyRef'] === undefined ? {} : { agencyRef: d['agencyRef'] }),
+          realisedAt: at,
+        };
+      return;
+    }
+    case 'REPAYMENT_RECORDED':
+      r.servicing.repayments.push({
+        repaymentId: d['repaymentId'] ?? '',
+        receivedOn: d['receivedOn'] ?? '',
+        amount: money(BigInt(d['amountMinorUnits'] ?? '0'), r.application.requested.currency),
+        reference: d['reference'] ?? '',
+        channel: (d['channel'] ?? 'MANUAL') as RepaymentChannel,
+        recordedBy: e.actor,
+        ...(d['confirmedBy'] === undefined ? {} : { confirmedBy: d['confirmedBy'] }),
+        source: d['source'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+      });
+      return;
+    case 'COLLECTION_PRESENTED':
+      r.servicing.collections.push({
+        scheduleNumber: Number.parseInt(d['instalment'] ?? '0', 10),
+        idempotencyKey: d['idempotencyKey'] ?? '',
+        channel: d['channel'] === 'SADAD' ? 'SADAD' : 'PARTNER_BANK',
+        amount: money(BigInt(d['amountMinorUnits'] ?? '0'), r.application.requested.currency),
+        dueDate: d['dueDate'] ?? '',
+        presentedBy: e.actor,
+        presentedAtEpochSeconds: e.atEpochSeconds,
+      });
+      return;
+    case 'COLLECTION_RESULT': {
+      const i = r.servicing.collections.findIndex((x) => x.idempotencyKey === d['idempotencyKey']);
+      if (i >= 0)
+        r.servicing.collections[i] = {
+          ...(r.servicing.collections[i] as CollectionRecord),
+          result: d['result'] === 'PAID' ? 'PAID' : 'RETURNED',
+        };
+      return;
+    }
+    case 'LATE_CHARGE_ASSESSED':
+      r.servicing.lateCharges.push({
+        scheduleNumber: Number.parseInt(d['instalment'] ?? '0', 10),
+        amount: money(BigInt(d['amountMinorUnits'] ?? '0'), r.application.requested.currency),
+        treatment: d['treatment'] === 'CHARITY' ? 'CHARITY' : 'INCOME',
+        assessedBy: e.actor,
+        assessedAtEpochSeconds: e.atEpochSeconds,
+      });
+      return;
+    case 'LATE_CHARGE_WAIVED': {
+      const i = r.servicing.lateCharges.findIndex(
+        (x) => String(x.scheduleNumber) === d['instalment'] && x.waivedBy === undefined,
+      );
+      if (i >= 0)
+        r.servicing.lateCharges[i] = {
+          ...(r.servicing.lateCharges[i] as LateChargeRecord),
+          waivedBy: e.actor,
+          waiverReason: d['reason'] ?? '',
+        };
+      return;
+    }
+    case 'HARDSHIP_SET':
+      r.servicing.hardship = { reason: d['reason'] ?? '', setBy: e.actor, setAtEpochSeconds: e.atEpochSeconds };
+      return;
+    case 'HARDSHIP_LIFTED':
+      delete r.servicing.hardship;
+      return;
+    case 'RESTRUCTURE_PROPOSED': {
+      const currency = r.application.requested.currency;
+      r.servicing.restructures.push({
+        restructureId: d['restructureId'] ?? '',
+        effectiveDate: d['effectiveDate'] ?? '',
+        rows: (d['rows'] ?? '')
+          .split(';')
+          .filter((x) => x !== '')
+          .map((x) => {
+            const [n, due, pr, ch] = x.split('|');
+            return {
+              number: Number.parseInt(n ?? '0', 10),
+              dueDate: due ?? '',
+              principal: money(BigInt(pr ?? '0'), currency),
+              charge: money(BigInt(ch ?? '0'), currency),
+            };
+          }),
+        outstandingBefore: money(BigInt(d['outstandingBefore'] ?? '0'), currency),
+        totalAfter: money(BigInt(d['totalAfter'] ?? '0'), currency),
+        proposedBy: e.actor,
+        reason: d['reason'] ?? '',
+      });
+      return;
+    }
+    case 'RESTRUCTURE_APPROVED': {
+      const i = r.servicing.restructures.findIndex((x) => x.restructureId === d['restructureId']);
+      if (i >= 0)
+        r.servicing.restructures[i] = { ...(r.servicing.restructures[i] as RestructureRecord), approvedBy: e.actor };
+      return;
+    }
+    case 'BUREAU_STATUS_REPORTED':
+      r.servicing.bureauReports.push(d['month'] ?? '');
+      return;
+    case 'BUREAU_SETTLED_REPORTED':
+      r.servicing.settledReported = true;
+      return;
+    case 'REPAYMENT_CONFIRMED': {
+      const i = r.servicing.repayments.findIndex((x) => x.repaymentId === d['repaymentId']);
+      if (i >= 0)
+        r.servicing.repayments[i] = { ...(r.servicing.repayments[i] as RepaymentRecord), confirmedBy: e.actor };
+      return;
+    }
+    case 'OFFER_PDF_RENDERED':
+      r.letterPdfs.push({
+        letterVersion: d['letterVersion'] ?? '',
+        sha256Hex: d['sha256'] ?? '',
+        byteLength: Number.parseInt(d['byteLength'] ?? '0', 10),
+        storage: d['storage'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+        renderedBy: e.actor,
+        renderedAtEpochSeconds: e.atEpochSeconds,
+      });
+      return;
+    case 'LETTER_SEALED':
+      r.sealedLetters.push({
+        letterVersion: d['letterVersion'] ?? '',
+        sourceSha256Hex: d['sourceSha256'] ?? '',
+        sha256Hex: d['sha256'] ?? '',
+        byteLength: Number.parseInt(d['byteLength'] ?? '0', 10),
+        storage: d['storage'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+        signatureRef: d['signatureRef'] ?? '',
+        padesLevel: d['padesLevel'] ?? '',
+        longTermValidation: d['longTermValidation'] === 'true',
+        signerCommonName: d['signerCommonName'] ?? '',
+        issuerCommonName: d['issuerCommonName'] ?? '',
+        certificateSerialHex: d['certificateSerialHex'] ?? '',
+        environment: d['environment'] === 'production' ? 'production' : d['environment'] === 'uat' ? 'uat' : 'sandbox',
+        sealedBy: e.actor,
+        sealedAtEpochSeconds: e.atEpochSeconds,
+      });
+      return;
+    case 'LOAN_BOOKED':
+      r.booking = {
+        loanAccountNumber: d['loanAccountNumber'] ?? '',
+        contractRef: d['contractRef'] ?? '',
+        customerRef: d['customerRef'] ?? '',
+        productCode: d['productCode'] ?? '',
+        source: d['source'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+        bookedBy: e.actor,
+        bookedAtEpochSeconds: e.atEpochSeconds,
+      };
+      return;
+    case 'TRANCHES_PLANNED': {
+      const amounts = (d['amounts'] ?? '').split(',');
+      const dates = (d['dates'] ?? '').split(',');
+      r.closing.tranches = amounts.map((a, i) => ({
+        trancheId: `T${String(i + 1)}`,
+        amount: money(BigInt(a || '0'), r.application.requested.currency),
+        ...(dates[i] ? { plannedDate: dates[i] } : {}),
+        status: 'PLANNED' as const,
+        releases: 0,
+      }));
+      return;
+    }
+    case 'TRANCHE_RELEASED': {
+      const id = d['trancheId'] ?? 'T1';
+      r.closing.tranches ??= [
+        {
+          trancheId: 'T1',
+          amount: money(BigInt(d['minorUnits'] ?? '0'), r.application.requested.currency),
+          status: 'PLANNED',
+          releases: 0,
+        },
+      ];
+      updateTranche(r, id, (t) => ({
+        ...t,
+        status: 'RELEASED',
+        releases: t.releases + 1,
+        idempotencyKey: d['idempotencyKey'] ?? '',
+        releasedBy: e.actor,
+      }));
+      return;
+    }
+    case 'PAYMENT_RESULT_RECORDED':
+      updateTranche(r, d['trancheId'] ?? '', (t) =>
+        applyPaymentResult(t, d['status'] ?? '', d['instructionRef'], d['reasonCode'], e.atEpochSeconds),
+      );
+      if (d['status'] === 'REJECTED' || d['status'] === 'RETURNED') withdrawPayeeConfirmation(r);
       return;
     case 'PORTFOLIO_STATUS_RECORDED':
       r.portfolio = {
@@ -1363,10 +2232,8 @@ export function resetBusinessStore(options: { readonly seed?: boolean; readonly 
   state.outboxOnDatabase = false;
   if (options.pool === undefined) delete state.pool;
   else state.pool = options.pool;
-  if (options.seed === false) {
-    const book = bookOf(SEED_TENANT);
-    book.seeded = true;
-  }
+  if (options.seed === false)
+    for (const tenant of Object.keys(SEED_BOOKS) as TenantCode[]) bookOf(tenant).seeded = true;
 }
 
 // =============================================================================
@@ -1491,7 +2358,7 @@ async function handOverAt(
   const currency = ctx.value.currency;
 
   // No identity number anywhere in what was handed over — the contact and the upstream reference as much as the applicant.
-  if (containsIdentityNumber(request))
+  if (containsIdentityNumber(request, REGISTRATION_FIELDS, request.applicant.registrationRef))
     return fail(
       'IDENTITY_NUMBER_IN_PAYLOAD',
       'An identity number does not belong in the application record; send a reference',
@@ -1557,6 +2424,12 @@ async function handOverAt(
     contact,
     figures: [],
     documents: [],
+    security: { collateral: [], guarantees: [] },
+    pack: { conditions: [], covenants: [], justifications: {} },
+    closing: { cps: {} },
+    servicing: { repayments: [], collections: [], bureauReports: [], lateCharges: [], restructures: [] },
+    letterPdfs: [],
+    sealedLetters: [],
     assessments: [],
     offers: [],
     events: [],
@@ -1740,9 +2613,12 @@ export async function proposeFigures(
 }
 
 /**
- * The system path for figures read from a statement (OCR) or a rail. Not
- * reachable from a workbench form: the server actions do not import it, and
- * it refuses an OFFICER_ENTRY. `source` is the ingesting system's principal.
+ * The system path for figures read from a statement (OCR) or a rail. No
+ * workbench form carries a value into it: the server actions do not import
+ * it, and it refuses an OFFICER_ENTRY. The one form that leads here is "Read
+ * figures" (business-statement-reading.ts), which carries a document
+ * reference only; the values come from the document as the engine read it.
+ * `source` is the ingesting system's principal.
  */
 export async function ingestReadFigures(
   tenant: TenantCode,
@@ -1885,7 +2761,7 @@ export async function verifyFigure(
 async function presentDocumentAt(
   tenant: TenantCode,
   applicationId: string,
-  doc: { readonly documentType: string; readonly documentRef: string },
+  doc: { readonly documentType: string; readonly documentRef: string; readonly content?: DocumentContent },
   actor: string,
   at: TsaInstant,
 ): Promise<Result<BusinessApplicationView>> {
@@ -1906,12 +2782,15 @@ async function presentDocumentAt(
   if (identity !== undefined) return identity;
   // A typed reference proves nothing about the document: it is PENDING until a different principal validates it.
   const status: BusinessDocument['validationStatus'] = 'PENDING';
+  if (doc.content !== undefined && !/^[0-9a-f]{64}$/.test(doc.content.sha256Hex))
+    return fail('DOCUMENT_CONTENT_INVALID', 'An uploaded document is recorded by the hash of its bytes');
   r.documents.push({
     documentType: doc.documentType,
     documentRef: doc.documentRef,
     capturedAt: at,
     validationStatus: status,
     presentedBy: actor,
+    ...(doc.content === undefined ? {} : { content: doc.content }),
   });
   recordEvent(book, r, {
     eventType: 'DOCUMENT_PRESENTED',
@@ -1926,6 +2805,14 @@ async function presentDocumentAt(
       capturedAtEpoch: at.epochSeconds.toString(),
       capturedTokenDigest: at.tokenDigest,
       capturedAuthority: at.authorityId,
+      ...(doc.content === undefined
+        ? {}
+        : {
+            contentSha256: doc.content.sha256Hex,
+            contentBytes: String(doc.content.byteLength),
+            contentType: doc.content.mediaType,
+            contentStorage: doc.content.storage,
+          }),
     },
   });
   return ok(view(r, ctx.value.currency));
@@ -1938,7 +2825,7 @@ async function presentDocumentAt(
 export async function presentDocument(
   tenant: TenantCode,
   applicationId: string,
-  doc: { readonly documentType: string; readonly documentRef: string },
+  doc: { readonly documentType: string; readonly documentRef: string; readonly content?: DocumentContent },
   actor: string,
 ): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () => presentDocumentAt(tenant, applicationId, doc, actor, developmentAttestation()));
@@ -1951,6 +2838,7 @@ async function validateDocumentAt(
   decision: 'VALID' | 'INVALID',
   validator: string,
   at: TsaInstant,
+  resolution?: string,
 ): Promise<Result<BusinessApplicationView>> {
   const book = await hydrate(tenant);
   const ctx = tenantContext(tenant);
@@ -1978,6 +2866,21 @@ async function validateDocumentAt(
     return fail('FOUR_EYES_REQUIRED', 'A document is validated by a principal other than the one who presented it', {
       documentRef,
     });
+  // Document intelligence D3: the issuer said this document is not authentic. The checker may still accept it — the
+  // issuer's record can lag, or be wrong — but never silently: accepting it takes a written resolution, kept on the
+  // event. Refusing it takes none.
+  const note = resolution?.trim() ?? '';
+  if (decision === 'VALID' && (await issuerRefuted(tenant, applicationId, doc.content?.sha256Hex))) {
+    if (note.length < 10)
+      return fail(
+        'AUTHENTICITY_UNRESOLVED',
+        'The issuer did not confirm this document; accepting it needs the checker’s written resolution',
+        { documentRef },
+      );
+    if (note.length > 500) return fail('RESOLUTION_TOO_LONG', 'A resolution is at most 500 characters');
+    const identityInNote = identityNumberIn({ resolution: note });
+    if (identityInNote !== undefined) return identityInNote;
+  }
   markValidated(r, documentRef, decision, validator);
   recordEvent(book, r, {
     eventType: 'DOCUMENT_VALIDATED',
@@ -1985,7 +2888,12 @@ async function validateDocumentAt(
     toStage: null,
     actor: validator,
     atEpochSeconds: at.epochSeconds,
-    detail: { documentType: doc.documentType, documentRef, validationStatus: decision },
+    detail: {
+      documentType: doc.documentType,
+      documentRef,
+      validationStatus: decision,
+      ...(decision === 'VALID' && note.length > 0 ? { authenticityResolution: note } : {}),
+    },
   });
   return ok(view(r, ctx.value.currency));
 }
@@ -2000,10 +2908,23 @@ export async function validateDocument(
   documentRef: string,
   decision: 'VALID' | 'INVALID',
   validator: string,
+  /** Required to accept a document its issuer did not confirm (D3); ignored otherwise. */
+  resolution?: string,
 ): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () =>
-    validateDocumentAt(tenant, applicationId, documentRef, decision, validator, developmentAttestation()),
+    validateDocumentAt(tenant, applicationId, documentRef, decision, validator, developmentAttestation(), resolution),
   );
+}
+
+/** Whether the latest reading of this document on the application has the issuer saying it is not authentic. */
+async function issuerRefuted(
+  tenant: TenantCode,
+  applicationId: string,
+  sha256Hex: string | undefined,
+): Promise<boolean> {
+  if (sha256Hex === undefined) return false;
+  const latest = (await findingsFor(tenant, { kind: 'BUSINESS_APPLICATION', ref: applicationId })).get(sha256Hex);
+  return latest?.checks.some((c) => c.check === 'AUTHENTIC' && c.outcome === 'FAIL') === true;
 }
 
 const PER_TEN_THOUSAND_MAX = 100_000n;
@@ -2034,7 +2955,15 @@ async function recordAssessmentInputsAt(
       reportRef: fetched.reportRef,
       consentId: fetched.consentId,
       score: fetched.score,
-      source: fetched.source === 'LIVE' ? 'AECB_RAIL_LIVE' : 'AECB_RAIL_FIXTURE',
+      // The jurisdiction's bureau: AECB in the UAE, SIMAH in Saudi Arabia.
+      source:
+        ctx.value.profile.code === 'SA'
+          ? fetched.source === 'LIVE'
+            ? 'SIMAH_RAIL_LIVE'
+            : 'SIMAH_RAIL_FIXTURE'
+          : fetched.source === 'LIVE'
+            ? 'AECB_RAIL_LIVE'
+            : 'AECB_RAIL_FIXTURE',
     };
   } else {
     const keyed = entry.bureau;
@@ -2141,7 +3070,7 @@ export async function recordAssessmentInputs(
  */
 export function intakeConsentFor(
   application: BusinessApplication,
-  type: 'credit_bureau' | 'account_information',
+  type: 'credit_bureau' | 'account_information' | 'document_verification',
 ): string | undefined {
   if (!application.upstreamRef.startsWith('intake:')) return undefined;
   const id = `${application.upstreamRef.slice('intake:'.length)}:entity:${type}`.toLowerCase();
@@ -2283,6 +3212,298 @@ export async function confirmBankStatementFacts(
   });
 }
 
+/** Where the register may change: before submission, while the case is being prepared. */
+function securityOpen(r: BusinessRecord): Result<true> {
+  return SPREAD_OPEN.has(r.application.status)
+    ? ok(true)
+    : fail('SECURITY_LOCKED', 'The security register changes only before the application is submitted', {
+        status: r.application.status,
+      });
+}
+
+/** Evidence named on a security item is a document already on the application, uploaded or referenced. */
+function evidenceOnFile(r: BusinessRecord, ref: string | undefined): Result<true> {
+  if (ref === undefined || r.documents.some((d) => d.documentRef === ref)) return ok(true);
+  return fail(
+    'SECURITY_EVIDENCE_NOT_ON_FILE',
+    'Attach the valuation or deed to the application first, then name it here',
+  );
+}
+
+/** The officer records a collateral item. It counts once a different person confirms it. */
+export async function recordCollateral(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: CollateralEntry,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    recordCollateralAt(tenant, applicationId, entry, actor, developmentAttestation().epochSeconds),
+  );
+}
+
+async function recordCollateralAt(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: CollateralEntry,
+  actor: string,
+  at: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  const book = await hydrate(tenant);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  const open = securityOpen(r);
+  if (!open.ok) return open;
+  const item = validateCollateralEntry(entry, ctx.value.currency, at);
+  if (!item.ok) return item;
+  const evidence = evidenceOnFile(r, item.value.evidenceRef);
+  if (!evidence.ok) return evidence;
+  const itemId = nextSecurityId('COL', r.security.collateral.length);
+  r.security.collateral.push({ ...item.value, itemId, recordedBy: actor, recordedAtEpochSeconds: at });
+  recordEvent(book, r, {
+    eventType: 'COLLATERAL_RECORDED',
+    fromStage: null,
+    toStage: null,
+    actor,
+    atEpochSeconds: at,
+    detail: {
+      itemId,
+      kind: item.value.kind,
+      description: item.value.description,
+      marketValueMinorUnits: item.value.marketValue.minorUnits.toString(),
+      valuedAtEpoch: item.value.valuedAtEpochSeconds.toString(),
+      valuerRef: item.value.valuerRef,
+      ...(item.value.evidenceRef === undefined ? {} : { evidenceRef: item.value.evidenceRef }),
+      charge: item.value.charge,
+      ...(item.value.chargeRef === undefined ? {} : { chargeRef: item.value.chargeRef }),
+    },
+  });
+  return ok(view(r, ctx.value.currency));
+}
+
+/** The officer records a guarantee: a personal one from an owner, or a corporate one. It counts once confirmed by another person. */
+export async function recordGuarantee(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: GuaranteeEntry,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    recordGuaranteeAt(tenant, applicationId, entry, actor, developmentAttestation().epochSeconds),
+  );
+}
+
+async function recordGuaranteeAt(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: GuaranteeEntry,
+  actor: string,
+  at: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  const book = await hydrate(tenant);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  const open = securityOpen(r);
+  if (!open.ok) return open;
+  const g = validateGuaranteeEntry(entry, r.application.applicant.owners, ctx.value.currency);
+  if (!g.ok) return g;
+  if (
+    r.security.guarantees.some(
+      (x) =>
+        x.withdrawnBy === undefined &&
+        x.guarantorKind === g.value.guarantorKind &&
+        x.guarantorRef === g.value.guarantorRef,
+    )
+  )
+    return fail(
+      'GUARANTEE_DUPLICATE',
+      'This guarantor already has a guarantee on the application; withdraw it to replace it',
+    );
+  const evidence = evidenceOnFile(r, g.value.deedRef);
+  if (!evidence.ok) return evidence;
+  const guaranteeId = nextSecurityId('GUA', r.security.guarantees.length);
+  r.security.guarantees.push({ ...g.value, guaranteeId, recordedBy: actor, recordedAtEpochSeconds: at });
+  recordEvent(book, r, {
+    eventType: 'GUARANTEE_RECORDED',
+    fromStage: null,
+    toStage: null,
+    actor,
+    atEpochSeconds: at,
+    detail: {
+      itemId: guaranteeId,
+      guarantorKind: g.value.guarantorKind,
+      guarantorRef: g.value.guarantorRef,
+      guarantorName: g.value.guarantorName,
+      ...(g.value.limit.kind === 'LIMITED' ? { limitMinorUnits: g.value.limit.amount.minorUnits.toString() } : {}),
+      ...(g.value.deedRef === undefined ? {} : { deedRef: g.value.deedRef }),
+    },
+  });
+  return ok(view(r, ctx.value.currency));
+}
+
+/** A second person confirms a recorded collateral item or guarantee. A stale valuation is not confirmed. */
+export async function confirmSecurityItem(
+  tenant: TenantCode,
+  applicationId: string,
+  itemId: string,
+  confirmer: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    confirmSecurityItemAt(tenant, applicationId, itemId, confirmer, developmentAttestation().epochSeconds),
+  );
+}
+
+async function confirmSecurityItemAt(
+  tenant: TenantCode,
+  applicationId: string,
+  itemId: string,
+  confirmer: string,
+  at: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  const book = await hydrate(tenant);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  const open = securityOpen(r);
+  if (!open.ok) return open;
+  const collateral = r.security.collateral.find((i) => i.itemId === itemId);
+  const item = collateral ?? r.security.guarantees.find((i) => i.guaranteeId === itemId);
+  if (item === undefined) return fail('SECURITY_ITEM_NOT_FOUND', 'No such item in the security register', { itemId });
+  if (item.withdrawnBy !== undefined)
+    return fail('SECURITY_ITEM_WITHDRAWN', 'A withdrawn item is not confirmed; record it again');
+  if (item.confirmedBy !== undefined) return fail('SECURITY_ALREADY_CONFIRMED', 'This item is already confirmed');
+  if (confirmer === item.recordedBy)
+    return reject(
+      'OP-DETERMINACY',
+      'FOUR_EYES_SELF_CONFIRMATION',
+      'Whoever recorded a security item does not confirm it',
+    );
+  if (collateral !== undefined) {
+    const policy = loadSecurityPolicy(tenant);
+    if (!policy.ok) return policy;
+    if (!valuationCurrent(collateral, policy.value, at))
+      return fail('VALUATION_STALE', 'The valuation is older than the policy allows; record a current one', {
+        maxValuationAgeDays: String(policy.value.maxValuationAgeDays),
+      });
+  }
+  updateSecurityItem(r, itemId, { confirmedBy: confirmer, confirmedAtEpochSeconds: at });
+  recordEvent(book, r, {
+    eventType: 'SECURITY_CONFIRMED',
+    fromStage: null,
+    toStage: null,
+    actor: confirmer,
+    atEpochSeconds: at,
+    detail: { itemId },
+  });
+  return ok(view(r, ctx.value.currency));
+}
+
+/** Withdraw an item before submission. It stays in the record, counted nowhere. Withdrawing only ever reduces cover, so one person may do it. */
+export async function withdrawSecurityItem(
+  tenant: TenantCode,
+  applicationId: string,
+  itemId: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    const open = securityOpen(r);
+    if (!open.ok) return open;
+    const item =
+      r.security.collateral.find((i) => i.itemId === itemId) ??
+      r.security.guarantees.find((i) => i.guaranteeId === itemId);
+    if (item === undefined) return fail('SECURITY_ITEM_NOT_FOUND', 'No such item in the security register', { itemId });
+    if (item.withdrawnBy !== undefined) return fail('SECURITY_ITEM_WITHDRAWN', 'This item is already withdrawn');
+    const at = developmentAttestation().epochSeconds;
+    updateSecurityItem(r, itemId, { withdrawnBy: actor });
+    recordEvent(book, r, {
+      eventType: 'SECURITY_WITHDRAWN',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { itemId },
+    });
+    return ok(view(r, ctx.value.currency));
+  });
+}
+
+export interface SecurityStatus {
+  readonly position: SecurityPosition;
+  /** The variant's collateral requirements as the catalogue labels them. */
+  readonly labels: Readonly<Record<string, { readonly en: string; readonly ar: string }>>;
+  readonly haircutsPerTenThousand: Readonly<Record<string, number>>;
+  readonly maxValuationAgeDays: number;
+  readonly policyRef: string;
+}
+
+async function securityOf(tenant: TenantCode, r: BusinessRecord, at: bigint): Promise<Result<SecurityStatus>> {
+  const policy = loadSecurityPolicy(tenant);
+  if (!policy.ok) return policy;
+  const product = await productFor(
+    tenant,
+    r.application.productCode,
+    r.application.variantCode,
+    developmentAttestation(),
+  );
+  if (!product.ok) return product;
+  const required = product.value.variant.collateral;
+  return ok({
+    position: securityPosition(
+      r.security,
+      r.application.requested,
+      required.map((c) => c.code),
+      r.application.applicant.owners,
+      policy.value,
+      at,
+    ),
+    labels: Object.fromEntries(required.map((c) => [c.code, { en: c.labelEn, ar: c.labelAr }])),
+    haircutsPerTenThousand: policy.value.haircutsPerTenThousand,
+    maxValuationAgeDays: policy.value.maxValuationAgeDays,
+    policyRef: policy.value.policyRef,
+  });
+}
+
+/** The register against the variant's requirements and the tenant's haircuts, at the current attested instant. */
+export async function securityStatus(tenant: TenantCode, applicationId: string): Promise<Result<SecurityStatus>> {
+  const book = await hydrate(tenant);
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  return securityOf(tenant, r, developmentAttestation().epochSeconds);
+}
+
+/**
+ * Collateral cover for scoring. Where the confirmed register holds valued
+ * collateral (a kind the policy lends against at all), the register decides,
+ * and a stale valuation counts for nothing. Otherwise — a partner hand-over,
+ * or only instruments such as a promissory note — the officer's keyed value.
+ */
+function collateralCoverageOf(tenant: TenantCode, record: BusinessRecord, at: bigint, keyed: Money): bigint {
+  const requested = record.application.requested.minorUnits;
+  const policy = loadSecurityPolicy(tenant);
+  const confirmed = record.security.collateral.filter(
+    (c) =>
+      c.confirmedBy !== undefined &&
+      c.withdrawnBy === undefined &&
+      policy.ok &&
+      policy.value.haircutsPerTenThousand[c.kind] < 10_000,
+  );
+  if (!policy.ok || confirmed.length === 0) return floorDiv(keyed.minorUnits * 10_000n, requested);
+  const total = confirmed
+    .filter((c) => valuationCurrent(c, policy.value, at))
+    .reduce((sum, c) => sum + lendingValue(c, policy.value).minorUnits, 0n);
+  return floorDiv(total * 10_000n, requested);
+}
+
 async function submitAt(
   tenant: TenantCode,
   applicationId: string,
@@ -2316,6 +3537,20 @@ async function submitAt(
       'ASSESSMENT_INPUTS_MISSING',
       'Record the bureau result and the officer’s assessment inputs before submitting',
     );
+  // The securities the variant requires, each recorded and confirmed by a second person.
+  const security = await securityOf(tenant, r, at.epochSeconds);
+  if (!security.ok) return security;
+  if (!security.value.position.complete)
+    return fail(
+      'SECURITY_INCOMPLETE',
+      'Every security the product requires is recorded and confirmed before submitting',
+      {
+        missing: security.value.position.requirements
+          .filter((q) => !q.met)
+          .map((q) => q.code)
+          .join(','),
+      },
+    );
   apply(book, r, t.value);
   return ok(view(r, ctx.value.currency));
 }
@@ -2345,6 +3580,9 @@ const BUREAU_FACT_SOURCE: Readonly<Record<BureauSource, string>> = {
   AECB_RAIL_FIXTURE:
     'AECB commercial report fetched through the bureau rail under the business’s recorded consent — answered by the demonstration transport (FIXTURE)',
   AECB_RAIL_LIVE: 'AECB commercial report fetched through the bureau rail under the business’s recorded consent',
+  SIMAH_RAIL_FIXTURE:
+    'SIMAH commercial report fetched through the bureau rail under the business’s recorded consent — answered by the demonstration transport (FIXTURE)',
+  SIMAH_RAIL_LIVE: 'SIMAH commercial report fetched through the bureau rail under the business’s recorded consent',
 };
 
 export const FACT_SOURCES: Readonly<Record<string, string>> = {
@@ -2367,12 +3605,15 @@ export const FACT_SOURCES: Readonly<Record<string, string>> = {
   riskAnalysisScorePerTenThousand: 'Officer assessment',
   portfolioRepaymentPerTenThousand: 'Officer assessment',
   failedFilesRatePerTenThousand: 'Officer assessment',
-  collateralCoveragePerTenThousand: 'Collateral value ÷ requested amount, rounded down',
+  collateralCoveragePerTenThousand:
+    'Confirmed security register lending value (else the keyed collateral value) ÷ requested amount, rounded down',
 };
 
 function factsFor(
+  tenant: TenantCode,
   record: BusinessRecord,
   currency: CurrencyCode,
+  at: bigint,
 ): Result<{ readonly facts: SmeAssessmentFacts; readonly ratios: readonly FinancialRatio[] }> {
   const inputs = record.inputs;
   if (inputs === undefined)
@@ -2401,7 +3642,6 @@ function factsFor(
     return fail('RATIO_DENOMINATOR_ZERO', 'The debt burden before this facility needs a positive annual revenue', {
       ratio: 'DBR_BEFORE_LOAN',
     });
-  const requested = record.application.requested.minorUnits;
   const facts: SmeAssessmentFacts = {
     bureauScore: inputs.bureau.score,
     dscrPerTenThousand: ratio('DEBT_SERVICE_COVER'),
@@ -2419,7 +3659,7 @@ function factsFor(
     riskAnalysisScorePerTenThousand: inputs.riskAnalysisScorePerTenThousand,
     portfolioRepaymentPerTenThousand: inputs.portfolioRepaymentPerTenThousand,
     failedFilesRatePerTenThousand: inputs.failedFilesRatePerTenThousand,
-    collateralCoveragePerTenThousand: floorDiv(inputs.collateralValue.minorUnits * 10_000n, requested),
+    collateralCoveragePerTenThousand: collateralCoverageOf(tenant, record, at, inputs.collateralValue),
   };
   return ok({ facts, ratios });
 }
@@ -2449,7 +3689,7 @@ async function runAssessmentAt(
     );
   const policy = loadSmeAssessmentPolicy(tenant);
   if (!policy.ok) return policy;
-  const derived = factsFor(r, ctx.value.currency);
+  const derived = factsFor(tenant, r, ctx.value.currency, at.epochSeconds);
   if (!derived.ok) return derived;
   // Exactly the facts the policy reads: nothing it does not declare enters the trace.
   const facts: Record<string, SmeAssessmentFacts[string]> = {};
@@ -2519,6 +3759,297 @@ export async function runAssessment(
   return withTenantLock(tenant, () => runAssessmentAt(tenant, applicationId, actor, developmentAttestation()));
 }
 
+// -- the decision pack (UAE M4) -----------------------------------------------
+
+const PACK_OPEN = new Set(['ASSESSED', 'IN_COMMITTEE']);
+
+/** The pack changes while the decision is being prepared: assessed, before any approval is recorded. */
+function packOpen(r: BusinessRecord): Result<true> {
+  if (!PACK_OPEN.has(r.application.status) || r.pack.frozen !== undefined)
+    return fail('DECISION_PACK_LOCKED', 'The decision pack changes only between assessment and approval', {
+      status: r.application.status,
+    });
+  if ((r.application.committeeApprovals ?? []).length > 0)
+    return fail(
+      'DECISION_PACK_LOCKED',
+      'A committee member has approved this pack; it no longer changes, so every member approves the same one',
+    );
+  return ok(true);
+}
+
+const latestRun = (r: BusinessRecord): AssessmentRun | undefined => r.assessments[r.assessments.length - 1];
+
+function deviationsFor(r: BusinessRecord): readonly Deviation[] {
+  const run = latestRun(r);
+  return run === undefined ? [] : deviationsOf(run.assessment.reasons, r.pack.justifications);
+}
+
+function packDigestOf(r: BusinessRecord): string {
+  return packDigest({
+    applicationId: r.application.applicationId,
+    assessmentRef: latestRun(r)?.assessmentId ?? '',
+    deviations: deviationsFor(r),
+    conditions: r.pack.conditions,
+    covenants: r.pack.covenants,
+  });
+}
+
+/** The cap from the risk band: how many conditions and covenants the facility may carry. */
+function packCapacity(r: BusinessRecord): Result<number> {
+  const max = latestRun(r)?.assessment.terms?.maxConditions;
+  return max === undefined
+    ? fail('RISK_BAND_REQUIRED', 'The assessment placed the case in no risk band, so its conditions cannot be bounded')
+    : ok(max);
+}
+
+function freezePack(book: TenantBook, r: BusinessRecord, at: bigint): void {
+  if (r.application.status !== 'APPROVED' || r.pack.frozen !== undefined) return;
+  const digest = packDigestOf(r);
+  r.pack.frozen = { digest, atEpochSeconds: at };
+  const live = <T extends { readonly withdrawnBy?: string }>(xs: readonly T[]) =>
+    xs.filter((x) => x.withdrawnBy === undefined);
+  recordEvent(book, r, {
+    eventType: 'DECISION_PACK_FROZEN',
+    fromStage: null,
+    toStage: null,
+    actor: 'system',
+    atEpochSeconds: at,
+    detail: {
+      digest,
+      deviations: String(deviationsFor(r).length),
+      conditions: String(live(r.pack.conditions).length),
+      covenants: String(live(r.pack.covenants).length),
+    },
+  });
+}
+
+type PackChange = (r: BusinessRecord, book: TenantBook, at: bigint) => Result<true>;
+
+async function changePack(
+  tenant: TenantCode,
+  applicationId: string,
+  change: PackChange,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    const open = packOpen(r);
+    if (!open.ok) return open;
+    const done = change(r, book, developmentAttestation().epochSeconds);
+    if (!done.ok) return done;
+    return ok(view(r, ctx.value.currency));
+  });
+}
+
+const nextPackId = (prefix: 'CON' | 'COV', taken: number): string => `${prefix}-${String(taken + 1).padStart(3, '0')}`;
+
+/** Credit attaches a condition precedent or subsequent, in both languages, within the risk band's cap. */
+export async function addCondition(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: ConditionEntry,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return changePack(tenant, applicationId, (r, book, at) => {
+    const policy = loadDecisionPackPolicy(tenant);
+    if (!policy.ok) return policy;
+    const c = validateCondition(entry, policy.value);
+    if (!c.ok) return c;
+    const cap = packCapacity(r);
+    if (!cap.ok) return cap;
+    if (attachedCount(r.pack.conditions, r.pack.covenants) >= cap.value)
+      return fail('CONDITIONS_ABOVE_RISK_MAXIMUM', 'The risk band allows no more conditions and covenants', {
+        maxConditions: String(cap.value),
+      });
+    const conditionId = nextPackId('CON', r.pack.conditions.length);
+    r.pack.conditions.push({ ...c.value, conditionId, addedBy: actor, addedAtEpochSeconds: at });
+    recordEvent(book, r, {
+      eventType: 'CONDITION_ADDED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: {
+        itemId: conditionId,
+        kind: c.value.kind,
+        textEn: c.value.textEn,
+        textAr: c.value.textAr,
+        ...(c.value.dueDaysAfterDisbursement === undefined
+          ? {}
+          : { dueDaysAfterDisbursement: String(c.value.dueDaysAfterDisbursement) }),
+      },
+    });
+    return ok(true);
+  });
+}
+
+/** Credit attaches a covenant from the institution's templates; the template is snapshotted as it stands. */
+export async function addCovenant(
+  tenant: TenantCode,
+  applicationId: string,
+  templateCode: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return changePack(tenant, applicationId, (r, book, at) => {
+    const policy = loadDecisionPackPolicy(tenant);
+    if (!policy.ok) return policy;
+    const t = covenantTemplate(policy.value, templateCode);
+    if (!t.ok) return t;
+    if (r.pack.covenants.some((c) => c.withdrawnBy === undefined && c.template.code === templateCode))
+      return fail('COVENANT_DUPLICATE', 'This covenant is already attached');
+    const cap = packCapacity(r);
+    if (!cap.ok) return cap;
+    if (attachedCount(r.pack.conditions, r.pack.covenants) >= cap.value)
+      return fail('CONDITIONS_ABOVE_RISK_MAXIMUM', 'The risk band allows no more conditions and covenants', {
+        maxConditions: String(cap.value),
+      });
+    const covenantId = nextPackId('COV', r.pack.covenants.length);
+    r.pack.covenants.push({ covenantId, template: t.value, addedBy: actor, addedAtEpochSeconds: at });
+    const tpl = t.value;
+    recordEvent(book, r, {
+      eventType: 'COVENANT_ADDED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: {
+        itemId: covenantId,
+        code: tpl.code,
+        kind: tpl.kind,
+        ...(tpl.metric === undefined ? {} : { metric: tpl.metric }),
+        ...(tpl.minimumPerTenThousand === undefined
+          ? {}
+          : { minimumPerTenThousand: String(tpl.minimumPerTenThousand) }),
+        ...(tpl.frequency === undefined ? {} : { frequency: tpl.frequency }),
+        labelEn: tpl.labelEn,
+        labelAr: tpl.labelAr,
+      },
+    });
+    return ok(true);
+  });
+}
+
+/** Withdraw a condition or covenant before approval. It stays on record, attached nowhere. */
+export async function withdrawPackItem(
+  tenant: TenantCode,
+  applicationId: string,
+  itemId: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return changePack(tenant, applicationId, (r, book, at) => {
+    if (!withdrawPackItemIn(r, itemId, actor))
+      return fail('PACK_ITEM_NOT_FOUND', 'No such condition or covenant on the pack', { itemId });
+    recordEvent(book, r, {
+      eventType: 'PACK_ITEM_WITHDRAWN',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { itemId },
+    });
+    return ok(true);
+  });
+}
+
+/** Credit states why a deviation is acceptable. A later justification replaces the earlier; every version is an event. */
+export async function justifyDeviation(
+  tenant: TenantCode,
+  applicationId: string,
+  code: string,
+  text: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return changePack(tenant, applicationId, (r, book, at) => {
+    if (!deviationsFor(r).some((d) => d.code === code))
+      return fail('DEVIATION_NOT_FOUND', 'The assessment records no such deviation', { code });
+    const t = validateJustification(text);
+    if (!t.ok) return t;
+    r.pack.justifications[code] = { text: t.value, by: actor, atEpochSeconds: at };
+    recordEvent(book, r, {
+      eventType: 'DEVIATION_JUSTIFIED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { code, text: t.value },
+    });
+    return ok(true);
+  });
+}
+
+export interface DecisionPackStatus {
+  readonly deviations: readonly Deviation[];
+  readonly conditions: readonly Condition[];
+  readonly covenants: readonly Covenant[];
+  readonly attached: number;
+  /** Absent when the assessment placed the case in no risk band. */
+  readonly maxConditions?: number;
+  readonly templates: readonly { readonly code: string; readonly labelEn: string; readonly labelAr: string }[];
+  readonly maxSubsequentDueDays: number;
+  readonly policyRef: string;
+  /** Conditions precedent the register suggests: a charge recorded as pending registration. */
+  readonly suggested: readonly { readonly textEn: string; readonly textAr: string }[];
+  readonly editable: boolean;
+  /** The digest as the pack stands; equal to `frozen.digest` once approved, unless something changed after. */
+  readonly digest: string;
+  readonly frozen?: FrozenPack;
+}
+
+export async function decisionPack(tenant: TenantCode, applicationId: string): Promise<Result<DecisionPackStatus>> {
+  const book = await hydrate(tenant);
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  const policy = loadDecisionPackPolicy(tenant);
+  if (!policy.ok) return policy;
+  const cap = packCapacity(r);
+  const pending = r.security.collateral.filter(
+    (c) => c.withdrawnBy === undefined && c.confirmedBy !== undefined && c.charge === 'PENDING',
+  );
+  const already = new Set(r.pack.conditions.filter((c) => c.withdrawnBy === undefined).map((c) => c.textEn));
+  return ok({
+    deviations: deviationsFor(r),
+    conditions: [...r.pack.conditions],
+    covenants: [...r.pack.covenants],
+    attached: attachedCount(r.pack.conditions, r.pack.covenants),
+    ...(cap.ok ? { maxConditions: cap.value } : {}),
+    templates: policy.value.covenantTemplates.map((t) => ({ code: t.code, labelEn: t.labelEn, labelAr: t.labelAr })),
+    maxSubsequentDueDays: policy.value.maxSubsequentDueDays,
+    policyRef: policy.value.policyRef,
+    suggested: pending
+      .map((c) => ({
+        textEn: `Charge over ${c.description} (${c.itemId}) registered, with the registry's reference`,
+        textAr: `تسجيل الرهن على ${c.description} (${c.itemId}) مع مرجع جهة التسجيل`,
+      }))
+      .filter((x) => !already.has(x.textEn)),
+    editable: packOpen(r).ok,
+    digest: packDigestOf(r),
+    ...(r.pack.frozen === undefined ? {} : { frozen: r.pack.frozen }),
+  });
+}
+
+/** The pack's live conditions and covenants as the offer letter states them, in both languages. */
+function packConditionsForLetter(r: BusinessRecord): readonly { readonly en: string; readonly ar: string }[] {
+  const conditions = r.pack.conditions
+    .filter((c) => c.withdrawnBy === undefined)
+    .map((c) =>
+      c.kind === 'PRECEDENT'
+        ? { en: `Before first drawdown: ${c.textEn}`, ar: `قبل السحب الأول: ${c.textAr}` }
+        : {
+            en: `Within ${String(c.dueDaysAfterDisbursement ?? 0)} days after first drawdown: ${c.textEn}`,
+            ar: `خلال ${arabicIndic(String(c.dueDaysAfterDisbursement ?? 0))} يوماً من السحب الأول: ${c.textAr}`,
+          },
+    );
+  const covenants = r.pack.covenants
+    .filter((c) => c.withdrawnBy === undefined)
+    .map((c) => ({ en: `Covenant: ${c.template.labelEn}`, ar: `تعهّد: ${c.template.labelAr}` }));
+  return [...conditions, ...covenants];
+}
+
+const arabicIndic = (s: string): string => s.replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)] ?? d);
+
 async function approveAt(
   tenant: TenantCode,
   applicationId: string,
@@ -2533,6 +4064,7 @@ async function approveAt(
   const t = approveStraightThroughCore(r.application, approver, at.epochSeconds);
   if (!t.ok) return t;
   apply(book, r, t.value);
+  freezePack(book, r, at.epochSeconds);
   return ok(view(r, ctx.value.currency));
 }
 
@@ -2695,7 +4227,28 @@ async function decideAt(
     },
   );
   if (!t.ok) return t;
+  // After the domain's own checks (status, four eyes, reason, limits), so their refusals come first.
+  if (decision.approved) {
+    const deviations = deviationsFor(r);
+    const unjustified = deviations.filter((d) => d.justification === undefined).map((d) => d.code);
+    if (unjustified.length > 0)
+      return fail(
+        'DEVIATIONS_UNJUSTIFIED',
+        'Every deviation from policy is justified in the decision pack before approval',
+        {
+          deviations: unjustified.join(','),
+        },
+      );
+    // Whoever argued for an exception does not also approve it.
+    if (deviations.some((d) => d.justification?.by === decision.decidedBy))
+      return reject(
+        'OP-DETERMINACY',
+        'FOUR_EYES_SELF_JUSTIFICATION',
+        'A committee member who justified a deviation does not approve the case',
+      );
+  }
   apply(book, r, t.value);
+  freezePack(book, r, at.epochSeconds);
   return ok(view(r, currency));
 }
 
@@ -2815,14 +4368,26 @@ async function generateOfferAt(
   if (!dates.ok) return dates;
   const tenorDays = approved.tenorMonths * 30;
 
-  const pricing = resolvePricingInputs(product.value.entry.pricingRule, {
+  // A benchmark-linked product (the Saudi SME products: SAIBOR + margin) is priced from the published benchmark;
+  // without it the quote is refused, never priced from a stale or guessed rate.
+  const rule = product.value.entry.pricingRule;
+  const benchmark =
+    rule.kind === 'BENCHMARK_PLUS_MARGIN' ? await publishedBenchmark(tenant, rule.benchmarkCode, at) : undefined;
+  const pricing = resolvePricingInputs(rule, {
     principal: facility,
     tenorDays,
     asOfEpochSeconds: at.epochSeconds,
+    ...(benchmark === undefined ? {} : { benchmark }),
   });
   if (!pricing.ok) return pricing;
   // The module's "requested" amount and tenor are what the institution offers: the approved terms.
-  const quote = smeTermConventional.quote(product.value.terms, {
+  const module = product.value.module;
+  const quote = (
+    module.quote as (
+      t: unknown,
+      r: Parameters<typeof smeTermConventional.quote>[1],
+    ) => ReturnType<typeof smeTermConventional.quote> | ReturnType<typeof smeTermIslamic.quote>
+  )(product.value.terms, {
     tenantId: tenant,
     programmeId: product.value.variant.documentChecklistRef ?? 'sme-direct-lending',
     counterpartyId: app.applicationId,
@@ -2845,40 +4410,59 @@ async function generateOfferAt(
   });
   if (!quote.ok) return quote;
   const q = quote.value;
-  const offer = buildOffer(smeTermConventional, q, at);
+  const offer = buildOffer(module as typeof smeTermConventional, q as never, at);
   if (!offer.ok) return offer;
 
-  const totalCharge = q.interestAmount;
-  const letter = buildOfferLetter({
-    jurisdiction: { code: ctx.value.profile.code, contractualCalendars: ctx.value.profile.contractualCalendars },
-    applicationReference: app.applicationId,
-    applicantBusinessName: {
-      en: app.applicant.businessNameEn,
-      ar: app.applicant.businessNameAr ?? app.applicant.businessNameEn,
+  // A term loan charges interest on the facility; a Tawarruq sells a commodity for a deferred price, its profit the charge.
+  const islamic = 'deferredSalePrice' in q;
+  const totalCharge = islamic ? q.profitAmount : q.interestAmount;
+  const totalPayable = islamic
+    ? q.deferredSalePrice
+    : money(facility.minorUnits + totalCharge.minorUnits, facility.currency);
+  const letter = buildOfferLetter(
+    {
+      jurisdiction: { code: ctx.value.profile.code, contractualCalendars: ctx.value.profile.contractualCalendars },
+      applicationReference: app.applicationId,
+      applicantBusinessName: {
+        en: app.applicant.businessNameEn,
+        ar: app.applicant.businessNameAr ?? app.applicant.businessNameEn,
+      },
+      productVariantName: { en: q.variantNameEn, ar: q.variantNameAr },
+      family: module.descriptor.family,
+      facilityAmount: facility,
+      tenorMonths: q.months,
+      graceMonths: q.graceMonths,
+      rateBp: q.rateSnapshot.rate.bp,
+      // The APR the platform computed (core/pricing/apr.ts via buildOffer); the letter states it, never computes it.
+      aprBp: offer.value.apr.bp,
+      equityContributionPerTenThousand: BigInt(q.contributionPerTenThousand),
+      offerDate,
+      validUntil,
+      totals: {
+        instalment: q.monthlyInstalment,
+        totalCharge,
+        totalPayable,
+      },
+      institutionLegalName: { en: ctx.value.legalNameEn, ar: ctx.value.legalNameAr },
+      signatories: [
+        { party: 'LENDER', role: { en: 'Authorised Signatory', ar: 'المفوّض بالتوقيع' } },
+        islamic
+          ? {
+              party: 'BORROWER',
+              role: {
+                en: 'Authorised Signatory of the Customer (Purchaser)',
+                ar: 'المفوّض بالتوقيع عن العميل (المشتري)',
+              },
+            }
+          : {
+              party: 'BORROWER',
+              role: { en: 'Authorised Signatory of the Borrower', ar: 'المفوّض بالتوقيع عن المقترض' },
+            },
+      ],
+      conditions: [...q.collateral.map((c) => ({ en: c.labelEn, ar: c.labelAr })), ...packConditionsForLetter(r)],
     },
-    productVariantName: { en: q.variantNameEn, ar: q.variantNameAr },
-    family: smeTermConventional.descriptor.family,
-    facilityAmount: facility,
-    tenorMonths: q.months,
-    graceMonths: q.graceMonths,
-    rateBp: q.rateSnapshot.rate.bp,
-    // The APR the platform computed (core/pricing/apr.ts via buildOffer); the letter states it, never computes it.
-    aprBp: offer.value.apr.bp,
-    equityContributionPerTenThousand: BigInt(q.contributionPerTenThousand),
-    offerDate,
-    validUntil,
-    totals: {
-      instalment: q.monthlyInstalment,
-      totalCharge,
-      totalPayable: money(facility.minorUnits + totalCharge.minorUnits, facility.currency),
-    },
-    institutionLegalName: { en: ctx.value.legalNameEn, ar: ctx.value.legalNameAr },
-    signatories: [
-      { party: 'LENDER', role: { en: 'Authorised Signatory', ar: 'المفوّض بالتوقيع' } },
-      { party: 'BORROWER', role: { en: 'Authorised Signatory of the Borrower', ar: 'المفوّض بالتوقيع عن المقترض' } },
-    ],
-    conditions: q.collateral.map((c) => ({ en: c.labelEn, ar: c.labelAr })),
-  });
+    ummAlQura,
+  );
   if (!letter.ok) return letter;
 
   const terms: OfferTerms = {
@@ -2888,8 +4472,8 @@ async function generateOfferAt(
     graceMonths: q.graceMonths,
     facilityAmount: facility,
     monthlyInstalment: q.monthlyInstalment,
-    totalInterest: q.interestAmount,
-    totalPayable: money(facility.minorUnits + totalCharge.minorUnits, facility.currency),
+    totalInterest: totalCharge,
+    totalPayable,
     rateBp: q.rateSnapshot.rate.bp,
     rateBasis: q.rateSnapshot.rate.basis,
     ratePeriod: q.rateSnapshot.rate.period,
@@ -3027,6 +4611,101 @@ async function sendOfferAt(
   return ok(view(r, ctx.value.currency));
 }
 
+// -- document requests (document intelligence D4) ---------------------------------
+
+/**
+ * Ask the applicant for the documents the application still needs: records
+ * DOCUMENTS_REQUESTED and queues one INFORMATION_REQUESTED notification on the
+ * outbox in the same commit, to the applicant's contact party by reference.
+ * The gaps are codes on the event and the notification — never a value read
+ * from a document. Asking again for the same open set sends nothing more.
+ */
+export async function recordDocumentRequest(
+  tenant: TenantCode,
+  applicationId: string,
+  gaps: readonly DocumentGap[],
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    if (!SPREAD_OPEN.has(r.application.status))
+      return fail('TRANSITION_NOT_ALLOWED', 'Documents are requested while the application is in credit assessment', {
+        status: r.application.status,
+      });
+    if (gaps.length === 0) return fail('NO_DOCUMENT_GAPS', 'The application needs no documents from the applicant');
+    const key = gapSetKey(gaps);
+    const open = documentRequestOf(r).documentRequest;
+    if (open?.status === 'AWAITING' && open.gapSet === key) return ok(view(r, ctx.value.currency));
+    const channels = [
+      ...(r.contact.emailMasked === undefined ? [] : ['EMAIL']),
+      ...(r.contact.mobileMasked === undefined ? [] : ['SMS']),
+    ];
+    if (channels.length === 0)
+      return fail('NO_CONTACT_CHANNEL', 'The applicant has no email or mobile on record to send the request to');
+    const n = r.events.filter((e) => e.eventType === 'DOCUMENTS_REQUESTED').length + 1;
+    const queued = queueSideEffects([
+      {
+        eventId: randomUUID(),
+        tenantId: tenant,
+        kind: 'NOTIFICATION',
+        subjectRef: applicationId,
+        idempotencyKey: `${applicationId}:documents-requested:${String(n)}`,
+        correlationId: applicationId,
+        payload: {
+          recipientKind: 'COUNTERPARTY',
+          recipientRef: r.contact.partyRef,
+          event: 'INFORMATION_REQUESTED',
+          channels: channels.join(','),
+          applicationId,
+          documents: key,
+          count: String(gaps.length),
+        },
+      },
+    ]);
+    if (!queued.ok) return queued;
+    commitSideEffects(book, queued.value);
+    recordEvent(book, r, {
+      eventType: 'DOCUMENTS_REQUESTED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: developmentAttestation().epochSeconds,
+      detail: { gaps: key, count: String(gaps.length), channels: channels.join(',') },
+    });
+    return ok(view(r, ctx.value.currency));
+  });
+}
+
+/** The documents asked for have arrived and no gap is left: the case is ready for the officer again. */
+export async function recordDocumentsReceived(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    if (documentRequestOf(r).documentRequest?.status !== 'AWAITING')
+      return fail('NO_OPEN_DOCUMENT_REQUEST', 'No request for documents is open on this application');
+    recordEvent(book, r, {
+      eventType: 'DOCUMENTS_RECEIVED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: developmentAttestation().epochSeconds,
+      detail: {},
+    });
+    return ok(view(r, ctx.value.currency));
+  });
+}
+
 /**
  * Validate a batch of side effects against everything this process has
  * queued, without recording any: the caller commits them together with the
@@ -3063,6 +4742,1588 @@ export async function sendOffer(
   actor: string,
 ): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () => sendOfferAt(tenant, applicationId, actor, developmentAttestation()));
+}
+
+// -- closing (UAE M5a): signing, conditions precedent, payee ------------------
+
+/** Between approval and disbursement: the window in which closing steps are recorded. */
+const CLOSING_OPEN = new Set(['APPROVED', 'OFFER_SENT', 'SIGNED']);
+
+/** The payee may also be corrected after disbursement, while a tranche's payment has failed. */
+function payeeOpen(r: BusinessRecord): Result<true> {
+  if (r.application.status === 'DISBURSED' && (r.closing.tranches ?? []).some((t) => t.status === 'FAILED'))
+    return ok(true);
+  return closingOpen(r);
+}
+
+function closingOpen(r: BusinessRecord): Result<true> {
+  return CLOSING_OPEN.has(r.application.status)
+    ? ok(true)
+    : fail('CLOSING_LOCKED', 'Closing steps are recorded between approval and disbursement', {
+        status: r.application.status,
+      });
+}
+
+/** The live conditions precedent of the pack the decision froze. */
+const conditionsPrecedent = (r: BusinessRecord): readonly Condition[] =>
+  r.pack.conditions.filter((c) => c.kind === 'PRECEDENT' && c.withdrawnBy === undefined);
+
+/** Conditions precedent not yet evidenced and verified by a second person. */
+export function outstandingConditionsPrecedent(view: BusinessApplicationView): readonly Condition[] {
+  return view.pack.conditions.filter(
+    (c) =>
+      c.kind === 'PRECEDENT' &&
+      c.withdrawnBy === undefined &&
+      view.closing.cps[c.conditionId]?.verifiedBy === undefined,
+  );
+}
+
+type ClosingChange = (
+  r: BusinessRecord,
+  book: TenantBook,
+  ctx: TenantContext,
+  at: bigint,
+) => Promise<Result<true>> | Result<true>;
+
+async function closingChangeAt(
+  tenant: TenantCode,
+  applicationId: string,
+  at: bigint,
+  change: ClosingChange,
+): Promise<Result<BusinessApplicationView>> {
+  const book = await hydrate(tenant);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  const done = await change(r, book, ctx.value, at);
+  if (!done.ok) return done;
+  return ok(view(r, ctx.value.currency));
+}
+
+const closingChange = (tenant: TenantCode, applicationId: string, change: ClosingChange) =>
+  withTenantLock(tenant, () => closingChangeAt(tenant, applicationId, developmentAttestation().epochSeconds, change));
+
+/** A signing intent opened at the identity service, on the letter version that was sent. */
+export async function recordSigningStarted(
+  tenant: TenantCode,
+  applicationId: string,
+  started: {
+    readonly transactionRef: string;
+    readonly letterVersion: string;
+    readonly expiresAtEpochSeconds: bigint;
+    readonly source: 'LIVE' | 'FIXTURE';
+  },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    if (r.application.status !== 'OFFER_SENT')
+      return fail('TRANSITION_NOT_ALLOWED', 'Signing opens once the offer has been sent', {
+        status: r.application.status,
+      });
+    if (started.letterVersion !== r.application.offer?.letterVersion)
+      return fail('SIGNED_LETTER_NOT_SENT_LETTER', 'Signing is opened on the letter version that was sent');
+    if (!REF_SHAPE.test(started.transactionRef))
+      return fail('SIGNING_REF_INVALID', 'The identity service returned no usable reference; nothing was recorded');
+    r.closing.signing = { ...started, startedBy: actor };
+    recordEvent(book, r, {
+      eventType: 'SIGNING_STARTED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: {
+        transactionRef: started.transactionRef,
+        letterVersion: started.letterVersion,
+        expiresAtEpoch: started.expiresAtEpochSeconds.toString(),
+        source: started.source,
+      },
+    });
+    return ok(true);
+  });
+}
+
+/** The signing intent ended without a signature (refused, cancelled, expired): it is cleared so a new one can open. */
+export async function recordSigningEnded(
+  tenant: TenantCode,
+  applicationId: string,
+  code: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    if (r.closing.signing === undefined) return fail('SIGNING_NOT_STARTED', 'No signing is in progress');
+    delete r.closing.signing;
+    recordEvent(book, r, {
+      eventType: 'SIGNING_ENDED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { code },
+    });
+    return ok(true);
+  });
+}
+
+/**
+ * The identity service confirmed the signature: the application is SIGNED on
+ * the letter version the intent was opened on, and the signer's assertion is
+ * recorded by reference. An intent past its window signs nothing.
+ */
+export async function recordSignatureConfirmed(
+  tenant: TenantCode,
+  applicationId: string,
+  signer: SignerRecord,
+  actor: string,
+  /** The identity service's prefix on the signature reference: uaepass, nafath. */
+  railPrefix: 'uaepass' | 'nafath' = 'uaepass',
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    const signing = r.closing.signing;
+    if (signing === undefined) return fail('SIGNING_NOT_STARTED', 'Open the signing first');
+    const at = developmentAttestation();
+    if (at.epochSeconds > signing.expiresAtEpochSeconds)
+      return fail('SIGNING_EXPIRED', 'The signing window has passed; open a new one');
+    if (!REF_SHAPE.test(signer.assertionId) || !REF_SHAPE.test(signer.identityRef))
+      return fail('SIGNING_REF_INVALID', 'The identity service returned no usable reference; nothing was recorded');
+    const signed = await signAt(
+      tenant,
+      applicationId,
+      { letterVersion: signing.letterVersion, signatureRef: `${railPrefix}:${signer.assertionId}` },
+      actor,
+      at,
+    );
+    if (!signed.ok) return signed;
+    delete r.closing.signing;
+    r.closing.signer = signer;
+    recordEvent(book, r, {
+      eventType: 'SIGNER_VERIFIED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at.epochSeconds,
+      detail: { assertionId: signer.assertionId, identityRef: signer.identityRef, source: signer.source },
+    });
+    return ok(view(r, ctx.value.currency));
+  });
+}
+
+async function satisfyConditionAt(
+  tenant: TenantCode,
+  applicationId: string,
+  conditionId: string,
+  evidenceRef: string,
+  actor: string,
+  at: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChangeAt(tenant, applicationId, at, (r, book) => {
+    const open = closingOpen(r);
+    if (!open.ok) return open;
+    if (!conditionsPrecedent(r).some((c) => c.conditionId === conditionId))
+      return fail('CONDITION_NOT_FOUND', 'No such condition precedent on the approved pack', { conditionId });
+    if (r.closing.cps[conditionId]?.verifiedBy !== undefined)
+      return fail('CONDITION_ALREADY_VERIFIED', 'This condition precedent is already verified');
+    const evidence = evidenceOnFile(r, evidenceRef);
+    if (!evidence.ok) return evidence;
+    if (!REF_SHAPE.test(evidenceRef))
+      return fail('SECURITY_EVIDENCE_NOT_ON_FILE', 'Name the evidence document on the application');
+    r.closing.cps[conditionId] = { evidenceRef, satisfiedBy: actor, satisfiedAtEpochSeconds: at };
+    recordEvent(book, r, {
+      eventType: 'CP_SATISFIED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { conditionId, evidenceRef },
+    });
+    return ok(true);
+  });
+}
+
+/** The officer evidences a condition precedent with a document on the application. */
+export async function satisfyCondition(
+  tenant: TenantCode,
+  applicationId: string,
+  conditionId: string,
+  evidenceRef: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    satisfyConditionAt(tenant, applicationId, conditionId, evidenceRef, actor, developmentAttestation().epochSeconds),
+  );
+}
+
+async function verifyConditionAt(
+  tenant: TenantCode,
+  applicationId: string,
+  conditionId: string,
+  verifier: string,
+  at: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChangeAt(tenant, applicationId, at, (r, book) => {
+    const open = closingOpen(r);
+    if (!open.ok) return open;
+    const cp = r.closing.cps[conditionId];
+    if (cp === undefined) return fail('CONDITION_NOT_SATISFIED', 'Evidence this condition precedent first');
+    if (cp.verifiedBy !== undefined)
+      return fail('CONDITION_ALREADY_VERIFIED', 'This condition precedent is already verified');
+    if (verifier === cp.satisfiedBy)
+      return reject(
+        'OP-DETERMINACY',
+        'FOUR_EYES_SELF_CONFIRMATION',
+        'Whoever evidenced a condition does not verify it',
+      );
+    r.closing.cps[conditionId] = { ...cp, verifiedBy: verifier };
+    recordEvent(book, r, {
+      eventType: 'CP_VERIFIED',
+      fromStage: null,
+      toStage: null,
+      actor: verifier,
+      atEpochSeconds: at,
+      detail: { conditionId },
+    });
+    return ok(true);
+  });
+}
+
+/** A second person verifies the evidence for a condition precedent. */
+export async function verifyCondition(
+  tenant: TenantCode,
+  applicationId: string,
+  conditionId: string,
+  verifier: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    verifyConditionAt(tenant, applicationId, conditionId, verifier, developmentAttestation().epochSeconds),
+  );
+}
+
+async function recordPayeeAt(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: { readonly iban: string; readonly accountName: string; readonly evidenceRef: string },
+  actor: string,
+  at: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChangeAt(tenant, applicationId, at, (r, book, ctx) => {
+    const open = payeeOpen(r);
+    if (!open.ok) return open;
+    const iban = validateIban(entry.iban, ctx.profile.code);
+    if (!iban.ok) return iban;
+    const name = entry.accountName.trim();
+    if (name.length < 2 || name.length > 140)
+      return fail('PAYEE_NAME_INVALID', 'Give the account holder’s name, 2 to 140 characters');
+    if (identityNumberIn({ accountName: name }) !== undefined)
+      return fail('IDENTITY_NUMBER_IN_FREE_TEXT', 'No identity number belongs in a payee record');
+    const evidence = evidenceOnFile(r, entry.evidenceRef);
+    if (!evidence.ok) return evidence;
+    r.closing.payee = {
+      iban: iban.value,
+      accountName: name,
+      evidenceRef: entry.evidenceRef,
+      recordedBy: actor,
+      recordedAtEpochSeconds: at,
+    };
+    recordEvent(book, r, {
+      eventType: 'PAYEE_RECORDED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { iban: iban.value, accountName: name, evidenceRef: entry.evidenceRef },
+    });
+    return ok(true);
+  });
+}
+
+/** The officer records the account the facility is paid into, proven by a document on the application. A new record needs confirming again. */
+export async function recordPayee(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: { readonly iban: string; readonly accountName: string; readonly evidenceRef: string },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    recordPayeeAt(tenant, applicationId, entry, actor, developmentAttestation().epochSeconds),
+  );
+}
+
+async function confirmPayeeAt(
+  tenant: TenantCode,
+  applicationId: string,
+  confirmer: string,
+  at: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChangeAt(tenant, applicationId, at, (r, book) => {
+    const open = payeeOpen(r);
+    if (!open.ok) return open;
+    const payee = r.closing.payee;
+    if (payee === undefined) return fail('PAYEE_NOT_RECORDED', 'Record the payee account first');
+    if (payee.confirmedBy !== undefined)
+      return fail('PAYEE_ALREADY_CONFIRMED', 'The payee account is already confirmed');
+    if (confirmer === payee.recordedBy)
+      return reject(
+        'OP-DETERMINACY',
+        'FOUR_EYES_SELF_CONFIRMATION',
+        'Whoever recorded the payee account does not confirm it',
+      );
+    r.closing.payee = { ...payee, confirmedBy: confirmer };
+    recordEvent(book, r, {
+      eventType: 'PAYEE_CONFIRMED',
+      fromStage: null,
+      toStage: null,
+      actor: confirmer,
+      atEpochSeconds: at,
+      detail: { ibanMasked: maskIban(payee.iban) },
+    });
+    return ok(true);
+  });
+}
+
+/** A second person confirms the payee account against its evidence. */
+export async function confirmPayee(
+  tenant: TenantCode,
+  applicationId: string,
+  confirmer: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    confirmPayeeAt(tenant, applicationId, confirmer, developmentAttestation().epochSeconds),
+  );
+}
+
+/** The most tranches a facility is drawn in. */
+const MAX_TRANCHES = 12;
+
+/** The letter the borrower signed (or, before signing, the one sent or latest): its terms fix the facility amount. */
+const offerInForce = (r: BusinessRecord) =>
+  r.offers.find((o) => o.letter.version === r.application.offer?.letterVersion) ?? r.offers[r.offers.length - 1];
+
+/** The officer plans the drawdowns: amounts that add up to the facility exactly, dates in order. Changes only before the first release. */
+export async function planTranches(
+  tenant: TenantCode,
+  applicationId: string,
+  plan: readonly { readonly amountMinorUnits: bigint; readonly plannedDate?: string }[],
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, ctx, at) => {
+    const open = closingOpen(r);
+    if (!open.ok) return open;
+    if ((r.closing.tranches ?? []).some((t) => t.releases > 0))
+      return fail('TRANCHES_LOCKED', 'The drawdown plan changes only before the first release');
+    if (isTawarruq(r.application.productCode))
+      return fail('TRANCHES_NOT_PERMITTED', 'A Tawarruq pays its proceeds once; it is not drawn in tranches');
+    const offer = offerInForce(r);
+    if (offer === undefined)
+      return fail('OFFER_NOT_GENERATED', 'Generate the offer first; its facility amount is what the plan divides');
+    if (plan.length < 1 || plan.length > MAX_TRANCHES)
+      return fail('TRANCHES_INVALID', 'A facility is drawn in 1 to 12 tranches', { max: String(MAX_TRANCHES) });
+    if (plan.some((t) => t.amountMinorUnits <= 0n))
+      return fail('TRANCHES_INVALID', 'Every tranche is a positive amount');
+    const facility = offer.terms.facilityAmount;
+    const total = plan.reduce((sum, t) => sum + t.amountMinorUnits, 0n);
+    if (total !== facility.minorUnits)
+      return fail('TRANCHES_NOT_FACILITY', 'The tranches add up to the facility amount exactly', {
+        facilityMinorUnits: facility.minorUnits.toString(),
+        plannedMinorUnits: total.toString(),
+      });
+    const dates = plan.map((t) => t.plannedDate ?? '');
+    for (const d of dates)
+      if (d !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(d)) return fail('TRANCHES_INVALID', 'A tranche date is yyyy-mm-dd');
+    const given = dates.filter((d) => d !== '');
+    if (given.some((d, i) => i > 0 && d < (given[i - 1] ?? '')))
+      return fail('TRANCHES_INVALID', 'Tranche dates run in order');
+    if (given[0] !== undefined && given[0] < offer.terms.disbursementDate)
+      return fail('TRANCHES_INVALID', 'No tranche is planned before the offer’s disbursement date', {
+        disbursementDate: offer.terms.disbursementDate,
+      });
+    r.closing.tranches = plan.map((t, i) => ({
+      trancheId: `T${String(i + 1)}`,
+      amount: money(t.amountMinorUnits, ctx.currency),
+      ...(t.plannedDate === undefined || t.plannedDate === '' ? {} : { plannedDate: t.plannedDate }),
+      status: 'PLANNED' as const,
+      releases: 0,
+    }));
+    recordEvent(book, r, {
+      eventType: 'TRANCHES_PLANNED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { amounts: plan.map((t) => t.amountMinorUnits.toString()).join(','), dates: dates.join(',') },
+    });
+    return ok(true);
+  });
+}
+
+export type PaymentResultStatus = 'ACCEPTED' | 'SETTLED' | 'REJECTED' | 'RETURNED';
+
+/**
+ * The bank's status for one instruction, by its idempotency key: settled, or
+ * failed (rejected, returned). The same result twice changes nothing. A
+ * failed tranche can be released again once the payee has been recorded and
+ * confirmed afresh.
+ */
+export async function recordPaymentResult(
+  tenant: TenantCode,
+  applicationId: string,
+  result: {
+    readonly idempotencyKey: string;
+    readonly status: PaymentResultStatus;
+    readonly instructionRef?: string;
+    readonly reasonCode?: string;
+    readonly source: 'LIVE' | 'FIXTURE';
+  },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    closingChangeAt(tenant, applicationId, developmentAttestation().epochSeconds, (r, book, _ctx, at) => {
+      const tranche = (r.closing.tranches ?? []).find((t) => t.idempotencyKey === result.idempotencyKey);
+      if (tranche === undefined)
+        return fail('PAYMENT_NOT_FOUND', 'No released tranche carries that instruction key', { applicationId });
+      if (!['ACCEPTED', 'SETTLED', 'REJECTED', 'RETURNED'].includes(result.status))
+        return fail('PAYMENT_STATUS_INVALID', 'A payment status is accepted, settled, rejected or returned');
+      if (result.instructionRef !== undefined && !REF_SHAPE.test(result.instructionRef))
+        return fail('PAYMENT_STATUS_INVALID', 'The bank’s reference is not usable');
+      if (result.reasonCode !== undefined && !/^[A-Z0-9]{2,8}$/.test(result.reasonCode))
+        return fail('PAYMENT_STATUS_INVALID', 'A reason is the bank’s ISO 20022 reason code');
+      const next = applyPaymentResult(tranche, result.status, result.instructionRef, result.reasonCode, at);
+      if (next.status === tranche.status && next.instructionRef === tranche.instructionRef) return ok(true);
+      if (tranche.status === 'FAILED') return ok(true);
+      updateTranche(r, tranche.trancheId, () => next);
+      if (next.status === 'FAILED') withdrawPayeeConfirmation(r);
+      recordEvent(book, r, {
+        eventType: 'PAYMENT_RESULT_RECORDED',
+        fromStage: null,
+        toStage: null,
+        actor,
+        atEpochSeconds: at,
+        detail: {
+          trancheId: tranche.trancheId,
+          idempotencyKey: result.idempotencyKey,
+          status: result.status,
+          ...(result.instructionRef === undefined ? {} : { instructionRef: result.instructionRef }),
+          ...(result.reasonCode === undefined ? {} : { reasonCode: result.reasonCode }),
+          source: result.source,
+        },
+      });
+      return ok(true);
+    }),
+  );
+}
+
+// -- booking in the loan system (UAE M6) ---------------------------------------
+
+/**
+ * The loan as the loan system booked it: its account number, contract and
+ * customer references. Once only: a booked loan is not booked again. Recorded
+ * against the disbursed application (the row is closed; this is an event).
+ */
+export async function recordLoanBooked(
+  tenant: TenantCode,
+  applicationId: string,
+  booking: {
+    readonly loanAccountNumber: string;
+    readonly contractRef: string;
+    readonly customerRef: string;
+    readonly productCode: string;
+    readonly source: 'LIVE' | 'FIXTURE';
+  },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    if (r.application.status !== 'DISBURSED')
+      return fail('TRANSITION_NOT_ALLOWED', 'A loan is booked once it has been disbursed', {
+        status: r.application.status,
+      });
+    if (r.booking !== undefined) return fail('LOAN_ALREADY_BOOKED', 'This loan is already booked in the loan system');
+    for (const v of [booking.loanAccountNumber, booking.contractRef, booking.customerRef])
+      if (!REF_SHAPE.test(v))
+        return fail('LOAN_BOOKING_REF_INVALID', 'The loan system returned no usable reference; nothing was recorded');
+    r.booking = { ...booking, bookedBy: actor, bookedAtEpochSeconds: at };
+    recordEvent(book, r, {
+      eventType: 'LOAN_BOOKED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { ...booking },
+    });
+    return ok(true);
+  });
+}
+
+/** What the loan system is told: the signed offer's terms and the borrower, for one disbursed application. */
+export async function bookingTermsOf(
+  tenant: TenantCode,
+  applicationId: string,
+): Promise<
+  Result<{
+    readonly view: BusinessApplicationView;
+    readonly terms: OfferTerms;
+  }>
+> {
+  const book = await hydrate(tenant);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  const signed = r.offers.find((o) => o.letter.version === r.application.offer?.letterVersion);
+  if (signed === undefined) return fail('OFFER_NOT_GENERATED', 'The signed letter version is not on record');
+  return ok({ view: view(r, ctx.value.currency), terms: signed.terms });
+}
+
+// -- Tawarruq execution (KSA K4) ------------------------------------------------
+
+export type TawarruqStep =
+  | { readonly step: 'COMMODITY_PURCHASED'; readonly lot: CommodityLot }
+  | { readonly step: 'SOLD_TO_CUSTOMER'; readonly saleDocumentRef: string }
+  | { readonly step: 'TITLE_TRANSFERRED'; readonly transferRef: string }
+  | {
+      readonly step: 'PROCEEDS_REALISED';
+      readonly saleRef: string;
+      readonly proceeds: Money;
+      readonly agencyRef?: string;
+    };
+
+/**
+ * The module's view of this Tawarruq: its core rebuilt from the signed offer
+ * and the approval's evidence. Only the quote's commodity cost and deferred
+ * price are read by the execution functions; the rest of the quote was fixed
+ * into the signed letter.
+ */
+function tawarruqCoreOf(
+  r: BusinessRecord,
+  tenant: TenantCode,
+  terms: OfferTerms,
+  brokerRef: string,
+  agencyPermitted: boolean,
+): Result<SmeIslamicCore> {
+  const signature = r.application.signature;
+  if (signature === undefined)
+    return fail('TAWARRUQ_BEFORE_SIGNATURE', 'The commodity is bought only once the customer has signed');
+  const registry =
+    r.application.applicant.upstreamVerificationRefs.find((x) => /^(wathq|ner)[:-]/.test(x)) ??
+    r.application.applicant.registrationRef;
+  const quote = {
+    commodityCost: terms.facilityAmount,
+    deferredSalePrice: terms.totalPayable,
+  } as unknown as SmeIslamicQuote;
+  return ok({
+    transactionId: r.application.applicationId,
+    tenantId: tenant,
+    applicantRef: r.contact.partyRef,
+    quote,
+    brokerRef,
+    agency: { permitted: agencyPermitted },
+    bureauEnquiryRef: r.inputs?.bureau.reportRef ?? '',
+    consentId: r.inputs?.bureau.consentId ?? '',
+    businessRegistryRef: registry,
+    guaranteeRequired: false,
+    correlationId: r.application.applicationId,
+    // The customer's signature opens the execution: every step is attested after it.
+    openedAt: restoreAttestedInstant({
+      epochSeconds: signature.atEpochSeconds,
+      tokenDigest: 'signature',
+      authorityId: 'signature',
+    }),
+  });
+}
+
+/** The broker and agency terms of the tenant's Tawarruq catalogue entry. */
+export async function tawarruqTermsOf(
+  tenant: TenantCode,
+  applicationId: string,
+): Promise<
+  Result<{
+    readonly brokerRef: string;
+    readonly commodityCode: string;
+    readonly agencyPermitted: boolean;
+    readonly view: BusinessApplicationView;
+    readonly offer: OfferTerms;
+  }>
+> {
+  const book = await hydrate(tenant);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  if (!isTawarruq(r.application.productCode)) return fail('NOT_TAWARRUQ', 'This application is not a Tawarruq');
+  const product = await productFor(
+    tenant,
+    r.application.productCode,
+    r.application.variantCode,
+    developmentAttestation(),
+  );
+  if (!product.ok) return product;
+  const t = product.value.terms as Parameters<typeof smeTermIslamic.quote>[0];
+  const signed = r.offers.find((o) => o.letter.version === r.application.offer?.letterVersion);
+  if (signed === undefined) return fail('OFFER_NOT_GENERATED', 'The signed letter version is not on record');
+  return ok({
+    brokerRef: t.brokerRef,
+    commodityCode: t.commodityCode,
+    agencyPermitted: t.agencyPermitted,
+    view: view(r, ctx.value.currency),
+    offer: signed.terms,
+  });
+}
+
+/**
+ * Record one Tawarruq step, validated by the module's execution functions in
+ * order — the purchase at exactly the quoted cost (SH-03), the sale on a signed
+ * instrument, title, the onward sale (agency only where the board permits,
+ * SH-18) — each attested strictly after the one before. A step out of order is
+ * refused by construction: there is no state to apply it to.
+ */
+export async function recordTawarruqStep(
+  tenant: TenantCode,
+  applicationId: string,
+  step: TawarruqStep,
+  source: 'LIVE' | 'FIXTURE',
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  const terms = await tawarruqTermsOf(tenant, applicationId);
+  if (!terms.ok) return terms;
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    if (r.application.status !== 'SIGNED')
+      return fail('TRANSITION_NOT_ALLOWED', 'The commodity steps run between signature and disbursement', {
+        status: r.application.status,
+      });
+    const core = tawarruqCoreOf(r, tenant, terms.value.offer, terms.value.brokerRef, terms.value.agencyPermitted);
+    if (!core.ok) return core;
+    const draft = openTawarruq(core.value);
+    if (!draft.ok) return draft;
+    const at = developmentAttestation();
+    const t = r.closing.tawarruq;
+    let next: TawarruqRecord;
+    let detail: Record<string, string>;
+    if (step.step === 'COMMODITY_PURCHASED') {
+      if (t !== undefined) return fail('TAWARRUQ_STEP_OUT_OF_ORDER', 'The commodity is already bought');
+      const done = purchaseCommodity(draft.value, step.lot, at);
+      if (!done.ok) return done;
+      next = { state: 'COMMODITY_PURCHASED', lot: step.lot, purchasedAt: at, source };
+      detail = {
+        lotRef: step.lot.lotRef,
+        commodityCode: step.lot.commodityCode,
+        quantity: step.lot.quantity,
+        unit: step.lot.unit,
+        priceMinorUnits: step.lot.price.minorUnits.toString(),
+        brokerConfirmedAt: step.lot.confirmedAtEpochSeconds.toString(),
+        source,
+      };
+    } else if (step.step === 'SOLD_TO_CUSTOMER') {
+      if (t?.state !== 'COMMODITY_PURCHASED')
+        return fail('TAWARRUQ_STEP_OUT_OF_ORDER', 'The commodity is sold to the customer once bought');
+      if (!r.documents.some((d) => d.documentRef === step.saleDocumentRef))
+        return fail(
+          'SECURITY_EVIDENCE_NOT_ON_FILE',
+          'The signed deferred-sale instrument is a document on the application',
+        );
+      const done = sellToCustomer(
+        { state: 'COMMODITY_PURCHASED', core: core.value, lot: t.lot, purchasedAt: t.purchasedAt },
+        step.saleDocumentRef,
+        at,
+      );
+      if (!done.ok) return done;
+      next = { ...t, state: 'SOLD_TO_CUSTOMER', saleDocumentRef: step.saleDocumentRef, soldAt: at };
+      detail = { saleDocumentRef: step.saleDocumentRef };
+    } else if (step.step === 'TITLE_TRANSFERRED') {
+      if (t?.state !== 'SOLD_TO_CUSTOMER' || t.soldAt === undefined || t.saleDocumentRef === undefined)
+        return fail('TAWARRUQ_STEP_OUT_OF_ORDER', 'Title passes once the commodity is sold to the customer');
+      const done = transferTitle(
+        {
+          state: 'SOLD_TO_CUSTOMER',
+          core: core.value,
+          lot: t.lot,
+          purchasedAt: t.purchasedAt,
+          soldAt: t.soldAt,
+          saleDocumentRef: t.saleDocumentRef,
+        },
+        step.transferRef,
+        at,
+      );
+      if (!done.ok) return done;
+      next = { ...t, state: 'TITLE_TRANSFERRED', transferRef: step.transferRef, transferredAt: at };
+      detail = { transferRef: step.transferRef };
+    } else {
+      if (
+        t?.state !== 'TITLE_TRANSFERRED' ||
+        t.soldAt === undefined ||
+        t.transferRef === undefined ||
+        t.transferredAt === undefined
+      )
+        return fail('TAWARRUQ_STEP_OUT_OF_ORDER', 'The commodity is sold on once title has passed');
+      if (step.proceeds.currency !== ctx.value.currency)
+        return fail('CURRENCY_NOT_TENANTS', 'The proceeds are in the tenant’s currency');
+      const done = realiseProceeds(
+        {
+          state: 'TITLE_TRANSFERRED',
+          core: core.value,
+          lot: t.lot,
+          soldAt: t.soldAt,
+          transferRef: t.transferRef,
+          transferredAt: t.transferredAt,
+        },
+        {
+          saleRef: step.saleRef,
+          proceeds: step.proceeds,
+          ...(step.agencyRef === undefined ? {} : { agencyRef: step.agencyRef }),
+        },
+        at,
+      );
+      if (!done.ok) return done;
+      next = {
+        ...t,
+        state: 'PROCEEDS_REALISED',
+        saleRef: step.saleRef,
+        proceeds: step.proceeds,
+        ...(step.agencyRef === undefined ? {} : { agencyRef: step.agencyRef }),
+        realisedAt: at,
+      };
+      detail = {
+        saleRef: step.saleRef,
+        proceedsMinorUnits: step.proceeds.minorUnits.toString(),
+        ...(step.agencyRef === undefined ? {} : { agencyRef: step.agencyRef }),
+      };
+    }
+    r.closing.tawarruq = next;
+    recordEvent(book, r, {
+      eventType: 'TAWARRUQ_STEP',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at.epochSeconds,
+      detail: {
+        step: step.step,
+        atEpoch: at.epochSeconds.toString(),
+        tokenDigest: at.tokenDigest,
+        authority: at.authorityId,
+        ...detail,
+      },
+    });
+    return ok(view(r, ctx.value.currency));
+  });
+}
+
+// -- servicing (S1): repayments and the position ---------------------------------
+
+/** The signed schedule as instalments: interest (term loan) or profit (Tawarruq) is the charge. */
+function scheduleOf(r: BusinessRecord) {
+  const signed = r.offers.find((o) => o.letter.version === r.application.offer?.letterVersion);
+  return signed?.schedule.rows.map((row) => ({
+    number: row.number,
+    dueDate: row.dueDate,
+    principal: row.principal,
+    charge: row.interest,
+  }));
+}
+
+/** The position as of today in the tenant's time zone, from confirmed repayments only; undefined before disbursement. */
+function servicingOf(r: BusinessRecord): ServicingView | undefined {
+  if (r.application.status !== 'DISBURSED') return undefined;
+  const ctx = tenantContext(r.application.tenantId as TenantCode);
+  if (!ctx.ok) return undefined;
+  const today = localDate(developmentAttestation().epochSeconds, ctx.value.profile);
+  // An approved restructuring supersedes the signed schedule from its effective date: what was owed then, re-spread,
+  // and only receipts from that day count against it.
+  const current = [...r.servicing.restructures].reverse().find((x) => x.approvedBy !== undefined);
+  const schedule = current?.rows ?? scheduleOf(r);
+  if (schedule === undefined) return undefined;
+  const confirmed = r.servicing.repayments.filter((x) => x.confirmedBy !== undefined);
+  const position = facilityPosition(
+    schedule,
+    current === undefined ? confirmed : confirmed.filter((x) => x.receivedOn >= current.effectiveDate),
+    today,
+    ctx.value.currency,
+  );
+  return {
+    repayments: [...r.servicing.repayments],
+    collections: [...r.servicing.collections],
+    bureauReports: [...r.servicing.bureauReports],
+    lateCharges: [...r.servicing.lateCharges],
+    ...(r.servicing.hardship === undefined ? {} : { hardship: r.servicing.hardship }),
+    restructures: [...r.servicing.restructures],
+    position,
+    ...(r.portfolio === undefined
+      ? {}
+      : {
+          reconciliation: {
+            loanSystemDaysPastDue: r.portfolio.daysPastDue,
+            sanadDaysPastDue: position.daysPastDue,
+            matches: r.portfolio.daysPastDue === position.daysPastDue,
+          },
+        }),
+  };
+}
+
+async function recordRepaymentAt(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: {
+    readonly amountMinorUnits: bigint;
+    readonly receivedOn: string;
+    readonly reference: string;
+    readonly channel: RepaymentChannel;
+    readonly source: 'LIVE' | 'FIXTURE';
+  },
+  actor: string,
+  at: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChangeAt(tenant, applicationId, at, (r, book, ctx) => {
+    if (r.application.status !== 'DISBURSED')
+      return fail('TRANSITION_NOT_ALLOWED', 'Repayments are recorded against a disbursed facility', {
+        status: r.application.status,
+      });
+    if (entry.amountMinorUnits <= 0n) return fail('REPAYMENT_AMOUNT_INVALID', 'A repayment is a positive amount');
+    const received = civilDay(entry.receivedOn);
+    const today = civilDay(localDate(at, ctx.profile)) ?? 0;
+    const disbursedOn =
+      r.application.disbursement === undefined
+        ? undefined
+        : civilDay(localDate(r.application.disbursement.atEpochSeconds, ctx.profile));
+    if (received === undefined || received > today || (disbursedOn !== undefined && received < disbursedOn))
+      return fail('REPAYMENT_DATE_INVALID', 'A repayment is dated between disbursement and today');
+    if (!REF_SHAPE.test(entry.reference))
+      return fail('REPAYMENT_REF_INVALID', 'A repayment is recorded by the channel’s reference');
+    const identity = identityNumberIn({ reference: entry.reference });
+    if (identity !== undefined) return identity;
+    // The channel's reference is the receipt's identity: the same receipt twice is one receipt.
+    if (r.servicing.repayments.some((x) => x.reference === entry.reference && x.channel === entry.channel))
+      return fail('REPAYMENT_DUPLICATE', 'This receipt is already recorded');
+    const repaymentId = `RP-${String(r.servicing.repayments.length + 1).padStart(4, '0')}`;
+    // A rail's receipt is confirmed by the rail; a manual one waits for a second person.
+    const confirmedBy = entry.channel === 'MANUAL' ? undefined : `rail:${entry.channel.toLowerCase()}`;
+    const amount = money(entry.amountMinorUnits, ctx.currency);
+    r.servicing.repayments.push({
+      repaymentId,
+      receivedOn: entry.receivedOn,
+      amount,
+      reference: entry.reference,
+      channel: entry.channel,
+      recordedBy: actor,
+      ...(confirmedBy === undefined ? {} : { confirmedBy }),
+      source: entry.source,
+    });
+    recordEvent(book, r, {
+      eventType: 'REPAYMENT_RECORDED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: {
+        repaymentId,
+        receivedOn: entry.receivedOn,
+        amountMinorUnits: amount.minorUnits.toString(),
+        reference: entry.reference,
+        channel: entry.channel,
+        source: entry.source,
+        ...(confirmedBy === undefined ? {} : { confirmedBy }),
+      },
+    });
+    return ok(true);
+  });
+}
+
+/** Record a receipt: a manual one by finance (confirmed by a second person before it counts), or a rail's. */
+export async function recordRepayment(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: {
+    readonly amountMinorUnits: bigint;
+    readonly receivedOn: string;
+    readonly reference: string;
+    readonly channel: RepaymentChannel;
+    readonly source: 'LIVE' | 'FIXTURE';
+  },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    recordRepaymentAt(tenant, applicationId, entry, actor, developmentAttestation().epochSeconds),
+  );
+}
+
+/** A second person confirms a manual receipt against the bank statement before it counts. */
+export async function confirmRepayment(
+  tenant: TenantCode,
+  applicationId: string,
+  repaymentId: string,
+  confirmer: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    const i = r.servicing.repayments.findIndex((x) => x.repaymentId === repaymentId);
+    const rp = r.servicing.repayments[i];
+    if (rp === undefined) return fail('REPAYMENT_NOT_FOUND', 'No such repayment on the facility', { repaymentId });
+    if (rp.confirmedBy !== undefined) return fail('REPAYMENT_ALREADY_CONFIRMED', 'This repayment is already confirmed');
+    if (confirmer === rp.recordedBy)
+      return reject('OP-DETERMINACY', 'FOUR_EYES_SELF_CONFIRMATION', 'Whoever recorded a receipt does not confirm it');
+    r.servicing.repayments[i] = { ...rp, confirmedBy: confirmer };
+    recordEvent(book, r, {
+      eventType: 'REPAYMENT_CONFIRMED',
+      fromStage: null,
+      toStage: null,
+      actor: confirmer,
+      atEpochSeconds: at,
+      detail: { repaymentId },
+    });
+    queueSettlementIfRepaid(book, r, tenant, at);
+    return ok(true);
+  });
+}
+
+// -- servicing (S2): collections and bureau reporting -----------------------------
+
+/** How many days ahead of its due date an instalment is presented for collection. */
+const COLLECTION_LEAD_DAYS = 7;
+
+/**
+ * Present the instalments due within the lead window, and any overdue and
+ * unpaid, for collection: a SADAD bill in Saudi Arabia, a direct collection
+ * from the payee account through the partner bank in the UAE. Each is its own
+ * idempotent outbox instruction; an instalment already presented and not
+ * returned is not presented again.
+ */
+export async function presentCollections(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    const servicing = servicingOf(r);
+    if (servicing === undefined)
+      return fail('TRANSITION_NOT_ALLOWED', 'Instalments are collected on a disbursed facility', {
+        status: r.application.status,
+      });
+    if (r.servicing.hardship !== undefined)
+      return fail('HARDSHIP_HOLD', 'Collections are paused while the customer is in hardship');
+    const saudi = ctx.value.profile.code === 'SA';
+    const payee = r.closing.payee;
+    if (!saudi && payee?.confirmedBy === undefined)
+      return fail('PAYEE_NOT_CONFIRMED', 'A direct collection debits the confirmed account; none is on record');
+    const today = civilDay(servicing.position.asOf) ?? 0;
+    const due = servicing.position.instalments.filter(
+      (i) =>
+        i.outstanding.minorUnits > 0n &&
+        (civilDay(i.dueDate) ?? 0) <= today + COLLECTION_LEAD_DAYS &&
+        !r.servicing.collections.some((c) => c.scheduleNumber === i.number && c.result !== 'RETURNED'),
+    );
+    if (due.length === 0) return fail('NOTHING_TO_COLLECT', 'No instalment is due for collection now');
+    const at = developmentAttestation().epochSeconds;
+    const base = { tenantId: tenant, subjectRef: applicationId, correlationId: applicationId };
+    const channel: CollectionRecord['channel'] = saudi ? 'SADAD' : 'PARTNER_BANK';
+    const planned = due.map((i) => {
+      const attempts = r.servicing.collections.filter((c) => c.scheduleNumber === i.number).length;
+      const key = `business:${applicationId}:collect:I${String(i.number)}${attempts > 0 ? `:R${String(attempts)}` : ''}`;
+      return { i, key };
+    });
+    const queued = queueSideEffects(
+      planned.map(({ i, key }) =>
+        saudi
+          ? {
+              ...base,
+              eventId: key,
+              kind: 'BILL_PRESENT' as const,
+              idempotencyKey: key,
+              payload: {
+                payerRef: r.contact.partyRef,
+                minorUnits: i.outstanding.minorUnits.toString(),
+                currency: i.outstanding.currency,
+                dueDateGregorian: i.dueDate,
+              },
+            }
+          : {
+              ...base,
+              eventId: key,
+              kind: 'PAYMENT_COLLECT' as const,
+              idempotencyKey: key,
+              payload: {
+                payerRef: r.contact.partyRef,
+                payerIban: payee?.iban ?? '',
+                minorUnits: i.outstanding.minorUnits.toString(),
+                currency: i.outstanding.currency,
+              },
+            },
+      ),
+    );
+    if (!queued.ok) return queued;
+    commitSideEffects(book, queued.value);
+    for (const { i, key } of planned) {
+      r.servicing.collections.push({
+        scheduleNumber: i.number,
+        idempotencyKey: key,
+        channel,
+        amount: i.outstanding,
+        dueDate: i.dueDate,
+        presentedBy: actor,
+        presentedAtEpochSeconds: at,
+      });
+      recordEvent(book, r, {
+        eventType: 'COLLECTION_PRESENTED',
+        fromStage: null,
+        toStage: null,
+        actor,
+        atEpochSeconds: at,
+        detail: {
+          instalment: String(i.number),
+          idempotencyKey: key,
+          channel,
+          amountMinorUnits: i.outstanding.minorUnits.toString(),
+          dueDate: i.dueDate,
+        },
+      });
+    }
+    return ok(view(r, ctx.value.currency));
+  });
+}
+
+/**
+ * The channel's result for a presented instalment. PAID becomes a receipt,
+ * confirmed by the rail, at the amount actually paid; RETURNED frees the
+ * instalment to be presented again. The same result twice changes nothing.
+ */
+export async function recordCollectionResult(
+  tenant: TenantCode,
+  applicationId: string,
+  result: {
+    readonly idempotencyKey: string;
+    readonly status: 'PAID' | 'RETURNED';
+    readonly amountMinorUnits?: bigint;
+    readonly reference: string;
+    readonly receivedOn: string;
+    readonly source: 'LIVE' | 'FIXTURE';
+  },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const at = developmentAttestation().epochSeconds;
+    const book = await hydrate(tenant);
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    const c = r.servicing.collections.find((x) => x.idempotencyKey === result.idempotencyKey);
+    if (c === undefined)
+      return fail('COLLECTION_NOT_FOUND', 'No presented instalment carries that key', { applicationId });
+    if (c.result !== undefined) {
+      const ctx = tenantContext(tenant);
+      return ctx.ok ? ok(view(r, ctx.value.currency)) : ctx;
+    }
+    if (result.status === 'PAID') {
+      const paid = await recordRepaymentAt(
+        tenant,
+        applicationId,
+        {
+          amountMinorUnits: result.amountMinorUnits ?? c.amount.minorUnits,
+          receivedOn: result.receivedOn,
+          reference: result.reference,
+          channel: c.channel,
+          source: result.source,
+        },
+        actor,
+        at,
+      );
+      if (!paid.ok) return paid;
+    }
+    return closingChangeAt(tenant, applicationId, at, (rec, b) => {
+      const i = rec.servicing.collections.findIndex((x) => x.idempotencyKey === result.idempotencyKey);
+      if (i >= 0)
+        rec.servicing.collections[i] = { ...(rec.servicing.collections[i] as CollectionRecord), result: result.status };
+      recordEvent(b, rec, {
+        eventType: 'COLLECTION_RESULT',
+        fromStage: null,
+        toStage: null,
+        actor,
+        atEpochSeconds: at,
+        detail: {
+          idempotencyKey: result.idempotencyKey,
+          result: result.status,
+          reference: result.reference,
+          source: result.source,
+        },
+      });
+      queueSettlementIfRepaid(b, rec, tenant, at);
+      return ok(true);
+    });
+  });
+}
+
+/** Once the facility is repaid in full, the bureau is told it is settled — once. */
+function queueSettlementIfRepaid(book: TenantBook, r: BusinessRecord, tenant: TenantCode, at: bigint): void {
+  if (r.servicing.settledReported === true) return;
+  const s = servicingOf(r);
+  if (s === undefined || s.position.outstandingTotal.minorUnits > 0n) return;
+  const key = `business:${r.application.applicationId}:bureau:settled`;
+  const queued = queueSideEffects([
+    {
+      tenantId: tenant,
+      subjectRef: r.application.applicationId,
+      correlationId: r.application.applicationId,
+      eventId: key,
+      kind: 'BUREAU_REPORT',
+      idempotencyKey: key,
+      payload: {
+        facilityRef: r.application.applicationId,
+        event: 'SETTLED',
+        minorUnits: s.position.totalPaid.minorUnits.toString(),
+        asOfEpochSeconds: at.toString(),
+      },
+    },
+  ]);
+  if (!queued.ok) return;
+  commitSideEffects(book, queued.value);
+  r.servicing.settledReported = true;
+  recordEvent(book, r, {
+    eventType: 'BUREAU_SETTLED_REPORTED',
+    fromStage: null,
+    toStage: null,
+    actor: 'system',
+    atEpochSeconds: at,
+    detail: {},
+  });
+}
+
+/**
+ * The month's status to the credit bureau (SIMAH, AECB): in arrears with the
+ * days-past-due bucket, or current with the instalments paid. Once per month,
+ * keyed on it.
+ */
+export async function reportToBureau(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    const s = servicingOf(r);
+    if (s === undefined)
+      return fail('TRANSITION_NOT_ALLOWED', 'The bureau is told about a disbursed facility', {
+        status: r.application.status,
+      });
+    const month = s.position.asOf.slice(0, 7);
+    if (r.servicing.bureauReports.includes(month))
+      return fail('BUREAU_ALREADY_REPORTED', 'This month’s status is already reported', { month });
+    const at = developmentAttestation().epochSeconds;
+    const key = `business:${applicationId}:bureau:${month}`;
+    const inArrears = s.position.daysPastDue > 0;
+    const queued = queueSideEffects([
+      {
+        tenantId: tenant,
+        subjectRef: applicationId,
+        correlationId: applicationId,
+        eventId: key,
+        kind: 'BUREAU_REPORT',
+        idempotencyKey: key,
+        payload: {
+          facilityRef: applicationId,
+          event: inArrears ? 'ARREARS' : 'INSTALMENT_PAID',
+          minorUnits: (inArrears ? s.position.arrears : s.position.outstandingTotal).minorUnits.toString(),
+          daysPastDue: String(s.position.daysPastDue),
+          asOfEpochSeconds: at.toString(),
+        },
+      },
+    ]);
+    if (!queued.ok) return queued;
+    commitSideEffects(book, queued.value);
+    r.servicing.bureauReports.push(month);
+    recordEvent(book, r, {
+      eventType: 'BUREAU_STATUS_REPORTED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { month, event: inArrears ? 'ARREARS' : 'INSTALMENT_PAID', daysPastDue: String(s.position.daysPastDue) },
+    });
+    return ok(view(r, ctx.value.currency));
+  });
+}
+
+// -- servicing (S3): late charges, hardship, restructuring -------------------------
+
+const reasonOk = (text: string): Result<string> => {
+  const t = text.trim();
+  if (t.length < 10 || t.length > 500)
+    return fail('SERVICING_REASON_REQUIRED', 'State the reason in 10 to 500 characters');
+  if (containsIdentityNumber(t)) return fail('IDENTITY_NUMBER_IN_FREE_TEXT', 'No identity number belongs in a reason');
+  return ok(t);
+};
+
+/** Charge each instalment overdue beyond the grace days, once; for an Islamic facility, as a charity obligation. */
+export async function assessLateCharges(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, ctx, at) => {
+    const s = servicingOf(r);
+    if (s === undefined)
+      return fail('TRANSITION_NOT_ALLOWED', 'Late charges apply to a disbursed facility', {
+        status: r.application.status,
+      });
+    if (r.servicing.hardship !== undefined)
+      return fail('HARDSHIP_HOLD', 'No late charge is assessed while the customer is in hardship');
+    const policy = loadServicingPolicy(tenant);
+    if (!policy.ok) return policy;
+    const due = lateChargesDue(
+      s.position,
+      policy.value,
+      new Set(r.servicing.lateCharges.map((c) => c.scheduleNumber)),
+      isTawarruq(r.application.productCode),
+      ctx.currency,
+    );
+    if (due.length === 0)
+      return fail('NO_LATE_CHARGE_DUE', 'No instalment is overdue beyond the grace days and not yet charged');
+    for (const c of due) {
+      r.servicing.lateCharges.push({ ...c, assessedBy: actor, assessedAtEpochSeconds: at });
+      recordEvent(book, r, {
+        eventType: 'LATE_CHARGE_ASSESSED',
+        fromStage: null,
+        toStage: null,
+        actor,
+        atEpochSeconds: at,
+        detail: {
+          instalment: String(c.scheduleNumber),
+          amountMinorUnits: c.amount.minorUnits.toString(),
+          treatment: c.treatment,
+        },
+      });
+    }
+    return ok(true);
+  });
+}
+
+/** A second person waives a late charge, with the reason. */
+export async function waiveLateCharge(
+  tenant: TenantCode,
+  applicationId: string,
+  scheduleNumber: number,
+  reason: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    const i = r.servicing.lateCharges.findIndex((c) => c.scheduleNumber === scheduleNumber && c.waivedBy === undefined);
+    const c = r.servicing.lateCharges[i];
+    if (c === undefined) return fail('LATE_CHARGE_NOT_FOUND', 'No such late charge outstanding');
+    if (actor === c.assessedBy)
+      return reject('OP-DETERMINACY', 'FOUR_EYES_SELF_WAIVER', 'Whoever assessed a charge does not waive it');
+    const why = reasonOk(reason);
+    if (!why.ok) return why;
+    r.servicing.lateCharges[i] = { ...c, waivedBy: actor, waiverReason: why.value };
+    recordEvent(book, r, {
+      eventType: 'LATE_CHARGE_WAIVED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { instalment: String(scheduleNumber), reason: why.value },
+    });
+    return ok(true);
+  });
+}
+
+/** Place the customer in hardship: collections and late charges pause. Lifted by a second person. */
+export async function setHardship(
+  tenant: TenantCode,
+  applicationId: string,
+  reason: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    if (r.application.status !== 'DISBURSED')
+      return fail('TRANSITION_NOT_ALLOWED', 'Hardship applies to a disbursed facility', {
+        status: r.application.status,
+      });
+    if (r.servicing.hardship !== undefined) return fail('HARDSHIP_ALREADY_SET', 'The customer is already in hardship');
+    const why = reasonOk(reason);
+    if (!why.ok) return why;
+    r.servicing.hardship = { reason: why.value, setBy: actor, setAtEpochSeconds: at };
+    recordEvent(book, r, {
+      eventType: 'HARDSHIP_SET',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { reason: why.value },
+    });
+    return ok(true);
+  });
+}
+
+export async function liftHardship(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    const h = r.servicing.hardship;
+    if (h === undefined) return fail('HARDSHIP_NOT_SET', 'The customer is not in hardship');
+    if (actor === h.setBy)
+      return reject('OP-DETERMINACY', 'FOUR_EYES_SELF_CONFIRMATION', 'Whoever placed the hold does not lift it');
+    delete r.servicing.hardship;
+    recordEvent(book, r, {
+      eventType: 'HARDSHIP_LIFTED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: {},
+    });
+    return ok(true);
+  });
+}
+
+/**
+ * Propose a restructuring from today: what is owed — arrears included —
+ * re-spread over the new instalments. A term loan is re-amortised at its
+ * signed rate; an Islamic facility's outstanding price is re-spread with its
+ * total unchanged. It takes effect only once approved by a second person.
+ */
+export async function proposeRestructure(
+  tenant: TenantCode,
+  applicationId: string,
+  terms: { readonly firstDueDate: string; readonly numberOfPayments: number; readonly reason: string },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, ctx, at) => {
+    const s = servicingOf(r);
+    if (s === undefined)
+      return fail('TRANSITION_NOT_ALLOWED', 'A disbursed facility is restructured', { status: r.application.status });
+    if (r.servicing.restructures.some((x) => x.approvedBy === undefined))
+      return fail('RESTRUCTURE_PENDING', 'A restructuring is already awaiting approval');
+    const why = reasonOk(terms.reason);
+    if (!why.ok) return why;
+    const policy = loadServicingPolicy(tenant);
+    if (!policy.ok) return policy;
+    const signed = r.offers.find((o) => o.letter.version === r.application.offer?.letterVersion);
+    if (signed === undefined) return fail('OFFER_NOT_GENERATED', 'The signed letter version is not on record');
+    const effectiveDate = s.position.asOf;
+    const paymentDay = Number(terms.firstDueDate.slice(8, 10));
+    const outstandingPrincipal = s.position.outstandingPrincipal;
+    const outstandingCharge = money(
+      s.position.outstandingTotal.minorUnits - outstandingPrincipal.minorUnits,
+      ctx.currency,
+    );
+    const t = { effectiveDate, firstDueDate: terms.firstDueDate, numberOfPayments: terms.numberOfPayments, paymentDay };
+    const rows = isTawarruq(r.application.productCode)
+      ? respreadPrice(outstandingPrincipal, outstandingCharge, t, policy.value.restructuring.maxPayments)
+      : reamortise(outstandingPrincipal, signed.terms.rateBp, t, policy.value.restructuring.maxPayments);
+    if (!rows.ok) return rows;
+    const totalAfter = money(
+      rows.value.reduce((a, x) => a + x.principal.minorUnits + x.charge.minorUnits, 0n),
+      ctx.currency,
+    );
+    const restructureId = `RS-${String(r.servicing.restructures.length + 1).padStart(3, '0')}`;
+    r.servicing.restructures.push({
+      restructureId,
+      effectiveDate,
+      rows: rows.value,
+      outstandingBefore: s.position.outstandingTotal,
+      totalAfter,
+      proposedBy: actor,
+      reason: why.value,
+    });
+    recordEvent(book, r, {
+      eventType: 'RESTRUCTURE_PROPOSED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: {
+        restructureId,
+        effectiveDate,
+        rows: rows.value
+          .map(
+            (x) =>
+              `${String(x.number)}|${x.dueDate}|${x.principal.minorUnits.toString()}|${x.charge.minorUnits.toString()}`,
+          )
+          .join(';'),
+        outstandingBefore: s.position.outstandingTotal.minorUnits.toString(),
+        totalAfter: totalAfter.minorUnits.toString(),
+        reason: why.value,
+      },
+    });
+    return ok(true);
+  });
+}
+
+/** A second person approves the proposed restructuring; it then supersedes the schedule from its effective date. */
+export async function approveRestructure(
+  tenant: TenantCode,
+  applicationId: string,
+  restructureId: string,
+  approver: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    const i = r.servicing.restructures.findIndex((x) => x.restructureId === restructureId);
+    const rs = r.servicing.restructures[i];
+    if (rs === undefined) return fail('RESTRUCTURE_NOT_FOUND', 'No such restructuring', { restructureId });
+    if (rs.approvedBy !== undefined)
+      return fail('RESTRUCTURE_ALREADY_APPROVED', 'This restructuring is already approved');
+    if (approver === rs.proposedBy)
+      return reject(
+        'OP-DETERMINACY',
+        'FOUR_EYES_SELF_APPROVAL',
+        'Whoever proposed a restructuring does not approve it',
+      );
+    r.servicing.restructures[i] = { ...rs, approvedBy: approver };
+    recordEvent(book, r, {
+      eventType: 'RESTRUCTURE_APPROVED',
+      fromStage: null,
+      toStage: null,
+      actor: approver,
+      atEpochSeconds: at,
+      detail: { restructureId },
+    });
+    return ok(true);
+  });
+}
+
+// -- offer letter PDFs ------------------------------------------------------------
+
+/**
+ * Record a rendered PDF of one of the application's letter versions. The same
+ * PDF twice is one record. It may be rendered at any stage once the letter
+ * exists: the record is an event, the application row is untouched.
+ */
+export async function recordOfferPdf(
+  tenant: TenantCode,
+  applicationId: string,
+  pdf: {
+    readonly letterVersion: string;
+    readonly sha256Hex: string;
+    readonly byteLength: number;
+    readonly storage: 'LIVE' | 'FIXTURE';
+  },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    if (!r.offers.some((o) => o.letter.version === pdf.letterVersion))
+      return fail('OFFER_NOT_GENERATED', 'No such letter version on the application');
+    if (!/^[0-9a-f]{64}$/.test(pdf.sha256Hex))
+      return fail('DOCUMENT_CONTENT_INVALID', 'A PDF is recorded by the hash of its bytes');
+    if (r.letterPdfs.some((x) => x.sha256Hex === pdf.sha256Hex)) return ok(true);
+    r.letterPdfs.push({ ...pdf, renderedBy: actor, renderedAtEpochSeconds: at });
+    recordEvent(book, r, {
+      eventType: 'OFFER_PDF_RENDERED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: {
+        letterVersion: pdf.letterVersion,
+        sha256: pdf.sha256Hex,
+        byteLength: String(pdf.byteLength),
+        storage: pdf.storage,
+      },
+    });
+    return ok(true);
+  });
+}
+
+/**
+ * Record the signed letter sealed with the institution's digital signature.
+ * Only the letter the customer signed, only from a PDF of exactly that
+ * version, only once, and only a seal the engine validated: a signature that
+ * does not validate, or whose bytes are not intact, is not recorded.
+ */
+export async function recordLetterSealed(
+  tenant: TenantCode,
+  applicationId: string,
+  seal: Omit<SealedLetter, 'sealedBy' | 'sealedAtEpochSeconds' | 'signatureRef'> & {
+    readonly signatureValid: boolean;
+    readonly chainValid: boolean;
+    readonly integrityValid: boolean;
+  },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    const check = sealable(r);
+    if (!check.ok) return check;
+    if (
+      check.value.letterVersion !== seal.letterVersion ||
+      !r.letterPdfs.some((p) => p.sha256Hex === seal.sourceSha256Hex && p.letterVersion === seal.letterVersion)
+    )
+      return fail('LETTER_PDF_NOT_RENDERED', 'Render the signed letter version as a PDF first');
+    if (!seal.signatureValid || !seal.chainValid || !seal.integrityValid)
+      return fail('SEAL_NOT_VALID', 'The document engine did not validate the seal; nothing was recorded');
+    if (!/^[0-9a-f]{64}$/.test(seal.sha256Hex))
+      return fail('DOCUMENT_CONTENT_INVALID', 'A PDF is recorded by the hash of its bytes');
+    const { signatureValid: _s, chainValid: _c, integrityValid: _i, ...kept } = seal;
+    const record: SealedLetter = {
+      ...kept,
+      signatureRef: check.value.signatureRef,
+      sealedBy: actor,
+      sealedAtEpochSeconds: at,
+    };
+    r.sealedLetters.push(record);
+    recordEvent(book, r, {
+      eventType: 'LETTER_SEALED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: {
+        letterVersion: record.letterVersion,
+        sourceSha256: record.sourceSha256Hex,
+        sha256: record.sha256Hex,
+        byteLength: String(record.byteLength),
+        storage: record.storage,
+        signatureRef: record.signatureRef,
+        padesLevel: record.padesLevel,
+        longTermValidation: String(record.longTermValidation),
+        signerCommonName: record.signerCommonName,
+        issuerCommonName: record.issuerCommonName,
+        certificateSerialHex: record.certificateSerialHex,
+        environment: record.environment,
+      },
+    });
+    return ok(true);
+  });
+}
+
+/** Whether the application has a customer signature to seal and has not sealed it yet; the signed version and reference if so. */
+function sealable(r: {
+  readonly application: BusinessApplication;
+  readonly sealedLetters: readonly SealedLetter[];
+}): Result<{
+  readonly letterVersion: string;
+  readonly signatureRef: string;
+}> {
+  const signature = r.application.signature;
+  const letterVersion = r.application.offer?.letterVersion;
+  if (signature === undefined || letterVersion === undefined)
+    return fail('LETTER_NOT_SIGNED', 'The customer has not signed the letter yet');
+  if (r.sealedLetters.some((x) => x.letterVersion === letterVersion))
+    return fail('LETTER_ALREADY_SEALED', 'The signed letter is already sealed');
+  return ok({ letterVersion, signatureRef: signature.signatureRef });
+}
+
+/** The signed letter's version, its signature reference, and the latest PDF of that version, when it can be sealed. */
+export async function sealCandidate(
+  tenant: TenantCode,
+  applicationId: string,
+): Promise<Result<{ readonly letterVersion: string; readonly signatureRef: string; readonly pdf: LetterPdf }>> {
+  const v = await getApplication(tenant, applicationId);
+  if (v === undefined) return notFound(applicationId);
+  const check = sealable({ application: v.application, sealedLetters: v.sealedLetters });
+  if (!check.ok) return check;
+  const pdf = [...v.letterPdfs].reverse().find((p) => p.letterVersion === check.value.letterVersion);
+  if (pdf === undefined) return fail('LETTER_PDF_NOT_RENDERED', 'Render the signed letter version as a PDF first');
+  return ok({ ...check.value, pdf });
 }
 
 async function signAt(
@@ -3127,55 +6388,125 @@ async function disburseAt(
       'FOUR_EYES_DISBURSEMENT',
       'Disbursement is released by a principal other than the approver and the submitting officer',
     );
+  // Every condition precedent on the approved pack, evidenced and verified by a second person.
+  const outstanding = conditionsPrecedent(r).filter((c) => r.closing.cps[c.conditionId]?.verifiedBy === undefined);
+  if (outstanding.length > 0)
+    return fail('CONDITIONS_PRECEDENT_OUTSTANDING', 'Every condition precedent is met and verified before drawdown', {
+      conditions: outstanding.map((c) => c.conditionId).join(','),
+    });
+  // The account paid into: recorded, proven and confirmed by a second person; and not released by whoever recorded it.
+  const payee = r.closing.payee;
+  if (payee?.confirmedBy === undefined)
+    return fail(
+      'PAYEE_NOT_CONFIRMED',
+      'The payee account is recorded and confirmed by a second person before disbursement',
+    );
+  if (actor === payee.recordedBy)
+    return reject(
+      'OP-DETERMINACY',
+      'FOUR_EYES_PAYEE',
+      'Whoever recorded the payee account does not release the payment',
+    );
+  // The first release moves the application to DISBURSED; later tranches are paid against it, the row unchanged.
+  const first = app.status === 'SIGNED';
+  if (!first && app.status !== 'DISBURSED')
+    return fail('TRANSITION_NOT_ALLOWED', 'Disbursement follows the borrower’s signature', { status: app.status });
   // Fixture: the partner bank's payment instruction reference until that adapter is verified (adapters/uae/partner-bank/README.md).
   const reference = paymentRef ?? `partner-bank-fixture:pay:${applicationId}`;
-  const t = recordDisbursedCore(app, reference, actor, at.epochSeconds);
-  if (!t.ok) return t;
+  const t = first ? recordDisbursedCore(app, reference, actor, at.epochSeconds) : undefined;
+  if (t !== undefined && !t.ok) return t;
   const signed = r.offers.find((o) => o.letter.version === app.offer?.letterVersion);
   if (signed === undefined) return fail('OFFER_NOT_GENERATED', 'The signed letter version is not on record');
-  // Money goes out on or after the date the borrower signed for: the schedule (and its first due date) is built from it.
+
+  // A Tawarruq pays the customer the proceeds of the onward sale, once, after the commodity steps (SI-3 to SI-5, SI-11).
+  if (isTawarruq(app.productCode)) {
+    const tw = r.closing.tawarruq;
+    if (tw?.state !== 'PROCEEDS_REALISED' || tw.proceeds === undefined)
+      return fail(
+        'TAWARRUQ_INCOMPLETE',
+        'The commodity is bought, sold to the customer, title passed and sold on before the proceeds are paid',
+      );
+    r.closing.tranches ??= [{ trancheId: 'T1', amount: tw.proceeds, status: 'PLANNED', releases: 0 }];
+  }
+  // The tranche to pay: the first not yet paid, in plan order — or, after a failure, that one again.
+  r.closing.tranches ??= [{ trancheId: 'T1', amount: signed.terms.facilityAmount, status: 'PLANNED', releases: 0 }];
+  const tranches = r.closing.tranches;
+  const index = tranches.findIndex((x) => x.status === 'PLANNED' || x.status === 'FAILED');
+  const tranche = tranches[index];
+  if (tranche === undefined) return fail('NO_TRANCHE_TO_RELEASE', 'Every tranche of the facility has been released');
+
+  // Money goes out on or after the date the borrower signed for (the first tranche) or the date planned for this one.
+  const plannedDate = tranche.plannedDate ?? signed.terms.disbursementDate;
   const actualDate = localDate(at.epochSeconds, ctx.value.profile);
-  if (actualDate < signed.terms.disbursementDate) {
+  if (actualDate < plannedDate) {
     return fail(
       'DISBURSEMENT_BEFORE_PLANNED_DATE',
       'The disbursement is recorded on or after the planned disbursement date in the signed offer',
-      { plannedDate: signed.terms.disbursementDate, actualDate },
+      { plannedDate, actualDate },
     );
   }
 
-  // The payment instruction to the partner bank and the bureau's facility-opened report, as products/sme-term-conventional/execution.ts
-  // shapes them, keyed on the application: queued with the DISBURSED change and written in its transaction.
+  // The payment instruction to the partner bank (and, with the first, the bureau's facility-opened report), keyed on the
+  // application and the tranche: queued with the change and written in its transaction.
   const key = `business:${applicationId}`;
+  const n = index + 1;
+  const trancheKey = `${n === 1 ? `${key}:disburse` : `${key}:disburse:T${String(n)}`}${tranche.releases > 0 ? `:R${String(tranche.releases)}` : ''}`;
   const base = { tenantId: tenant, subjectRef: applicationId, correlationId: applicationId };
   const queued = queueSideEffects([
     {
       ...base,
-      eventId: `${key}:disburse`,
+      eventId: trancheKey,
       kind: 'PAYMENT_DISBURSE',
-      idempotencyKey: `${key}:disburse`,
+      idempotencyKey: trancheKey,
       payload: {
-        rail: 'PARTNER_BANK',
+        // The jurisdiction's money-movement rail: the institution's payments hub in Saudi Arabia, the partner bank in the UAE.
+        rail: ctx.value.profile.code === 'SA' ? 'PAYMENTS_HUB' : 'PARTNER_BANK',
         beneficiaryRef: applicationId,
+        beneficiaryIban: payee.iban,
         paymentRef: reference,
-        minorUnits: String(signed.terms.facilityAmount.minorUnits),
-        currency: signed.terms.facilityAmount.currency,
+        trancheId: tranche.trancheId,
+        minorUnits: String(tranche.amount.minorUnits),
+        currency: tranche.amount.currency,
       },
     },
-    {
-      ...base,
-      eventId: `${key}:bureau`,
-      kind: 'BUREAU_REPORT',
-      idempotencyKey: `${key}:bureau`,
-      payload: {
-        facilityRef: applicationId,
-        event: 'OPENED',
-        minorUnits: String(signed.terms.totalPayable.minorUnits),
-      },
-    },
+    ...(first && tranche.releases === 0
+      ? [
+          {
+            ...base,
+            eventId: `${key}:bureau`,
+            kind: 'BUREAU_REPORT' as const,
+            idempotencyKey: `${key}:bureau`,
+            payload: {
+              facilityRef: applicationId,
+              event: 'OPENED',
+              minorUnits: String(signed.terms.totalPayable.minorUnits),
+            },
+          },
+        ]
+      : []),
   ]);
   if (!queued.ok) return queued;
   commitSideEffects(book, queued.value);
-  apply(book, r, t.value);
+  if (t !== undefined) apply(book, r, t.value);
+  updateTranche(r, tranche.trancheId, (x) => ({
+    ...x,
+    status: 'RELEASED',
+    releases: x.releases + 1,
+    idempotencyKey: trancheKey,
+    releasedBy: actor,
+  }));
+  recordEvent(book, r, {
+    eventType: 'TRANCHE_RELEASED',
+    fromStage: null,
+    toStage: null,
+    actor,
+    atEpochSeconds: at.epochSeconds,
+    detail: {
+      trancheId: tranche.trancheId,
+      idempotencyKey: trancheKey,
+      minorUnits: tranche.amount.minorUnits.toString(),
+    },
+  });
   return ok(view(r, ctx.value.currency));
 }
 
@@ -3299,18 +6630,20 @@ export async function withdrawApplication(
 }
 
 // =============================================================================
-// ILLUSTRATIVE seed — the UAE fund's development book
+// ILLUSTRATIVE seed — the development books (the UAE fund, Bank A, Fintech B)
 // =============================================================================
 
 /**
- * ILLUSTRATIVE. Eight invented businesses and owners — none is a real person
- * or company — spread across stages 5 to 9 so every screen has something to
- * show. Amounts are AED; figures, scores and assessments are chosen to
- * exercise each route, not drawn from any applicant. Each application is
- * walked through the same functions an officer uses, with back-dated
- * development instants, so the seed is the real state machine's output.
+ * ILLUSTRATIVE. Eight invented businesses and owners per tenant — none is a
+ * real person or company — spread across stages 5 to 9 so every screen has
+ * something to show. Amounts are in the tenant's currency; figures, scores and
+ * assessments are chosen to exercise each route, not drawn from any applicant.
+ * Each application is walked through the same functions an officer uses, with
+ * back-dated development instants, so the seed is the real state machine's
+ * output. The Saudi books reuse the UAE cases' figures (the Saudi assessment
+ * policies are the UAE one restated in SAR) under Saudi names, products, rails
+ * and staff.
  */
-const SEED_TENANT: TenantCode = 'sme-fund-ae';
 
 type SeedReach = 'PROPOSED' | 'PARTLY_VERIFIED' | 'SUBMITTED' | 'ASSESSED' | 'OFFER_SENT' | 'DISBURSED';
 
@@ -3323,12 +6656,12 @@ interface SeedSpec {
   readonly owner: string;
   readonly variant: string;
   readonly purpose: string;
-  readonly requestedAed: bigint;
+  readonly requestedUnits: bigint;
   readonly tenorMonths: number;
   readonly graceMonths: number;
   readonly contribution: number;
   readonly receivedDaysAgo: bigint;
-  /** Dirhams. */
+  /** Whole units of the tenant's currency (dirhams, riyals), as are the requested amount and the collateral. */
   readonly figures: {
     readonly revenue: bigint;
     readonly prior: bigint;
@@ -3343,7 +6676,7 @@ interface SeedSpec {
   readonly employees: number;
   readonly experience: bigint;
   readonly sectorPriority: 'PRIORITY' | 'NON_PRIORITY';
-  readonly collateralAed: bigint;
+  readonly collateralUnits: bigint;
   readonly reach: SeedReach;
   readonly daysPastDue?: number;
   /**
@@ -3364,7 +6697,7 @@ const SEEDS: readonly SeedSpec[] = [
     owner: 'Hessa R. Example',
     variant: 'SMALL_LOAN',
     purpose: 'EQUIPMENT',
-    requestedAed: 250_000n,
+    requestedUnits: 250_000n,
     tenorMonths: 24,
     graceMonths: 0,
     contribution: 2_000,
@@ -3383,7 +6716,7 @@ const SEEDS: readonly SeedSpec[] = [
     employees: 14,
     experience: 5n,
     sectorPriority: 'PRIORITY',
-    collateralAed: 300_000n,
+    collateralUnits: 300_000n,
     reach: 'PROPOSED',
   },
   {
@@ -3395,7 +6728,7 @@ const SEEDS: readonly SeedSpec[] = [
     owner: 'Omar K. Example',
     variant: 'ADVANCED_TECH_AI',
     purpose: 'TECHNOLOGY_DEVELOPMENT',
-    requestedAed: 600_000n,
+    requestedUnits: 600_000n,
     tenorMonths: 48,
     graceMonths: 6,
     contribution: 2_500,
@@ -3414,7 +6747,7 @@ const SEEDS: readonly SeedSpec[] = [
     employees: 22,
     experience: 6n,
     sectorPriority: 'PRIORITY',
-    collateralAed: 750_000n,
+    collateralUnits: 750_000n,
     reach: 'PARTLY_VERIFIED',
   },
   {
@@ -3426,7 +6759,7 @@ const SEEDS: readonly SeedSpec[] = [
     owner: 'Mariam S. Example',
     variant: 'WORKING_CAPITAL',
     purpose: 'INVENTORY',
-    requestedAed: 300_000n,
+    requestedUnits: 300_000n,
     tenorMonths: 12,
     graceMonths: 0,
     contribution: 2_000,
@@ -3445,7 +6778,7 @@ const SEEDS: readonly SeedSpec[] = [
     employees: 30,
     experience: 8n,
     sectorPriority: 'NON_PRIORITY',
-    collateralAed: 380_000n,
+    collateralUnits: 380_000n,
     reach: 'SUBMITTED',
   },
   {
@@ -3457,7 +6790,7 @@ const SEEDS: readonly SeedSpec[] = [
     owner: 'Khalid A. Example',
     variant: 'EXPANSION',
     purpose: 'BUSINESS_EXPANSION',
-    requestedAed: 1_200_000n,
+    requestedUnits: 1_200_000n,
     tenorMonths: 60,
     graceMonths: 6,
     contribution: 2_500,
@@ -3476,7 +6809,7 @@ const SEEDS: readonly SeedSpec[] = [
     employees: 41,
     experience: 9n,
     sectorPriority: 'NON_PRIORITY',
-    collateralAed: 1_500_000n,
+    collateralUnits: 1_500_000n,
     reach: 'ASSESSED',
   },
   {
@@ -3488,7 +6821,7 @@ const SEEDS: readonly SeedSpec[] = [
     owner: 'Noura M. Example',
     variant: 'FIXED_ASSETS',
     purpose: 'PREMISES_FIT_OUT',
-    requestedAed: 450_000n,
+    requestedUnits: 450_000n,
     tenorMonths: 36,
     graceMonths: 3,
     contribution: 2_500,
@@ -3507,7 +6840,7 @@ const SEEDS: readonly SeedSpec[] = [
     employees: 26,
     experience: 7n,
     sectorPriority: 'PRIORITY',
-    collateralAed: 600_000n,
+    collateralUnits: 600_000n,
     reach: 'ASSESSED',
   },
   {
@@ -3519,7 +6852,7 @@ const SEEDS: readonly SeedSpec[] = [
     owner: 'Saeed H. Example',
     variant: 'SMALL_LOAN',
     purpose: 'WORKING_CAPITAL',
-    requestedAed: 400_000n,
+    requestedUnits: 400_000n,
     tenorMonths: 36,
     graceMonths: 0,
     contribution: 2_000,
@@ -3538,7 +6871,7 @@ const SEEDS: readonly SeedSpec[] = [
     employees: 33,
     experience: 10n,
     sectorPriority: 'PRIORITY',
-    collateralAed: 520_000n,
+    collateralUnits: 520_000n,
     reach: 'OFFER_SENT',
   },
   {
@@ -3550,7 +6883,7 @@ const SEEDS: readonly SeedSpec[] = [
     owner: 'Layla F. Example',
     variant: 'ADVANCED_TECH_AI',
     purpose: 'EQUIPMENT',
-    requestedAed: 480_000n,
+    requestedUnits: 480_000n,
     tenorMonths: 36,
     graceMonths: 3,
     contribution: 2_000,
@@ -3569,7 +6902,7 @@ const SEEDS: readonly SeedSpec[] = [
     employees: 19,
     experience: 6n,
     sectorPriority: 'PRIORITY',
-    collateralAed: 620_000n,
+    collateralUnits: 620_000n,
     reach: 'DISBURSED',
   },
   {
@@ -3581,7 +6914,7 @@ const SEEDS: readonly SeedSpec[] = [
     owner: 'Rashid T. Example',
     variant: 'FIXED_ASSETS',
     purpose: 'EQUIPMENT',
-    requestedAed: 420_000n,
+    requestedUnits: 420_000n,
     tenorMonths: 48,
     graceMonths: 0,
     contribution: 2_000,
@@ -3600,25 +6933,302 @@ const SEEDS: readonly SeedSpec[] = [
     employees: 48,
     experience: 11n,
     sectorPriority: 'NON_PRIORITY',
-    collateralAed: 560_000n,
+    collateralUnits: 560_000n,
     reach: 'DISBURSED',
     daysPastDue: 34,
     walkEndsDaysAgo: 40n,
   },
 ];
 
+/** A Saudi case: the UAE case at the same index, renamed, on the tenant's one SME variant and its purposes. */
+interface SaudiCase {
+  readonly nameEn: string;
+  readonly nameAr: string;
+  readonly owner: string;
+  readonly purpose: 'WORKING_CAPITAL' | 'CAPEX_OPEX';
+}
+
+/** The UAE cases restated for a Saudi tenant: no grace period, the tenor within the tenant's limit. */
+const saudiSeeds = (prefix: string, maxMonths: number, cases: readonly SaudiCase[]): readonly SeedSpec[] =>
+  SEEDS.flatMap((s, i) => {
+    const c = cases[i];
+    return c === undefined
+      ? []
+      : [
+          {
+            ...s,
+            ...c,
+            applicationId: `${prefix}-${s.applicationId.slice(3)}`,
+            variant: 'SME_TERM',
+            tenorMonths: Math.min(s.tenorMonths, maxMonths),
+            graceMonths: 0,
+          },
+        ];
+  });
+
+/** Everything about a seeded tenant's book that differs by jurisdiction and institution. */
+interface SeedBook {
+  readonly staff: {
+    readonly officer: string;
+    readonly checker: string;
+    readonly committee: string;
+    readonly finance: string;
+  };
+  readonly productCode: string;
+  /** The applicant's registration number as the jurisdiction writes it (UAE trade licence, Saudi CR). */
+  readonly registrationRef: (applicationId: string) => string;
+  /** The national identity, identity-record, register and bureau references the upstream intake verified. */
+  readonly verificationRails: readonly [identity: string, record: string, register: string, bureau: string];
+  /** The rail the bureau report and the salary figure are read from. */
+  readonly bureauRail: string;
+  readonly salaryRail: string;
+  /** The checklist item a first, incomplete application presents. */
+  readonly firstDocument: string;
+  readonly mobileMasked: string;
+  readonly emailMasked: string;
+  /** A published example IBAN of the jurisdiction: synthetic, it pays no one. */
+  readonly payeeIban: string;
+  readonly seeds: readonly SeedSpec[];
+}
+
+const SEED_BOOKS: Readonly<Partial<Record<TenantCode, SeedBook>>> = {
+  'sme-fund-ae': {
+    staff: SEED_PRINCIPALS,
+    productCode: 'sme-term-conventional',
+    registrationRef: (id) => `TL-ILLUS-${id.slice(-4)}`,
+    verificationRails: ['uaepass:assert', 'icp:verify', 'ner:licence', 'aecb:consent'],
+    bureauRail: 'aecb',
+    salaryRail: 'mohre:wps',
+    firstDocument: 'TRADE_LICENCE',
+    mobileMasked: '+971 50 XXX XXXX',
+    emailMasked: 'o***@example.com',
+    payeeIban: 'AE070331234567890123456',
+    seeds: SEEDS,
+  },
+  // Bank A (both windows): conventional SME finance. Its Islamic product stays off until the board ruling is recorded.
+  'bank-a': {
+    staff: {
+      officer: 'stf-maker-01',
+      checker: 'stf-checker-01',
+      committee: 'stf-committee-01',
+      finance: 'stf-finance-01',
+    },
+    productCode: 'sme-term-conventional',
+    // A Riyadh CR: 1010, then six digits.
+    registrationRef: (id) => `1010${id.slice(-6)}`,
+    verificationRails: ['nafath:assert', 'yakeen:verify', 'wathq:cr', 'simah:consent'],
+    bureauRail: 'simah',
+    salaryRail: 'gosi:salary',
+    firstDocument: 'COMMERCIAL_REGISTRATION',
+    mobileMasked: '+966 5X XXX XXXX',
+    emailMasked: 'o***@example.sa',
+    payeeIban: 'SA0380000000608010167519',
+    seeds: saudiSeeds('BA', 60, [
+      {
+        nameEn: 'Najd Lantern Works Co',
+        nameAr: 'شركة فوانيس نجد للصناعة',
+        owner: 'Abdullah N. Example',
+        purpose: 'CAPEX_OPEX',
+      },
+      {
+        nameEn: 'Tuwaiq Data Labs Co',
+        nameAr: 'شركة مختبرات طويق للبيانات',
+        owner: 'Faisal M. Example',
+        purpose: 'CAPEX_OPEX',
+      },
+      {
+        nameEn: 'Al-Ahsa Tannour Bakery Est.',
+        nameAr: 'مؤسسة مخبز تنور الأحساء',
+        owner: 'Hind A. Example',
+        purpose: 'WORKING_CAPITAL',
+      },
+      {
+        nameEn: 'Red Sea Freight Services Co',
+        nameAr: 'شركة البحر الأحمر لخدمات الشحن',
+        owner: 'Turki S. Example',
+        purpose: 'CAPEX_OPEX',
+      },
+      {
+        nameEn: 'Diriyah Fit-Out Contracting Co',
+        nameAr: 'شركة الدرعية لمقاولات التجهيز',
+        owner: 'Reem K. Example',
+        purpose: 'CAPEX_OPEX',
+      },
+      {
+        nameEn: 'Qassim Date Farms Co',
+        nameAr: 'شركة مزارع تمور القصيم',
+        owner: 'Majed O. Example',
+        purpose: 'WORKING_CAPITAL',
+      },
+      {
+        nameEn: 'Abha Robotics Workshop Co',
+        nameAr: 'شركة ورشة أبها للروبوتات',
+        owner: 'Lama F. Example',
+        purpose: 'CAPEX_OPEX',
+      },
+      {
+        nameEn: 'Hijaz Loom Textiles Co',
+        nameAr: 'شركة نول الحجاز للمنسوجات',
+        owner: 'Nasser T. Example',
+        purpose: 'CAPEX_OPEX',
+      },
+    ]),
+  },
+  'fintech-b': {
+    staff: {
+      officer: 'stf-fb-officer-01',
+      checker: 'stf-fb-checker-01',
+      committee: 'stf-fb-committee-01',
+      finance: 'stf-fb-finance-01',
+    },
+    productCode: 'sme-term-conventional',
+    // A Jeddah CR: 4030, then six digits.
+    registrationRef: (id) => `4030${id.slice(-6)}`,
+    verificationRails: ['nafath:assert', 'yakeen:verify', 'wathq:cr', 'simah:consent'],
+    bureauRail: 'simah',
+    salaryRail: 'gosi:salary',
+    firstDocument: 'COMMERCIAL_REGISTRATION',
+    mobileMasked: '+966 5X XXX XXXX',
+    emailMasked: 'o***@example.sa',
+    payeeIban: 'SA0380000000608010167519',
+    seeds: saudiSeeds('FB', 36, [
+      {
+        nameEn: 'Corniche Coffee Roasters Co',
+        nameAr: 'شركة محمصة الكورنيش للقهوة',
+        owner: 'Yasser H. Example',
+        purpose: 'CAPEX_OPEX',
+      },
+      {
+        nameEn: 'Sarawat Cloud Studio Co',
+        nameAr: 'شركة استوديو السروات السحابي',
+        owner: 'Dana R. Example',
+        purpose: 'CAPEX_OPEX',
+      },
+      {
+        nameEn: 'Balad Spice Traders Est.',
+        nameAr: 'مؤسسة البلد لتجارة البهارات',
+        owner: 'Omar B. Example',
+        purpose: 'WORKING_CAPITAL',
+      },
+      {
+        nameEn: 'Yanbu Marine Supplies Co',
+        nameAr: 'شركة ينبع للتجهيزات البحرية',
+        owner: 'Ahmed Y. Example',
+        purpose: 'CAPEX_OPEX',
+      },
+      {
+        nameEn: 'Obhur Interiors Co',
+        nameAr: 'شركة أبحر للتصميم الداخلي',
+        owner: 'Sara J. Example',
+        purpose: 'CAPEX_OPEX',
+      },
+      {
+        nameEn: 'Taif Rose Water Est.',
+        nameAr: 'مؤسسة ماء الورد الطائفي',
+        owner: 'Khalid W. Example',
+        purpose: 'WORKING_CAPITAL',
+      },
+      {
+        nameEn: 'Rabigh Solar Fabrication Co',
+        nameAr: 'شركة رابغ لتصنيع الطاقة الشمسية',
+        owner: 'Nora S. Example',
+        purpose: 'CAPEX_OPEX',
+      },
+      {
+        nameEn: 'Hejaz Print & Pack Co',
+        nameAr: 'شركة الحجاز للطباعة والتغليف',
+        owner: 'Saad M. Example',
+        purpose: 'CAPEX_OPEX',
+      },
+    ]),
+  },
+};
+
 // The illustrative seed's instants are the host clock's, written only where the seed itself is permitted.
 const seedInstant = (epochSeconds: bigint): TsaInstant => hostClockInstant(epochSeconds);
 
+/**
+ * The seed's securities: whatever the variant requires, recorded by the
+ * officer and confirmed by the checker, plus a cash deposit topping the
+ * register's lending value up to the seed's collateral amount — so the
+ * register reproduces the cover each illustrative case was designed with.
+ */
+async function seedSecurity(
+  tenant: TenantCode,
+  id: string,
+  officer: string,
+  checker: string,
+  at: bigint,
+  collateralMinor: bigint,
+): Promise<void> {
+  const r = bookOf(tenant).records.get(id);
+  const policy = loadSecurityPolicy(tenant);
+  if (r === undefined || !policy.ok) return;
+  const status = await securityOf(tenant, r, at);
+  if (!status.ok) return;
+  const valuedAt = at - DAY;
+  let lent = 0n;
+  const collateral = async (kind: CollateralEntry['kind'], description: string, value: bigint) => {
+    const v = await recordCollateralAt(
+      tenant,
+      id,
+      {
+        kind,
+        description,
+        marketValueMinorUnits: value,
+        valuedAtEpochSeconds: valuedAt,
+        valuerRef: `valuer-ILLUS-${id.slice(-4)}`,
+        charge: 'NOT_APPLICABLE',
+      },
+      officer,
+      at,
+    );
+    if (v.ok) {
+      const item = v.value.security.collateral.at(-1);
+      if (item !== undefined) {
+        lent += lendingValue(item, policy.value).minorUnits;
+        await confirmSecurityItemAt(tenant, id, item.itemId, checker, at);
+      }
+    }
+  };
+  for (const req of status.value.position.requirements) {
+    const rule = policy.value.requirements[req.code];
+    if (rule?.kind === 'GUARANTEE_FROM_EACH_OWNER') {
+      for (const ref of req.missingOwners) {
+        const g = await recordGuaranteeAt(
+          tenant,
+          id,
+          { guarantorKind: 'PERSONAL', guarantorRef: ref, guarantorName: '' },
+          officer,
+          at,
+        );
+        const made = g.ok ? g.value.security.guarantees.at(-1) : undefined;
+        if (made !== undefined) await confirmSecurityItemAt(tenant, id, made.guaranteeId, checker, at);
+      }
+    } else if (rule?.kind === 'COLLATERAL') {
+      const value = rule.collateralKind === 'FINANCED_ASSET' ? collateralMinor : r.application.requested.minorUnits;
+      await collateral(
+        rule.collateralKind,
+        `ILLUSTRATIVE ${rule.collateralKind.toLowerCase().replace(/_/g, ' ')}`,
+        value,
+      );
+    }
+  }
+  if (collateralMinor > lent)
+    await collateral('CASH_DEPOSIT', 'ILLUSTRATIVE cash deposit under lien', collateralMinor - lent);
+}
+
 async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
+  const seedBook = SEED_BOOKS[tenant];
+  if (seedBook === undefined) return;
   const now = developmentAttestation().epochSeconds;
-  const officer = SEED_PRINCIPALS.officer;
-  const checker = SEED_PRINCIPALS.checker;
+  const { officer, checker } = seedBook.staff;
   const ctx = tenantContext(tenant);
   const datePolicy = loadOfferDatePolicy(tenant);
   if (!ctx.ok || !datePolicy.ok) return;
   const profile = ctx.value.profile;
-  for (const s of SEEDS) {
+  const [identityRail, recordRail, registerRail, consentRail] = seedBook.verificationRails;
+  for (const s of seedBook.seeds) {
     const t0 = now - s.receivedDaysAgo * DAY;
     // Steps are spaced between receipt and the walk's end (today unless the seed says otherwise), so every instant is in the past.
     const span = (s.receivedDaysAgo - (s.walkEndsDaysAgo ?? 0n)) * DAY;
@@ -3631,28 +7241,28 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
         applicant: {
           businessNameEn: s.nameEn,
           businessNameAr: s.nameAr,
-          registrationRef: `TL-ILLUS-${s.applicationId.slice(-4)}`,
+          registrationRef: seedBook.registrationRef(s.applicationId),
           sector: s.sector,
           yearsInOperation: s.years,
           owners: [{ displayName: s.owner, ref: `owner-ILLUS-${s.applicationId.slice(-4)}` }],
           upstreamVerificationRefs: [
-            `uaepass:assert-ILLUS-${s.applicationId.slice(-4)}`,
-            `icp:verify-ILLUS-${s.applicationId.slice(-4)}`,
-            `ner:licence-ILLUS-${s.applicationId.slice(-4)}`,
-            `aecb:consent-ILLUS-${s.applicationId.slice(-4)}`,
+            `${identityRail}-ILLUS-${s.applicationId.slice(-4)}`,
+            `${recordRail}-ILLUS-${s.applicationId.slice(-4)}`,
+            `${registerRail}-ILLUS-${s.applicationId.slice(-4)}`,
+            `${consentRail}-ILLUS-${s.applicationId.slice(-4)}`,
           ],
         },
-        productCode: 'sme-term-conventional',
+        productCode: seedBook.productCode,
         variantCode: s.variant,
         purpose: s.purpose,
-        requestedMinorUnits: s.requestedAed * 100n,
+        requestedMinorUnits: s.requestedUnits * 100n,
         tenorMonths: s.tenorMonths,
         graceMonths: s.graceMonths,
         contributionPerTenThousand: s.contribution,
         contact: {
           partyRef: `owner-ILLUS-${s.applicationId.slice(-4)}`,
-          emailMasked: 'o***@example.com',
-          mobileMasked: '+971 50 XXX XXXX',
+          emailMasked: seedBook.emailMasked,
+          mobileMasked: seedBook.mobileMasked,
         },
       },
       'upstream-record-dev-01',
@@ -3693,7 +7303,7 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
           periodLabel: 'FY2025',
           minorUnits: f.debtService * 100n,
           sourceKind: 'RAIL',
-          sourceRef: `aecb:report-ILLUS-${id.slice(-4)}`,
+          sourceRef: `${seedBook.bureauRail}:report-ILLUS-${id.slice(-4)}`,
         },
         {
           metric: 'CURRENT_ASSETS',
@@ -3714,7 +7324,7 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
           periodLabel: '2026-09',
           minorUnits: f.salary * 100n,
           sourceKind: 'RAIL',
-          sourceRef: `mohre:wps-ILLUS-${id.slice(-4)}`,
+          sourceRef: `${seedBook.salaryRail}-ILLUS-${id.slice(-4)}`,
         },
       ],
       READ_FIGURE_SOURCES.ocr,
@@ -3741,7 +7351,7 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
       await presentDocumentAt(
         tenant,
         id,
-        { documentType: 'TRADE_LICENCE', documentRef: `doc-ILLUS-${id.slice(-4)}-TRADE_LICENCE` },
+        { documentType: seedBook.firstDocument, documentRef: `doc-ILLUS-${id.slice(-4)}-${seedBook.firstDocument}` },
         officer,
         step(1n),
       );
@@ -3776,8 +7386,8 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
       id,
       {
         bureau: {
-          reportRef: `aecb:report-ILLUS-${id.slice(-4)}`,
-          consentId: `aecb:consent-ILLUS-${id.slice(-4)}`,
+          reportRef: `${seedBook.bureauRail}:report-ILLUS-${id.slice(-4)}`,
+          consentId: `${consentRail}-ILLUS-${id.slice(-4)}`,
           score: s.bureauScore,
         },
         fullTimeEmployees: s.employees,
@@ -3788,16 +7398,36 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
         riskAnalysisScorePerTenThousand: 7_400n,
         portfolioRepaymentPerTenThousand: 8_600n,
         failedFilesRatePerTenThousand: 800n,
-        collateralValueMinorUnits: s.collateralAed * 100n,
+        collateralValueMinorUnits: s.collateralUnits * 100n,
       },
       officer,
       step(3n),
     );
+    await seedSecurity(tenant, id, officer, checker, step(3n).epochSeconds, s.collateralUnits * 100n);
     const submitted = await submitAt(tenant, id, officer, step(4n));
     if (!submitted.ok || s.reach === 'SUBMITTED') continue;
 
     const assessed = await runAssessmentAt(tenant, id, checker, step(5n));
-    if (!assessed.ok || s.reach === 'ASSESSED') continue;
+    if (!assessed.ok) continue;
+    // Credit justifies each deviation the assessment recorded; the committee (another person) then approves.
+    if (assessed.value.application.status === 'IN_COMMITTEE') {
+      const rec = bookOf(tenant).records.get(id);
+      if (rec !== undefined)
+        for (const d of deviationsFor(rec)) {
+          const text = 'ILLUSTRATIVE — mitigated by the confirmed security and the owners’ personal guarantees';
+          const at = step(5n).epochSeconds;
+          rec.pack.justifications[d.code] = { text, by: checker, atEpochSeconds: at };
+          recordEvent(bookOf(tenant), rec, {
+            eventType: 'DEVIATION_JUSTIFIED',
+            fromStage: null,
+            toStage: null,
+            actor: checker,
+            atEpochSeconds: at,
+            detail: { code: d.code, text },
+          });
+        }
+    }
+    if (s.reach === 'ASSESSED') continue;
 
     const status = assessed.value.application.status;
     const decided =
@@ -3808,7 +7438,7 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
               tenant,
               id,
               {
-                decidedBy: SEED_PRINCIPALS.committee,
+                decidedBy: seedBook.staff.committee,
                 approved: true,
                 reason: 'ILLUSTRATIVE — within risk-aligned terms; collateral cover adequate',
               },
@@ -3836,7 +7466,20 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
     const version = sent.value.latestOffer?.letter.version ?? '';
     const signed = await signAt(tenant, id, { letterVersion: version }, officer, step(9n));
     if (!signed.ok) continue;
-    const disbursed = await disburseAt(tenant, id, SEED_PRINCIPALS.finance, undefined, step(10n));
+    // The payee account: recorded by the officer against a document on file, confirmed by the checker.
+    // AE07 0331 2345 6789 0123 456 is the published example UAE IBAN — synthetic, it pays no one.
+    const evidence = signed.value.documents[0]?.documentRef;
+    if (evidence !== undefined) {
+      await recordPayeeAt(
+        tenant,
+        id,
+        { iban: seedBook.payeeIban, accountName: s.nameEn, evidenceRef: evidence },
+        officer,
+        step(9n).epochSeconds,
+      );
+      await confirmPayeeAt(tenant, id, checker, step(9n).epochSeconds);
+    }
+    const disbursed = await disburseAt(tenant, id, seedBook.staff.finance, undefined, step(10n));
     if (!disbursed.ok) continue;
     if (s.daysPastDue !== undefined) {
       // Observed on the day the arrears reach the seed's days past due, counted from the first due date — never after today.

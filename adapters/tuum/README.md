@@ -247,6 +247,70 @@ Endpoint paths and payload field names are supplied as adapter *configuration*, 
 hardcoded. When OI-02 is answered the configuration is filled in and the fixtures are
 re-recorded from real responses. Nothing in `core/` changes.
 
+## Lending adapter — rate-priced loans (UAE M6, 2026-10-15)
+
+`lending-adapter.ts` (`TuumLendingAdapter`, port `core/ports/loan-booking.ts`) books a
+disbursed, **rate-priced** loan as a Tuum loan contract, under the product owner's
+decision of 2026-10-08 (see "Steps A.2–A.5"). It is the only file under `adapters/tuum`
+allowed a lending path; `test/architecture/absences.test.ts` fails the build if one appears
+anywhere else, and neither `core/` nor `products/murabaha-scf` may import it. Murabaha
+obligations stay account-shaped in `core-banking-adapter.ts`, which still refuses a
+lending host.
+
+The booking:
+
+1. `POST /api/v2/persons` — the borrower as a legal person (`personTypeCode: "L"`).
+2. `POST /api/v1/persons/{personId}/contracts` — `tenantCode`, `loanTypeCode` (the tenant's
+   mapping in `config/tenants/<t>/core-banking/loan-products.json`), `contractMoney`,
+   **Sanad's** `interestRate` and `apr`, `numberOfPayments`, `paymentDay`,
+   `firstPaymentDate`.
+3. The response's `contractNumber` is stored as the loan account number, `headerId` as
+   the contract reference.
+
+Amounts and rates are JSON numbers in Tuum's API; the adapter writes them as exact decimal
+tokens (`JSON.rawJSON`) from integer minor units and basis points, so no floating-point
+value is made. A contract echoing a different `interestRate` is refused (`RATE_MISMATCH`).
+Each call carries `x-request-id` = `business:<id>:book:person|contract`.
+
+**Status: fixture only.** The ops app uses the demonstration transport
+(`demonstration.ts`, labelled Fixture) unless the vault holds the tenant's CORE_BANKING
+credentials **and** `person_api_base_url`, which is the opt-in to the live path.
+
+### Verification item TUUM-LEND-01
+
+- The fund's own AED product in Tuum (none exists in the sandbox; the mapping holds a
+  placeholder code).
+- Whether a supplied `interestRate` overrides the price list (README "Steps A.2–A.5": untested).
+- How the servicing account is opened (`servicingAccountId` is required in practice):
+  account type, customer group and price list for the fund.
+- Whether `x-request-id` makes person and contract creation idempotent, or a search first
+  is needed (`POST /api/v2/persons/search`).
+- Whether the contract must then be accepted, activated and disbursement initialised
+  (`/api/v2/contracts/{headerId}/accept`, `…/activate`, `…/initialise-disbursement`)
+  before it services, given Sanad's partner bank pays the money out.
+
+## Murabaha booking — account-shaped (Wasl W3, 2026-10-18)
+
+An executed Murabaha is held through `core-banking-adapter.ts` — the party, its
+COLLECTION account, and one posting at the fixed total with cost and profit as
+detail — never through the lending module (ADR 0007, Finding 1). Sanad holds the
+obligation and its schedule (`services/origination/src/wasl/booking.ts`). The posting
+codes and account types are tenant configuration
+(`config/tenants/<t>/core-banking/murabaha-accounts.json`, ILLUSTRATIVE).
+
+On the synthetic environment `demonstration.ts` answers the account calls
+(`person.resolveOrCreate`, `account.findByPurpose`, `account.postTransaction`),
+labelled Fixture. The live path is not wired.
+
+### Verification item TUUM-ACCT-01
+
+- Bank A's own transaction type codes for raising and settling the receivable, goods
+  inventory and the charity liability (from the transaction-types endpoint), and the
+  account type the distributor's collection account is opened under.
+- Whether `x-request-id` makes the posting idempotent across a retry (the booking is keyed
+  `wasl:<transaction>:book`).
+- That the posted receivable's balance reconciles to Sanad's obligation total (Finding 2).
+
 ## Known deviations
 
 Declared in code as `TUUM_DEVIATIONS`, so they surface in review as well as in audit.

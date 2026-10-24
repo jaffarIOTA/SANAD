@@ -39,6 +39,32 @@ export const ACT_REQUIREMENTS = {
   BUSINESS_APPROVE: ['CHECKER', 'SENIOR_CHECKER'],
   BUSINESS_COMMITTEE: ['CREDIT_COMMITTEE'],
   BUSINESS_DISBURSE: ['FINANCE'],
+  /**
+   * Wasl trade operations: hold the limit, execute the wa'd and the purchase, record evidence, take a gate the
+   * sequencing engine says is satisfied, make the sale offer, record a lapse. No authority passes a gate that is not.
+   */
+  TRADE_OPERATIONS: ['MAKER'],
+  /** Validate or refuse possession evidence: a checker, never the person who recorded it (the service refuses the same person). */
+  TRADE_EVIDENCE_VERIFY: ['CHECKER', 'SENIOR_CHECKER'],
+  /** Unwind an acquired position before the sale, with the goods' disposition. */
+  TRADE_UNWIND: ['CHECKER', 'SENIOR_CHECKER'],
+  /** Instruct the seller's payment again after the payments hub rejected or returned it: money out, finance's act. */
+  TRADE_SETTLEMENT: ['FINANCE'],
+  /**
+   * Late amounts (W4b-2): the officer records whether the distributor was able but unwilling to pay, or unable;
+   * presents a late amount's bill again after a return.
+   */
+  TRADE_LATE_ASSESS: ['MAKER'],
+  /** Confirm the assessment or send it back: a checker, never the officer who assessed (the service refuses the same person). */
+  TRADE_LATE_CONFIRM: ['CHECKER', 'SENIOR_CHECKER'],
+  /** Propose which board-approved charity a collected late amount goes to: money out, finance's act. */
+  CHARITY_DISBURSE_PROPOSE: ['FINANCE'],
+  /** Approve or decline the disbursement: a checker, never the person who proposed it. */
+  CHARITY_DISBURSE_APPROVE: ['CHECKER', 'SENIOR_CHECKER'],
+  /** Propose a distributor's facility in a programme, with what it rests on (W5a). */
+  FACILITY_PROPOSE: ['MAKER'],
+  /** Approve or reject a proposed facility: an approver, never the person who proposed it (the service refuses the same person). */
+  FACILITY_APPROVE: APPROVERS,
 } as const satisfies Readonly<Record<string, readonly StaffAuthority[]>>;
 
 export type WorkbenchAct = keyof typeof ACT_REQUIREMENTS;

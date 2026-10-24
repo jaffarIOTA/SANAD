@@ -1460,3 +1460,47 @@ describe('each UAE adapter declares its deviations against a verification item, 
     expect(creds.refs[0]).toMatchObject({ tenantId: 'sme-fund-ae', provider: 'CREDIT_BUREAU', environment: 'sandbox' });
   });
 });
+
+describe('UAE M5a: the signing intent carries the letter’s digest; the instruction carries the IBAN', () => {
+  const digest = 'a'.repeat(64);
+  it('UAE Pass: a signing intent with a document hash sends it as a SHA-256 digest entry', async () => {
+    const t = transport(
+      answer(
+        'signature.start',
+        { id: 'sp-2', status: 'active', tasks: { pending: [{ id: 't-1', url: 'https://sign.example/sp-2' }] } },
+        { documents: [{ name: 'offer-letter', digest: { algorithm: 'SHA-256', value: digest } }] },
+      ),
+    );
+    const r = expectOk(
+      await uaePass(t).startAuthentication({
+        tenantId: 'sme-fund-ae',
+        applicantRef: 'app-1',
+        purpose: 'SIGNATURE_INTENT',
+        documentHash: digest,
+        correlationId: 'c',
+      }),
+    );
+    expect(r.kind).toBe('ANSWERED');
+    // The fixture answers only a body that carries the digest: without it, no answer.
+    const without = await uaePass(
+      transport(
+        answer(
+          'signature.start',
+          { id: 'sp-2', status: 'active', tasks: { pending: [{ id: 't-1' }] } },
+          { documents: [{ name: 'offer-letter', digest: { algorithm: 'SHA-256', value: digest } }] },
+        ),
+      ),
+    ).startAuthentication({ tenantId: 'sme-fund-ae', applicantRef: 'app-1', purpose: 'SIGNATURE_INTENT', correlationId: 'c' });
+    expect(without.ok && without.value.kind === 'ANSWERED').toBe(false);
+  });
+  it('Partner bank: a disbursement to an IBAN names it as the creditor account (CdtrAcct/Id/IBAN)', async () => {
+    const t = transport(
+      answer('payments.disburse', statusReport('k-d', { TxSts: 'ACCP' }), {
+        Cdtr: { Ref: 'ben-1' },
+        CdtrAcct: { Id: { IBAN: 'AE070331234567890123456' } },
+      }),
+    );
+    const r = expectOk(await bank(t).disburse({ ...disbursement, beneficiaryAccount: { iban: 'AE070331234567890123456' } }));
+    expect(r.kind).toBe('ANSWERED');
+  });
+});

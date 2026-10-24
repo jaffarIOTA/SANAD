@@ -223,6 +223,11 @@ describe('the pre-commit hook is installed and bites', () => {
     // and the colon, which an unanchored pattern misses. Every vendor
     // credentials file looks like this.
     ['notes.md', `{ "client_secret": "${['9f8e7d6c5b4a3928', '1706f5e4d3c2b1a0'].join('')}" }`, 'a JSON-quoted secret'],
+    [
+      'a.ts',
+      `const secretAccessKey = '${['wJalrXUtnFEMI', 'K7MDENG', 'bPxRfiCYEXAMPLEKEYx'].join('/')}';`,
+      'a value that merely begins like the documentation key',
+    ],
   ])('refuses %s — %s', (path, content) => {
     const findings = scan(path, content);
     expect(findings.length).toBeGreaterThan(0);
@@ -245,6 +250,11 @@ describe('the pre-commit hook is installed and bites', () => {
     ],
     ['sanad.json', '{}', "the product's own name"],
     ['sales.yaml', 'total: 5', 'an ordinary file starting with "sa"'],
+    [
+      'sigv4.test.ts',
+      "const secretAccessKey = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';",
+      "AWS's published documentation key, exactly",
+    ],
   ])('allows %s — %s', (path, content) => {
     expect(scan(path, content)).toEqual([]);
   });

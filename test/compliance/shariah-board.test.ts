@@ -11,7 +11,9 @@
  */
 import { describe, expect, it } from 'vitest';
 
+import { money } from '../../core/kernel/money.ts';
 import { buildLegRenderRequest } from '../../products/murabaha-scf/documents/render.ts';
+import { lateAmountsDue } from '../../products/murabaha-scf/ledger/late-amounts.ts';
 import {
   parseBoardPositions,
   screenGoods,
@@ -83,6 +85,70 @@ describe('the board positions bind (SR-025)', () => {
       { ...board, approvedTemplates: [{ document: 'x' }] },
     ])
       expect(parseBoardPositions(bad).ok).toBe(false);
+  });
+});
+
+describe('the board’s ruling on late amounts binds (SH-13, Wasl W4b-2)', () => {
+  const ruling = {
+    computationBasisKey: 'SSB-T-1/late',
+    graceDays: 5,
+    amountPerInstalmentMinorUnits: '50000',
+    approvedRecipients: [{ recipientId: 'r1', nameAr: 'أ', nameEn: 'A', iban: 'SA1380000000000000000101' }],
+  };
+  const { lateAmounts: _ruled, ...unruled } = board;
+  const position = (asOf: string, state: 'OVERDUE' | 'PAID', outstanding: bigint) => ({
+    asOf,
+    instalments: [
+      {
+        number: 1,
+        dueDate: '2026-12-17',
+        amount: money(100_000n, 'SAR'),
+        paid: money(100_000n - outstanding, 'SAR'),
+        paidCharge: money(0n, 'SAR'),
+        paidPrincipal: money(100_000n - outstanding, 'SAR'),
+        outstanding: money(outstanding, 'SAR'),
+        state,
+      },
+    ],
+    arrears: money(outstanding, 'SAR'),
+    daysPastDue: 0,
+    totalPaid: money(100_000n - outstanding, 'SAR'),
+    outstandingPrincipal: money(outstanding, 'SAR'),
+    outstandingTotal: money(outstanding, 'SAR'),
+    overpaid: money(0n, 'SAR'),
+  });
+
+  it('loads a well-formed ruling, and a board without one rules no late amounts', () => {
+    const r = parseBoardPositions({ ...unruled, lateAmounts: ruling });
+    expect(r.ok && r.value.lateAmounts).toMatchObject({ graceDays: 5, amountPerInstalmentMinorUnits: 50_000n });
+    const none = parseBoardPositions(unruled);
+    expect(none.ok && none.value.lateAmounts).toBeUndefined();
+    expect(lateAmountsDue(position('2027-01-31', 'OVERDUE', 100_000n), undefined, new Set(), 'SAR')).toEqual([]);
+  });
+
+  it('refuses a ruling half-read: no basis, a negative or fractional grace, an amount as a number, a bad IBAN, a repeated recipient', () => {
+    for (const bad of [
+      { ...ruling, computationBasisKey: '' },
+      { ...ruling, graceDays: -1 },
+      { ...ruling, graceDays: 2.5 },
+      { ...ruling, amountPerInstalmentMinorUnits: 500 },
+      { ...ruling, amountPerInstalmentMinorUnits: '0' },
+      { ...ruling, approvedRecipients: [{ ...ruling.approvedRecipients[0], iban: 'SA00' }] },
+      { ...ruling, approvedRecipients: [ruling.approvedRecipients[0], ruling.approvedRecipients[0]] },
+    ])
+      expect(parseBoardPositions({ ...unruled, lateAmounts: bad }).ok).toBe(false);
+  });
+
+  it('is due only beyond the grace, on an instalment still unpaid, once', () => {
+    const r = parseBoardPositions({ ...unruled, lateAmounts: ruling });
+    const late = r.ok ? r.value.lateAmounts : undefined;
+    // Due on the 17th, five days' grace: the 22nd is within it, the 23rd beyond.
+    expect(lateAmountsDue(position('2026-12-22', 'OVERDUE', 100_000n), late, new Set(), 'SAR')).toEqual([]);
+    expect(lateAmountsDue(position('2026-12-23', 'OVERDUE', 100_000n), late, new Set(), 'SAR')).toEqual([
+      expect.objectContaining({ sequenceNumber: 1, daysPastDue: 6, amount: money(50_000n, 'SAR') }),
+    ]);
+    expect(lateAmountsDue(position('2026-12-23', 'PAID', 0n), late, new Set(), 'SAR')).toEqual([]);
+    expect(lateAmountsDue(position('2026-12-23', 'OVERDUE', 100_000n), late, new Set([1]), 'SAR')).toEqual([]);
   });
 });
 
