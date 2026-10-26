@@ -74,6 +74,11 @@ export const ACT_REQUIREMENTS = {
    * Closing is a different reviewer from the one who remediated (the service and the table refuse the same person).
    */
   SHARIAH_INCIDENT_ACT: ['SHARIAH_REVIEWER'],
+  /**
+   * Propose purifying the income an incident affected, or confirm or reject another reviewer's proposal (W6b-2).
+   * Disbursing a raised share is finance's and a checker's, as a late amount is (CHARITY_DISBURSE_*).
+   */
+  SHARIAH_PURIFY: ['SHARIAH_REVIEWER'],
 } as const satisfies Readonly<Record<string, readonly StaffAuthority[]>>;
 
 export type WorkbenchAct = keyof typeof ACT_REQUIREMENTS;

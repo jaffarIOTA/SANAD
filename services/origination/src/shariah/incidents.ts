@@ -62,6 +62,27 @@ export function fingerprintOf(d: Discovery): string {
     .digest('hex');
 }
 
+// -- Purification, the product's answer ---------------------------------------------
+
+/** Whether the income an incident affected is purified in full: each product module answers for its own. */
+export type PurificationCheck = (tenant: TenantCode, subjectRef: string, incidentRef: string) => Promise<boolean>;
+
+const CHECKS_KEY = Symbol.for('sanad.shariah.purificationChecks');
+const PURIFICATION_CHECKS = (): Map<string, PurificationCheck> => {
+  const g = globalThis as { [CHECKS_KEY]?: Map<string, PurificationCheck> };
+  g[CHECKS_KEY] ??= new Map();
+  return g[CHECKS_KEY];
+};
+
+/**
+ * A product module says how its purification is known to be complete. A
+ * product that has registered none never answers yes, so an incident that
+ * affected its income does not close.
+ */
+export function registerPurificationCheck(productCode: string, check: PurificationCheck): void {
+  PURIFICATION_CHECKS().set(productCode, check);
+}
+
 // -- The store ------------------------------------------------------------------------
 
 interface Stored {
@@ -290,7 +311,11 @@ export function actOnIncident(
   return withLock(tenant, async () => {
     const incident = (await shariahIncidents(tenant)).find((i) => i.incidentRef === incidentRef);
     if (incident === undefined) return fail('INCIDENT_NOT_FOUND', 'No such incident');
-    const checked = checkIncidentAction(incident, action, actor);
+    const purified =
+      action.kind === 'CLOSE' && incident.purificationRequired
+        ? ((await PURIFICATION_CHECKS().get(incident.productCode)?.(tenant, incident.subjectRef, incidentRef)) ?? false)
+        : false;
+    const checked = checkIncidentAction(incident, action, actor, purified);
     if (!checked.ok) return checked;
     const now = hostClockInstant().epochSeconds;
     const last = incident.history.at(-1)?.atEpochSeconds ?? incident.raisedAtEpochSeconds;
