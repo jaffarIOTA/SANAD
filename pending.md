@@ -9,7 +9,7 @@ Last updated: 26 October 2026.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
   #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2 · #68–#69 Wasl W5a, W5b ·
-  #70 Wasl W6a.
+  #70 Wasl W6a · #71 Wasl W6b-1.
   Auto mode cannot merge.
 - **Record each institution's Shariah approvals (W6a).** Since W6a nothing Islamic originates until the approval
   its configuration cites is in the register: Bank A `SSB-A-2026-014` (Wasl) and `SSB-A-2026-021` (personal
@@ -124,7 +124,7 @@ The findings go in the adapter README.
     - Database cases and migration 0033 ran locally on 26 October on a fresh database (`sanad_w6a` in
       `sanad-w2-pg`), every migration applied from empty and 0033 applied twice; the full suite passed against it.
     - **Not reviewed in a browser** in RTL or LTR: `/shariah/approvals`, and the SH-17 notice in Admin → Products.
-  - **W6b-1 built** (stacked on #70): automated Shariah checks and incidents, as decided on 26 October 2026 (W6b split
+  - **W6b-1 built**, PR #71 (stacked on #70): automated Shariah checks and incidents, as decided on 26 October 2026 (W6b split
     into W6b-1 checks/incidents and W6b-2 purification; severity LOW / MEDIUM / HIGH / MATERIAL; an open MATERIAL
     incident stops the sale).
     - **The Shariah review** (`products/murabaha-scf/compliance/checks.ts`, run by `services/origination/src/wasl/
