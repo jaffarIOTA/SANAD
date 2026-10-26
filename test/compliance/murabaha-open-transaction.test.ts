@@ -19,6 +19,8 @@ import {
   transactionForRequest,
 } from '../../apps/ops/src/server/murabaha-transactions.ts';
 import { approveRequest, listRequests } from '../../apps/ops/src/server/store.ts';
+import { resetShariahApprovals } from '../../services/origination/src/shariah/approvals.ts';
+import { recordTestApprovals } from '../support/shariah-approvals.ts';
 
 // The development book's req_00002 finances invoice …0002, and req_00004 invoice …0004.
 const EXCLUDED = '3cf5d9a2-0000-4000-8000-000000000002';
@@ -40,9 +42,11 @@ vi.mock('../../apps/ops/src/server/invoices.ts', async (original) => {
 const SENIOR = { principalId: 'stf-senior-01', tenantId: 'bank-a' };
 const reason = (r: { ok: boolean; error?: { reason: string } }) => (r.ok ? 'opened' : r.error?.reason);
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.stubEnv('SANAD_DATABASE_URL', '');
   resetTransactions();
+  resetShariahApprovals();
+  await recordTestApprovals();
 });
 
 const awaiting = (counterparty: string) => {

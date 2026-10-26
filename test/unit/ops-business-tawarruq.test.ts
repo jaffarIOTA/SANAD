@@ -35,6 +35,8 @@ vi.mock('@sanad/config/loader.ts', async (importOriginal) => {
 });
 
 import { expectOk } from '@sanad/core/kernel/result.ts';
+import { resetShariahApprovals } from '../../services/origination/src/shariah/approvals.ts';
+import { recordTestApproval } from '../support/shariah-approvals.ts';
 import type { FinancialMetric } from '@sanad/core/applicant/financials.ts';
 import {
   READ_FIGURE_SOURCES,
@@ -96,12 +98,15 @@ const tick = () => {
 const isoAfter = (days: number): string =>
   new Date(clock + 3 * 3_600_000 + days * 86_400_000).toISOString().slice(0, 10);
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.stubEnv('SANAD_DATABASE_URL', '');
   vi.useFakeTimers({ toFake: ['Date'] });
   clock = Date.now();
   vi.setSystemTime(clock);
   resetBusinessStore({ seed: false });
+  // The test-only reference, recorded as an approval in force: no approval, no Tawarruq (SH-17).
+  resetShariahApprovals();
+  await recordTestApproval('bank-a', 'TEST-ONLY-NOT-A-BOARD-RULING', ['sme-term-islamic']);
 });
 afterEach(() => {
   vi.useRealTimers();

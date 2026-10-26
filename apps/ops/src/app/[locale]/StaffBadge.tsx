@@ -17,6 +17,8 @@ const initials = (staff: StaffPrincipal): string => {
   if (first === 'CREDIT_COMMITTEE') return 'CC';
   if (first === 'SENIOR_CHECKER') return 'SC';
   if (first === 'PLATFORM_ADMIN') return 'PA';
+  if (first === 'SHARIAH_REVIEWER') return 'SR';
+  if (first === 'SHARIAH_AUDITOR') return 'SA';
   return (first ?? '?').slice(0, 2);
 };
 

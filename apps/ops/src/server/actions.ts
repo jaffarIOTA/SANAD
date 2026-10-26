@@ -22,6 +22,8 @@ import type { OriginationChannel } from '@sanad/core/origination/channel.ts';
 
 import { licenceRefusalText } from '@sanad/core/licensing/explain.ts';
 import { newBusinessPermitted } from '@sanad/origination/licensing.ts';
+import { approvalRefusalText } from '@sanad/core/shariah/explain.ts';
+import { newBusinessShariahRefusal } from '@sanad/origination/shariah/approvals.ts';
 
 import type { TenantCode } from '@sanad/config/loader.ts';
 
@@ -180,18 +182,24 @@ export async function rejectAction(form: FormData): Promise<void> {
  * journey. A refusal goes back as OP-LICENCE with the explanation in the
  * screen's language — never a generic decline.
  */
-async function requireLicence(locale: string, path: string): Promise<void> {
+async function requireLicence(locale: string, path: string, tenant: TenantCode): Promise<void> {
   const r = await newBusinessPermitted({ productCode: 'murabaha-scf' });
-  if (r.ok) return;
-  const words = licenceRefusalText(r.error.reason);
-  failTo(path, 'OP-LICENCE', locale === 'ar' ? words.ar : words.en);
+  if (!r.ok) {
+    const words = licenceRefusalText(r.error.reason);
+    failTo(path, 'OP-LICENCE', locale === 'ar' ? words.ar : words.en);
+  }
+  // SH-17: and only while the institution's Shariah approval for the product is in force.
+  const shariah = await newBusinessShariahRefusal(tenant, 'murabaha-scf', developmentAttestation());
+  if (shariah === undefined) return;
+  const words = approvalRefusalText(shariah.reason) ?? { en: shariah.detail, ar: shariah.detail };
+  failTo(path, shariah.control, locale === 'ar' ? words.ar : words.en);
 }
 
 export async function beginOriginationAction(form: FormData): Promise<void> {
   const locale = localeOf(form);
   const channel = (field(form, 'channel') || 'MAKER_CHECKER') as OriginationChannel;
-  await authorise(locale, 'ORIGINATE', `/${locale}/originate`);
-  await requireLicence(locale, `/${locale}/originate`);
+  const staff = await authorise(locale, 'ORIGINATE', `/${locale}/originate`);
+  await requireLicence(locale, `/${locale}/originate`, staff.tenantId as TenantCode);
 
   const draft = startDraft(channel);
   redirect(`/${locale}/originate/${draft.draftId}/trade`);
@@ -259,7 +267,7 @@ export async function submitDraftAction(form: FormData): Promise<void> {
   const staff = await authorise(locale, 'ORIGINATE', `/${locale}/originate/${encodeURIComponent(draftId)}/review`);
   const maker = requestPrincipal(staff);
   // A draft started before the licence lapsed still does not become an application after it.
-  await requireLicence(locale, `/${locale}/originate/${draftId}/review`);
+  await requireLicence(locale, `/${locale}/originate/${draftId}/review`, staff.tenantId as TenantCode);
 
   const draft = findDraft(draftId);
   if (draft?.invoiceUuid === undefined || draft.tenorDays === undefined) {

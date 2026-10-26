@@ -37,6 +37,8 @@ import { validateAndReserve } from '../../apps/ops/src/server/murabaha-sequencin
 import { openTransactionForRequest, resetTransactions } from '../../apps/ops/src/server/murabaha-transactions.ts';
 import { approveRequest, keyRequest, submit } from '../../apps/ops/src/server/store.ts';
 import { decideFacility, proposeFacility, resetFacilities } from '../../services/origination/src/wasl/facilities.ts';
+import { resetShariahApprovals } from '../../services/origination/src/shariah/approvals.ts';
+import { recordTestApprovals } from '../support/shariah-approvals.ts';
 import { checkProgrammesChange } from '../../services/origination/src/wasl/programme-changes.ts';
 
 vi.mock('../../apps/ops/src/server/invoices.ts', async (original) => {
@@ -78,12 +80,14 @@ const advance = (seconds: number) => {
   clock += seconds * 1000;
   vi.setSystemTime(clock);
 };
-beforeEach(() => {
+beforeEach(async () => {
   vi.stubEnv('SANAD_DATABASE_URL', '');
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(clock);
   resetTransactions();
   resetFacilities();
+  resetShariahApprovals();
+  await recordTestApprovals();
   inForce.programmes = undefined;
   inForce.board = undefined;
 });

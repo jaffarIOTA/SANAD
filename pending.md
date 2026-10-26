@@ -1,15 +1,21 @@
 # Pending
 
 Everything waiting on someone, kept in one place. Updated as items close.
-Last updated: 21 October 2026.
+Last updated: 26 October 2026.
 
 ## Waiting on the product owner
 
 - **Merge the stacked PRs.** Each is built on the one before; only #35 targets `main`.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
-  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2 · #68–#69 Wasl W5a, W5b.
+  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2 · #68–#69 Wasl W5a, W5b ·
+  Wasl W6a (approvals register).
   Auto mode cannot merge.
+- **Record each institution's Shariah approvals (W6a).** Since W6a nothing Islamic originates until the approval
+  its configuration cites is in the register: Bank A `SSB-A-2026-014` (Wasl) and `SSB-A-2026-021` (personal
+  Tawarruq), Fintech B `SSB-B-2026-007` (its structure) and `SSB-B-2026-003` (its catalogue's Wasl entry). A Shariah
+  reviewer records each at `/shariah/approvals` and a second confirms, with the board's members, dates and the
+  template versions it approves. The references in the checked-in files are ILLUSTRATIVE.
 - **Renew the `APICAPIKEY` GitHub secret.**
 - **Bank A's Tawarruq board ruling.** Record it in Admin. `sme-term-islamic` stays
   disabled until it's recorded.
@@ -91,9 +97,37 @@ The findings go in the adapter README.
     - A goods-register change binds new transactions only. Transactions already open keep the screening they had.
     - **Not reviewed in a browser** in RTL or LTR: Admin → Programmes & anchors, Admin → Goods register, workbench
       `/programmes` and `/goods`.
+  - **W6a built** (stacked on #69): the Shariah approvals register, as decided on 26 October 2026 (W6 split into
+    W6a register, W6b checks/incidents/purification, W6c audit workspace/Board report).
+    - **Workbench → Shariah governance → Approvals register** (`/shariah/approvals`). A Shariah reviewer records an
+      approval (body, reference, members, effective and review or expiry dates, products and template versions);
+      a second reviewer confirms. Suspend, reinstate, withdraw and renew go the same way. Migration **0033**:
+      `core.shariah_approval_change` (decided once, four eyes in the table, one open proposal per approval), with
+      each confirmation projected onto `core.shariah_approval`, whose recorded terms are then immutable.
+    - Two new staff authorities, `SHARIAH_REVIEWER` and `SHARIAH_AUDITOR` (read-only, used from W6c), mapped to
+      `sanad.<tenant>.shariah-reviewers` / `-auditors` in every tenant's staff identity configuration. Development
+      identities `STAFF_DEV_TOKEN_SA_SHARIAH_1`, `_2`, `_SA_SHARIAH_AUDITOR`, `_FB_SHARIAH_1`, `_2`,
+      `_AE_SHARIAH_1`, `_2` are in `.env.example`; **`.env.local` needs tokens for them** before the screen can be
+      tried locally.
+    - **SH-17 at every new-business point:** Wasl request (API and workbench), transaction opening (approval in
+      force, covering Wasl and every template the board approves), limit hold, wa'd and purchase; SME Tawarruq
+      hand-over and offer; consumer Tawarruq quote and acceptance; and enabling an Islamic product in Admin →
+      Products (in force when the change takes effect). A lapse is a date: nobody acts on it.
+    - Executed transactions keep their approval. After the purchase the sale of goods already owned, booking and
+      servicing continue under it.
+    - **Gap made sharper:** a transaction holding its limit (`LIMIT_RESERVED`) when its approval stops cannot
+      move until reinstated. The Murabaha module has no transition that releases a hold before the wa'd (unwind
+      starts at `WAAD_EXECUTED`). This was true before W6a for any abandoned hold. It needs a release transition in
+      `products/murabaha-scf/sequencing/`, which is its own reviewed change.
+    - Approval dates are entered and stored Gregorian; the screen shows the Umm al-Qura date beside them,
+      converted for display.
+    - Database cases and migration 0033 ran locally on 26 October on a fresh database (`sanad_w6a` in
+      `sanad-w2-pg`), every migration applied from empty and 0033 applied twice; the full suite passed against it.
+    - **Not reviewed in a browser** in RTL or LTR: `/shariah/approvals`, and the SH-17 notice in Admin → Products.
   - Contract legs are hashed canonical content; the PDF rendition through Document
     Engine and an embedded viewer in the SME portal are not built.
-  - No cross-transaction evidence workspace for the board (**W6**).
+  - No cross-transaction evidence workspace for the board (**W6c**), and no automated compliance checks,
+    incidents or purification of non-compliant income (**W6b**).
   - **W4b-1 built**, PR #66 (stacked on #65): SADAD paid-bills reconciliation (`/transactions/reconciliation`), and Wasl in
     the daily servicing cycle (reconciliation first, then collections).
     - FIXTURE until KSA-RAIL-SADAD-01. Each tenant's SADAD **biller id** must be configured before it can go live.

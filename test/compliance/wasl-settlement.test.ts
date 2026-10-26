@@ -50,6 +50,8 @@ import {
 import { approveRequest, keyRequest, submit } from '../../apps/ops/src/server/store.ts';
 import { resetFacilities } from '../../services/origination/src/wasl/facilities.ts';
 import { approveTestFacilities } from '../support/wasl-facilities.ts';
+import { recordTestApprovals } from '../support/shariah-approvals.ts';
+import { resetShariahApprovals } from '../../services/origination/src/shariah/approvals.ts';
 import { bookExecutedSale } from '../../services/origination/src/wasl/booking.ts';
 import {
   obligationPosition,
@@ -93,7 +95,9 @@ beforeEach(async () => {
   vi.setSystemTime(clock);
   resetTransactions();
   resetFacilities();
+  resetShariahApprovals();
   await approveTestFacilities();
+  await recordTestApprovals();
 });
 afterEach(() => {
   vi.useRealTimers();

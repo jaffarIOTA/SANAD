@@ -11,6 +11,8 @@
 
 import type { ReactElement, ReactNode } from 'react';
 
+import { STAFF_AUTHORITIES, type StaffAuthority } from '@sanad/core/config/staff-identity.ts';
+
 import { type WorkbenchAct, permits, refusalWording } from '../../server/authority.ts';
 import type { StaffPrincipal } from '../../server/staff.ts';
 
@@ -59,9 +61,8 @@ export function authorityRefusal(
   arabic: boolean,
 ): string | undefined {
   if (reason !== 'AUTHORITY_REQUIRED') return undefined;
-  const known = ['MAKER', 'CHECKER', 'SENIOR_CHECKER', 'CREDIT_COMMITTEE', 'FINANCE', 'PLATFORM_ADMIN'] as const;
   const list = (needs ?? '')
     .split(',')
-    .filter((n): n is (typeof known)[number] => (known as readonly string[]).includes(n));
+    .filter((n): n is StaffAuthority => (STAFF_AUTHORITIES as readonly string[]).includes(n));
   return refusalWording(list.length > 0 ? list : ['CHECKER'], arabic);
 }
