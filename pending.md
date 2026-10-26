@@ -9,7 +9,7 @@ Last updated: 26 October 2026.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
   #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2 · #68–#69 Wasl W5a, W5b ·
-  #70 Wasl W6a · #71 Wasl W6b-1 · #72 Wasl W6b-2.
+  #70 Wasl W6a · #71 Wasl W6b-1 · #72 Wasl W6b-2 · #73 Wasl W6c.
   Auto mode cannot merge.
 - **Record each institution's Shariah approvals (W6a).** Since W6a nothing Islamic originates until the approval
   its configuration cites is in the register: Bank A `SSB-A-2026-014` (Wasl) and `SSB-A-2026-021` (personal
@@ -187,7 +187,7 @@ The findings go in the adapter README.
       applied from empty and 0035 applied twice; the full suite passed against it.
   - Contract legs are hashed canonical content; the PDF rendition through Document
     Engine and an embedded viewer in the SME portal are not built.
-  - **W6c built** (stacked on #72): the Shariah audit workspace and the Board report (BR-F05, BR-F08, SH-18). W6 is complete.
+  - **W6c built**, PR #73 (stacked on #72): the Shariah audit workspace and the Board report (BR-F05, BR-F08, SH-18). W6 is complete.
     - **Workbench → Shariah governance → Audit workspace** (`/shariah/audit`), for `SHARIAH_AUDITOR` and the reviewers.
       Search, or draw a sample that the same seed draws again (`core/shariah/sampling.ts`). The replay of any
       transaction, in plain words, shows:
