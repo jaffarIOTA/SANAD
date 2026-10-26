@@ -7,7 +7,7 @@ import { type TenantCode, loadJurisdictionProfile, loadTenantOnboarding } from '
 import type { TsaInstant } from '@sanad/core/time/tsa.ts';
 
 /** The civil date (yyyy-mm-dd) of an attested instant in the institution's time zone. */
-export function civilDateOf(tenant: TenantCode, at: TsaInstant): string {
+export function civilDateOf(tenant: TenantCode, at: Pick<TsaInstant, 'epochSeconds'>): string {
   const onboarding = loadTenantOnboarding(tenant);
   const profile = onboarding.ok ? loadJurisdictionProfile(onboarding.value.jurisdiction) : undefined;
   const timeZone = profile?.ok === true ? profile.value.timeZone : 'UTC';

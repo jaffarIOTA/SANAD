@@ -162,6 +162,7 @@ import { hostClockInstant } from '@sanad/origination/host-clock.ts';
 import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
 import { tenantUuidByCode } from '@sanad/origination/credentials.ts';
 import { type NewBusinessAct, newBusinessRefusal } from '@sanad/origination/licensing.ts';
+import { catalogueApproval } from '@sanad/origination/shariah/approvals.ts';
 import { smeTermConventional } from '@sanad/products/sme-term-conventional/index.ts';
 import { smeTermIslamic } from '@sanad/products/sme-term-islamic/index.ts';
 import {
@@ -1097,6 +1098,9 @@ async function productFor(
     return fail('PRODUCT_NOT_QUOTED_HERE', 'Business applications are quoted through the SME modules only', {
       productCode,
     });
+  // SH-17: an Islamic product is handed over and offered only while the approval its entry cites is in force.
+  const approval = await catalogueApproval(tenant, entry, at);
+  if (!approval.ok) return approval;
   const terms = module.validateTerms(entry.terms);
   if (!terms.ok) return terms;
   const variant = terms.value.variants.find((v) => v.code === variantCode);

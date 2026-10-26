@@ -3,6 +3,8 @@
  * order (products/murabaha-scf/sequencing/state.ts). Display only: the state
  * machine decides every move; this names where a transaction is.
  */
+import { APPROVAL_REFUSAL_REASONS, approvalRefusalText } from '@sanad/core/shariah/explain.ts';
+
 export const SEQUENCE: readonly string[] = [
   'DRAFT',
   'TRADE_VALIDATION',
@@ -70,6 +72,18 @@ export const EVIDENCE_STATUS_LABEL: Readonly<Record<string, Words>> = {
 
 /** What a step that went through says, by the notice code the action sends back. */
 export const NOTICE: Readonly<Record<string, Words>> = {
+  APPROVAL_CHANGE_PROPOSED: {
+    en: 'Proposed. It takes effect in the register only when a second Shariah reviewer confirms it.',
+    ar: 'اقتُرح التغيير، ولا يسري في السجل إلا بعد أن يؤكده مراجع شرعي ثانٍ.',
+  },
+  APPROVAL_CHANGE_CONFIRMED: {
+    en: 'Confirmed: the register now says so, from this moment.',
+    ar: 'تم التأكيد: أصبح السجل يقول ذلك من هذه اللحظة.',
+  },
+  APPROVAL_CHANGE_REJECTED: {
+    en: 'Rejected. The register is unchanged.',
+    ar: 'رُفض التغيير، ولم يتغير السجل.',
+  },
   FACILITY_PROPOSED: {
     en: 'The facility is proposed; a second person approves it before the distributor may draw.',
     ar: 'اقتُرح التسهيل، ويعتمده شخص ثانٍ قبل أن يسحب الموزع.',
@@ -339,7 +353,16 @@ export const LIMIT_REFUSAL: Readonly<Record<string, Words>> = {
   },
 };
 
+/** SH-17: new origination under an approval that is not in force (W6a). */
+const SHARIAH_APPROVAL_REFUSAL: Readonly<Record<string, Words>> = Object.fromEntries(
+  APPROVAL_REFUSAL_REASONS.flatMap((r) => {
+    const words = approvalRefusalText(r);
+    return words === undefined ? [] : [[r, words]];
+  }),
+);
+
 export const REFUSAL: Readonly<Record<string, Words>> = {
+  ...SHARIAH_APPROVAL_REFUSAL,
   ...BOOKING_REFUSAL,
   ...SETTLEMENT_REFUSAL,
   ...LATE_AMOUNT_REFUSAL,

@@ -11,6 +11,7 @@ import { notFound, redirect } from 'next/navigation';
 
 import { loadProductCatalogue } from '@sanad/config/loader.ts';
 import type { CoreBankingProductDetail, CoreBankingProductType } from '@sanad/core/ports/core-banking-catalogue.ts';
+import { approvalRefusalText } from '@sanad/core/shariah/explain.ts';
 import {
   BUTTON_DANGER,
   BUTTON_PRIMARY,
@@ -125,10 +126,13 @@ export default async function ProductsAdminPage({
       .map((r) => /^Add (\S+) to the catalogue/.exec(r.summary)?.[1])
       .filter((c): c is string => c !== undefined),
   );
+  // SH-17 (W6a): an Islamic product enabled without an approval in force, in the register's own words.
+  const shariah = notice?.startsWith('REFUSED:') === true ? approvalRefusalText(notice.slice(8)) : undefined;
   const n =
     notice === undefined
       ? undefined
       : (NOTICE[notice] ??
+        (shariah === undefined ? undefined : { ...shariah, tone: 'blocked' as const }) ??
         (notice.startsWith('REFUSED:')
           ? {
               en: `Refused before proposal: ${notice.slice(8)}`,

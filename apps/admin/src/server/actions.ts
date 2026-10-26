@@ -53,6 +53,7 @@ import { beginSingleSignOn, providerSignOut } from './single-sign-on.ts';
 import { configurableTenant } from './tenant-scope.ts';
 import { decideDeploymentJurisdiction, proposeDeploymentJurisdiction } from '@sanad/origination/jurisdiction.ts';
 import { decideLicenceInstall, proposeLicenceInstall } from '@sanad/origination/licensing.ts';
+import { catalogueApproval } from '@sanad/origination/shariah/approvals.ts';
 
 const field = (form: FormData, name: string): string => {
   const v = form.get(name);
@@ -183,6 +184,16 @@ export async function proposeProductChangeAction(form: FormData): Promise<void> 
     coreBankingProductCode,
   });
   if (!changed.ok) return back(to, `REFUSED:${changed.error.reason}`);
+  // SH-17: an Islamic product is enabled only under an approval in the register, in force when the change takes
+  // effect and covering it. Origination asks again every day; this stops a product being switched on without one.
+  if (form.get('enabled') === 'on') {
+    const approval = await catalogueApproval(
+      tenant,
+      { productCode: field(form, 'productCode'), ...(boardRulingRef === '' ? {} : { boardRulingRef }) },
+      { epochSeconds: BigInt(Math.floor(effectiveMs / 1000)) },
+    );
+    if (!approval.ok) return back(to, `REFUSED:${approval.error.reason}`);
+  }
   const summary = field(form, 'summary');
   const checked = checkProposal({
     tenant,

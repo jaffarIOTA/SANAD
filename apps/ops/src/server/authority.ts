@@ -65,6 +65,10 @@ export const ACT_REQUIREMENTS = {
   FACILITY_PROPOSE: ['MAKER'],
   /** Approve or reject a proposed facility: an approver, never the person who proposed it (the service refuses the same person). */
   FACILITY_APPROVE: APPROVERS,
+  /** Propose a change to the Shariah approvals register: record, suspend, reinstate, withdraw or renew (W6a). */
+  SHARIAH_APPROVAL_PROPOSE: ['SHARIAH_REVIEWER'],
+  /** Confirm or reject it: a Shariah reviewer, never the one who proposed it (the service refuses the same person). */
+  SHARIAH_APPROVAL_CONFIRM: ['SHARIAH_REVIEWER'],
 } as const satisfies Readonly<Record<string, readonly StaffAuthority[]>>;
 
 export type WorkbenchAct = keyof typeof ACT_REQUIREMENTS;
@@ -85,6 +89,8 @@ const AUTHORITY_AR: Readonly<Record<StaffAuthority, string>> = {
   SENIOR_CHECKER: 'مُراجِع أول',
   CREDIT_COMMITTEE: 'لجنة الائتمان',
   FINANCE: 'المالية',
+  SHARIAH_REVIEWER: 'المراجعة الشرعية',
+  SHARIAH_AUDITOR: 'التدقيق الشرعي',
   PLATFORM_ADMIN: 'مسؤول المنصة',
 };
 const AUTHORITY_EN: Readonly<Record<StaffAuthority, string>> = {
@@ -93,6 +99,8 @@ const AUTHORITY_EN: Readonly<Record<StaffAuthority, string>> = {
   SENIOR_CHECKER: 'senior checker',
   CREDIT_COMMITTEE: 'credit committee',
   FINANCE: 'finance',
+  SHARIAH_REVIEWER: 'Shariah reviewer',
+  SHARIAH_AUDITOR: 'Shariah auditor',
   PLATFORM_ADMIN: 'platform administrator',
 };
 

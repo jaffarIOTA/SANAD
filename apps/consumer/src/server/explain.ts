@@ -54,8 +54,16 @@ const EXPLANATIONS: Readonly<Record<string, { readonly ar: string; readonly en: 
   },
 };
 
+// The institution's Shariah approval for the product is not in force (SH-17). As with the licence, the customer is
+// told the finance is not available now, not the state of the institution's board approvals.
+const SHARIAH_APPROVAL_NOT_IN_FORCE = {
+  ar: 'هذا التمويل غير متاح حالياً، ولم يُسجَّل عليك أي شيء. إن كان لديك تمويل قائم فسداده ومتابعته مستمران كالمعتاد.',
+  en: 'This finance is not available at the moment, and nothing has been recorded against you. Any finance you already hold continues as normal.',
+};
+
 export function explain(reason: string, arabic: boolean): string {
-  const e = EXPLANATIONS[reason];
+  const e =
+    EXPLANATIONS[reason] ?? (reason.startsWith('SHARIAH_APPROVAL_') ? SHARIAH_APPROVAL_NOT_IN_FORCE : undefined);
   if (e !== undefined) return arabic ? e.ar : e.en;
   return arabic ? `تعذّر إكمال الطلب (${reason}).` : `The request could not be completed (${reason}).`;
 }

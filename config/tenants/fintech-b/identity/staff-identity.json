@@ -36,6 +36,14 @@
       "authority": "FINANCE"
     },
     {
+      "group": "sanad.fintech-b.shariah-reviewers",
+      "authority": "SHARIAH_REVIEWER"
+    },
+    {
+      "group": "sanad.fintech-b.shariah-auditors",
+      "authority": "SHARIAH_AUDITOR"
+    },
+    {
       "group": "sanad.fintech-b.platform-admins",
       "authority": "PLATFORM_ADMIN"
     }
