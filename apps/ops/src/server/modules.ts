@@ -837,7 +837,15 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         readiness: soon(),
         reference: 'BR-F05 · SH-18',
       },
-      { id: 'incidents', titleEn: 'Incidents', titleAr: 'المخالفات', readiness: soon(), reference: 'BR-F04' },
+      {
+        id: 'incidents',
+        titleEn: 'Incidents',
+        titleAr: 'المخالفات',
+        href: '/shariah/incidents',
+        readiness: live(),
+        reference:
+          'BR-F03 · BR-F04 · BR-F07 — Wasl W6b-1: each morning, after reconciliation, the Shariah review re-checks every live Wasl transaction from its own record — leg chain and order, evidence at each gate and at the sale, the risk period at the sale offer, distinct parties, goods against the register at opening and now, sale price = cost + profit, each leg’s template in its approval and its document rebuilt from that template and compared — and raises each failure once as an incident (LOW, MEDIUM, HIGH or MATERIAL). Shariah reviewers triage, plan, remediate and close; a different reviewer closes, with evidence. An open MATERIAL incident stops the wa’d, purchase and sale offer until closed; unwinding is not stopped. Reviewers may raise observations. Purification of affected income is W6b-2: an incident marked as affecting income cannot close until then',
+      },
       {
         id: 'purification',
         titleEn: 'Charity ledger & purification',
