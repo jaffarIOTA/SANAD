@@ -9,7 +9,7 @@ Last updated: 26 October 2026.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
   #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2 · #68–#69 Wasl W5a, W5b ·
-  #70 Wasl W6a.
+  #70 Wasl W6a · #71 Wasl W6b-1.
   Auto mode cannot merge.
 - **Record each institution's Shariah approvals (W6a).** Since W6a nothing Islamic originates until the approval
   its configuration cites is in the register: Bank A `SSB-A-2026-014` (Wasl) and `SSB-A-2026-021` (personal
@@ -124,10 +124,43 @@ The findings go in the adapter README.
     - Database cases and migration 0033 ran locally on 26 October on a fresh database (`sanad_w6a` in
       `sanad-w2-pg`), every migration applied from empty and 0033 applied twice; the full suite passed against it.
     - **Not reviewed in a browser** in RTL or LTR: `/shariah/approvals`, and the SH-17 notice in Admin → Products.
+  - **W6b-1 built**, PR #71 (stacked on #70): automated Shariah checks and incidents, as decided on 26 October 2026 (W6b split
+    into W6b-1 checks/incidents and W6b-2 purification; severity LOW / MEDIUM / HIGH / MATERIAL; an open MATERIAL
+    incident stops the sale).
+    - **The Shariah review** (`products/murabaha-scf/compliance/checks.ts`, run by `services/origination/src/wasl/
+      compliance.ts`) re-checks every live Wasl transaction from its own record:
+      - the legs' chain and order, and a state not ahead of its legs;
+      - each gate evidenced, and every gate holding when the sale was offered;
+      - the risk period at the sale offer;
+      - distinct parties, the same buyer on every leg;
+      - the goods against the register at opening and as it stands;
+      - the sale price is the cost plus the profit;
+      - template drift: each leg's template is in the approval it executed under, and each executed document is
+        rebuilt from its template and the transaction's figures and compared by hash (one `instrumentHash` for
+        execution and the check).
+    - It runs in the daily cycle (tenant task `SHARIAH_REVIEW`, after reconciliation) and from **Workbench → Shariah
+      governance → Incidents** (`/shariah/incidents`). Each failure is raised once, ever (fingerprinted).
+    - **Incidents**: raised by the review or as a reviewer's observation; triaged (severity, owner, a reason for
+      re-rating), planned, remediated and closed, in that order; closed by a different reviewer with evidence.
+      Migration **0034** (`core.shariah_incident`, `core.shariah_incident_event`) enforces the order, the four eyes at
+      closing and write-once rows.
+    - **An open MATERIAL incident** on a transaction stops the wa'd, the purchase and the sale offer (SH-17
+      `SHARIAH_INCIDENT_OPEN`). Unwinding is not stopped; a transaction already sold is not touched.
+    - **Waiting on W6b-2:** an incident remediated as affecting income cannot close (SH-13
+      `INCIDENT_PURIFICATION_PENDING`, in the service and the table) until purification exists.
+    - The opening event now records the goods it screened. Transactions opened before W6b-1 have none recorded; the
+      review raises a LOW `GOODS_SCREENING_NOT_RECORDED` for each.
+    - Evidence "as it stood at the sale" is read by capture time; a checker's decision keeps the artefact's capture
+      time. The sequencing engine refuses a sale before its gates are decided, so this reads real sales correctly.
+    - The institution's registration in a rebuilt document is read as it stands. If the institution's CR in
+      `parties.json` changes, every executed document will read as drifted.
+    - Database cases and migration 0034 ran locally on 26 October on a fresh database (`sanad_w6b`), every migration
+      applied from empty and 0034 applied twice; the full suite passed against it.
+    - **Not reviewed in a browser** in RTL or LTR: `/shariah/incidents`.
   - Contract legs are hashed canonical content; the PDF rendition through Document
     Engine and an embedded viewer in the SME portal are not built.
-  - No cross-transaction evidence workspace for the board (**W6c**), and no automated compliance checks,
-    incidents or purification of non-compliant income (**W6b**).
+  - No cross-transaction evidence workspace for the board (**W6c**), and no purification of non-compliant
+    income (**W6b-2**).
   - **W4b-1 built**, PR #66 (stacked on #65): SADAD paid-bills reconciliation (`/transactions/reconciliation`), and Wasl in
     the daily servicing cycle (reconciliation first, then collections).
     - FIXTURE until KSA-RAIL-SADAD-01. Each tenant's SADAD **biller id** must be configured before it can go live.

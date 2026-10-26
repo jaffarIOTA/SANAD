@@ -72,6 +72,16 @@ export const EVIDENCE_STATUS_LABEL: Readonly<Record<string, Words>> = {
 
 /** What a step that went through says, by the notice code the action sends back. */
 export const NOTICE: Readonly<Record<string, Words>> = {
+  SHARIAH_REVIEW_RUN: {
+    en: 'The Shariah review ran over the live book. Anything it found is listed below.',
+    ar: 'جرت المراجعة الشرعية على المحفظة القائمة، وما وجدته مدرج أدناه.',
+  },
+  INCIDENT_RAISED: { en: 'The observation is raised as an incident.', ar: 'قُيّدت الملاحظة مخالفةً.' },
+  INCIDENT_ALREADY_RAISED: {
+    en: 'This observation is already raised on this transaction.',
+    ar: 'هذه الملاحظة مقيّدة بالفعل على هذه المعاملة.',
+  },
+  INCIDENT_STEP_RECORDED: { en: 'Recorded.', ar: 'سُجّل.' },
   APPROVAL_CHANGE_PROPOSED: {
     en: 'Proposed. It takes effect in the register only when a second Shariah reviewer confirms it.',
     ar: 'اقتُرح التغيير، ولا يسري في السجل إلا بعد أن يؤكده مراجع شرعي ثانٍ.',
@@ -363,6 +373,10 @@ const SHARIAH_APPROVAL_REFUSAL: Readonly<Record<string, Words>> = Object.fromEnt
 
 export const REFUSAL: Readonly<Record<string, Words>> = {
   ...SHARIAH_APPROVAL_REFUSAL,
+  SHARIAH_INCIDENT_OPEN: {
+    en: 'A material Shariah incident is open on this transaction. It does not proceed to its sale until the Shariah reviewers close the incident; it may still be unwound.',
+    ar: 'توجد مخالفة شرعية جوهرية مفتوحة على هذه المعاملة، فلا تمضي إلى البيع حتى يغلقها المراجعون الشرعيون؛ ويبقى فكّها ممكناً.',
+  },
   ...BOOKING_REFUSAL,
   ...SETTLEMENT_REFUSAL,
   ...LATE_AMOUNT_REFUSAL,

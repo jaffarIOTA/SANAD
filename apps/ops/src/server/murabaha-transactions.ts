@@ -165,7 +165,13 @@ export async function openTransactionForRequest(
       fromState: null,
       toState: 'DRAFT',
       actor,
-      detail: { requestRef, approvedBy: approved.checker.principalId, core: encodeCore(draft.value.core) },
+      // The goods as screened, so the Shariah review can screen them again against the register (W6b-1, SH-11).
+      detail: {
+        requestRef,
+        approvedBy: approved.checker.principalId,
+        core: encodeCore(draft.value.core),
+        goods: lines.map((l) => ({ lineNo: l.lineNo, goodsClassificationCode: l.goodsClassificationCode })),
+      },
       occurredAtEpochSeconds: at.epochSeconds,
     };
     const pool = waslPool();
