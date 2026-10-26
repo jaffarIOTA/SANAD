@@ -79,6 +79,13 @@ export const ACT_REQUIREMENTS = {
    * Disbursing a raised share is finance's and a checker's, as a late amount is (CHARITY_DISBURSE_*).
    */
   SHARIAH_PURIFY: ['SHARIAH_REVIEWER'],
+  /**
+   * Open the Shariah audit workspace and the Board report, and download an audit pack (W6c). Read-only: the Board's
+   * auditor and the institution's Shariah reviewers.
+   */
+  SHARIAH_AUDIT_READ: ['SHARIAH_AUDITOR', 'SHARIAH_REVIEWER'],
+  /** Raise an observation from the workspace, which becomes an incident for the reviewers to work (W6c). */
+  SHARIAH_OBSERVE: ['SHARIAH_AUDITOR', 'SHARIAH_REVIEWER'],
 } as const satisfies Readonly<Record<string, readonly StaffAuthority[]>>;
 
 export type WorkbenchAct = keyof typeof ACT_REQUIREMENTS;
