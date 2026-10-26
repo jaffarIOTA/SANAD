@@ -9,7 +9,7 @@ Last updated: 26 October 2026.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
   #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2 · #68–#69 Wasl W5a, W5b ·
-  Wasl W6a (approvals register).
+  #70 Wasl W6a.
   Auto mode cannot merge.
 - **Record each institution's Shariah approvals (W6a).** Since W6a nothing Islamic originates until the approval
   its configuration cites is in the register: Bank A `SSB-A-2026-014` (Wasl) and `SSB-A-2026-021` (personal
@@ -97,7 +97,7 @@ The findings go in the adapter README.
     - A goods-register change binds new transactions only. Transactions already open keep the screening they had.
     - **Not reviewed in a browser** in RTL or LTR: Admin → Programmes & anchors, Admin → Goods register, workbench
       `/programmes` and `/goods`.
-  - **W6a built** (stacked on #69): the Shariah approvals register, as decided on 26 October 2026 (W6 split into
+  - **W6a built**, PR #70 (stacked on #69): the Shariah approvals register, as decided on 26 October 2026 (W6 split into
     W6a register, W6b checks/incidents/purification, W6c audit workspace/Board report).
     - **Workbench → Shariah governance → Approvals register** (`/shariah/approvals`). A Shariah reviewer records an
       approval (body, reference, members, effective and review or expiry dates, products and template versions);
