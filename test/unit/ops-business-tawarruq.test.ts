@@ -24,7 +24,9 @@ vi.mock('@sanad/config/loader.ts', async (importOriginal) => {
         value: {
           ...c.value,
           entries: c.value.entries.map((e) =>
-            e.productCode === 'sme-term-islamic' ? { ...e, enabled: true, boardRulingRef: 'TEST-ONLY-NOT-A-BOARD-RULING' } : e,
+            e.productCode === 'sme-term-islamic'
+              ? { ...e, enabled: true, boardRulingRef: 'TEST-ONLY-NOT-A-BOARD-RULING' }
+              : e,
           ),
         },
       };
@@ -91,7 +93,8 @@ const tick = () => {
   clock += 2_000;
   vi.setSystemTime(clock);
 };
-const isoAfter = (days: number): string => new Date(clock + 3 * 3_600_000 + days * 86_400_000).toISOString().slice(0, 10);
+const isoAfter = (days: number): string =>
+  new Date(clock + 3 * 3_600_000 + days * 86_400_000).toISOString().slice(0, 10);
 
 beforeEach(() => {
   vi.stubEnv('SANAD_DATABASE_URL', '');
@@ -137,14 +140,26 @@ describe('an SME Tawarruq on Bank A', () => {
       await ingestReadFigures(
         TENANT,
         ID,
-        FIGURES.map(([metric, periodLabel, minorUnits]) => ({ metric, periodLabel, minorUnits, sourceKind: 'OCR' as const, sourceRef: 'doc-statements' })),
+        FIGURES.map(([metric, periodLabel, minorUnits]) => ({
+          metric,
+          periodLabel,
+          minorUnits,
+          sourceKind: 'OCR' as const,
+          sourceRef: 'doc-statements',
+        })),
         READ_FIGURE_SOURCES.ocr,
       ),
     );
     const keyed = expectOk(
-      await proposeFigures(TENANT, ID, [{ metric: 'MONTHLY_DEBT_OBLIGATIONS', periodLabel: '2026-09', minorUnits: 700_000n, sourceRef: 'doc-simah' }], officer),
+      await proposeFigures(
+        TENANT,
+        ID,
+        [{ metric: 'MONTHLY_DEBT_OBLIGATIONS', periodLabel: '2026-09', minorUnits: 700_000n, sourceRef: 'doc-simah' }],
+        officer,
+      ),
     );
-    for (const f of keyed.figures) expectOk(await verifyFigure(TENANT, ID, f.figureId, f.figure.sourceKind === 'OFFICER_ENTRY' ? checker : officer));
+    for (const f of keyed.figures)
+      expectOk(await verifyFigure(TENANT, ID, f.figureId, f.figure.sourceKind === 'OFFICER_ENTRY' ? checker : officer));
     const checklist = expectOk(await checklistStatus(TENANT, ID));
     for (const item of checklist.checklist.items.filter((i) => i.required)) {
       const ref = `doc-ba-${item.documentType}`;
@@ -152,7 +167,14 @@ describe('an SME Tawarruq on Bank A', () => {
       expectOk(await validateDocument(TENANT, ID, ref, 'VALID', checker));
     }
     // The signed deferred-sale instrument, on file for the sale step.
-    expectOk(await presentDocument(TENANT, ID, { documentType: 'DEFERRED_SALE_CONTRACT', documentRef: 'doc-ba-deferred-sale' }, officer));
+    expectOk(
+      await presentDocument(
+        TENANT,
+        ID,
+        { documentType: 'DEFERRED_SALE_CONTRACT', documentRef: 'doc-ba-deferred-sale' },
+        officer,
+      ),
+    );
     expectOk(
       await recordAssessmentInputs(
         TENANT,
@@ -172,22 +194,41 @@ describe('an SME Tawarruq on Bank A', () => {
         officer,
       ),
     );
-    await meetSecurityRequirements(TENANT, ID, officer, checker, 100_000_000n, BigInt(Math.floor(clock / 1000)) - 86_400n);
+    await meetSecurityRequirements(
+      TENANT,
+      ID,
+      officer,
+      checker,
+      100_000_000n,
+      BigInt(Math.floor(clock / 1000)) - 86_400n,
+    );
     expectOk(await submitForAssessment(TENANT, ID, officer));
     const assessed = expectOk(await runAssessment(TENANT, ID, checker));
     if (assessed.application.status === 'IN_COMMITTEE') {
       await justifyDeviations(TENANT, ID, checker);
-      expectOk(await decideInCommittee(TENANT, ID, { decidedBy: committee, approved: true, reason: 'Within risk-aligned terms' }));
+      expectOk(
+        await decideInCommittee(TENANT, ID, {
+          decidedBy: committee,
+          approved: true,
+          reason: 'Within risk-aligned terms',
+        }),
+      );
     }
 
     // The offer is a deferred sale: commodity cost + profit = deferred price; the letter speaks of profit, not interest.
-    const offered = expectOk(await generateOffer(TENANT, ID, officer, { disbursementDate: isoAfter(0), firstDueDate: isoAfter(30) }));
+    const offered = expectOk(
+      await generateOffer(TENANT, ID, officer, { disbursementDate: isoAfter(0), firstDueDate: isoAfter(30) }),
+    );
     const terms = offered.latestOffer?.terms;
     expect(terms?.productCode).toBe('sme-term-islamic');
-    expect((terms?.facilityAmount.minorUnits ?? 0n) + (terms?.totalInterest.minorUnits ?? 0n)).toBe(terms?.totalPayable.minorUnits);
+    expect((terms?.facilityAmount.minorUnits ?? 0n) + (terms?.totalInterest.minorUnits ?? 0n)).toBe(
+      terms?.totalPayable.minorUnits,
+    );
     expect(JSON.stringify(offered.latestOffer?.letter.terms)).toMatch(/[Pp]rofit/);
     // Not drawn in tranches.
-    expect(reason(await planTranches(TENANT, ID, [{ amountMinorUnits: terms?.facilityAmount.minorUnits ?? 0n }], officer))).toBe('TRANCHES_NOT_PERMITTED');
+    expect(
+      reason(await planTranches(TENANT, ID, [{ amountMinorUnits: terms?.facilityAmount.minorUnits ?? 0n }], officer)),
+    ).toBe('TRANCHES_NOT_PERMITTED');
 
     expectOk(await sendOffer(TENANT, ID, officer));
     expectOk(await startSigning(TENANT, ID, officer));
@@ -203,7 +244,9 @@ describe('an SME Tawarruq on Bank A', () => {
     expect(bought.closing.tawarruq?.lot.price.minorUnits).toBe(terms?.facilityAmount.minorUnits);
     expect(bought.closing.tawarruq?.source).toBe('FIXTURE');
     tick();
-    expect(reason(await sellCommodityToCustomer(TENANT, ID, 'doc-not-on-file', finance))).toBe('SECURITY_EVIDENCE_NOT_ON_FILE');
+    expect(reason(await sellCommodityToCustomer(TENANT, ID, 'doc-not-on-file', finance))).toBe(
+      'SECURITY_EVIDENCE_NOT_ON_FILE',
+    );
     expectOk(await sellCommodityToCustomer(TENANT, ID, 'doc-ba-deferred-sale', finance));
     tick();
     expectOk(await transferCommodityTitle(TENANT, ID, finance));
@@ -225,7 +268,12 @@ describe('an SME Tawarruq on Bank A', () => {
 
     // Servicing S3: a Tawarruq is restructured without changing what is owed.
     const proposed = expectOk(
-      await proposeRestructure(TENANT, ID, { firstDueDate: isoAfter(45), numberOfPayments: 48, reason: 'Longer term at the customer’s request' }, officer),
+      await proposeRestructure(
+        TENANT,
+        ID,
+        { firstDueDate: isoAfter(45), numberOfPayments: 48, reason: 'Longer term at the customer’s request' },
+        officer,
+      ),
     );
     const rs = proposed.servicing?.restructures.at(-1);
     expect(rs?.totalAfter.minorUnits).toBe(rs?.outstandingBefore.minorUnits);
