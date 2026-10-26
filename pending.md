@@ -9,7 +9,7 @@ Last updated: 26 October 2026.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
   #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2 · #68–#69 Wasl W5a, W5b ·
-  #70 Wasl W6a · #71 Wasl W6b-1.
+  #70 Wasl W6a · #71 Wasl W6b-1 · #72 Wasl W6b-2.
   Auto mode cannot merge.
 - **Record each institution's Shariah approvals (W6a).** Since W6a nothing Islamic originates until the approval
   its configuration cites is in the register: Bank A `SSB-A-2026-014` (Wasl) and `SSB-A-2026-021` (personal
@@ -22,6 +22,9 @@ Last updated: 26 October 2026.
 - **Bank A's late-amount ruling (Wasl W4b-2).** The basis (a fixed amount per instalment is assumed), the grace
   period, and the charities a collected late amount may go to, with their accounts. They replace the ILLUSTRATIVE
   `lateAmounts` in `config/tenants/bank-a/shariah/board-positions.json`.
+- **Each board's purification ruling (Wasl W6b-2, OI-12).** Whole profit or an assessed amount, the basis
+  reference, the charities purified income may go to, and what to do with profit that is never collected. They
+  replace the ILLUSTRATIVE `purification` in each tenant's `board-positions.json`.
 - **ADR 0007 board view.** Each institution's Shariah board states its view on servicing
   a Tawarruq debt through a rate-carrying loan contract before go-live.
 - **SME portal deployment.** It is behind sign-in since W3 (SR-019) but not deployed.
@@ -146,8 +149,7 @@ The findings go in the adapter README.
       closing and write-once rows.
     - **An open MATERIAL incident** on a transaction stops the wa'd, the purchase and the sale offer (SH-17
       `SHARIAH_INCIDENT_OPEN`). Unwinding is not stopped; a transaction already sold is not touched.
-    - **Waiting on W6b-2:** an incident remediated as affecting income cannot close (SH-13
-      `INCIDENT_PURIFICATION_PENDING`, in the service and the table) until purification exists.
+    - An incident remediated as affecting income closes only once it is purified in full (W6b-2, below).
     - The opening event now records the goods it screened. Transactions opened before W6b-1 have none recorded; the
       review raises a LOW `GOODS_SCREENING_NOT_RECORDED` for each.
     - Evidence "as it stood at the sale" is read by capture time; a checker's decision keeps the artefact's capture
@@ -157,10 +159,35 @@ The findings go in the adapter README.
     - Database cases and migration 0034 ran locally on 26 October on a fresh database (`sanad_w6b`), every migration
       applied from empty and 0034 applied twice; the full suite passed against it.
     - **Not reviewed in a browser** in RTL or LTR: `/shariah/incidents`.
+  - **W6b-2 built**, PR #72 (stacked on #71): purification of income from a defective transaction (BR-F06), as decided on
+    26 October 2026 (the board's method per tenant; raised as the profit is collected).
+    - **The board's ruling** is a new `purification` position in board-positions (method `WHOLE_PROFIT` or
+      `ASSESSED_AMOUNT`, basis key, its own approved recipients), carried by every BOARD_POSITIONS revision.
+      ILLUSTRATIVE: Bank A whole profit to `chr-a-01`; Fintech B an assessed amount to an invented `chr-b-01`.
+    - **On the incident** (`/shariah/incidents`): once remediated as affecting income, a Shariah reviewer proposes the
+      amount by the board's method (never above the profit), and a second reviewer confirms or rejects it.
+    - **Raised as collected:** the amount is split across the instalments in proportion, the last taking the
+      remainder. Each share is raised when its instalment is paid, to `core.charity_ledger` as `NON_COMPLIANT_INCOME`
+      (key `wasl:<ref>:purify:<incident>:I<n>`) and to the core's charity liability together. Shares already paid
+      are raised at confirmation. One the core could not take is raised by the daily Shariah review.
+    - **Disbursed** share by share, by finance and a second person, to a recipient the board approved for
+      purification, through the payments hub (as late amounts are).
+    - **The incident closes** only when every share is raised. Migration **0035** has the table check this against
+      the ledger itself (the confirmed amount = the sum of the incident's NON_COMPLIANT_INCOME entries).
+    - Lifecycle in the transaction's event log (`services/origination/src/wasl/purification.ts`); the product
+      registers its "purified in full" check with the incident service. A product that registers none can never
+      close an incident that affected its income.
+    - **Not done:** an incident whose instalments will never all be paid (hardship, write-off) cannot close. The
+      board must rule what purifying uncollected profit means. A payment returned after its share was raised leaves the
+      share raised (the ledger is write-once): over-purified, never under. The payments hub's result for a
+      disbursement is not recorded, as with late amounts.
+    - Purification amounts and the disbursement screens were typechecked but **not reviewed in a browser** in RTL or
+      LTR. The charity ledger page now counts purified income in its totals.
+    - Database cases and migration 0035 ran locally on 26 October on a fresh database (`sanad_w6b2`), every migration
+      applied from empty and 0035 applied twice; the full suite passed against it.
   - Contract legs are hashed canonical content; the PDF rendition through Document
     Engine and an embedded viewer in the SME portal are not built.
-  - No cross-transaction evidence workspace for the board (**W6c**), and no purification of non-compliant
-    income (**W6b-2**).
+  - No cross-transaction evidence workspace for the board, and no Board report (**W6c**).
   - **W4b-1 built**, PR #66 (stacked on #65): SADAD paid-bills reconciliation (`/transactions/reconciliation`), and Wasl in
     the daily servicing cycle (reconciliation first, then collections).
     - FIXTURE until KSA-RAIL-SADAD-01. Each tenant's SADAD **biller id** must be configured before it can go live.

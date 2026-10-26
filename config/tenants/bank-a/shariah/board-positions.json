@@ -39,5 +39,18 @@
         "iban": "SA0280000000000000000202"
       }
     ]
+  },
+  "purification": {
+    "$comment": "ILLUSTRATIVE until the board rules (Wasl W6b-2, 2026-10-26; OI-12): how income from a defective transaction is fixed for purification — WHOLE_PROFIT (the transaction's entire profit) or ASSESSED_AMOUNT (a Shariah reviewer's assessment, never above the profit) — and the charities it may be given to. Confirmed by a second reviewer; raised to the charity liability as the profit is collected. The recipients are invented, with invented IBANs in the Saudi format.",
+    "method": "WHOLE_PROFIT",
+    "computationBasisKey": "SSB-A-2026-014/purification/whole-profit",
+    "approvedRecipients": [
+      {
+        "recipientId": "chr-a-01",
+        "nameAr": "جمعية خيرية توضيحية (أ)",
+        "nameEn": "Illustrative charitable association A",
+        "iban": "SA1380000000000000000101"
+      }
+    ]
   }
 }
