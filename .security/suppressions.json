@@ -16,14 +16,6 @@
       "owner": "Product owner",
       "reason": "The Upstash endpoint beside the token above, whose credentials were reset on 2026-10-10; reviewed with it.",
       "expires": "2027-10-10"
-    },
-    {
-      "tool": "trivy",
-      "id": "CVE-2026-84008",
-      "register": "SR-049",
-      "owner": "Product owner",
-      "reason": "System.Security.Cryptography.Pkcs 10.0.5 (.NET denial of service) is compiled into the Nutrient Web SDK's WebAssembly bundle (gdpicture-*), which runs only in the viewer's own browser tab; the ops server never executes it. Nutrient 1.23.0, the latest stable, still bundles 10.0.5. Exception accepted by the product owner 2026-10-14 for the High SLA window only; upgrade the SDK when a fixed bundle ships.",
-      "expires": "2026-10-21"
     }
   ]
 }
