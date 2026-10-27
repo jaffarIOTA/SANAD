@@ -111,6 +111,20 @@ First build from scratch: run with `deployApps=false`, set the four secrets, bui
 (`az acr build -r <registry> -f apps/Containerfile --build-arg APP=<app> -t sanad-<app>:<tag> --platform linux/amd64 .`),
 then run with `deployApps=true`.
 
+## The daily audit-chain check (SR-011)
+
+`deployApps=true` also creates `job-sanad-audit-verify`, a scheduled job that verifies every tenant's
+audit chain twice (in the database and independently) at `auditCron` (default `15 1 * * *`, UTC). It runs
+in the worker image, so that image must be in the registry first: the release workflow pushes
+`sanad-worker:<tag>`, or `az acr build -r <registry> -f services/worker/Containerfile -t sanad-worker:<tag>
+--platform linux/amd64 .`. Pass `auditAlertEmail=<address>` to create the alert: it fires on a broken
+chain, on a run that cannot reach the database, and on 26 hours with no verdict at all.
+
+To see a run now: `az containerapp job start -g rg-sanad-hosted -n job-sanad-audit-verify`, then its logs
+in the environment's Log Analytics workspace (`ContainerAppConsoleLogs_CL`, one `audit <tenant> OK|BROKEN`
+line per tenant). Confirm that the column naming the job is `ContainerJobName_s` on the first run; the
+alert query reads it.
+
 ## Custom domains
 
 For each hostname, the DNS zone needs a `CNAME` to the app's default FQDN and a `TXT`
