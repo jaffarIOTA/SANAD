@@ -1,0 +1,45 @@
+# The workflow worker (ADR 0003): registers each tenant's servicing Schedule and runs
+# the workflows on the institution's Temporal cluster.
+#
+#   docker build -f services/worker/Containerfile -t sanad-worker .
+#
+# Built like the other images for OpenShift's restricted-v2 constraint: no assumed
+# UID, group 0 owns what the runtime UID needs, nothing written outside /tmp.
+# The TypeScript sources run directly (`--experimental-transform-types`), their
+# `@sanad/*` aliases resolved by services/worker/aliases.mjs from tsconfig.json.
+# Temporal bundles the workflow code itself at start-up, into memory.
+
+ARG NODE_RUN=registry.access.redhat.com/ubi9/nodejs-22-minimal@sha256:03b7dd64cafaaca5019c4cc1c36e05140b1650dab6cd5c4ab1fde9d88c0537ca
+
+FROM ${NODE_RUN}
+WORKDIR /opt/app-root/src
+USER 0
+# The pinned base may lag Red Hat's errata: apply what is released, so a fixable High never ships.
+RUN microdnf -y upgrade --refresh --nodocs --setopt=install_weak_deps=0 && microdnf clean all
+
+COPY --chown=0:0 package.json package-lock.json ./
+COPY --chown=0:0 core/package.json ./core/package.json
+COPY --chown=0:0 products/package.json ./products/package.json
+# As apps/Containerfile installs: the lockfile is checked whole (with --omit=dev, the image's npm 10 refuses
+# optional platform packages the lockfile records for npm 11).
+RUN npm ci --ignore-scripts --no-audit --no-fund
+
+# What the worker runs: the engine, configuration, products, adapters, the services, and the ops
+# server's servicing operations (the host the activities call). No tests, no migrations, no pages.
+COPY --chown=0:0 tsconfig.json ./
+COPY --chown=0:0 core ./core
+COPY --chown=0:0 config ./config
+COPY --chown=0:0 products ./products
+COPY --chown=0:0 adapters ./adapters
+COPY --chown=0:0 packages ./packages
+COPY --chown=0:0 services ./services
+COPY --chown=0:0 apps/ops/src/server ./apps/ops/src/server
+COPY --chown=0:0 api/openapi ./api/openapi
+
+RUN chgrp -R 0 /opt/app-root && chmod -R g=u /opt/app-root
+USER 1001
+
+ENV NODE_ENV=production \
+    TEMPORAL_NAMESPACE=default
+
+CMD ["node", "--experimental-transform-types", "--no-warnings", "--import", "./services/worker/aliases.mjs", "services/worker/main.ts"]
