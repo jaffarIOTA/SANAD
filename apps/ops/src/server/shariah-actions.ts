@@ -288,3 +288,32 @@ export async function decidePurificationDisbursementAction(form: FormData): Prom
     () => (approve ? 'CHARITY_DISBURSED' : 'CHARITY_DISBURSEMENT_DECLINED'),
   );
 }
+
+// -- The audit workspace (W6c) ---------------------------------------------------------
+
+/**
+ * The Board's auditor, or a Shariah reviewer, raises an observation from a
+ * transaction's replay. It becomes an incident for the reviewers to work; the
+ * workspace itself changes nothing.
+ */
+export async function raiseAuditObservationAction(form: FormData): Promise<void> {
+  const locale = localeSegmentOf(field(form, 'locale') || 'en');
+  const subjectRef = field(form, 'transactionRef').slice(0, 40);
+  const back = `/${locale}/shariah/audit/${encodeURIComponent(subjectRef)}`;
+  const staff = await authorise(locale, 'SHARIAH_OBSERVE', back);
+  const tenant = staff.tenantId as TenantCode;
+  const result =
+    (await getTransaction(tenant, subjectRef)) === undefined
+      ? reject('OP-DETERMINACY', 'TRANSACTION_NOT_FOUND', 'No such transaction')
+      : await raiseObservation(tenant, staff.principalId, {
+          subjectRef,
+          productCode: WASL_PRODUCT,
+          severity: severityOf(form),
+          observation: field(form, 'observation').slice(0, 2000),
+        });
+  revalidatePath(back);
+  const query = result.ok
+    ? new URLSearchParams({ notice: result.value === undefined ? 'INCIDENT_ALREADY_RAISED' : 'INCIDENT_RAISED' })
+    : new URLSearchParams({ control: result.error.control, reason: result.error.reason });
+  redirect(`${back}?${query.toString()}`);
+}
