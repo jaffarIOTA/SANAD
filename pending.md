@@ -56,8 +56,11 @@ The findings go in the adapter README.
 
 ## Built, with parts deliberately deferred
 
-- **Timestamping authority.** The host clock stands in for an RFC 3161 authority (SR-006,
-  ClaudeRecommendations E-04). Real-data deployments refuse to run without one.
+- **Timestamping authority (A3).** The RFC 3161 adapter is built (`adapters/tsa/`) and accepts a real
+  authority's token (FreeTSA, 2026-10-28). What waits is E-04: **each institution's accredited authority**,
+  saved in Admin → Credentials under the timestamping authority (`endpoint_url`, `authority_id`,
+  `trust_anchors_pem`, optional `policy_oid` and `authorization`), then its rail enabled in Admin → Rails.
+  Until then the host clock stands in, on synthetic data only (SR-006).
 - **Standalone Temporal worker process.** Needs import-alias resolution. Today the
   servicing cycle runs from the pipeline.
 - **Wasl.**

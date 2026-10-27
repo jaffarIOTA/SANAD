@@ -46,7 +46,7 @@ import { resolveWaslParties } from './configuration.ts';
 import { HOLDING, PURCHASED } from './exposure.ts';
 import { lateAmounts } from './late-amounts.ts';
 import { purifications } from './purification.ts';
-import { instrumentHash, termsAtOpening } from './steps.ts';
+import { rebuiltInstrumentHash, termsAtOpening } from './steps.ts';
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex');
 const legsOf = (r: TransactionRecord): readonly ContractLeg[] => ('legs' in r.transaction ? r.transaction.legs : []);
@@ -237,7 +237,7 @@ export async function replayTransaction(
     const document = structure.value.legs.find((l) => l.type === leg.legType)?.document;
     const rebuilt =
       terms.ok && document !== undefined
-        ? instrumentHash(leg, { document, institutionCr, terms: terms.value, core: t.core })
+        ? rebuiltInstrumentHash(leg, { document, institutionCr, terms: terms.value, core: t.core })
         : undefined;
     return {
       legType: leg.legType,

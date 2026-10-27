@@ -228,7 +228,8 @@ export function recordPossessionEvidence(
       source,
       artefactUri: `obj:transactions/${transactionRef}/${sha256Hex}`,
       artefactHash: sha256Hex,
-      capturedAt: await c.attestation.attest(),
+      // Attested over the file itself: the token proves these bytes existed at that instant (SR-006).
+      capturedAt: await c.attestation.attestOver(sha256Hex),
       validationStatus: 'PENDING',
       validationDetail: { mediaType, byteLength, storage: store.source },
     };

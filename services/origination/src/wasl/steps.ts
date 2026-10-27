@@ -31,6 +31,7 @@ import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import { entryFor } from '@sanad/core/products/catalogue.ts';
 import type { TsaInstant } from '@sanad/core/time/tsa.ts';
 import { type MurabahaTerms, murabahaScf, repaymentSchedule } from '@sanad/products/murabaha-scf/index.ts';
+import { legAnchorDigest } from '@sanad/products/murabaha-scf/legs/anchor.ts';
 import type { ContractLeg, LegType } from '@sanad/products/murabaha-scf/legs/leg.ts';
 import { checkDrawdown } from '@sanad/products/murabaha-scf/limits/drawdown-limits.ts';
 import type { Instalment } from '@sanad/products/murabaha-scf/obligation/obligation.ts';
@@ -46,8 +47,9 @@ import {
 } from '../../../../adapters/workflow-temporal/activities.ts';
 import type { Attestation, LegPreparer } from '../../../../adapters/workflow-temporal/ports.ts';
 import { SequenceRefusal } from '../../../../adapters/workflow-temporal/programs/murabaha.ts';
+import { type TimeSource, TimestampUnavailable, stepDigest, timeSourceFor } from '../attested-time.ts';
 import { ummAlQuraIso } from '../hijri.ts';
-import { hostClockInstant } from '../host-clock.ts';
+import { HOST_CLOCK_AUTHORITY, hostClockInstant } from '../host-clock.ts';
 import { originationApproval } from '../shariah/approvals.ts';
 import { incidentsStoppingTheSale } from '../shariah/incidents.ts';
 import { resolveConcentration } from './concentration.ts';
@@ -122,25 +124,60 @@ export interface StepOutcome {
 }
 
 export interface StepAttestation extends Attestation {
+  /** The step's instant: attested once, over the step's own digest, the first time it is asked for. */
+  attest(): Promise<TsaInstant>;
   /** The step's latest attested instant, attesting one if the step has not. */
   occurred(): Promise<TsaInstant>;
+  /** A fresh instant attested over an artefact (a leg's anchor, an evidence file's SHA-256), its token retained. */
+  attestOver(sha256Hex: string): Promise<TsaInstant>;
+  /** The token behind an instant this step attested, by its digest; none for the host clock. */
+  tokenFor(tokenDigest: string): Uint8Array | undefined;
 }
+
+/** How long to wait for an authority's next second before refusing, when its genTime is not yet strictly later. */
+const LATER_RETRIES = 3;
+const pause = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Attested instants for one step, each strictly later than the transaction's
- * last event and than the one before it — the host-clock stand-in's
- * "strictly-later successor" (SR-006), as an authority's tokens would be.
+ * last recorded event (SR-006), so a step's leg is later than the leg before
+ * it, which an earlier step recorded. Instants within one step may share a
+ * second, as an authority's do. The host clock is given its "strictly-later
+ * successor"; an authority's time is its own, so a genTime that is not yet
+ * later is asked again a moment on, then refused.
  */
-function attestationAfter(record: TransactionRecord): StepAttestation {
-  let last = record.events.reduce((m, e) => (e.occurredAtEpochSeconds > m ? e.occurredAtEpochSeconds : m), 0n);
+function attestationAfter(record: TransactionRecord, source: TimeSource, transactionRef: string): StepAttestation {
+  const floor = record.events.reduce((m, e) => (e.occurredAtEpochSeconds > m ? e.occurredAtEpochSeconds : m), 0n);
   let latest: TsaInstant | undefined;
-  const attest = (): Promise<TsaInstant> => {
-    const observed = hostClockInstant().epochSeconds;
-    last = observed > last ? observed : last + 1n;
-    latest = hostClockInstant(last);
-    return Promise.resolve(latest);
+  let stepInstant: TsaInstant | undefined;
+  const tokens = new Map<string, Uint8Array>();
+  const attestOver = async (sha256Hex: string): Promise<TsaInstant> => {
+    for (let attempt = 0; ; attempt++) {
+      const a = await source.attest(sha256Hex);
+      if (a === undefined) throw new TimestampUnavailable(source.kind);
+      let instant = a.instant;
+      if (instant.epochSeconds <= floor) {
+        if (source.kind === 'HOST_CLOCK') instant = hostClockInstant(floor + 1n);
+        else if (attempt < LATER_RETRIES) {
+          await pause(400);
+          continue;
+        } else throw new TimestampUnavailable(source.kind);
+      }
+      if (a.token !== undefined) tokens.set(instant.tokenDigest, a.token);
+      if (latest === undefined || instant.epochSeconds >= latest.epochSeconds) latest = instant;
+      return instant;
+    }
   };
-  return { attest, occurred: () => (latest === undefined ? attest() : Promise.resolve(latest)) };
+  const attest = async (): Promise<TsaInstant> => {
+    stepInstant ??= await attestOver(stepDigest(record.transaction.core.tenantId, transactionRef, String(floor)));
+    return stepInstant;
+  };
+  return {
+    attest,
+    attestOver,
+    occurred: () => (latest === undefined ? attest() : Promise.resolve(latest)),
+    tokenFor: (d) => tokens.get(d),
+  };
 }
 
 const legsOf = (t: Transaction): readonly ContractLeg[] => ('legs' in t ? t.legs : []);
@@ -183,114 +220,137 @@ export async function step(
   actor: string,
   work: (c: StepContext) => Promise<Result<StepOutcome>>,
 ): Promise<Result<TransactionView>> {
-  return withLock(tenant, async () => {
-    const book = await hydrate(tenant);
-    const record = book.records.get(transactionRef);
-    if (record === undefined) return fail('TRANSACTION_NOT_FOUND', 'No such transaction', { transactionRef });
-    // The programmes and the board's positions in force now: an approved Admin revision binds from its moment (W5b).
-    const parties = await resolveWaslParties(tenant);
-    if (!parties.ok) return parties;
-    const structure = structureOf(tenant);
-    if (!structure.ok) return structure;
-    const board = (await resolveBoard(tenant)).value;
-    if (!board.ok) return board;
-    const terms = termsAtOpening(tenant, record);
-    if (!terms.ok) return terms;
-    const before = record.transaction;
-    const distributor = parties.value.distributors.find((d) => d.counterpartyId === before.core.counterpartyId);
-    if (distributor === undefined)
-      return fail('COUNTERPARTY_NOT_CONFIGURED', 'The distributor on this transaction is not onboarded');
-    const attestation = attestationAfter(record);
-    const out = await work({
-      tenant,
-      record,
-      book: [...book.records.values()],
-      parties: parties.value,
-      distributorCr: distributor.registrationNo,
-      structure: structure.value,
-      board: board.value,
-      terms: terms.value,
-      attestation,
-    });
-    if (!out.ok) return out;
+  const source = await timeSourceFor(tenant);
+  return withLock(tenant, () => withoutTimeRefused(() => stepUnderLock(tenant, transactionRef, actor, work, source)));
+}
 
-    const after = out.value.transaction;
-    const moved = after !== before;
-    // SH-17, BR-F02: holding the limit, the wa'd and the purchase commit the institution to a new sale, and are
-    // refused once the approval the transaction was opened under is not in force. What follows the purchase —
-    // completing the sale of goods already owned, servicing — continues under it, or the goods are unwound.
-    if (moved && NEW_COMMITMENTS.has(after.state)) {
-      const approval = await originationApproval(
-        tenant,
-        WASL_PRODUCT,
-        before.core.shariahApprovalId,
-        await attestation.occurred(),
-      );
-      if (!approval.ok) return approval;
-    }
-    // W6b-1: an open MATERIAL Shariah incident on the transaction stops its commitment to the sale until it is
-    // closed (decided 26 October 2026). Unwinding is not stopped; a transaction already sold is not touched.
-    if (moved && SALE_COMMITMENTS.has(after.state)) {
-      const stopping = await incidentsStoppingTheSale(tenant, transactionRef);
-      const first = stopping[0];
-      if (first !== undefined)
-        return reject('SH-17', 'SHARIAH_INCIDENT_OPEN', 'A material Shariah incident is open on this transaction', {
-          incidentRef: first.incidentRef,
-        });
-    }
-    const leg = legsOf(after).length > legsOf(before).length ? legsOf(after).at(-1) : undefined;
-    const { evidence, supersedes, obligation, paidDelta, outbox, charity } = out.value;
-    // Buying the goods finances the invoice, once (SH-10): checked here for every path to the purchase, and again
-    // by the registry's unique constraint as the purchase is written.
-    if (after.state === 'PURCHASE_EXECUTED' && before.state !== 'PURCHASE_EXECUTED') {
-      const other = invoiceFinancedBy(record, [...book.records.values()]);
-      if (other !== undefined)
-        return reject('SH-10', 'DUPLICATE_FINANCING', 'This invoice is already financed by another transaction', {
-          existingReference: other,
-        });
-    }
-    const limit = limitMovement(before.state, after.state);
-    const event: TransactionEventRow = {
-      eventType: out.value.eventType,
-      fromState: moved ? before.state : null,
-      toState: moved ? after.state : null,
-      actor,
-      detail: eventDetail(out.value, moved),
-      occurredAtEpochSeconds: (await attestation.occurred()).epochSeconds,
-    };
-    const pool = waslPool();
-    if (pool !== undefined) {
-      const saved = await recordStep(pool, tenant, {
-        transactionRef,
-        expectedState: before.state,
-        toState: after.state,
-        event,
-        ...(leg === undefined ? {} : { leg }),
-        ...(evidence === undefined ? {} : { evidence }),
-        ...(supersedes === undefined ? {} : { supersedes }),
-        ...(obligation === undefined ? {} : { obligation }),
-        ...(paidDelta === undefined ? {} : { paidDelta }),
-        ...(outbox === undefined ? {} : { outbox }),
-        ...(charity === undefined ? {} : { charity }),
-        ...(limit === undefined ? {} : { limit }),
-        ...(after.state === 'POSSESSION_CONFIRMED' ? { riskPeriodStartAt: after.riskPeriodStartAt } : {}),
-        ...(after.state === 'SALE_OFFERED' ? { saleOfferedAt: after.saleOfferedAt } : {}),
-        correlationId: before.core.correlationId,
-      });
-      if (!saved.ok) return saved;
-    }
-    const kept = record.evidence.map((e) =>
-      e.evidenceId === supersedes && evidence !== undefined ? { ...e, supersededBy: evidence.evidenceId } : e,
-    );
-    const next: TransactionRecord = {
-      ...record,
-      transaction: after,
-      evidence: evidence === undefined ? kept : [...kept, evidence],
-      events: [...record.events, event],
-    };
-    book.records.set(transactionRef, next);
-    return ok(viewOf(tenant, next));
+/** No attested instant, no step: the step is refused and nothing is written (SH-06, SDD §4.9). */
+async function withoutTimeRefused<T>(run: () => Promise<Result<T>>): Promise<Result<T>> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!(error instanceof TimestampUnavailable)) throw error;
+    return reject('SH-06', 'TIMESTAMP_UNAVAILABLE', 'No trusted time could be attested; nothing was recorded', {
+      source: error.sourceKind,
+    });
+  }
+}
+
+async function stepUnderLock(
+  tenant: TenantCode,
+  transactionRef: string,
+  actor: string,
+  work: (c: StepContext) => Promise<Result<StepOutcome>>,
+  source: TimeSource,
+): Promise<Result<TransactionView>> {
+  const book = await hydrate(tenant);
+  const record = book.records.get(transactionRef);
+  if (record === undefined) return fail('TRANSACTION_NOT_FOUND', 'No such transaction', { transactionRef });
+  // The programmes and the board's positions in force now: an approved Admin revision binds from its moment (W5b).
+  const parties = await resolveWaslParties(tenant);
+  if (!parties.ok) return parties;
+  const structure = structureOf(tenant);
+  if (!structure.ok) return structure;
+  const board = (await resolveBoard(tenant)).value;
+  if (!board.ok) return board;
+  const terms = termsAtOpening(tenant, record);
+  if (!terms.ok) return terms;
+  const before = record.transaction;
+  const distributor = parties.value.distributors.find((d) => d.counterpartyId === before.core.counterpartyId);
+  if (distributor === undefined)
+    return fail('COUNTERPARTY_NOT_CONFIGURED', 'The distributor on this transaction is not onboarded');
+  const attestation = attestationAfter(record, source, transactionRef);
+  const out = await work({
+    tenant,
+    record,
+    book: [...book.records.values()],
+    parties: parties.value,
+    distributorCr: distributor.registrationNo,
+    structure: structure.value,
+    board: board.value,
+    terms: terms.value,
+    attestation,
   });
+  if (!out.ok) return out;
+
+  const after = out.value.transaction;
+  const moved = after !== before;
+  // SH-17, BR-F02: holding the limit, the wa'd and the purchase commit the institution to a new sale, and are
+  // refused once the approval the transaction was opened under is not in force. What follows the purchase —
+  // completing the sale of goods already owned, servicing — continues under it, or the goods are unwound.
+  if (moved && NEW_COMMITMENTS.has(after.state)) {
+    const approval = await originationApproval(
+      tenant,
+      WASL_PRODUCT,
+      before.core.shariahApprovalId,
+      await attestation.occurred(),
+    );
+    if (!approval.ok) return approval;
+  }
+  // W6b-1: an open MATERIAL Shariah incident on the transaction stops its commitment to the sale until it is
+  // closed (decided 26 October 2026). Unwinding is not stopped; a transaction already sold is not touched.
+  if (moved && SALE_COMMITMENTS.has(after.state)) {
+    const stopping = await incidentsStoppingTheSale(tenant, transactionRef);
+    const first = stopping[0];
+    if (first !== undefined)
+      return reject('SH-17', 'SHARIAH_INCIDENT_OPEN', 'A material Shariah incident is open on this transaction', {
+        incidentRef: first.incidentRef,
+      });
+  }
+  const leg = legsOf(after).length > legsOf(before).length ? legsOf(after).at(-1) : undefined;
+  const { evidence, supersedes, obligation, paidDelta, outbox, charity } = out.value;
+  // Buying the goods finances the invoice, once (SH-10): checked here for every path to the purchase, and again
+  // by the registry's unique constraint as the purchase is written.
+  if (after.state === 'PURCHASE_EXECUTED' && before.state !== 'PURCHASE_EXECUTED') {
+    const other = invoiceFinancedBy(record, [...book.records.values()]);
+    if (other !== undefined)
+      return reject('SH-10', 'DUPLICATE_FINANCING', 'This invoice is already financed by another transaction', {
+        existingReference: other,
+      });
+  }
+  const limit = limitMovement(before.state, after.state);
+  const event: TransactionEventRow = {
+    eventType: out.value.eventType,
+    fromState: moved ? before.state : null,
+    toState: moved ? after.state : null,
+    actor,
+    detail: eventDetail(out.value, moved),
+    occurredAtEpochSeconds: (await attestation.occurred()).epochSeconds,
+  };
+  const pool = waslPool();
+  if (pool !== undefined) {
+    const saved = await recordStep(pool, tenant, {
+      transactionRef,
+      expectedState: before.state,
+      toState: after.state,
+      event,
+      ...(leg === undefined ? {} : { leg, legToken: attestation.tokenFor(leg.tsaTokenDigest) }),
+      ...(evidence === undefined
+        ? {}
+        : { evidence, evidenceToken: attestation.tokenFor(evidence.capturedAt.tokenDigest) }),
+      ...(supersedes === undefined ? {} : { supersedes }),
+      ...(obligation === undefined ? {} : { obligation }),
+      ...(paidDelta === undefined ? {} : { paidDelta }),
+      ...(outbox === undefined ? {} : { outbox }),
+      ...(charity === undefined ? {} : { charity }),
+      ...(limit === undefined ? {} : { limit }),
+      ...(after.state === 'POSSESSION_CONFIRMED' ? { riskPeriodStartAt: after.riskPeriodStartAt } : {}),
+      ...(after.state === 'SALE_OFFERED' ? { saleOfferedAt: after.saleOfferedAt } : {}),
+      correlationId: before.core.correlationId,
+    });
+    if (!saved.ok) return saved;
+  }
+  const kept = record.evidence.map((e) =>
+    e.evidenceId === supersedes && evidence !== undefined ? { ...e, supersededBy: evidence.evidenceId } : e,
+  );
+  const next: TransactionRecord = {
+    ...record,
+    transaction: after,
+    evidence: evidence === undefined ? kept : [...kept, evidence],
+    events: [...record.events, event],
+  };
+  book.records.set(transactionRef, next);
+  return ok(viewOf(tenant, next));
 }
 
 /**
@@ -542,33 +602,68 @@ function legFigures(legType: LegType, terms: MurabahaTerms, core: TransactionCor
   }
 }
 
+type InstrumentLeg = Pick<
+  ContractLeg,
+  'legType' | 'sequenceNo' | 'templateVersionId' | 'counterpartyRole' | 'counterpartyCr' | 'prevLegHash'
+>;
+
+interface InstrumentFacts {
+  readonly document: string;
+  readonly institutionCr: string;
+  readonly terms: MurabahaTerms;
+  readonly core: TransactionCore;
+}
+
 /**
  * A leg's instrument — what its template makes of the transaction's figures:
- * parties, goods, figures, its predecessor's hash, its attested instant — as
- * the SHA-256 of that content. One definition, so the hash a leg is executed
- * with and the hash the drift check rebuilds it to (W6b, BR-F07) are the
- * same function of the same facts.
+ * parties, goods, figures, its predecessor's hash — as the SHA-256 of that
+ * content. One definition, so the hash a leg is executed with and the hash the
+ * drift check rebuilds it to (W6b, BR-F07) are the same function of the same
+ * facts.
+ *
+ * The instant is not in it. The authority's token is stamped over the leg's
+ * anchor, which carries this hash, and the token's genTime is the leg's
+ * instant: so the time is attested over the content, as a document's timestamp
+ * is, rather than written inside what is timestamped — which no authority's
+ * time could ever satisfy (SR-006). Version 2; see `legacyInstrumentHash`.
  */
-export function instrumentHash(
-  leg: Pick<
-    ContractLeg,
-    | 'legType'
-    | 'sequenceNo'
-    | 'templateVersionId'
-    | 'counterpartyRole'
-    | 'counterpartyCr'
-    | 'prevLegHash'
-    | 'executedAt'
-  >,
-  facts: {
-    readonly document: string;
-    readonly institutionCr: string;
-    readonly terms: MurabahaTerms;
-    readonly core: TransactionCore;
-  },
+export function instrumentHash(leg: InstrumentLeg, facts: InstrumentFacts): string {
+  return createHash('sha256')
+    .update(JSON.stringify({ hashVersion: 2, ...instrumentOf(leg, facts) }))
+    .digest('hex');
+}
+
+/**
+ * Version 1, with the instant inside: what legs the host clock attested before
+ * 28 October 2026 were executed with. Only a host-clock leg may still match it
+ * (`instrumentMatches`); those exist only where data is synthetic (ADR 0004).
+ */
+export function legacyInstrumentHash(
+  leg: InstrumentLeg & Pick<ContractLeg, 'executedAt'>,
+  facts: InstrumentFacts,
 ): string {
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        ...instrumentOf(leg, facts),
+        executedAt: leg.executedAt.epochSeconds.toString(),
+        authority: leg.executedAt.authorityId,
+      }),
+    )
+    .digest('hex');
+}
+
+/** The hash a leg should carry, rebuilt from the facts: version 2, or version 1 for a host-clock leg that matches it. */
+export function rebuiltInstrumentHash(leg: ContractLeg, facts: InstrumentFacts): string {
+  const current = instrumentHash(leg, facts);
+  if (current === leg.contentHash || leg.executedAt.authorityId !== HOST_CLOCK_AUTHORITY) return current;
+  const legacy = legacyInstrumentHash(leg, facts);
+  return legacy === leg.contentHash ? legacy : current;
+}
+
+function instrumentOf(leg: InstrumentLeg, facts: InstrumentFacts): Record<string, unknown> {
   const { core } = facts;
-  const instrument = {
+  return {
     document: facts.document,
     templateVersionId: leg.templateVersionId,
     transaction: core.transactionId,
@@ -584,10 +679,7 @@ export function instrumentHash(
     currency: core.pricing.costAmount.currency,
     figures: legFigures(leg.legType, facts.terms, core),
     prevLegHash: leg.prevLegHash ?? null,
-    executedAt: leg.executedAt.epochSeconds.toString(),
-    authority: leg.executedAt.authorityId,
   };
-  return createHash('sha256').update(JSON.stringify(instrument)).digest('hex');
 }
 
 /**
@@ -609,31 +701,31 @@ function legPreparer(c: StepContext): LegPreparer {
       const core = p.transaction.core;
       const role: ContractLeg['counterpartyRole'] = p.legType === 'PURCHASE' ? 'SELLER' : 'BUYER';
       const counterpartyCr = role === 'SELLER' ? core.tradeReference.issuerCr : c.distributorCr;
-      const executedAt = await c.attestation.attest();
-      const leg = {
+      const instrument = {
         legType: p.legType,
         sequenceNo: p.sequenceNo,
         templateVersionId: approved.templateVersionId,
         counterpartyRole: role,
         counterpartyCr,
         ...(p.previousContentHash === undefined ? {} : { prevLegHash: p.previousContentHash }),
-        executedAt,
       };
-      return ok({
-        ...leg,
+      const unstamped = {
+        ...instrument,
         legId: randomUUID(),
         tenantId: core.tenantId,
         transactionId: core.transactionId,
         documentId: randomUUID(),
-        contentHash: instrumentHash(leg, {
+        contentHash: instrumentHash(instrument, {
           document: p.document,
           institutionCr: c.parties.institution.registrationNo,
           terms: c.terms,
           core,
         }),
-        tsaTokenDigest: executedAt.tokenDigest,
-        immutable: true,
-      });
+        immutable: true as const,
+      };
+      // The leg's instant is the token stamped over its anchor: its content, its place and its predecessor (SR-008).
+      const executedAt = await c.attestation.attestOver(legAnchorDigest(unstamped));
+      return ok({ ...unstamped, executedAt, tsaTokenDigest: executedAt.tokenDigest });
     },
   };
 }
