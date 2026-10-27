@@ -28,6 +28,7 @@
     "dev:consumer": "next dev apps/consumer --port 3003",
     "build:consumer": "next build apps/consumer",
     "dev:outbox": "node --experimental-strip-types services/outbox/src/index.ts",
+    "worker": "node --experimental-transform-types --no-warnings --import ./services/worker/aliases.mjs services/worker/main.ts",
     "nutrient:assets": "node scripts/nutrient-assets.mjs",
     "nutrient:samples": "node scripts/nutrient-samples.mjs",
     "dev:admin": "next dev apps/admin --port 3004",

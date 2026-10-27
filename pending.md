@@ -61,8 +61,10 @@ The findings go in the adapter README.
   saved in Admin → Credentials under the timestamping authority (`endpoint_url`, `authority_id`,
   `trust_anchors_pem`, optional `policy_oid` and `authorization`), then its rail enabled in Admin → Rails.
   Until then the host clock stands in, on synthetic data only (SR-006).
-- **Standalone Temporal worker process.** Needs import-alias resolution. Today the
-  servicing cycle runs from the pipeline.
+- **Temporal on the institution's cluster.** The standalone worker is built (A4: `services/worker/`,
+  `npm run worker`, its own image) and ran the servicing cycle against a Temporal dev server on
+  2026-10-28. What waits: the institution's Temporal cluster (PostgreSQL persistence, mTLS from the
+  vault), and moving the Murabaha and Tawarruq sequences onto it.
 - **Wasl.**
   - **W5a built**, PR #68 (stacked on #67): distributor facilities, limits, concentration and the financed-invoice registry,
     as decided on 22 October 2026.

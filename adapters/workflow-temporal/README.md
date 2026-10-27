@@ -49,10 +49,8 @@ Vitest process so the ops host's aliases resolve):
   4 tasks done, 2 nothing due, 0 failed, in 47 history events.
 - A second `servicingDay` the same day did nothing: 0 done, 6 nothing due.
 
-So the servicing workflow, its activities and the Schedule work against a server. Still
-open: `murabahaSequence` and `tawarruqSequence` on a server, a standalone worker
-process (today the host's `@sanad/*` aliases resolve only under a bundler or Vitest),
-and the institution's cluster with PostgreSQL and mTLS.
+So the servicing workflow, its activities and the Schedule work against a server. The
+standalone worker process followed on 2026-10-28 (below).
 
 ## The servicing cycle (Servicing S4)
 
@@ -69,12 +67,32 @@ charges, collections and, from the reporting day, the bureau report for each fac
 - The host is `apps/ops/src/server/servicing-scheduler.ts`. Its `runServicingCycleNow`
   runs the same program in process for the workbench's "Run today's cycle".
 
-## Running locally
+## The standalone worker (A4, 2026-10-28)
+
+`services/worker/main.ts` is the worker as its own process. It registers each tenant's daily servicing
+Schedule (local time from `credit-policy/servicing.json`, time zone from the jurisdiction profile; created
+once, left alone after) and runs the workflows with the servicing activities answered by the ops server's
+servicing host. Plain Node runs the TypeScript sources directly; `services/worker/aliases.mjs` resolves the
+`@sanad/*` aliases from `tsconfig.json`'s `paths`, so it needs no bundler. Image:
+`services/worker/Containerfile` (UBI9 Node 22, restricted-v2 ready).
 
 ```
 temporal server start-dev
-TEMPORAL_ADDRESS=127.0.0.1:7233 TEMPORAL_NAMESPACE=default node --experimental-strip-types adapters/workflow-temporal/worker.ts
+TEMPORAL_ADDRESS=127.0.0.1:7233 npm run worker            # or: npm run worker -- --check (no server)
 ```
 
-(The worker entry expects the host to assemble `SequencingPorts` — see
-`in-memory/runner.ts` for the development assembly.)
+Optional: `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, `SANAD_WORKER_TENANTS` (comma list), and mTLS as
+mounted files `TEMPORAL_TLS_CERT_FILE`, `TEMPORAL_TLS_KEY_FILE`, `TEMPORAL_TLS_CA_FILE`. SIGTERM shuts it
+down cleanly.
+
+**Run 2026-10-28** (`temporalio/temporal` `server start-dev` in Docker, the worker as a plain Node process,
+in-memory book):
+
+- The three Schedules were created: `bank-a/servicing`, `fintech-b/servicing`, `sme-fund-ae/servicing`.
+- Triggering `bank-a/servicing` completed `servicingDay` through the standalone worker: servicing date
+  2026-10-28, 2 facilities, 4 tasks done, 4 nothing due, 0 failed.
+- Triggered again the same day: 0 done, 8 nothing due. Idempotent.
+- The image's own check (`--check` inside `sanad-worker`, Node 22.23.2) resolves every module.
+
+Still open: the Murabaha and Tawarruq sequences on the cluster (their activities join this worker when they
+move there), and the institution's cluster with PostgreSQL persistence and mTLS.
