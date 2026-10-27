@@ -21,10 +21,12 @@ import { DevelopmentStandInRefused } from '../../services/origination/src/profil
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
-/** The only places that may construct one. A timestamping adapter, when it exists, is added here. */
+/** The only places that may construct one. */
 const CONSTRUCTORS = new Set([
   'core/time/tsa.ts',
   'services/origination/src/host-clock.ts',
+  // From a token the RFC 3161 adapter has verified (adapters/tsa), and from nothing else.
+  'services/origination/src/attested-time.ts',
   // A virtual clock for workflow tests; never wired into an app.
   'adapters/workflow-temporal/in-memory/runner.ts',
 ]);

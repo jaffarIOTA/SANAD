@@ -363,7 +363,11 @@ export interface StepWrite {
   readonly toState: string;
   readonly event: TransactionEventRow;
   readonly leg?: ContractLeg;
+  /** The authority's token behind the leg's instant; absent where the host clock stood in (SR-006). */
+  readonly legToken?: Uint8Array | undefined;
   readonly evidence?: EvidenceRecord;
+  /** The authority's token behind the evidence's instant, stamped over its artefact; absent for the host clock. */
+  readonly evidenceToken?: Uint8Array | undefined;
   /** The evidence id the new evidence supersedes (a checker's validation of an earlier record). */
   readonly supersedes?: string;
   readonly riskPeriodStartAt?: TsaInstant;
@@ -508,7 +512,7 @@ export async function recordStep(pool: Pool, tenant: TenantCode, w: StepWrite): 
             leg.executedAt.epochSeconds.toString(),
             leg.tsaTokenDigest,
             // The token as retained. The host-clock stand-in issues none, so its labelled digest stands in (SR-006).
-            Buffer.from(leg.tsaTokenDigest, 'utf8'),
+            w.legToken === undefined ? Buffer.from(leg.tsaTokenDigest, 'utf8') : Buffer.from(w.legToken),
             nameUuid(leg.templateVersionId),
             leg.counterpartyRole,
             leg.counterpartyCr,
@@ -520,8 +524,11 @@ export async function recordStep(pool: Pool, tenant: TenantCode, w: StepWrite): 
         await db.query(
           `insert into evidence.evidence (id, tenant_id, transaction_id, evidence_type, gate_satisfied, source,
              artefact_uri, artefact_hash, captured_at, captured_tsa_digest, validation_status, validation_detail,
-             extraction_confidence_bp, correlation_id)
-           values ($1, $2, $3, $4, $5, $6, $7, $8, to_timestamp($9), $10, $11, $12, $13, $14)`,
+             extraction_confidence_bp, correlation_id, captured_tsa_token)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, to_timestamp($9), $10, $11, $12, $13, $14,
+             -- A checker's record of an earlier capture keeps that capture's instant, so it keeps its token too.
+             coalesce($15, (select s.captured_tsa_token from evidence.evidence s
+                             where s.tenant_id = $2 and s.id = $16::uuid and s.captured_tsa_digest = $10)))`,
           [
             ev.evidenceId,
             tenantUuid,
@@ -537,6 +544,8 @@ export async function recordStep(pool: Pool, tenant: TenantCode, w: StepWrite): 
             ev.validationDetail === undefined ? null : JSON.stringify(ev.validationDetail),
             ev.extractionConfidencePerTenThousand ?? null,
             correlation,
+            w.evidenceToken === undefined ? null : Buffer.from(w.evidenceToken),
+            w.supersedes ?? null,
           ],
         );
         if (w.supersedes !== undefined) {

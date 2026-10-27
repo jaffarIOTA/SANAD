@@ -41,14 +41,19 @@ export interface VerifiedTimestamp {
   readonly authorityId: string;
 }
 
+/** A fresh attestation and the token that proves it, which the caller retains (SH-06). */
+export interface StampedTimestamp extends VerifiedTimestamp {
+  readonly token: Uint8Array;
+}
+
 /**
  * Port. The implementation is an adapter (SDD INT-10); core only declares the
  * shape. Failure posture is fail-closed: no leg executes without a trusted
- * timestamp (SDD §4.9).
+ * timestamp (SDD §4.9). `messageDigest` is the SHA-256 of what is attested, in hex.
  */
 export interface TimestampAuthorityPort {
-  /** Stamp a document digest and return the verified attestation. */
-  stamp(messageDigest: string): Promise<VerifiedTimestamp>;
+  /** Stamp a document digest and return the verified attestation with its token. Undefined when the authority is unavailable or its answer does not verify. */
+  stamp(messageDigest: string): Promise<StampedTimestamp | undefined>;
   /**
    * Re-verify a retained token for audit replay: its signature and certificate chain, and that its message
    * imprint is `messageDigest`. Undefined when any of those fails; the reason stays in the adapter (SR-008).
