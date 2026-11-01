@@ -116,8 +116,10 @@ describe.skipIf(url === undefined)('party contacts on PostgreSQL (0037)', () => 
         intakeId,
       ]),
     );
-    expect(stored.rows[0]?.record).toContain('d***@example.com');
+    // The first case replaced the email with a mobile: the record holds the current mask, and no value ever keyed.
+    expect(stored.rows[0]?.record).toContain('+971 50 XXX XXXX');
     expect(stored.rows[0]?.record).not.toContain('db.signatory');
+    expect(stored.rows[0]?.record).not.toContain('501234567');
 
     const audited = await inTenant(pool, tenant, (db) =>
       db.query<{ after: string }>(
