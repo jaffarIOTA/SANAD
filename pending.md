@@ -14,10 +14,17 @@ Last updated: 1 November 2026.
   #77 A5 scheduled audit check (SR-011).
   Auto mode cannot merge.
 - **Hosted environment, operator steps (go-live hardening A).**
-  - **A2, SR-003 (High):** apply migrations through 0018 to the hosted database, set the `sanad_runtime`
-    password and point the `sanad-database-url` secret at it, then restart the apps
-    (`deploy/azure/README.md`, "Runtime database role"). It changes the live hosted site, so it waits for your
-    go-ahead; SR-003 closes when it is done.
+  - **A2, SR-003: done 1 November.** The hosted apps connect as `sanad_runtime` and Admin as `sanad_admin`.
+    Admin's own login was set directly on its container app, so **the next template deployment must pass
+    `adminOwnLogin=true`**, or it points Admin back at the runtime login and every configuration action fails.
+  - **SR-051 (High), the database connection's TLS:**
+    - **Rotate the `postgres` owner password** (Supabase dashboard → Database → Reset password) and update
+      `SANAD_DATABASE_URL` in `.env.local`. It crossed the internet in plaintext until 1 November and is still in
+      an earlier version of the `sanad-database-url` vault secret, which the apps' identity can read.
+    - **With the first release built after SR-051**, switch both database secrets to
+      `sslmode=verify-full&sslrootcert=…` in the same step as the image (`deploy/azure/README.md`, "Verified TLS
+      to the database"). The new images refuse today's `no-verify` URLs, and old images can't use the new ones.
+    - Consider turning on Supabase's SSL enforcement once the apps verify, so nothing connects in the clear.
   - **SR-047, the platform operator's sign-in:** in the Entra registration Admin uses, add the app role
     `sanad.platform.operators` and assign it to the operators (at least two, for four eyes), and add
     `OIDC_CLIENT_SECRET_PLATFORM_ADMIN` by redeploying `deploy/azure/main.bicep`. Until then nobody in the hosted

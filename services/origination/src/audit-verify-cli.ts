@@ -11,11 +11,17 @@
 import { Pool } from 'pg';
 
 import { verifyAuditChain } from './audit-verify.ts';
+import { databaseTransportRefusal } from './database-transport.ts';
 import { inTenant } from './tenant-scope.ts';
 
 const url = (process.env['SANAD_DATABASE_URL'] ?? process.env['SANAD_TEST_DATABASE_URL'] ?? '').trim();
 if (url.length === 0) {
   process.stderr.write('audit:verify needs SANAD_DATABASE_URL\n');
+  process.exit(2);
+}
+const transport = databaseTransportRefusal(url);
+if (transport !== undefined) {
+  process.stderr.write(`audit:verify could not run: ${transport}\n`);
   process.exit(2);
 }
 

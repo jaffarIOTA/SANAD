@@ -28,3 +28,5 @@ test
 supabase
 gateway
 deploy
+# …except the database provider's root certificate the images verify against (SR-051).
+!deploy/certs

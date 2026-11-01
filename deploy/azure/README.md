@@ -65,14 +65,30 @@ Once, per database (the value never leaves the vault):
 pw="$(openssl rand -hex 24)"
 # Through stdin, so the value is not in any process's arguments. Owner connection, trusted shell.
 printf "alter role sanad_runtime password '%s';\n" "$pw" | psql "$OWNER_URL" -q
-# Supabase session pooler: the user is sanad_runtime.<project ref>
-az keyvault secret set --vault-name <vault> -n sanad-database-url -o none \
-  --value "postgresql://sanad_runtime.<project ref>:$pw@<pooler host>:5432/postgres?sslmode=require"
+# Supabase session pooler: the user is sanad_runtime.<project ref>. Verified TLS (SR-051), below.
+printf '%s' "postgresql://sanad_runtime.<project ref>:$pw@<pooler host>:5432/postgres?$DB_TLS" |
+  az keyvault secret set --vault-name <vault> -n sanad-database-url -o none --file /dev/stdin --encoding utf-8
 unset pw
 ```
 
-Then restart each app's revision so it reads the new version. Migrations keep running as the
-owner (`npm run db:push`).
+Then make each app read the new version. A restart alone serves the cached value: set the
+reference again (`az containerapp secret set … --secrets "sanad-database-url=keyvaultref:<secret
+url>,identityref:<identity>"`), then restart the revision. Migrations keep running as the owner
+(`npm run db:push`); the owner login is kept out of this vault, which the apps' identity can read.
+
+### Verified TLS to the database (SR-051)
+
+A deployed process refuses a database URL that is not on loopback unless it says
+`sslmode=verify-full` (`services/origination/src/database-transport.ts`). Supabase's root is not
+public, so the images carry it (`deploy/certs/supabase-root-2021.crt`, SHA-256
+`80:70:25:AD:…:E6:CA:FA`) and the URL names it:
+
+```sh
+DB_TLS='sslmode=verify-full&sslrootcert=/opt/app-root/src/deploy/certs/supabase-root-2021.crt'
+```
+
+An image built before SR-051 holds no root file and cannot use that URL, and an image built after
+refuses any other. Change both secrets and roll the new image in the same step.
 
 ## Admin database login
 
@@ -84,8 +100,8 @@ those actions works under the runtime login (SR-046). Once, per database, as abo
 ```sh
 pw="$(openssl rand -hex 24)"
 printf "alter role sanad_admin password '%s';\n" "$pw" | psql "$OWNER_URL" -q
-az keyvault secret set --vault-name <vault> -n sanad-admin-database-url -o none \
-  --value "postgresql://sanad_admin.<project ref>:$pw@<pooler host>:5432/postgres?sslmode=require"
+printf '%s' "postgresql://sanad_admin.<project ref>:$pw@<pooler host>:5432/postgres?$DB_TLS" |
+  az keyvault secret set --vault-name <vault> -n sanad-admin-database-url -o none --file /dev/stdin --encoding utf-8
 unset pw
 ```
 

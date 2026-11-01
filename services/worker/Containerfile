@@ -35,6 +35,8 @@ COPY --chown=0:0 packages ./packages
 COPY --chown=0:0 services ./services
 COPY --chown=0:0 apps/ops/src/server ./apps/ops/src/server
 COPY --chown=0:0 api/openapi ./api/openapi
+# The database provider's root, for sslmode=verify-full&sslrootcert=… (SR-051).
+COPY --chown=0:0 deploy/certs ./deploy/certs
 
 RUN chgrp -R 0 /opt/app-root && chmod -R g=u /opt/app-root
 USER 1001
