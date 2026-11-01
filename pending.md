@@ -291,6 +291,28 @@ The findings go in the adapter README.
 - **Semgrep** has not been run locally on W2/W3 (not installed here). CI's gate is the
   first run.
 
+## Journey gaps (hardening plan B)
+
+- **B1 built**, PR #81 (stacked on #80): contact channels at intake.
+  - The officer keys a signatory's email and/or mobile when opening the intake, or records or corrects it on the
+    intake page while it's a draft.
+  - The intake, its events and the application carry the masked forms only.
+  - The details themselves go to `core.party_contact` (migration **0037**: append-only, RLS forced, audited by
+    channel, never by address), in the same transaction as the intake change.
+  - The reference is scoped to the intake (`INT-…/<party ref>`), because officer-keyed party refs repeat.
+  - Hand-over is refused while no signing party can be reached (gap `CONTACT_NOT_RECORDED`).
+  - **Not done:**
+    - **Intakes already open** (including the hosted demo ones) show the new gap. Record a contact on each before
+      hand-over.
+    - **Applications already handed over** from an intake still have no channel, and there's no screen to add one
+      on the application.
+    - The delivery side, which turns `partyContactDirectory` into a sent email or SMS, is B2. The outbox
+      dispatcher's database role reaches only the outbox, so B2 has to decide how delivery reads the contact.
+    - **Not tested locally on a database:** Docker Desktop was waiting on an administrator prompt.
+      `test/contract/party-contact-postgres.test.ts` runs in CI's "Database controls" job.
+    - **Not reviewed in a browser**, in RTL or LTR: the intake opening form and the contact block on the intake
+      page.
+
 ## Document intelligence (docs/DOCUMENT-INTELLIGENCE-PLAN.md)
 
 - **D1 built**, PR #60: findings and classification on business uploads.
@@ -309,10 +331,8 @@ The findings go in the adapter README.
   and the case shown ready again when the last gap closes.
   - The notification goes to the outbox. What the applicant actually receives depends on the notifications adapter
     and its templates for `INFORMATION_REQUESTED`, which aren't built (the development port only records it).
-  - **Applications from Sanad's own intake can't be sent a request yet**, and can't be sent the offer either
-    (`OFFER_NOTICE_NO_CHANNEL`). Intake records the contact party but not whether it has an email or mobile, so
-    both refuse with no channel. Seeded and partner applications carry it. Intake needs to capture the signatory's
-    contact channels (masked, as everywhere else).
+  - ~~Applications from Sanad's own intake can't be sent a request or the offer (`OFFER_NOTICE_NO_CHANNEL`).~~
+    **Fixed by B1** (below) for new intakes.
   - The stage clock doesn't pause while a case waits on the applicant. Whether it should is a policy decision for
     the product owner.
   - Wasl isn't covered until its documents are uploaded rather than referenced.

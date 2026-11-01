@@ -60,7 +60,15 @@ const FORM: OpenIntakeForm = {
   tenorMonths: 36,
   graceMonths: 0,
   contributionPerTenThousand: 2000,
-  parties: [{ partyRef: 'party-a', displayName: 'Owner A', role: 'OWNER_SIGNATORY', ownershipPerTenThousand: 10_000 }],
+  parties: [
+    {
+      partyRef: 'party-a',
+      displayName: 'Owner A',
+      role: 'OWNER_SIGNATORY',
+      ownershipPerTenThousand: 10_000,
+      contact: { email: 'owner.a@example.com' },
+    },
+  ],
 };
 
 /** A Saudi intake through KYB, handed over; with or without the document-verification consent. */

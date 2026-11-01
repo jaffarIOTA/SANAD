@@ -130,7 +130,7 @@ export default async function NewIntakePage({
                   )}
                 </p>
               ) : (
-              <label className={labelCls}>
+                <label className={labelCls}>
                   {t('Tax registration number (TRN), if registered', 'رقم التسجيل الضريبي، إن وُجد')}
                   <input
                     name="taxRegistrationNumber"
@@ -213,46 +213,68 @@ export default async function NewIntakePage({
             title={t('Owners and signatories', 'الملاك والمفوّضون بالتوقيع')}
             note={t(
               saudi
-                ? 'By reference and display name only — never a national ID, iqama or passport number. At least one party signs; shares add up to at most 100%.'
-                : 'By reference and display name only — never an Emirates ID or passport number. At least one party signs; shares add up to at most 100%.',
-              'بالمرجع والاسم المعروض فقط — دون رقم الهوية أو جواز السفر. يوقّع طرف واحد على الأقل، ولا يتجاوز مجموع الحصص ١٠٠٪.',
+                ? 'By reference and display name only — never a national ID, iqama or passport number. At least one party signs; shares add up to at most 100%. Give a signatory’s email or mobile: requests and the offer go to them. Only the masked form is shown afterwards.'
+                : 'By reference and display name only — never an Emirates ID or passport number. At least one party signs; shares add up to at most 100%. Give a signatory’s email or mobile: requests and the offer go to them. Only the masked form is shown afterwards.',
+              'بالمرجع والاسم المعروض فقط — دون رقم الهوية أو جواز السفر. يوقّع طرف واحد على الأقل، ولا يتجاوز مجموع الحصص ١٠٠٪. أدخل بريد المفوّض بالتوقيع أو جواله، فإليه تُرسل الطلبات والعرض، ولا يظهر بعد ذلك إلا الشكل المُقنّع.',
             )}
           >
             <div className="flex flex-col gap-3 px-5 py-5">
               {Array.from({ length: PARTY_ROWS }, (_, i) => (
-                <div key={i} className="grid gap-3 sm:grid-cols-[1fr_1.4fr_1fr_0.7fr]">
-                  <input
-                    name={`party_ref_${String(i)}`}
-                    aria-label={t(`Party ${String(i + 1)} reference`, `مرجع الطرف ${f.n(i + 1)}`)}
-                    placeholder={t('Reference', 'المرجع')}
-                    dir="ltr"
-                    autoComplete="off"
-                    className={`${INPUT} identifier`}
-                  />
-                  <input
-                    name={`party_name_${String(i)}`}
-                    aria-label={t(`Party ${String(i + 1)} name`, `اسم الطرف ${f.n(i + 1)}`)}
-                    placeholder={t('Display name', 'الاسم المعروض')}
-                    className={INPUT}
-                  />
-                  <select
-                    name={`party_role_${String(i)}`}
-                    aria-label={t(`Party ${String(i + 1)} role`, `صفة الطرف ${f.n(i + 1)}`)}
-                    className={INPUT}
-                    defaultValue={i === 0 ? 'OWNER_SIGNATORY' : 'OWNER'}
-                  >
-                    <option value="OWNER_SIGNATORY">{t('Owner and signatory', 'مالك ومفوّض بالتوقيع')}</option>
-                    <option value="OWNER">{t('Owner', 'مالك')}</option>
-                    <option value="SIGNATORY">{t('Signatory', 'مفوّض بالتوقيع')}</option>
-                  </select>
-                  <input
-                    name={`party_share_${String(i)}`}
-                    aria-label={t(`Party ${String(i + 1)} share (%)`, `حصة الطرف ${f.n(i + 1)} (٪)`)}
-                    placeholder={t('Share %', 'الحصة ٪')}
-                    inputMode="decimal"
-                    dir="ltr"
-                    className={`${INPUT} tabular-nums`}
-                  />
+                <div key={i} className="flex flex-col gap-2 border-b border-line pb-3 last:border-b-0 last:pb-0">
+                  <div className="grid gap-3 sm:grid-cols-[1fr_1.4fr_1fr_0.7fr]">
+                    <input
+                      name={`party_ref_${String(i)}`}
+                      aria-label={t(`Party ${String(i + 1)} reference`, `مرجع الطرف ${f.n(i + 1)}`)}
+                      placeholder={t('Reference', 'المرجع')}
+                      dir="ltr"
+                      autoComplete="off"
+                      className={`${INPUT} identifier`}
+                    />
+                    <input
+                      name={`party_name_${String(i)}`}
+                      aria-label={t(`Party ${String(i + 1)} name`, `اسم الطرف ${f.n(i + 1)}`)}
+                      placeholder={t('Display name', 'الاسم المعروض')}
+                      className={INPUT}
+                    />
+                    <select
+                      name={`party_role_${String(i)}`}
+                      aria-label={t(`Party ${String(i + 1)} role`, `صفة الطرف ${f.n(i + 1)}`)}
+                      className={INPUT}
+                      defaultValue={i === 0 ? 'OWNER_SIGNATORY' : 'OWNER'}
+                    >
+                      <option value="OWNER_SIGNATORY">{t('Owner and signatory', 'مالك ومفوّض بالتوقيع')}</option>
+                      <option value="OWNER">{t('Owner', 'مالك')}</option>
+                      <option value="SIGNATORY">{t('Signatory', 'مفوّض بالتوقيع')}</option>
+                    </select>
+                    <input
+                      name={`party_share_${String(i)}`}
+                      aria-label={t(`Party ${String(i + 1)} share (%)`, `حصة الطرف ${f.n(i + 1)} (٪)`)}
+                      placeholder={t('Share %', 'الحصة ٪')}
+                      inputMode="decimal"
+                      dir="ltr"
+                      className={`${INPUT} tabular-nums`}
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <input
+                      name={`party_email_${String(i)}`}
+                      type="email"
+                      aria-label={t(`Party ${String(i + 1)} email`, `البريد الإلكتروني للطرف ${f.n(i + 1)}`)}
+                      placeholder={t('Email (for a signatory)', 'البريد الإلكتروني (للمفوّض بالتوقيع)')}
+                      dir="ltr"
+                      autoComplete="off"
+                      className={INPUT}
+                    />
+                    <input
+                      name={`party_mobile_${String(i)}`}
+                      type="tel"
+                      aria-label={t(`Party ${String(i + 1)} mobile`, `جوال الطرف ${f.n(i + 1)}`)}
+                      placeholder={saudi ? '+966 5X XXX XXXX' : '+971 5X XXX XXXX'}
+                      dir="ltr"
+                      autoComplete="off"
+                      className={`${INPUT} tabular-nums`}
+                    />
+                  </div>
                 </div>
               ))}
             </div>

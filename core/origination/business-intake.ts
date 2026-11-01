@@ -14,11 +14,14 @@
  * Pure, and with no clock: every instant is passed in. The checks arrive as
  * results from the rails (or their labelled fixtures); this module records
  * outcomes and references only — never a copy of a registry file, an identity
- * record or a screening hit — and refuses an identity number anywhere.
+ * record or a screening hit — and refuses an identity number anywhere. A
+ * party's email and mobile appear here masked only.
  */
 
 import type { CurrencyCode, Money } from '../kernel/money.ts';
 import { type Result, ok, reject } from '../kernel/result.ts';
+import type { MaskedContact } from '../notifications/contact.ts';
+import { type OfferNotificationRecipient, isMaskedEmail, isMaskedMobile } from '../notifications/offer-notification.ts';
 
 import { REGISTRATION_FIELDS, containsIdentityNumber } from './business-application.ts';
 
@@ -64,6 +67,12 @@ export interface IntakeParty {
   readonly ownershipPerTenThousand: number;
   readonly identity?: IdentityCheck;
   readonly screening?: ScreeningCheck;
+  /**
+   * How the party is reached, masked. The address and number themselves are
+   * kept by the service under `contactRefOf` (core/ports/party-contacts.ts),
+   * never in the intake.
+   */
+  readonly contact?: MaskedContact;
 }
 
 /** The consents an intake captures, by the platform's consent types. */
@@ -190,6 +199,29 @@ const emit = (
   event: { eventType, actor, atEpochSeconds: at, detail },
 });
 
+/** Why a masked contact may not be carried, or undefined when it may: a channel, and masked forms only. */
+function maskedContactRefusal(contact: MaskedContact, partyRef: string): Result<never> | undefined {
+  if (contact.emailMasked === undefined && contact.mobileMasked === undefined)
+    return bad('CONTACT_NO_CHANNEL', 'An email address or a mobile number is recorded', { partyRef });
+  if (contact.emailMasked !== undefined && !isMaskedEmail(contact.emailMasked))
+    return bad('CONTACT_EMAIL_NOT_MASKED', 'An email address is carried masked only', { partyRef });
+  if (contact.mobileMasked !== undefined && !isMaskedMobile(contact.mobileMasked))
+    return bad('CONTACT_MOBILE_NOT_MASKED', 'A mobile number is carried masked only', { partyRef });
+  return undefined;
+}
+
+/**
+ * The reference a party's contact details are kept under: the intake and the
+ * party. Party references are keyed by an officer and may repeat across
+ * intakes for two different people; this cannot.
+ */
+export const contactRefOf = (intakeId: string, partyRef: string): string => `${intakeId}/${partyRef}`;
+
+const channelsOf = (contact: MaskedContact): string =>
+  [contact.emailMasked === undefined ? '' : 'EMAIL', contact.mobileMasked === undefined ? '' : 'SMS']
+    .filter((c) => c !== '')
+    .join(',');
+
 // -- Open -------------------------------------------------------------------------
 
 export interface OpenIntakeInput {
@@ -267,6 +299,10 @@ export function openIntake(
       return bad('OWNERSHIP_ROLE_MISMATCH', 'A party who owns a share is an owner', { partyRef: p.partyRef });
     if (p.role !== 'SIGNATORY' && p.ownershipPerTenThousand === 0)
       return bad('OWNERSHIP_ROLE_MISMATCH', 'An owner holds a share', { partyRef: p.partyRef });
+    if (p.contact !== undefined) {
+      const contact = maskedContactRefusal(p.contact, p.partyRef);
+      if (contact !== undefined) return contact;
+    }
     owned += p.ownershipPerTenThousand;
   }
   if (owned > 10_000) return bad('OWNERSHIP_ABOVE_WHOLE', 'Ownership adds up to at most 100%');
@@ -295,6 +331,57 @@ export function openIntake(
       detail: { tradeLicence: e.tradeLicence, issuingAuthority: e.issuingAuthority },
     },
   });
+}
+
+// -- Contact ----------------------------------------------------------------------
+
+/**
+ * Record how a party is reached, masked, replacing what was recorded before.
+ * The service keeps the details themselves under `contactRefOf` in the same
+ * change. A party who may sign is the one a notice goes to (`handoverContact`).
+ */
+export function recordPartyContact(
+  intake: BusinessIntake,
+  partyRef: string,
+  contact: MaskedContact,
+  actor: string,
+  at: bigint,
+): Result<IntakeTransition> {
+  const isOpen = open(intake, 'Recording a contact');
+  if (!isOpen.ok) return isOpen;
+  if (!intake.parties.some((p) => p.partyRef === partyRef))
+    return bad('PARTY_UNKNOWN', 'A contact is recorded for a party of this intake', { partyRef });
+  const refusal = maskedContactRefusal(contact, partyRef);
+  if (refusal !== undefined) return refusal;
+  const masked: MaskedContact = {
+    ...(contact.emailMasked === undefined ? {} : { emailMasked: contact.emailMasked }),
+    ...(contact.mobileMasked === undefined ? {} : { mobileMasked: contact.mobileMasked }),
+  };
+  return ok(
+    emit(
+      intake,
+      { parties: intake.parties.map((p) => (p.partyRef === partyRef ? { ...p, contact: masked } : p)) },
+      'CONTACT_RECORDED',
+      actor,
+      at,
+      { partyRef, channels: channelsOf(masked) },
+    ),
+  );
+}
+
+/**
+ * Who the application's notices go to: the first party who may sign and has a
+ * channel, under the reference their details are kept by. Undefined when no
+ * signing party can be reached, which `kybGaps` reports before hand-over.
+ */
+export function handoverContact(intake: BusinessIntake): OfferNotificationRecipient | undefined {
+  const signatory = intake.parties.find((p) => p.role !== 'OWNER' && p.contact !== undefined);
+  if (signatory?.contact === undefined) return undefined;
+  return {
+    partyRef: contactRefOf(intake.intakeId, signatory.partyRef),
+    ...(signatory.contact.emailMasked === undefined ? {} : { emailMasked: signatory.contact.emailMasked }),
+    ...(signatory.contact.mobileMasked === undefined ? {} : { mobileMasked: signatory.contact.mobileMasked }),
+  };
 }
 
 // -- Consent ----------------------------------------------------------------------
@@ -565,7 +652,9 @@ export interface KybGap {
     | 'SCREENING_NOT_RUN'
     | 'SCREENING_NOT_CLEAR'
     | 'UBO_NOT_DECLARED'
-    | 'BUREAU_CONSENT_MISSING';
+    | 'BUREAU_CONSENT_MISSING'
+    /** No party who may sign can be reached, so neither a request for information nor the offer could be sent. */
+    | 'CONTACT_NOT_RECORDED';
   readonly subject?: string;
 }
 
@@ -586,6 +675,7 @@ export function kybGaps(intake: BusinessIntake): readonly KybGap[] {
   }
   if (intake.ubo === undefined) gaps.push({ code: 'UBO_NOT_DECLARED' });
   if (!hasConsent(intake, 'ENTITY', 'CREDIT_BUREAU')) gaps.push({ code: 'BUREAU_CONSENT_MISSING', subject: 'ENTITY' });
+  if (handoverContact(intake) === undefined) gaps.push({ code: 'CONTACT_NOT_RECORDED' });
   return gaps;
 }
 
