@@ -330,6 +330,10 @@ The findings go in the adapter README.
 
 - **SR-024:** in remediation. CI coverage of the unit, contract and adapter suites.
 - **SR-039:** in remediation. The threat model is drafted, not reviewed.
+- **SR-041:** in remediation. The daily `hosted-checks` run has failed since it was added, because it was never
+  configured. `SUPABASE_PROJECT_REF` was set on 1 November. It still needs the repository secret
+  `SUPABASE_ACCESS_TOKEN`: a Supabase personal access token, from Supabase → Account → Access Tokens
+  (`gh secret set SUPABASE_ACCESS_TOKEN`). SR-041 closes on its first green run.
 - **SR-040:** the repository is public. Decided 1 November: make it private, but only after moving it to an IOTA
   GitHub organisation on a plan with Code Security. On a personal account a private repository loses branch
   protection (without Pro), and the CodeQL and dependency-review gates stop working. Waiting on the organisation.
