@@ -11,8 +11,17 @@ Last updated: 1 November 2026.
   #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2 · #68–#69 Wasl W5a, W5b ·
   #70 Wasl W6a · #71 Wasl W6b-1 · #72 Wasl W6b-2 · #73 Wasl W6c ·
   #74 A1 viewer without .NET (SR-049) · #75 A3 timestamping authority (SR-006) · #76 A4 standalone worker ·
-  #77 A5 scheduled audit check (SR-011).
+  #77 A5 scheduled audit check (SR-011) · #78 SR-047 platform operator · #79 SR-051 database TLS ·
+  #80 SR-021 protection check.
   Auto mode cannot merge.
+  - **Since 1 November `main` is protected (SR-021):** a merge into `main` needs an approving review from someone
+    other than the author, all twelve security gates green and signed commits, and admins are bound too. Name a
+    second reviewer. Squash-merge, so GitHub signs the commit on `main`.
+  - Once #76 is on `main`, add `Image scan (worker)` to the required checks, and remove it from `NOT_YET_ON_MAIN` in
+    `test/architecture/branch-protection.test.ts`.
+  - Add this machine's SSH key to GitHub as a signing key, so its signed commits show as verified:
+    `gh auth refresh -h github.com -s admin:ssh_signing_key`, then
+    `gh ssh-key add ~/.ssh/id_ed25519.pub --type signing --title "Sanad signing"`.
 - **Hosted environment, operator steps (go-live hardening A).**
   - **A2, SR-003: done 1 November.** The hosted apps connect as `sanad_runtime` and Admin as `sanad_admin`.
     Admin's own login was set directly on its container app, so **the next template deployment must pass
@@ -319,10 +328,11 @@ The findings go in the adapter README.
 
 ## Security register items still open
 
-- **SR-021:** no branch protection on `main`; commits unsigned.
 - **SR-024:** in remediation. CI coverage of the unit, contract and adapter suites.
 - **SR-039:** in remediation. The threat model is drafted, not reviewed.
-- **SR-040:** the repository is public.
+- **SR-040:** the repository is public. Decided 1 November: make it private, but only after moving it to an IOTA
+  GitHub organisation on a plan with Code Security. On a personal account a private repository loses branch
+  protection (without Pro), and the CodeQL and dependency-review gates stop working. Waiting on the organisation.
 - **SEC-Q01 … SEC-Q08:** open questions for the client (CSCC classification, CSF level,
   VAPT provider, SOC, notification contacts, disclosure programme, sign-off).
 
