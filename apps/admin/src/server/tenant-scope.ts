@@ -1,5 +1,6 @@
 /**
- * Which institution an administrator may configure (SR-033). The institution a
+ * Which institution an administrator may configure (SR-033), and whether they
+ * may act on the whole deployment (SR-047). The institution a
  * form or address names is a request, never an authority: single sign-on binds
  * the session to the institution whose identity provider and mappings granted
  * the role, and that is the only one it may read or change. Development
@@ -36,6 +37,15 @@ export function displayedTenant(
     (admin.method === 'DEVELOPMENT' ? fallback : configurableTenant(admin, admin.tenantId))
   );
 }
+
+/**
+ * Whether this administrator may act on the whole deployment: propose or
+ * decide its jurisdiction, propose or decide a licence (SR-047). Only platform
+ * authority may; an institution's administrator, whose single sign-on binds
+ * them to one institution, never acts for every other one. Four eyes still
+ * applies between two platform operators.
+ */
+export const mayActForDeployment = (admin: Pick<AdminPrincipal, 'scope'>): boolean => admin.scope === 'PLATFORM';
 
 /** The institutions a screen offers to switch between. */
 export const configurableTenants = <T extends { readonly code: string }>(

@@ -49,8 +49,8 @@ import {
   endAdminSession,
   startAdminSession,
 } from './session.ts';
-import { beginSingleSignOn, providerSignOut } from './single-sign-on.ts';
-import { configurableTenant } from './tenant-scope.ts';
+import { PLATFORM_OPERATOR, beginSingleSignOn, providerSignOut } from './single-sign-on.ts';
+import { configurableTenant, mayActForDeployment } from './tenant-scope.ts';
 import { decideDeploymentJurisdiction, proposeDeploymentJurisdiction } from '@sanad/origination/jurisdiction.ts';
 import { decideLicenceInstall, proposeLicenceInstall } from '@sanad/origination/licensing.ts';
 import { catalogueApproval } from '@sanad/origination/shariah/approvals.ts';
@@ -62,6 +62,9 @@ const field = (form: FormData, name: string): string => {
 const back = (to: string, notice: string): never =>
   redirect(`${to}${to.includes('?') ? '&' : '?'}notice=${encodeURIComponent(notice)}`);
 
+/** An institution's administrator asked to act on the whole deployment (SR-047). */
+const PLATFORM_AUTHORITY_REQUIRED = 'REFUSED:PLATFORM_AUTHORITY_REQUIRED';
+
 export async function signInAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') || 'ar';
   if (!developmentSignInPermitted()) return back(`/${locale}`, 'DEVELOPMENT_SIGN_IN_REFUSED');
@@ -69,9 +72,11 @@ export async function signInAction(form: FormData): Promise<void> {
   if (principal === undefined) return back(`/${locale}`, 'SIGN_IN_REFUSED');
   // The session lifetime is the tenant's staff identity configuration in force, bounded by the session layer.
   const identity = await resolveStaffIdentity('bank-a', nowEpoch());
+  // A development operator holds platform authority, so the deployment-wide screens can be exercised locally.
   await startAdminSession(
     principal,
     identity.identity.ok ? BigInt(identity.identity.value.sessionLifetimeSeconds) : undefined,
+    { platform: true },
   );
   redirect(`/${locale}/credentials`);
 }
@@ -92,8 +97,9 @@ export async function signOutAction(form: FormData): Promise<void> {
   const locale = field(form, 'locale') === 'en' ? 'en' : 'ar';
   const admin = await currentAdmin();
   await endAdminSession();
-  if (admin?.method === 'OIDC' && admin.tenantId !== undefined) {
-    const atProvider = await providerSignOut(admin.tenantId, locale);
+  const provider = admin?.scope === 'PLATFORM' ? PLATFORM_OPERATOR : admin?.tenantId;
+  if (admin?.method === 'OIDC' && provider !== undefined) {
+    const atProvider = await providerSignOut(provider, locale);
     if (atProvider !== undefined) redirect(atProvider);
   }
   redirect(`/${locale}`);
@@ -270,6 +276,7 @@ export async function proposeJurisdictionAction(form: FormData): Promise<void> {
   const to = `/${locale}/jurisdiction`;
   const admin = await currentAdmin();
   if (admin === undefined) redirect(`/${locale}`);
+  if (!mayActForDeployment(admin)) return back(to, PLATFORM_AUTHORITY_REQUIRED);
   if (store().kind !== 'READY') return back(to, 'NO_DATABASE');
   const jurisdiction = field(form, 'jurisdiction');
   if (jurisdiction !== 'SA' && jurisdiction !== 'AE') return back(to, 'JURISDICTION_UNKNOWN');
@@ -297,6 +304,7 @@ export async function decideJurisdictionAction(form: FormData): Promise<void> {
   const to = `/${locale}/jurisdiction`;
   const admin = await currentAdmin();
   if (admin === undefined) redirect(`/${locale}`);
+  if (!mayActForDeployment(admin)) return back(to, PLATFORM_AUTHORITY_REQUIRED);
   if (store().kind !== 'READY') return back(to, 'NO_DATABASE');
   const id = field(form, 'revisionId');
   if (!/^[0-9a-f-]{36}$/i.test(id)) return back(to, 'REVISION_ID_MALFORMED');
@@ -735,6 +743,7 @@ export async function proposeLicenceAction(form: FormData): Promise<void> {
   const to = `/${locale}/licence`;
   const admin = await currentAdmin();
   if (admin === undefined) redirect(`/${locale}`);
+  if (!mayActForDeployment(admin)) return back(to, PLATFORM_AUTHORITY_REQUIRED);
   const file = form.get('licenceFile');
   if (!(file instanceof Blob) || file.size === 0) return back(to, 'FILE_REQUIRED');
   if (file.size > MAX_LICENCE_FILE_BYTES) return back(to, 'REFUSED:MALFORMED');
@@ -749,6 +758,7 @@ export async function decideLicenceAction(form: FormData): Promise<void> {
   const to = `/${locale}/licence`;
   const admin = await currentAdmin();
   if (admin === undefined) redirect(`/${locale}`);
+  if (!mayActForDeployment(admin)) return back(to, PLATFORM_AUTHORITY_REQUIRED);
   const id = field(form, 'proposalId');
   if (!/^[0-9a-f-]{36}$/i.test(id)) return back(to, 'PROPOSAL_ID_MALFORMED');
   const approve = field(form, 'decision') === 'approve';

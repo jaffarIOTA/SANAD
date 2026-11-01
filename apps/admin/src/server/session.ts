@@ -24,11 +24,21 @@ import { deploymentProfile } from '@sanad/origination/profile.ts';
 
 export type AdminSignInMethod = 'DEVELOPMENT' | 'OIDC';
 
+/**
+ * Whose authority the administrator holds (SR-047). INSTITUTION: granted by an
+ * institution's identity provider, so it configures that institution only.
+ * PLATFORM: granted by the platform operator's own identity provider, or by
+ * development sign-in; only it acts on the whole deployment (its jurisdiction,
+ * its licence). Absent from a cookie reads as INSTITUTION.
+ */
+export type AdminScope = 'INSTITUTION' | 'PLATFORM';
+
 export interface AdminPrincipal {
   readonly principalId: string;
   readonly role: 'PLATFORM_ADMIN';
   /** The institution whose identity provider and mappings granted the role (single sign-on only). */
   readonly tenantId?: string;
+  readonly scope: AdminScope;
   readonly method: AdminSignInMethod;
   readonly authenticatedAtEpochSeconds: bigint;
   /** For the screen only. */
@@ -98,22 +108,25 @@ export function developmentPrincipalFor(presented: string): string | undefined {
   return found;
 }
 
-/** p principal · r role · t institution (SSO) · at authenticated at · m method (D/O) · n display name. */
+/** p principal · r role · t institution (SSO) · s scope (P platform) · at authenticated at · m method (D/O) · n display name. */
 interface Payload {
   readonly p: string;
   readonly r: 'PLATFORM_ADMIN';
   readonly t?: string;
+  readonly s?: string;
   readonly at?: string;
   readonly m?: string;
   readonly n?: string;
 }
-const PAYLOAD_KEYS = new Set(['p', 'r', 't', 'at', 'm', 'n']);
+const PAYLOAD_KEYS = new Set(['p', 'r', 't', 's', 'at', 'm', 'n']);
 const isPayload = (v: Readonly<Record<string, unknown>>): v is Payload & Record<string, string> =>
   Object.keys(v).every((k) => PAYLOAD_KEYS.has(k)) &&
   typeof v['p'] === 'string' &&
   /^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$/.test(v['p']) &&
   v['r'] === 'PLATFORM_ADMIN' &&
   (v['t'] === undefined || (typeof v['t'] === 'string' && /^[a-z][a-z0-9-]{1,40}$/.test(v['t']))) &&
+  // Platform authority is never bound to an institution.
+  (v['s'] === undefined || (v['s'] === 'P' && v['t'] === undefined)) &&
   (v['at'] === undefined || (typeof v['at'] === 'string' && /^\d{1,12}$/.test(v['at']))) &&
   (v['m'] === undefined || v['m'] === 'D' || v['m'] === 'O') &&
   (v['n'] === undefined || (typeof v['n'] === 'string' && v['n'].length <= 80));
@@ -126,12 +139,13 @@ export async function currentAdmin(): Promise<AdminPrincipal | undefined> {
   if (opened.kind !== 'VALID') return undefined;
   // Signed out: a copy of the cookie is no session (SR-030).
   if (await spentTokens().isSpent('ADMIN_SESSION', raw)) return undefined;
-  const { p, t, at, m, n } = opened.value.payload;
+  const { p, t, s, at, m, n } = opened.value.payload;
   const authenticatedAt = at === undefined ? opened.value.issuedAtEpochSeconds : BigInt(at);
   if (authenticatedAt > opened.value.issuedAtEpochSeconds) return undefined;
   return {
     principalId: p,
     role: 'PLATFORM_ADMIN',
+    scope: s === 'P' ? 'PLATFORM' : 'INSTITUTION',
     method: m === 'O' ? 'OIDC' : 'DEVELOPMENT',
     authenticatedAtEpochSeconds: authenticatedAt,
     ...(t === undefined ? {} : { tenantId: t }),
@@ -141,7 +155,9 @@ export async function currentAdmin(): Promise<AdminPrincipal | undefined> {
 
 export interface AdminSessionOptions {
   readonly method?: AdminSignInMethod;
+  /** Exactly one of an institution or platform authority. */
   readonly tenantId?: string;
+  readonly platform?: boolean;
   readonly authenticatedAtEpochSeconds?: bigint;
   readonly displayName?: string;
 }
@@ -158,6 +174,8 @@ export async function startAdminSession(
       : lifetimeSeconds > ADMIN_SESSION_CEILING
         ? ADMIN_SESSION_CEILING
         : lifetimeSeconds;
+  if (options.platform === true && options.tenantId !== undefined)
+    throw new Error('platform authority is not bound to an institution');
   const issued = now();
   const authenticatedAt = options.authenticatedAtEpochSeconds ?? issued;
   const name = options.displayName?.slice(0, 80);
@@ -169,6 +187,7 @@ export async function startAdminSession(
         at: (authenticatedAt > issued ? issued : authenticatedAt).toString(),
         m: options.method === 'OIDC' ? 'O' : 'D',
         ...(options.tenantId === undefined ? {} : { t: options.tenantId }),
+        ...(options.platform === true ? { s: 'P' } : {}),
         ...(name === undefined || name.length === 0 ? {} : { n: name }),
       },
       issuedAtEpochSeconds: issued,

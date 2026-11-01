@@ -41,6 +41,7 @@ import fundAeTenant from './tenants/sme-fund-ae/tenant.json' with { type: 'json'
 import fundAeCatalogue from './tenants/sme-fund-ae/products/catalogue.json' with { type: 'json' };
 import fundAeRails from './tenants/sme-fund-ae/rails/rails.json' with { type: 'json' };
 import fundAeIdentity from './tenants/sme-fund-ae/identity/staff-identity.json' with { type: 'json' };
+import platformOperatorIdentity from './platform/operator-identity.json' with { type: 'json' };
 import fundAeOrigination from './tenants/sme-fund-ae/origination/policy.json' with { type: 'json' };
 import fundAeSmeAssessment from './tenants/sme-fund-ae/credit-policy/sme-assessment.json' with { type: 'json' };
 // KSA K2: the Saudi tenants' SME policies (ILLUSTRATIVE, adapted from the UAE fund's).
@@ -274,6 +275,17 @@ const STAFF_IDENTITY: Readonly<Record<TenantCode, unknown>> = {
 
 export function loadStaffIdentity(tenant: TenantCode, profile: DeploymentProfile): Result<StaffIdentityConfiguration> {
   return parseStaffIdentity(STAFF_IDENTITY[tenant], profile);
+}
+
+/**
+ * The platform operator's own identity provider (SR-047): the one sign-in that
+ * may act on the whole deployment in Admin. It belongs to no institution, so it
+ * is a file, changed through a reviewed commit, not an institution's revision.
+ * It grants platform administration and nothing else: an operator approves no
+ * credit and releases no money.
+ */
+export function loadPlatformOperatorIdentity(profile: DeploymentProfile): Result<StaffIdentityConfiguration> {
+  return parseStaffIdentity(platformOperatorIdentity, profile, 'PLATFORM_OPERATOR');
 }
 
 export function loadOriginationPolicy(tenant: TenantCode): Result<OriginationPolicy> {

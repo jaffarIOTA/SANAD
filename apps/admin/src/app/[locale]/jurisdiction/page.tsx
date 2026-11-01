@@ -1,7 +1,8 @@
 /**
  * Jurisdiction: whether the whole application behaves as the Kingdom of Saudi
- * Arabia (SAR) or the United Arab Emirates (AED). One administrator proposes,
- * a different one decides; a production deployment that has recorded business
+ * Arabia (SAR) or the United Arab Emirates (AED). One platform operator
+ * proposes, a different one decides (an institution's administrator only sees
+ * it, SR-047); a production deployment that has recorded business
  * cannot change. Each institution keeps the jurisdiction it was onboarded
  * under: the setting decides which institutions are active, never rewrites
  * one's currency (ADR 0005).
@@ -30,6 +31,7 @@ import {
 import { decideJurisdictionAction, proposeJurisdictionAction } from '../../../server/actions.ts';
 import { store } from '../../../server/credentials.ts';
 import { currentAdmin } from '../../../server/session.ts';
+import { mayActForDeployment } from '../../../server/tenant-scope.ts';
 
 const NOTICE: Readonly<Record<string, { en: string; ar: string; tone: 'settled' | 'blocked' | 'attention' }>> = {
   PROPOSED: {
@@ -61,6 +63,11 @@ const NOTICE: Readonly<Record<string, { en: string; ar: string; tone: 'settled' 
   'REFUSED:FOUR_EYES_SELF_DECISION': {
     en: 'Four eyes: you proposed this change, so you may not decide it. Sign in as the other administrator.',
     ar: 'أربع أعين: أنت من اقترح هذا التغيير فلا يجوز أن تقرر فيه. سجّل الدخول بالمدير الآخر.',
+    tone: 'blocked',
+  },
+  'REFUSED:PLATFORM_AUTHORITY_REQUIRED': {
+    en: 'The jurisdiction applies to every institution in this deployment, so only the platform operator may propose or decide it. Your sign-in is your institution’s.',
+    ar: 'تسري الولاية على كل المؤسسات في هذا النشر، فلا يقترحها أو يقرر فيها إلا مشغّل المنصة. تسجيل دخولك خاص بمؤسستك.',
     tone: 'blocked',
   },
   REJECTION_REASON_REQUIRED: { en: 'A rejection says why.', ar: 'الرفض يحتاج سبباً.', tone: 'attention' },
@@ -191,6 +198,19 @@ export default async function JurisdictionPage({
         {locked ? (
           <p className="mt-4 text-[14px] text-blocked">
             {t('Locked: this production deployment has recorded business.', 'مقفل: سجّل هذا النشر الإنتاجي معاملات.')}
+          </p>
+        ) : !mayActForDeployment(admin) ? (
+          <p className="mt-4 text-[14px] text-ink-quiet">
+            {t(
+              'Only the platform operator proposes or decides the jurisdiction, because it applies to every institution here. You can see it; you cannot change it.',
+              'لا يقترح الولاية أو يقرر فيها إلا مشغّل المنصة لأنها تسري على كل المؤسسات هنا. يمكنك الاطلاع عليها دون تغييرها.',
+            )}
+            {pending === undefined ? null : (
+              <>
+                {' '}
+                {t('Proposed:', 'مقترح:')} <span className="identifier">{pending.jurisdiction}</span>
+              </>
+            )}
           </p>
         ) : pending !== undefined ? (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-tile border border-line p-4">

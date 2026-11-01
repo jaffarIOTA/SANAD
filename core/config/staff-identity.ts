@@ -183,7 +183,18 @@ function selectProvider(raw: Record<string, unknown>, profile: DeploymentProfile
   return ok(selected);
 }
 
-export function parseStaffIdentity(raw: unknown, profile: DeploymentProfile): Result<StaffIdentityConfiguration> {
+/**
+ * INSTITUTION: an institution's staff, who must reach maker and checker.
+ * PLATFORM_OPERATOR: the deployment's operator, who holds PLATFORM_ADMIN and
+ * nothing else.
+ */
+export type StaffIdentityPurpose = 'INSTITUTION' | 'PLATFORM_OPERATOR';
+
+export function parseStaffIdentity(
+  raw: unknown,
+  profile: DeploymentProfile,
+  purpose: StaffIdentityPurpose = 'INSTITUTION',
+): Result<StaffIdentityConfiguration> {
   if (!isRecord(raw)) return bad('IDENTITY_MALFORMED', 'The staff identity configuration is an object');
   const unknownTop = Object.keys(raw).filter((k) => !TOP_KEYS.has(k));
   if (unknownTop.length > 0)
@@ -219,8 +230,17 @@ export function parseStaffIdentity(raw: unknown, profile: DeploymentProfile): Re
     mappings.push({ group, authority: entry['authority'] as StaffAuthority });
   }
   const mapped = new Set(mappings.map((x) => x.authority));
+  // The platform operator's provider administers the deployment; it keys and approves nothing (SR-047).
+  // Mappings are never empty, so PLATFORM_ADMIN alone is then reachable.
+  const other = [...mapped].filter((a) => a !== 'PLATFORM_ADMIN');
+  if (purpose === 'PLATFORM_OPERATOR' && other.length > 0)
+    return bad(
+      'PLATFORM_OPERATOR_AUTHORITY_ONLY',
+      'The platform operator’s provider grants platform administration only',
+      { authorities: other.join(',') },
+    );
   for (const required of ['MAKER', 'CHECKER'] as const) {
-    if (!mapped.has(required))
+    if (purpose === 'INSTITUTION' && !mapped.has(required))
       return bad(
         'IDENTITY_AUTHORITY_UNMAPPED',
         'Maker and checker must each be reachable, or nothing can be keyed and approved',

@@ -4,8 +4,10 @@
  * Production: the institution's single sign-on by OpenID Connect. The page
  * lists the institutions active in this deployment's jurisdiction whose staff
  * identity configuration uses OIDC; the person is an administrator only if
- * that institution maps one of their groups to PLATFORM_ADMIN. No development
- * path is offered (the action refuses it too).
+ * that institution maps one of their groups to PLATFORM_ADMIN. The platform
+ * operator's own provider is listed first; only it changes the deployment's
+ * jurisdiction or licence (SR-047). No development path is offered (the action
+ * refuses it too).
  *
  * Development: the platform operations token, compared by digest on the
  * server; single sign-on is offered as well wherever an institution's
@@ -23,6 +25,7 @@ import { singleSignOnInstitutions } from '@sanad/origination/staff-identity.ts';
 
 import { signInAction, singleSignOnAction } from '../../server/actions.ts';
 import { currentAdmin, developmentSignInPermitted, now } from '../../server/session.ts';
+import { PLATFORM_OPERATOR, platformOperatorSignOn } from '../../server/single-sign-on.ts';
 
 type Words = { readonly en: string; readonly ar: string; readonly refusal: boolean };
 
@@ -71,7 +74,13 @@ export default async function SignInPage({
   const t = (en: string, ar: string): string => (arabic ? ar : en);
   const words = notice === undefined ? undefined : NOTICES[notice];
   const development = developmentSignInPermitted();
-  const institutions = await singleSignOnInstitutions(now());
+  // The platform operator's own provider first: it alone acts on the whole deployment (SR-047).
+  const institutions = [
+    ...(platformOperatorSignOn()
+      ? [{ tenant: PLATFORM_OPERATOR, nameEn: 'Platform operator', nameAr: 'مشغّل المنصة' }]
+      : []),
+    ...(await singleSignOnInstitutions(now())),
+  ];
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-6">
@@ -110,13 +119,7 @@ export default async function SignInPage({
             <input type="hidden" name="locale" value={segment} />
             <label className={FIELD_LABEL}>
               {t('Platform operations token', 'رمز عمليات المنصة')}
-              <input
-                name="token"
-                type="password"
-                autoComplete="off"
-                required
-                className={`${FIELD_INPUT} identifier`}
-              />
+              <input name="token" type="password" autoComplete="off" required className={`${FIELD_INPUT} identifier`} />
             </label>
             <div className="flex justify-end">
               <button type="submit" className={BUTTON_PRIMARY}>

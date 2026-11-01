@@ -230,7 +230,10 @@ var origin = {
 // The variable names are packages/auth/staff-oidc.ts `clientSecretVariable`.
 var oidcTenants = ['BANK_A', 'FINTECH_B', 'SME_FUND_AE']
 var opsOidcEnv = [for t in oidcTenants: { name: 'OIDC_CLIENT_SECRET_${t}_OPS', secretRef: 'oidc-client-secret' }]
-var adminOidcEnv = [for t in oidcTenants: { name: 'OIDC_CLIENT_SECRET_${t}_ADMIN', secretRef: 'oidc-client-secret' }]
+var adminInstitutionOidcEnv = [for t in oidcTenants: { name: 'OIDC_CLIENT_SECRET_${t}_ADMIN', secretRef: 'oidc-client-secret' }]
+// The platform operator (SR-047) signs in to Admin alone, through the same registration
+// under its own app role; it has no workbench client.
+var adminOidcEnv = concat(adminInstitutionOidcEnv, [{ name: 'OIDC_CLIENT_SECRET_PLATFORM_ADMIN', secretRef: 'oidc-client-secret' }])
 
 var adminDatabaseSecret = adminOwnLogin ? 'sanad-admin-database-url' : 'sanad-database-url'
 

@@ -6,12 +6,17 @@
  * institution's mappings grant PLATFORM_ADMIN from their groups; any other
  * authority they hold signs nobody in here.
  *
+ * The platform operator signs in the same way through its own provider
+ * (config/platform/operator-identity.json, client secret
+ * OIDC_CLIENT_SECRET_PLATFORM_ADMIN). That session alone acts on the whole
+ * deployment, and configures no institution (SR-047).
+ *
  * Redirect URI: `<ADMIN_PUBLIC_ORIGIN>/sign-in/callback`. Nothing here logs.
  */
 
 import { cookies } from 'next/headers';
 
-import { isTenantCode } from '@sanad/config/loader.ts';
+import { isTenantCode, loadPlatformOperatorIdentity } from '@sanad/config/loader.ts';
 import { type OidcClient, createOidcClient } from '@sanad/auth/oidc.ts';
 import {
   CALLBACK_PATH,
@@ -27,7 +32,11 @@ import {
   stateReplayGuard,
 } from '@sanad/auth/staff-oidc.ts';
 import { deploymentJurisdiction } from '@sanad/origination/jurisdiction.ts';
-import { resolveStaffIdentity, singleSignOnInstitutions } from '@sanad/origination/staff-identity.ts';
+import {
+  deploymentProfile,
+  resolveStaffIdentity,
+  singleSignOnInstitutions,
+} from '@sanad/origination/staff-identity.ts';
 
 import { adminStateSealKey, now, startAdminSession } from './session.ts';
 import { spentTokens } from './spent-tokens.ts';
@@ -64,29 +73,51 @@ export function setSsoDependencies(d: { readonly client?: OidcClient; readonly r
 
 const production = (): boolean => process.env['NODE_ENV'] === 'production';
 
+/**
+ * The sign-in choice that selects the platform operator's own provider rather
+ * than an institution's (SR-047). Never a tenant code: `isTenantCode` refuses
+ * it, so it configures no institution, and the workbench resolves no identity
+ * for it.
+ */
+export const PLATFORM_OPERATOR = 'platform';
+
 async function identityOf(tenant: string) {
+  if (tenant === PLATFORM_OPERATOR) {
+    const operator = loadPlatformOperatorIdentity(deploymentProfile());
+    return operator.ok ? { ok: true as const, value: operator.value } : { ok: false as const };
+  }
   if (!isTenantCode(tenant)) return { ok: false as const };
   const resolved = await resolveStaffIdentity(tenant, now());
   return resolved.identity.ok ? { ok: true as const, value: resolved.identity.value } : { ok: false as const };
 }
 
+/** The platform operator is active in either jurisdiction; an institution only in its own. */
 async function active(tenant: string): Promise<boolean> {
+  if (tenant === PLATFORM_OPERATOR) return true;
   if (!isTenantCode(tenant)) return false;
   return (await deploymentJurisdiction()).activeTenants.includes(tenant);
+}
+
+/** The platform operator's sign-in, offered beside the institutions when its provider in force is OIDC. */
+export function platformOperatorSignOn(): boolean {
+  const operator = loadPlatformOperatorIdentity(deploymentProfile());
+  return operator.ok && operator.value.provider.protocol === 'OIDC';
 }
 
 export type BeginResult =
   { readonly ok: true; readonly location: string } | { readonly ok: false; readonly notice: AdminSignInNotice };
 
 export async function beginSingleSignOn(tenantChoice: string, locale: string): Promise<BeginResult> {
-  const listed = await singleSignOnInstitutions(now());
-  const institution = listed.find((x) => x.tenant === tenantChoice);
-  if (institution === undefined) return { ok: false, notice: 'SSO_UNAVAILABLE' };
-  const identity = await identityOf(institution.tenant);
+  const operator = tenantChoice === PLATFORM_OPERATOR && platformOperatorSignOn();
+  const chosen = operator
+    ? PLATFORM_OPERATOR
+    : (await singleSignOnInstitutions(now())).find((x) => x.tenant === tenantChoice)?.tenant;
+  if (chosen === undefined) return { ok: false, notice: 'SSO_UNAVAILABLE' };
+  const identity = await identityOf(chosen);
   if (!identity.ok) return { ok: false, notice: 'SSO_UNAVAILABLE' };
   const begun = await beginStaffSignIn({
     app: 'ADMIN',
-    tenant: institution.tenant,
+    tenant: chosen,
     locale: signInLocale(locale),
     stepUp: false,
     identity: identity.value,
@@ -147,9 +178,10 @@ export async function completeSingleSignOn(request: Request): Promise<Response> 
   const s = outcome.staff;
   if (!s.authorities.includes('PLATFORM_ADMIN'))
     return seeOther(`/${outcome.locale}?notice=${noticeFor('NOT_ADMINISTRATOR')}`);
+  // The sealed choice decides whose authority this is; the platform operator is bound to no institution.
   await startAdminSession(s.principalId, s.sessionLifetimeSeconds, {
     method: 'OIDC',
-    tenantId: s.tenant,
+    ...(s.tenant === PLATFORM_OPERATOR ? { platform: true } : { tenantId: s.tenant }),
     authenticatedAtEpochSeconds: s.authenticatedAtEpochSeconds,
     ...(s.displayName === undefined ? {} : { displayName: s.displayName }),
   });
