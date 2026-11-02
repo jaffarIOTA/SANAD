@@ -10,7 +10,13 @@ import type { ReactElement } from 'react';
 
 import { delinquencyBucket } from '@sanad/core/servicing/instalment-position.ts';
 
-import { confirmRepaymentAction, recordRepaymentAction } from '../../../../../server/business-actions.ts';
+import {
+  confirmRepaymentAction,
+  presentCollectionsAction,
+  recordFixtureCollectionResultAction,
+  recordRepaymentAction,
+  reportToBureauAction,
+} from '../../../../../server/business-actions.ts';
 import type { getApplication } from '../../../../../server/business.ts';
 import type { StaffPrincipal } from '../../../../../server/staff.ts';
 import { Gate } from '../../../Gate.tsx';
@@ -40,11 +46,14 @@ export function ServicingCard({
   view,
   staff,
   f,
+  fixtureResults,
 }: {
   readonly segment: string;
   readonly view: View;
   readonly staff: StaffPrincipal;
   readonly f: Formatters;
+  /** On the synthetic site, where no channel is connected, finance may record a collection result marked Fixture. */
+  readonly fixtureResults: boolean;
 }): ReactElement | null {
   const s = view.servicing;
   if (s === undefined) return null;
@@ -134,6 +143,54 @@ export function ServicingCard({
           </tbody>
         </table>
       </div>
+
+      <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">{t('Collections', 'التحصيل')}</h3>
+      {s.collections.length === 0 ? (
+        <p className="mb-3 text-[13px] text-ink-quiet">{t('Nothing presented yet.', 'لم يُقدَّم شيء بعد.')}</p>
+      ) : (
+        <ul className="mb-3 flex list-none flex-col divide-y divide-line rounded-tile border border-line p-0" data-servicing-collections>
+          {s.collections.map((c) => (
+            <li key={c.idempotencyKey} className="flex flex-wrap items-center gap-3 px-4 py-2 text-[13px]">
+              <span className="tabular-nums">
+                {t('Instalment', 'القسط')} {f.n(c.instalmentNumber)}
+              </span>
+              <span>{f.isoDate(c.dueDate)}</span>
+              <span className="font-medium text-heading">{amount(c.amount.minorUnits)}</span>
+              <span className="text-ink-quiet">{t(CHANNEL[c.channel]?.en ?? c.channel, CHANNEL[c.channel]?.ar ?? c.channel)}</span>
+              <Chip tone={c.result === 'PAID' ? 'good' : c.result === 'RETURNED' ? 'bad' : 'warn'}>
+                {c.result === 'PAID' ? t('Paid', 'مدفوع') : c.result === 'RETURNED' ? t('Returned', 'مرتجع') : t('Awaiting the channel', 'بانتظار القناة')}
+              </Chip>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic}>
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          <form action={presentCollectionsAction}>
+            {ctx}
+            <button type="submit" className={BTN_SMALL}>
+              {t('Present due instalments for collection', 'تقديم الأقساط المستحقة للتحصيل')}
+            </button>
+          </form>
+          <form action={reportToBureauAction}>
+            {ctx}
+            <button type="submit" className={BTN_SMALL}>
+              {t('Report this month to the bureau', 'إبلاغ المكتب الائتماني بحالة هذا الشهر')}
+            </button>
+          </form>
+          {fixtureResults && s.collections.some((c) => c.result === undefined)
+            ? (['PAID', 'RETURNED'] as const).map((st) => (
+                <form key={st} action={recordFixtureCollectionResultAction}>
+                  {ctx}
+                  <input type="hidden" name="status" value={st} />
+                  <button type="submit" className={BTN_SMALL} data-fixture-collection>
+                    {st === 'PAID' ? t('Fixture: paid', 'تجريبي: مدفوع') : t('Fixture: returned', 'تجريبي: مرتجع')}
+                  </button>
+                </form>
+              ))
+            : null}
+        </div>
+      </Gate>
 
       <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-quiet">
         {t('Receipts', 'المبالغ المستلمة')}

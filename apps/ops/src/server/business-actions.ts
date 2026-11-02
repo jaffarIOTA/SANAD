@@ -41,7 +41,7 @@ import type { WorkbenchAct } from './authority.ts';
 import { fetchBankStatements, fetchBureauReport } from './business-rails.ts';
 import { uploadBusinessDocument } from './business-storage.ts';
 import { confirmSigning, startSigning } from './business-signing.ts';
-import { recordFixturePaymentResult } from './business-payments.ts';
+import { recordFixtureCollectionResult, recordFixturePaymentResult } from './business-payments.ts';
 import { bookInLoanSystem } from './business-booking.ts';
 import { buyCommodity, sellCommodityOnBehalf, sellCommodityToCustomer, transferCommodityTitle } from './business-tawarruq.ts';
 import {
@@ -51,6 +51,8 @@ import {
   confirmPayee,
   confirmRepayment,
   planTranches,
+  presentCollections,
+  reportToBureau,
   recordRepayment,
   recordPayee,
   satisfyCondition,
@@ -768,4 +770,27 @@ export async function recordRepaymentAction(form: FormData): Promise<void> {
 export async function confirmRepaymentAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_VERIFY');
   return finish(ctx, () => confirmRepayment(ctx.tenant, ctx.applicationId, field(form, 'repaymentId'), ctx.actor), 'REPAYMENT_CONFIRMED');
+}
+
+// -- Servicing (S2): collections and the bureau --------------------------------------------
+
+/** Finance presents the instalments due now (and any overdue) for collection through the jurisdiction's channel. */
+export async function presentCollectionsAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  return finish(ctx, () => presentCollections(ctx.tenant, ctx.applicationId, ctx.actor), 'COLLECTIONS_PRESENTED');
+}
+
+/** On the synthetic site only: finance records the channel's result for the oldest presented instalment, marked Fixture. */
+export async function recordFixtureCollectionResultAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  const status = field(form, 'status');
+  if (status !== 'PAID' && status !== 'RETURNED')
+    return finish(ctx, refused('PAYMENT_STATUS_INVALID', 'A fixture result is paid or returned'), '');
+  return finish(ctx, () => recordFixtureCollectionResult(ctx.tenant, ctx.applicationId, status, ctx.actor), 'COLLECTION_RESULT_RECORDED');
+}
+
+/** Finance reports this month's status to the credit bureau. */
+export async function reportToBureauAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  return finish(ctx, () => reportToBureau(ctx.tenant, ctx.applicationId, ctx.actor), 'BUREAU_STATUS_REPORTED');
 }

@@ -350,7 +350,7 @@ export default async function OfferPage({
 
       {/* -- Closing: signature, conditions precedent, payee ------------------------------------------ */}
       {/* -- Servicing (S1): the position against the signed schedule, once disbursed ------------------- */}
-      <ServicingCard segment={segment} view={view} staff={staff} f={f} />
+      <ServicingCard segment={segment} view={view} staff={staff} f={f} fixtureResults={fixtureResults} />
 
       <ClosingCard segment={segment} view={view} staff={staff} f={f} fixtureResults={fixtureResults} />
 

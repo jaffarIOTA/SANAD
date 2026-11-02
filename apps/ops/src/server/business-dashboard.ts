@@ -439,6 +439,12 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
     en: 'Document recorded by reference. It counts once the checker validates it.',
     ar: 'سُجّل المستند بمرجعه، ويُحتسب بعد تحقق المراجِع منه.',
   },
+  COLLECTIONS_PRESENTED: {
+    en: 'Instalments presented for collection. Each result arrives from the channel.',
+    ar: 'قُدّمت الأقساط للتحصيل، وتصل نتيجة كل منها من القناة.',
+  },
+  COLLECTION_RESULT_RECORDED: { en: 'Collection result recorded.', ar: 'سُجّلت نتيجة التحصيل.' },
+  BUREAU_STATUS_REPORTED: { en: 'This month’s status queued for the credit bureau.', ar: 'أُدرجت حالة هذا الشهر للإبلاغ إلى المكتب الائتماني.' },
   REPAYMENT_RECORDED: {
     en: 'Repayment recorded. A manual receipt counts once a second person confirms it against the statement.',
     ar: 'سُجّل السداد. يُحتسب المبلغ المُدخل يدوياً بعد تأكيده من شخص آخر مقابل الكشف.',
@@ -923,6 +929,10 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
     en: 'Record the business’s tax registration number before checking it.',
     ar: 'سجّل رقم التسجيل الضريبي للمنشأة قبل التحقق منه.',
   },
+  // Servicing (S2). A refusal here presented and reported nothing.
+  NOTHING_TO_COLLECT: { en: 'No instalment is due for collection now.', ar: 'لا يوجد قسط مستحق للتحصيل الآن.' },
+  COLLECTION_NOT_FOUND: { en: 'No presented instalment matches that result.', ar: 'لا يوجد قسط مُقدَّم يطابق هذه النتيجة.' },
+  BUREAU_ALREADY_REPORTED: { en: 'This month’s status is already reported to the bureau.', ar: 'حالة هذا الشهر مُبلَّغة للمكتب الائتماني مسبقاً.' },
   // Servicing (S1). A refusal here recorded nothing.
   REPAYMENT_AMOUNT_INVALID: { en: 'A repayment is a positive amount.', ar: 'السداد مبلغ موجب.' },
   REPAYMENT_DATE_INVALID: { en: 'A repayment is dated between disbursement and today.', ar: 'يكون تاريخ السداد بين الصرف واليوم.' },

@@ -660,8 +660,23 @@ export interface RepaymentRecord {
   readonly source: 'LIVE' | 'FIXTURE';
 }
 
+/** An instalment presented for collection: a SADAD bill (Saudi Arabia) or a direct collection by the partner bank (UAE). */
+export interface CollectionRecord {
+  readonly instalmentNumber: number;
+  readonly idempotencyKey: string;
+  readonly channel: 'SADAD' | 'PARTNER_BANK';
+  readonly amount: Money;
+  readonly dueDate: string;
+  readonly presentedBy: string;
+  readonly presentedAtEpochSeconds: bigint;
+  readonly result?: 'PAID' | 'RETURNED';
+}
+
 export interface ServicingView {
   readonly repayments: readonly RepaymentRecord[];
+  readonly collections: readonly CollectionRecord[];
+  /** The months (yyyy-mm) whose status has been reported to the credit bureau. */
+  readonly bureauReports: readonly string[];
   /** Against the signed schedule, confirmed repayments only, as of today in the tenant's time zone. */
   readonly position: FacilityPosition;
   /** The loan system's last reported status, set against Sanad's own: a difference is flagged, never overwritten. */
@@ -755,7 +770,7 @@ interface BusinessRecord {
     tawarruq?: TawarruqRecord;
   };
   booking?: LoanBookingRecord;
-  servicing: { repayments: RepaymentRecord[] };
+  servicing: { repayments: RepaymentRecord[]; collections: CollectionRecord[]; bureauReports: string[]; settledReported?: true };
   assessments: AssessmentRun[];
   offers: OfferRun[];
   events: ApplicationEvent[];
@@ -1242,7 +1257,7 @@ function restoreBook(book: TenantBook, persisted: Awaited<ReturnType<typeof load
       security: { collateral: [], guarantees: [] },
       pack: { conditions: [], covenants: [], justifications: {} },
       closing: { cps: {} },
-      servicing: { repayments: [] },
+      servicing: { repayments: [], collections: [], bureauReports: [] },
       assessments: [],
       offers: [],
       events: [],
@@ -1662,6 +1677,28 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
         ...(d['confirmedBy'] === undefined ? {} : { confirmedBy: d['confirmedBy'] }),
         source: d['source'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
       });
+      return;
+    case 'COLLECTION_PRESENTED':
+      r.servicing.collections.push({
+        instalmentNumber: Number.parseInt(d['instalment'] ?? '0', 10),
+        idempotencyKey: d['idempotencyKey'] ?? '',
+        channel: d['channel'] === 'SADAD' ? 'SADAD' : 'PARTNER_BANK',
+        amount: money(BigInt(d['amountMinorUnits'] ?? '0'), r.application.requested.currency),
+        dueDate: d['dueDate'] ?? '',
+        presentedBy: e.actor,
+        presentedAtEpochSeconds: e.atEpochSeconds,
+      });
+      return;
+    case 'COLLECTION_RESULT': {
+      const i = r.servicing.collections.findIndex((x) => x.idempotencyKey === d['idempotencyKey']);
+      if (i >= 0) r.servicing.collections[i] = { ...(r.servicing.collections[i] as CollectionRecord), result: d['result'] === 'PAID' ? 'PAID' : 'RETURNED' };
+      return;
+    }
+    case 'BUREAU_STATUS_REPORTED':
+      r.servicing.bureauReports.push(d['month'] ?? '');
+      return;
+    case 'BUREAU_SETTLED_REPORTED':
+      r.servicing.settledReported = true;
       return;
     case 'REPAYMENT_CONFIRMED': {
       const i = r.servicing.repayments.findIndex((x) => x.repaymentId === d['repaymentId']);
@@ -2122,7 +2159,7 @@ async function handOverAt(
     security: { collateral: [], guarantees: [] },
     pack: { conditions: [], covenants: [], justifications: {} },
     closing: { cps: {} },
-    servicing: { repayments: [] },
+    servicing: { repayments: [], collections: [], bureauReports: [] },
     assessments: [],
     offers: [],
     events: [],
@@ -4909,6 +4946,8 @@ function servicingOf(r: BusinessRecord): ServicingView | undefined {
   );
   return {
     repayments: [...r.servicing.repayments],
+    collections: [...r.servicing.collections],
+    bureauReports: [...r.servicing.bureauReports],
     position,
     ...(r.portfolio === undefined
       ? {}
@@ -5023,7 +5062,235 @@ export async function confirmRepayment(
       atEpochSeconds: at,
       detail: { repaymentId },
     });
+    queueSettlementIfRepaid(book, r, tenant, at);
     return ok(true);
+  });
+}
+
+// -- servicing (S2): collections and bureau reporting -----------------------------
+
+/** How many days ahead of its due date an instalment is presented for collection. */
+const COLLECTION_LEAD_DAYS = 7;
+
+/**
+ * Present the instalments due within the lead window, and any overdue and
+ * unpaid, for collection: a SADAD bill in Saudi Arabia, a direct collection
+ * from the payee account through the partner bank in the UAE. Each is its own
+ * idempotent outbox instruction; an instalment already presented and not
+ * returned is not presented again.
+ */
+export async function presentCollections(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    const servicing = servicingOf(r);
+    if (servicing === undefined)
+      return fail('TRANSITION_NOT_ALLOWED', 'Instalments are collected on a disbursed facility', { status: r.application.status });
+    const saudi = ctx.value.profile.code === 'SA';
+    const payee = r.closing.payee;
+    if (!saudi && payee?.confirmedBy === undefined)
+      return fail('PAYEE_NOT_CONFIRMED', 'A direct collection debits the confirmed account; none is on record');
+    const today = civilDay(servicing.position.asOf) ?? 0;
+    const due = servicing.position.instalments.filter(
+      (i) =>
+        i.outstanding.minorUnits > 0n &&
+        (civilDay(i.dueDate) ?? 0) <= today + COLLECTION_LEAD_DAYS &&
+        !r.servicing.collections.some((c) => c.instalmentNumber === i.number && c.result !== 'RETURNED'),
+    );
+    if (due.length === 0) return fail('NOTHING_TO_COLLECT', 'No instalment is due for collection now');
+    const at = developmentAttestation().epochSeconds;
+    const base = { tenantId: tenant, subjectRef: applicationId, correlationId: applicationId };
+    const channel: CollectionRecord['channel'] = saudi ? 'SADAD' : 'PARTNER_BANK';
+    const planned = due.map((i) => {
+      const attempts = r.servicing.collections.filter((c) => c.instalmentNumber === i.number).length;
+      const key = `business:${applicationId}:collect:I${String(i.number)}${attempts > 0 ? `:R${String(attempts)}` : ''}`;
+      return { i, key };
+    });
+    const queued = queueSideEffects(
+      planned.map(({ i, key }) =>
+        saudi
+          ? {
+              ...base,
+              eventId: key,
+              kind: 'BILL_PRESENT' as const,
+              idempotencyKey: key,
+              payload: { payerRef: r.contact.partyRef, minorUnits: i.outstanding.minorUnits.toString(), currency: i.outstanding.currency, dueDateGregorian: i.dueDate },
+            }
+          : {
+              ...base,
+              eventId: key,
+              kind: 'PAYMENT_COLLECT' as const,
+              idempotencyKey: key,
+              payload: {
+                payerRef: r.contact.partyRef,
+                payerIban: payee?.iban ?? '',
+                minorUnits: i.outstanding.minorUnits.toString(),
+                currency: i.outstanding.currency,
+              },
+            },
+      ),
+    );
+    if (!queued.ok) return queued;
+    commitSideEffects(book, queued.value);
+    for (const { i, key } of planned) {
+      r.servicing.collections.push({ instalmentNumber: i.number, idempotencyKey: key, channel, amount: i.outstanding, dueDate: i.dueDate, presentedBy: actor, presentedAtEpochSeconds: at });
+      recordEvent(book, r, {
+        eventType: 'COLLECTION_PRESENTED',
+        fromStage: null,
+        toStage: null,
+        actor,
+        atEpochSeconds: at,
+        detail: { instalment: String(i.number), idempotencyKey: key, channel, amountMinorUnits: i.outstanding.minorUnits.toString(), dueDate: i.dueDate },
+      });
+    }
+    return ok(view(r, ctx.value.currency));
+  });
+}
+
+/**
+ * The channel's result for a presented instalment. PAID becomes a receipt,
+ * confirmed by the rail, at the amount actually paid; RETURNED frees the
+ * instalment to be presented again. The same result twice changes nothing.
+ */
+export async function recordCollectionResult(
+  tenant: TenantCode,
+  applicationId: string,
+  result: {
+    readonly idempotencyKey: string;
+    readonly status: 'PAID' | 'RETURNED';
+    readonly amountMinorUnits?: bigint;
+    readonly reference: string;
+    readonly receivedOn: string;
+    readonly source: 'LIVE' | 'FIXTURE';
+  },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const at = developmentAttestation().epochSeconds;
+    const book = await hydrate(tenant);
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    const c = r.servicing.collections.find((x) => x.idempotencyKey === result.idempotencyKey);
+    if (c === undefined) return fail('COLLECTION_NOT_FOUND', 'No presented instalment carries that key', { applicationId });
+    if (c.result !== undefined) {
+      const ctx = tenantContext(tenant);
+      return ctx.ok ? ok(view(r, ctx.value.currency)) : ctx;
+    }
+    if (result.status === 'PAID') {
+      const paid = await recordRepaymentAt(
+        tenant,
+        applicationId,
+        {
+          amountMinorUnits: result.amountMinorUnits ?? c.amount.minorUnits,
+          receivedOn: result.receivedOn,
+          reference: result.reference,
+          channel: c.channel,
+          source: result.source,
+        },
+        actor,
+        at,
+      );
+      if (!paid.ok) return paid;
+    }
+    return closingChangeAt(tenant, applicationId, at, (rec, b) => {
+      const i = rec.servicing.collections.findIndex((x) => x.idempotencyKey === result.idempotencyKey);
+      if (i >= 0) rec.servicing.collections[i] = { ...(rec.servicing.collections[i] as CollectionRecord), result: result.status };
+      recordEvent(b, rec, {
+        eventType: 'COLLECTION_RESULT',
+        fromStage: null,
+        toStage: null,
+        actor,
+        atEpochSeconds: at,
+        detail: { idempotencyKey: result.idempotencyKey, result: result.status, reference: result.reference, source: result.source },
+      });
+      queueSettlementIfRepaid(b, rec, tenant, at);
+      return ok(true);
+    });
+  });
+}
+
+/** Once the facility is repaid in full, the bureau is told it is settled — once. */
+function queueSettlementIfRepaid(book: TenantBook, r: BusinessRecord, tenant: TenantCode, at: bigint): void {
+  if (r.servicing.settledReported === true) return;
+  const s = servicingOf(r);
+  if (s === undefined || s.position.outstandingTotal.minorUnits > 0n) return;
+  const key = `business:${r.application.applicationId}:bureau:settled`;
+  const queued = queueSideEffects([
+    {
+      tenantId: tenant,
+      subjectRef: r.application.applicationId,
+      correlationId: r.application.applicationId,
+      eventId: key,
+      kind: 'BUREAU_REPORT',
+      idempotencyKey: key,
+      payload: { facilityRef: r.application.applicationId, event: 'SETTLED', minorUnits: s.position.totalPaid.minorUnits.toString(), asOfEpochSeconds: at.toString() },
+    },
+  ]);
+  if (!queued.ok) return;
+  commitSideEffects(book, queued.value);
+  r.servicing.settledReported = true;
+  recordEvent(book, r, { eventType: 'BUREAU_SETTLED_REPORTED', fromStage: null, toStage: null, actor: 'system', atEpochSeconds: at, detail: {} });
+}
+
+/**
+ * The month's status to the credit bureau (SIMAH, AECB): in arrears with the
+ * days-past-due bucket, or current with the instalments paid. Once per month,
+ * keyed on it.
+ */
+export async function reportToBureau(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    const s = servicingOf(r);
+    if (s === undefined) return fail('TRANSITION_NOT_ALLOWED', 'The bureau is told about a disbursed facility', { status: r.application.status });
+    const month = s.position.asOf.slice(0, 7);
+    if (r.servicing.bureauReports.includes(month)) return fail('BUREAU_ALREADY_REPORTED', 'This month’s status is already reported', { month });
+    const at = developmentAttestation().epochSeconds;
+    const key = `business:${applicationId}:bureau:${month}`;
+    const inArrears = s.position.daysPastDue > 0;
+    const queued = queueSideEffects([
+      {
+        tenantId: tenant,
+        subjectRef: applicationId,
+        correlationId: applicationId,
+        eventId: key,
+        kind: 'BUREAU_REPORT',
+        idempotencyKey: key,
+        payload: {
+          facilityRef: applicationId,
+          event: inArrears ? 'ARREARS' : 'INSTALMENT_PAID',
+          minorUnits: (inArrears ? s.position.arrears : s.position.outstandingTotal).minorUnits.toString(),
+          daysPastDue: String(s.position.daysPastDue),
+          asOfEpochSeconds: at.toString(),
+        },
+      },
+    ]);
+    if (!queued.ok) return queued;
+    commitSideEffects(book, queued.value);
+    r.servicing.bureauReports.push(month);
+    recordEvent(book, r, {
+      eventType: 'BUREAU_STATUS_REPORTED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { month, event: inArrears ? 'ARREARS' : 'INSTALMENT_PAID', daysPastDue: String(s.position.daysPastDue) },
+    });
+    return ok(view(r, ctx.value.currency));
   });
 }
 

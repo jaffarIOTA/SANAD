@@ -451,7 +451,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         titleAr: 'خدمة التمويل: السداد والمتأخرات',
         href: '/business',
         readiness: live(),
-        reference: 'Servicing S1: the same position, receipts and reconciliation as the UAE journey, in SAR; SADAD collection is S2',
+        reference: 'Servicing S1–S2: the same position, receipts and reconciliation as the UAE journey, in SAR; instalments presented as SADAD bills, the result a rail-confirmed receipt; the month’s status to SIMAH',
       },
       {
         id: 'ksa-business-islamic',
@@ -568,7 +568,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         href: '/business',
         readiness: live(),
         reference:
-          'Servicing S1 (core/servicing/instalment-position.ts): the position of a disbursed facility against its signed schedule from confirmed receipts — oldest instalment first, charge before principal; due today is due, overdue the day after; arrears, days past due and bucket; stage 9 when past due, without a hand-keyed status. A manual receipt is recorded by finance and counts once a second person confirms it; the loan system’s report is reconciled against Sanad’s, a difference flagged. Collections through SADAD and the partner bank are S2; late charges and restructuring S3. Both jurisdictions',
+          'Servicing S1 (core/servicing/instalment-position.ts): the position of a disbursed facility against its signed schedule from confirmed receipts — oldest instalment first, charge before principal; due today is due, overdue the day after; arrears, days past due and bucket; stage 9 when past due, without a hand-keyed status. A manual receipt is recorded by finance and counts once a second person confirms it; the loan system’s report is reconciled against Sanad’s, a difference flagged. S2: instalments due within seven days or overdue are presented for collection — a SADAD bill in Saudi Arabia (BILL_PRESENT), a direct collection from the confirmed payee account through the partner bank in the UAE (PAYMENT_COLLECT) — each its own idempotent instruction; the channel’s signed result (webhooks/collection-results) becomes a rail-confirmed receipt, a returned one is presented again; the month’s status goes to the bureau once (ARREARS or INSTALMENT_PAID), SETTLED once when repaid in full. Channels on fixtures until SADAD and the partner bank are verified. Late charges and restructuring S3. Both jurisdictions',
       },
       {
         id: 'business-handover-api',
