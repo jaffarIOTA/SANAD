@@ -14,6 +14,8 @@ import type { AddressInfo } from 'node:net';
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { preparePayee } from '../support/business-closing.ts';
+
 import { justifyDeviations } from '../support/business-decision-pack.ts';
 
 import { meetSecurityRequirements } from '../support/business-security.ts';
@@ -651,6 +653,7 @@ describe('a customer who accepted before grace ended is never let down', () => {
     const fresh = await generateOffer(T, ID, officer, {});
     expect(fresh.ok ? undefined : fresh.error.control).toBe('OP-LICENCE');
     // …but the facility the borrower already signed for is disbursed.
+    await preparePayee(T, ID, officer, checker);
     const disbursed = await recordDisbursed(T, ID, finance);
     expect(disbursed.ok && disbursed.value.application.status).toBe('DISBURSED');
   });

@@ -11,6 +11,8 @@
 import type { Pool } from 'pg';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { preparePayee } from '../support/business-closing.ts';
+
 import { justifyDeviations } from '../support/business-decision-pack.ts';
 
 import { meetSecurityRequirements } from '../support/business-security.ts';
@@ -317,6 +319,7 @@ describe('the business-application service — full journey in memory', () => {
     expect(signed.ok && signed.value.application.status).toBe('SIGNED');
     if (signed.ok) expect(signed.value.application.signature?.signatureRef).toMatch(/^uaepass-fixture:/);
 
+    await preparePayee(TENANT, ID, officer, checker);
     const disbursed = await recordDisbursed(TENANT, ID, finance);
     expect(disbursed.ok && disbursed.value.application.status).toBe('DISBURSED');
     if (disbursed.ok) {
@@ -675,6 +678,7 @@ describe('#12 #13 disbursement: a distinct finance principal, payment and bureau
       { letterVersion: sent.ok ? (sent.value.application.offer?.letterVersion ?? '') : '' },
       officer,
     );
+    await preparePayee(TENANT, ID, officer, checker);
     const early = await recordDisbursed(TENANT, ID, finance);
     expectRefused(early, 'DISBURSEMENT_BEFORE_PLANNED_DATE');
     if (!early.ok) expect(early.error.context).toMatchObject({ plannedDate: isoAfter(14), actualDate: isoAfter(0) });
@@ -699,6 +703,7 @@ describe('#12 #13 disbursement: a distinct finance principal, payment and bureau
     expectRefused(await recordDisbursed(TENANT, ID, officer), 'FOUR_EYES_DISBURSEMENT');
     expect(queuedBusinessNotifications().filter((e) => e.kind === 'PAYMENT_DISBURSE')).toHaveLength(0);
 
+    await preparePayee(TENANT, ID, officer, checker);
     const paid = await recordDisbursed(TENANT, ID, finance);
     expect(paid.ok && paid.value.application.status).toBe('DISBURSED');
     const payment = queuedBusinessNotifications().filter((e) => e.subjectRef === ID && e.kind === 'PAYMENT_DISBURSE');
@@ -708,6 +713,8 @@ describe('#12 #13 disbursement: a distinct finance principal, payment and bureau
     expect(payment[0]?.payload).toMatchObject({
       rail: 'PARTNER_BANK',
       beneficiaryRef: ID,
+      // UAE M5a: paid to the confirmed payee account, by IBAN.
+      beneficiaryIban: 'AE070331234567890123456',
       minorUnits: '80000000',
       currency: 'AED',
     });

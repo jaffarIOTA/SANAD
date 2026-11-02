@@ -15,6 +15,8 @@ export interface PaymentsPort {
   disburse(params: {
     readonly tenantId: string;
     readonly beneficiaryRef: string;
+    /** The account credited, where the institution's hub pays by IBAN. Absent: the hub resolves the beneficiary by reference. */
+    readonly beneficiaryAccount?: { readonly iban: string };
     readonly amount: Money;
     readonly purposeCode: string;
     readonly reference: string;

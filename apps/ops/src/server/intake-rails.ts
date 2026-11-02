@@ -54,13 +54,13 @@ export interface KybRails {
  * exactly as they will of the vault; this answers that request with a value that
  * reaches nothing and says what it is.
  */
-class DemonstrationCredentials implements CredentialProvider {
+export class DemonstrationCredentials implements CredentialProvider {
   get(_ref: CredentialRef): Promise<SecretValue> {
     return Promise.resolve(new SecretValue('demonstration-transport-needs-no-credential'));
   }
 }
 
-function demonstrationConfig(
+export function demonstrationConfig(
   tenantId: string,
   provider: RailAdapterConfig['provider'],
   consents: ConsentLedger,

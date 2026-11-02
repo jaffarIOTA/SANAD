@@ -92,9 +92,11 @@ export async function dispatchOnce(
       const beneficiaryRef = field(event, 'beneficiaryRef');
       if (amount === undefined || beneficiaryRef === undefined)
         return dead('payload lacks beneficiaryRef or minorUnits');
+      const iban = field(event, 'beneficiaryIban');
       const r = await ports.payments.disburse({
         tenantId: event.tenantId,
         beneficiaryRef,
+        ...(iban === undefined ? {} : { beneficiaryAccount: { iban } }),
         amount,
         purposeCode: field(event, 'reason') ?? 'FINANCE_DISBURSEMENT',
         reference: event.subjectRef,

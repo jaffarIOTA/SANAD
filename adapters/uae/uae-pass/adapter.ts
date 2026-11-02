@@ -50,9 +50,9 @@ export const UAE_PASS_DEVIATIONS: readonly KnownDeviation[] = [
   },
   {
     id: 'UAEPASS-DEV-003',
-    summary: 'The port’s signing intent carries no document; UAE Pass signs documents within a signer process.',
+    summary: 'UAE Pass signs documents within a signer process; the port passes the document by its SHA-256, not its bytes.',
     containment:
-      'SIGNATURE_INTENT opens a signer process with the published process type and policy and no document: it binds the signer’s identity to the intent. Attaching the document to sign needs a port change (a document reference on the intent), recorded rather than worked around.',
+      'SIGNATURE_INTENT opens a signer process with the published process type and policy, and — when the caller gives one — the document’s SHA-256 as a digest entry. How the document itself reaches the signer process (upload or by reference) is part of the verification item; until then the binding is the digest on the intent and the letter version Sanad records against the signature.',
     verificationRef: 'UAE-RAIL-UAEPASS-01',
   },
   {
@@ -120,6 +120,7 @@ export class UaePassAdapter extends RailAdapter implements IdentityAuthenticatio
     readonly tenantId: string;
     readonly applicantRef: string;
     readonly purpose: Purpose;
+    readonly documentHash?: string;
     readonly correlationId: string;
   }) {
     const now = BigInt(this.config.nowEpochSeconds());
@@ -129,7 +130,13 @@ export class UaePassAdapter extends RailAdapter implements IdentityAuthenticatio
         {
           method: 'POST',
           path: '/trustedx-resources/esignsp/v2/signer_processes',
-          body: { ...SIGNER_PROCESS, state: p.applicantRef },
+          body: {
+            ...SIGNER_PROCESS,
+            state: p.applicantRef,
+            ...(p.documentHash === undefined
+              ? {}
+              : { documents: [{ name: 'offer-letter', digest: { algorithm: 'SHA-256', value: p.documentHash } }] }),
+          },
         },
         p.correlationId,
       );

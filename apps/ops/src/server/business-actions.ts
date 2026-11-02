@@ -40,10 +40,15 @@ import type { Result } from '@sanad/core/kernel/result.ts';
 import type { WorkbenchAct } from './authority.ts';
 import { fetchBankStatements, fetchBureauReport } from './business-rails.ts';
 import { uploadBusinessDocument } from './business-storage.ts';
+import { confirmSigning, startSigning } from './business-signing.ts';
 import {
   approveStraightThrough,
   confirmBankStatementFacts,
   confirmSecurityItem,
+  confirmPayee,
+  recordPayee,
+  satisfyCondition,
+  verifyCondition,
   addCondition,
   addCovenant,
   justifyDeviation,
@@ -602,4 +607,56 @@ export async function justifyDeviationAction(form: FormData): Promise<void> {
     () => justifyDeviation(ctx.tenant, ctx.applicationId, field(form, 'code'), field(form, 'justification'), ctx.actor),
     'DEVIATION_JUSTIFIED',
   );
+}
+
+// -- Closing (UAE M5a): signing, conditions precedent, payee ------------------------------
+
+/** Open the signing intent at the identity service on the letter version that was sent. */
+export async function startSigningAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(ctx, () => startSigning(ctx.tenant, ctx.applicationId, ctx.actor), 'SIGNING_STARTED');
+}
+
+/** Ask the identity service whether the signatory has signed; records the signature if so. */
+export async function confirmSigningAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(ctx, () => confirmSigning(ctx.tenant, ctx.applicationId, ctx.actor), 'SIGNED_THROUGH_IDENTITY');
+}
+
+/** The officer evidences a condition precedent with a document on the application. */
+export async function satisfyConditionAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(
+    ctx,
+    () => satisfyCondition(ctx.tenant, ctx.applicationId, field(form, 'conditionId'), field(form, 'evidenceRef'), ctx.actor),
+    'CP_SATISFIED',
+  );
+}
+
+/** A second person verifies a condition precedent's evidence. */
+export async function verifyConditionAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_VERIFY');
+  return finish(ctx, () => verifyCondition(ctx.tenant, ctx.applicationId, field(form, 'conditionId'), ctx.actor), 'CP_VERIFIED');
+}
+
+/** The officer records the payee account, proven by a document on the application. */
+export async function recordPayeeAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(
+    ctx,
+    () =>
+      recordPayee(
+        ctx.tenant,
+        ctx.applicationId,
+        { iban: field(form, 'iban'), accountName: field(form, 'accountName'), evidenceRef: field(form, 'evidenceRef') },
+        ctx.actor,
+      ),
+    'PAYEE_RECORDED',
+  );
+}
+
+/** A second person confirms the payee account against its evidence. */
+export async function confirmPayeeAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_VERIFY');
+  return finish(ctx, () => confirmPayee(ctx.tenant, ctx.applicationId, ctx.actor), 'PAYEE_CONFIRMED');
 }

@@ -108,6 +108,7 @@ import {
 } from '@sanad/core/origination/decision-pack.ts';
 import { type CurrencyCode, type Money, money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
+import { maskIban, validateIban } from '@sanad/core/kernel/iban.ts';
 import {
   type OfferNotificationRecipient,
   type OfferNotifications,
@@ -506,6 +507,8 @@ export interface BusinessApplicationView {
   readonly security: SecurityRegister;
   /** Conditions and covenants attached, deviation justifications, and the digest frozen at approval. */
   readonly pack: DecisionPackRecord;
+  /** Closing (UAE M5): the signing in progress, each condition precedent's evidence, and the payee account. */
+  readonly closing: ClosingRecord;
   readonly assessments: readonly AssessmentRun[];
   readonly latestAssessment?: AssessmentRun;
   readonly offers: readonly OfferRun[];
@@ -583,6 +586,47 @@ export interface DecisionPackRecord {
   readonly frozen?: FrozenPack;
 }
 
+export interface SigningInProgress {
+  readonly transactionRef: string;
+  /** The letter version (its SHA-256) the signing intent was opened on. */
+  readonly letterVersion: string;
+  readonly expiresAtEpochSeconds: bigint;
+  readonly startedBy: string;
+  readonly source: 'LIVE' | 'FIXTURE';
+}
+
+export interface SignerRecord {
+  readonly assertionId: string;
+  /** The identity service's reference for the person who signed. Never an identity number. */
+  readonly identityRef: string;
+  readonly source: 'LIVE' | 'FIXTURE';
+}
+
+export interface CpEvidence {
+  readonly evidenceRef: string;
+  readonly satisfiedBy: string;
+  readonly satisfiedAtEpochSeconds: bigint;
+  readonly verifiedBy?: string;
+}
+
+export interface Payee {
+  /** Electronic form, validated (country, length, mod 97). Shown masked except to the person confirming it. */
+  readonly iban: string;
+  readonly accountName: string;
+  /** The bank letter or statement header proving the account, as a document on the application. */
+  readonly evidenceRef: string;
+  readonly recordedBy: string;
+  readonly recordedAtEpochSeconds: bigint;
+  readonly confirmedBy?: string;
+}
+
+export interface ClosingRecord {
+  readonly signing?: SigningInProgress;
+  readonly signer?: SignerRecord;
+  readonly cps: Readonly<Record<string, CpEvidence>>;
+  readonly payee?: Payee;
+}
+
 // =============================================================================
 // State
 // =============================================================================
@@ -597,6 +641,7 @@ interface BusinessRecord {
   bankFacts?: BankStatementFacts;
   security: { collateral: CollateralItem[]; guarantees: Guarantee[] };
   pack: { conditions: Condition[]; covenants: Covenant[]; justifications: Record<string, Justification>; frozen?: FrozenPack };
+  closing: { signing?: SigningInProgress; signer?: SignerRecord; cps: Record<string, CpEvidence>; payee?: Payee };
   assessments: AssessmentRun[];
   offers: OfferRun[];
   events: ApplicationEvent[];
@@ -996,6 +1041,12 @@ function view(record: BusinessRecord, currency: CurrencyCode): BusinessApplicati
       justifications: { ...record.pack.justifications },
       ...(record.pack.frozen === undefined ? {} : { frozen: record.pack.frozen }),
     },
+    closing: {
+      ...(record.closing.signing === undefined ? {} : { signing: record.closing.signing }),
+      ...(record.closing.signer === undefined ? {} : { signer: record.closing.signer }),
+      cps: { ...record.closing.cps },
+      ...(record.closing.payee === undefined ? {} : { payee: record.closing.payee }),
+    },
     assessments: [...record.assessments],
     ...(latestAssessment === undefined ? {} : { latestAssessment }),
     offers: [...record.offers],
@@ -1055,6 +1106,7 @@ function restoreBook(book: TenantBook, persisted: Awaited<ReturnType<typeof load
       documents: [],
       security: { collateral: [], guarantees: [] },
       pack: { conditions: [], covenants: [], justifications: {} },
+      closing: { cps: {} },
       assessments: [],
       offers: [],
       events: [],
@@ -1346,6 +1398,50 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
       return;
     case 'DECISION_PACK_FROZEN':
       r.pack.frozen = { digest: d['digest'] ?? '', atEpochSeconds: e.atEpochSeconds };
+      return;
+    case 'SIGNING_STARTED':
+      r.closing.signing = {
+        transactionRef: d['transactionRef'] ?? '',
+        letterVersion: d['letterVersion'] ?? '',
+        expiresAtEpochSeconds: BigInt(d['expiresAtEpoch'] ?? '0'),
+        startedBy: e.actor,
+        source: d['source'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+      };
+      return;
+    case 'SIGNING_ENDED':
+      delete r.closing.signing;
+      return;
+    case 'SIGNER_VERIFIED':
+      delete r.closing.signing;
+      r.closing.signer = {
+        assertionId: d['assertionId'] ?? '',
+        identityRef: d['identityRef'] ?? '',
+        source: d['source'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+      };
+      return;
+    case 'CP_SATISFIED':
+      r.closing.cps[d['conditionId'] ?? ''] = {
+        evidenceRef: d['evidenceRef'] ?? '',
+        satisfiedBy: e.actor,
+        satisfiedAtEpochSeconds: e.atEpochSeconds,
+      };
+      return;
+    case 'CP_VERIFIED': {
+      const cp = r.closing.cps[d['conditionId'] ?? ''];
+      if (cp !== undefined) r.closing.cps[d['conditionId'] ?? ''] = { ...cp, verifiedBy: e.actor };
+      return;
+    }
+    case 'PAYEE_RECORDED':
+      r.closing.payee = {
+        iban: d['iban'] ?? '',
+        accountName: d['accountName'] ?? '',
+        evidenceRef: d['evidenceRef'] ?? '',
+        recordedBy: e.actor,
+        recordedAtEpochSeconds: e.atEpochSeconds,
+      };
+      return;
+    case 'PAYEE_CONFIRMED':
+      if (r.closing.payee !== undefined) r.closing.payee = { ...r.closing.payee, confirmedBy: e.actor };
       return;
     case 'PORTFOLIO_STATUS_RECORDED':
       r.portfolio = {
@@ -1759,6 +1855,7 @@ async function handOverAt(
     documents: [],
     security: { collateral: [], guarantees: [] },
     pack: { conditions: [], covenants: [], justifications: {} },
+    closing: { cps: {} },
     assessments: [],
     offers: [],
     events: [],
@@ -3871,6 +3968,305 @@ export async function sendOffer(
   return withTenantLock(tenant, () => sendOfferAt(tenant, applicationId, actor, developmentAttestation()));
 }
 
+// -- closing (UAE M5a): signing, conditions precedent, payee ------------------
+
+/** Between approval and disbursement: the window in which closing steps are recorded. */
+const CLOSING_OPEN = new Set(['APPROVED', 'OFFER_SENT', 'SIGNED']);
+
+function closingOpen(r: BusinessRecord): Result<true> {
+  return CLOSING_OPEN.has(r.application.status)
+    ? ok(true)
+    : fail('CLOSING_LOCKED', 'Closing steps are recorded between approval and disbursement', {
+        status: r.application.status,
+      });
+}
+
+/** The live conditions precedent of the pack the decision froze. */
+const conditionsPrecedent = (r: BusinessRecord): readonly Condition[] =>
+  r.pack.conditions.filter((c) => c.kind === 'PRECEDENT' && c.withdrawnBy === undefined);
+
+/** Conditions precedent not yet evidenced and verified by a second person. */
+export function outstandingConditionsPrecedent(view: BusinessApplicationView): readonly Condition[] {
+  return view.pack.conditions.filter(
+    (c) => c.kind === 'PRECEDENT' && c.withdrawnBy === undefined && view.closing.cps[c.conditionId]?.verifiedBy === undefined,
+  );
+}
+
+type ClosingChange = (r: BusinessRecord, book: TenantBook, ctx: TenantContext, at: bigint) => Promise<Result<true>> | Result<true>;
+
+async function closingChangeAt(
+  tenant: TenantCode,
+  applicationId: string,
+  at: bigint,
+  change: ClosingChange,
+): Promise<Result<BusinessApplicationView>> {
+  const book = await hydrate(tenant);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  const done = await change(r, book, ctx.value, at);
+  if (!done.ok) return done;
+  return ok(view(r, ctx.value.currency));
+}
+
+const closingChange = (tenant: TenantCode, applicationId: string, change: ClosingChange) =>
+  withTenantLock(tenant, () => closingChangeAt(tenant, applicationId, developmentAttestation().epochSeconds, change));
+
+/** A signing intent opened at the identity service, on the letter version that was sent. */
+export async function recordSigningStarted(
+  tenant: TenantCode,
+  applicationId: string,
+  started: { readonly transactionRef: string; readonly letterVersion: string; readonly expiresAtEpochSeconds: bigint; readonly source: 'LIVE' | 'FIXTURE' },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    if (r.application.status !== 'OFFER_SENT')
+      return fail('TRANSITION_NOT_ALLOWED', 'Signing opens once the offer has been sent', { status: r.application.status });
+    if (started.letterVersion !== r.application.offer?.letterVersion)
+      return fail('SIGNED_LETTER_NOT_SENT_LETTER', 'Signing is opened on the letter version that was sent');
+    if (!REF_SHAPE.test(started.transactionRef))
+      return fail('SIGNING_REF_INVALID', 'The identity service returned no usable reference; nothing was recorded');
+    r.closing.signing = { ...started, startedBy: actor };
+    recordEvent(book, r, {
+      eventType: 'SIGNING_STARTED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: {
+        transactionRef: started.transactionRef,
+        letterVersion: started.letterVersion,
+        expiresAtEpoch: started.expiresAtEpochSeconds.toString(),
+        source: started.source,
+      },
+    });
+    return ok(true);
+  });
+}
+
+/** The signing intent ended without a signature (refused, cancelled, expired): it is cleared so a new one can open. */
+export async function recordSigningEnded(
+  tenant: TenantCode,
+  applicationId: string,
+  code: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    if (r.closing.signing === undefined) return fail('SIGNING_NOT_STARTED', 'No signing is in progress');
+    delete r.closing.signing;
+    recordEvent(book, r, { eventType: 'SIGNING_ENDED', fromStage: null, toStage: null, actor, atEpochSeconds: at, detail: { code } });
+    return ok(true);
+  });
+}
+
+/**
+ * The identity service confirmed the signature: the application is SIGNED on
+ * the letter version the intent was opened on, and the signer's assertion is
+ * recorded by reference. An intent past its window signs nothing.
+ */
+export async function recordSignatureConfirmed(
+  tenant: TenantCode,
+  applicationId: string,
+  signer: SignerRecord,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    const signing = r.closing.signing;
+    if (signing === undefined) return fail('SIGNING_NOT_STARTED', 'Open the signing first');
+    const at = developmentAttestation();
+    if (at.epochSeconds > signing.expiresAtEpochSeconds)
+      return fail('SIGNING_EXPIRED', 'The signing window has passed; open a new one');
+    if (!REF_SHAPE.test(signer.assertionId) || !REF_SHAPE.test(signer.identityRef))
+      return fail('SIGNING_REF_INVALID', 'The identity service returned no usable reference; nothing was recorded');
+    const signed = await signAt(
+      tenant,
+      applicationId,
+      { letterVersion: signing.letterVersion, signatureRef: `uaepass:${signer.assertionId}` },
+      actor,
+      at,
+    );
+    if (!signed.ok) return signed;
+    delete r.closing.signing;
+    r.closing.signer = signer;
+    recordEvent(book, r, {
+      eventType: 'SIGNER_VERIFIED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at.epochSeconds,
+      detail: { assertionId: signer.assertionId, identityRef: signer.identityRef, source: signer.source },
+    });
+    return ok(view(r, ctx.value.currency));
+  });
+}
+
+async function satisfyConditionAt(
+  tenant: TenantCode,
+  applicationId: string,
+  conditionId: string,
+  evidenceRef: string,
+  actor: string,
+  at: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChangeAt(tenant, applicationId, at, (r, book) => {
+    const open = closingOpen(r);
+    if (!open.ok) return open;
+    if (!conditionsPrecedent(r).some((c) => c.conditionId === conditionId))
+      return fail('CONDITION_NOT_FOUND', 'No such condition precedent on the approved pack', { conditionId });
+    if (r.closing.cps[conditionId]?.verifiedBy !== undefined)
+      return fail('CONDITION_ALREADY_VERIFIED', 'This condition precedent is already verified');
+    const evidence = evidenceOnFile(r, evidenceRef);
+    if (!evidence.ok) return evidence;
+    if (!REF_SHAPE.test(evidenceRef)) return fail('SECURITY_EVIDENCE_NOT_ON_FILE', 'Name the evidence document on the application');
+    r.closing.cps[conditionId] = { evidenceRef, satisfiedBy: actor, satisfiedAtEpochSeconds: at };
+    recordEvent(book, r, {
+      eventType: 'CP_SATISFIED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { conditionId, evidenceRef },
+    });
+    return ok(true);
+  });
+}
+
+/** The officer evidences a condition precedent with a document on the application. */
+export async function satisfyCondition(
+  tenant: TenantCode,
+  applicationId: string,
+  conditionId: string,
+  evidenceRef: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    satisfyConditionAt(tenant, applicationId, conditionId, evidenceRef, actor, developmentAttestation().epochSeconds),
+  );
+}
+
+async function verifyConditionAt(
+  tenant: TenantCode,
+  applicationId: string,
+  conditionId: string,
+  verifier: string,
+  at: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChangeAt(tenant, applicationId, at, (r, book) => {
+    const open = closingOpen(r);
+    if (!open.ok) return open;
+    const cp = r.closing.cps[conditionId];
+    if (cp === undefined) return fail('CONDITION_NOT_SATISFIED', 'Evidence this condition precedent first');
+    if (cp.verifiedBy !== undefined) return fail('CONDITION_ALREADY_VERIFIED', 'This condition precedent is already verified');
+    if (verifier === cp.satisfiedBy)
+      return reject('OP-DETERMINACY', 'FOUR_EYES_SELF_CONFIRMATION', 'Whoever evidenced a condition does not verify it');
+    r.closing.cps[conditionId] = { ...cp, verifiedBy: verifier };
+    recordEvent(book, r, {
+      eventType: 'CP_VERIFIED',
+      fromStage: null,
+      toStage: null,
+      actor: verifier,
+      atEpochSeconds: at,
+      detail: { conditionId },
+    });
+    return ok(true);
+  });
+}
+
+/** A second person verifies the evidence for a condition precedent. */
+export async function verifyCondition(
+  tenant: TenantCode,
+  applicationId: string,
+  conditionId: string,
+  verifier: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    verifyConditionAt(tenant, applicationId, conditionId, verifier, developmentAttestation().epochSeconds),
+  );
+}
+
+async function recordPayeeAt(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: { readonly iban: string; readonly accountName: string; readonly evidenceRef: string },
+  actor: string,
+  at: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChangeAt(tenant, applicationId, at, (r, book, ctx) => {
+    const open = closingOpen(r);
+    if (!open.ok) return open;
+    const iban = validateIban(entry.iban, ctx.profile.code);
+    if (!iban.ok) return iban;
+    const name = entry.accountName.trim();
+    if (name.length < 2 || name.length > 140) return fail('PAYEE_NAME_INVALID', 'Give the account holder’s name, 2 to 140 characters');
+    if (identityNumberIn({ accountName: name }) !== undefined)
+      return fail('IDENTITY_NUMBER_IN_FREE_TEXT', 'No identity number belongs in a payee record');
+    const evidence = evidenceOnFile(r, entry.evidenceRef);
+    if (!evidence.ok) return evidence;
+    r.closing.payee = { iban: iban.value, accountName: name, evidenceRef: entry.evidenceRef, recordedBy: actor, recordedAtEpochSeconds: at };
+    recordEvent(book, r, {
+      eventType: 'PAYEE_RECORDED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { iban: iban.value, accountName: name, evidenceRef: entry.evidenceRef },
+    });
+    return ok(true);
+  });
+}
+
+/** The officer records the account the facility is paid into, proven by a document on the application. A new record needs confirming again. */
+export async function recordPayee(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: { readonly iban: string; readonly accountName: string; readonly evidenceRef: string },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () => recordPayeeAt(tenant, applicationId, entry, actor, developmentAttestation().epochSeconds));
+}
+
+async function confirmPayeeAt(
+  tenant: TenantCode,
+  applicationId: string,
+  confirmer: string,
+  at: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChangeAt(tenant, applicationId, at, (r, book) => {
+    const open = closingOpen(r);
+    if (!open.ok) return open;
+    const payee = r.closing.payee;
+    if (payee === undefined) return fail('PAYEE_NOT_RECORDED', 'Record the payee account first');
+    if (payee.confirmedBy !== undefined) return fail('PAYEE_ALREADY_CONFIRMED', 'The payee account is already confirmed');
+    if (confirmer === payee.recordedBy)
+      return reject('OP-DETERMINACY', 'FOUR_EYES_SELF_CONFIRMATION', 'Whoever recorded the payee account does not confirm it');
+    r.closing.payee = { ...payee, confirmedBy: confirmer };
+    recordEvent(book, r, {
+      eventType: 'PAYEE_CONFIRMED',
+      fromStage: null,
+      toStage: null,
+      actor: confirmer,
+      atEpochSeconds: at,
+      detail: { ibanMasked: maskIban(payee.iban) },
+    });
+    return ok(true);
+  });
+}
+
+/** A second person confirms the payee account against its evidence. */
+export async function confirmPayee(
+  tenant: TenantCode,
+  applicationId: string,
+  confirmer: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () => confirmPayeeAt(tenant, applicationId, confirmer, developmentAttestation().epochSeconds));
+}
+
 async function signAt(
   tenant: TenantCode,
   applicationId: string,
@@ -3933,6 +4329,18 @@ async function disburseAt(
       'FOUR_EYES_DISBURSEMENT',
       'Disbursement is released by a principal other than the approver and the submitting officer',
     );
+  // Every condition precedent on the approved pack, evidenced and verified by a second person.
+  const outstanding = conditionsPrecedent(r).filter((c) => r.closing.cps[c.conditionId]?.verifiedBy === undefined);
+  if (outstanding.length > 0)
+    return fail('CONDITIONS_PRECEDENT_OUTSTANDING', 'Every condition precedent is met and verified before drawdown', {
+      conditions: outstanding.map((c) => c.conditionId).join(','),
+    });
+  // The account paid into: recorded, proven and confirmed by a second person; and not released by whoever recorded it.
+  const payee = r.closing.payee;
+  if (payee?.confirmedBy === undefined)
+    return fail('PAYEE_NOT_CONFIRMED', 'The payee account is recorded and confirmed by a second person before disbursement');
+  if (actor === payee.recordedBy)
+    return reject('OP-DETERMINACY', 'FOUR_EYES_PAYEE', 'Whoever recorded the payee account does not release the payment');
   // Fixture: the partner bank's payment instruction reference until that adapter is verified (adapters/uae/partner-bank/README.md).
   const reference = paymentRef ?? `partner-bank-fixture:pay:${applicationId}`;
   const t = recordDisbursedCore(app, reference, actor, at.epochSeconds);
@@ -3962,6 +4370,7 @@ async function disburseAt(
       payload: {
         rail: 'PARTNER_BANK',
         beneficiaryRef: applicationId,
+        beneficiaryIban: payee.iban,
         paymentRef: reference,
         minorUnits: String(signed.terms.facilityAmount.minorUnits),
         currency: signed.terms.facilityAmount.currency,
@@ -4715,6 +5124,13 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
     const version = sent.value.latestOffer?.letter.version ?? '';
     const signed = await signAt(tenant, id, { letterVersion: version }, officer, step(9n));
     if (!signed.ok) continue;
+    // The payee account: recorded by the officer against a document on file, confirmed by the checker.
+    // AE07 0331 2345 6789 0123 456 is the published example UAE IBAN — synthetic, it pays no one.
+    const evidence = signed.value.documents[0]?.documentRef;
+    if (evidence !== undefined) {
+      await recordPayeeAt(tenant, id, { iban: 'AE070331234567890123456', accountName: s.nameEn, evidenceRef: evidence }, officer, step(9n).epochSeconds);
+      await confirmPayeeAt(tenant, id, checker, step(9n).epochSeconds);
+    }
     const disbursed = await disburseAt(tenant, id, SEED_PRINCIPALS.finance, undefined, step(10n));
     if (!disbursed.ok) continue;
     if (s.daysPastDue !== undefined) {

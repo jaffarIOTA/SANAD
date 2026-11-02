@@ -159,11 +159,13 @@ describe('after a letter is sent', () => {
     expect(sent).toContain('name="disbursementDate"');
   });
 
-  it('offers to send a newer, unsent version, and keeps recording the signature on the sent one', () => {
+  it('offers to send a newer, unsent version, and keeps the signature on the sent one', () => {
     expect(sent).toContain('const unsent = latestVersion !== undefined && latestVersion !== letterVersion;');
     expect(sent).toContain('<form action={sendOfferAction}');
-    expect(sent).toContain('<form action={recordSignedAction}');
-    expect(sent).toContain('name="letterVersion" value={letterVersion ?? \'\'}');
+    // UAE M5a: signing opens and is confirmed at the identity service; the letter version is the server's, never the form's.
+    expect(sent).toContain('action={startSigningAction}');
+    expect(sent).toContain('action={confirmSigningAction}');
+    expect(repo('apps/ops/src/server/business-signing.ts')).toContain('documentHash: letterVersion');
   });
 });
 
@@ -190,6 +192,8 @@ const SOURCES = [
   'core/documents/upload.ts',
   'core/origination/security-register.ts',
   'core/origination/decision-pack.ts',
+  'core/kernel/iban.ts',
+  'apps/ops/src/server/business-signing.ts',
   'core/origination/business-application.ts',
   'core/applicant/financials.ts',
   'core/origination/business-intake.ts',

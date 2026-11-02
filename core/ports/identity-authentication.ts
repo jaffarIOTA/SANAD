@@ -15,6 +15,8 @@ export interface IdentityAuthenticationPort {
     readonly tenantId: string;
     readonly applicantRef: string;
     readonly purpose: 'LOGIN' | 'STEP_UP' | 'SIGNATURE_INTENT';
+    /** SIGNATURE_INTENT only: the SHA-256 (hex) of the document being signed, so the intent is bound to that content. */
+    readonly documentHash?: string;
     readonly correlationId: string;
   }): Promise<Result<RailOutcome<{ readonly transactionRef: string; readonly expiresAtEpochSeconds: bigint }>>>;
   confirmAuthentication(params: {

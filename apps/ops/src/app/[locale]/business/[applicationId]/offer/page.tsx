@@ -24,10 +24,18 @@ import {
   generateOfferAction,
   recordDisbursedAction,
   recordPortfolioStatusAction,
-  recordSignedAction,
+  confirmSigningAction,
   sendOfferAction,
+  startSigningAction,
 } from '../../../../../server/business-actions.ts';
-import { getApplication, previewNotifications, productVariants, syncBusiness } from '../../../../../server/business.ts';
+import {
+  getApplication,
+  outstandingConditionsPrecedent,
+  previewNotifications,
+  productVariants,
+  syncBusiness,
+} from '../../../../../server/business.ts';
+import { ClosingCard } from './ClosingCard.tsx';
 import { formatPercent, scheduleExcerpt } from '../../../../../server/business-dashboard.ts';
 import { staffJurisdiction } from '../../../../../server/jurisdiction.ts';
 import { pageStaff } from '../../../../../server/session.ts';
@@ -331,6 +339,9 @@ export default async function OfferPage({
           )}
         </p>
       </SectionCard>
+
+      {/* -- Closing: signature, conditions precedent, payee ------------------------------------------ */}
+      <ClosingCard segment={segment} view={view} staff={staff} f={f} />
 
       {/* -- Signing and disbursement --------------------------------------------------------------- */}
       <div className="grid gap-5 lg:grid-cols-2">
@@ -792,19 +803,33 @@ function NextStep({
       return (
         <div className="flex flex-col gap-4">
           <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
-            <form action={recordSignedAction} className="flex flex-wrap items-center justify-between gap-3">
-              {ctx}
-              <input type="hidden" name="letterVersion" value={letterVersion ?? ''} />
-              <p className="text-[13px] text-ink-quiet">
-                {t(
-                  'Waiting for the applicant’s signature. This records the UAE Pass signing callback (fixture) on the letter version that was sent — and no other.',
-                  'بانتظار توقيع العميل. يسجّل هذا إشعار التوقيع من الهوية الرقمية (تجريبي) على إصدار الخطاب المرسل — ولا غيره.',
-                )}
-              </p>
-              <button type="submit" className={BTN_PRIMARY}>
-                {t('Record signature', 'تسجيل التوقيع')}
-              </button>
-            </form>
+            {view.closing.signing === undefined ? (
+              <form action={startSigningAction} className="flex flex-wrap items-center justify-between gap-3" data-start-signing>
+                {ctx}
+                <p className="text-[13px] text-ink-quiet">
+                  {t(
+                    'Opens the signing at the identity service for the signatory, bound to the fingerprint of the letter version that was sent — and no other.',
+                    'يبدأ التوقيع لدى خدمة الهوية للمفوّض بالتوقيع، مرتبطاً ببصمة إصدار الخطاب المرسل — ولا غيره.',
+                  )}
+                </p>
+                <button type="submit" className={BTN_PRIMARY}>
+                  {t('Send for signing', 'إرسال للتوقيع')}
+                </button>
+              </form>
+            ) : (
+              <form action={confirmSigningAction} className="flex flex-wrap items-center justify-between gap-3" data-confirm-signing>
+                {ctx}
+                <p className="text-[13px] text-ink-quiet">
+                  {t(
+                    'Waiting for the signatory. Check once they have signed; the signature is recorded only if the identity service confirms it.',
+                    'بانتظار المفوّض بالتوقيع. تحقّق بعد توقيعه؛ ولا يُسجَّل التوقيع إلا إن أكدته خدمة الهوية.',
+                  )}
+                </p>
+                <button type="submit" className={BTN_PRIMARY}>
+                  {t('Check for signature', 'التحقق من التوقيع')}
+                </button>
+              </form>
+            )}
           </Gate>
           {unsent ? (
             <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
@@ -856,7 +881,29 @@ function NextStep({
         </div>
       );
     }
-    case 'SIGNED':
+    case 'SIGNED': {
+      // Closing outstanding: the service refuses disbursement, so the screen says why instead of offering it.
+      const cpsOutstanding = outstandingConditionsPrecedent(view);
+      const payeeConfirmed = view.closing.payee?.confirmedBy !== undefined;
+      if (cpsOutstanding.length > 0 || !payeeConfirmed)
+        return (
+          <DisabledAction
+            label={t('Release disbursement as finance', 'إطلاق الصرف بصفة المالية')}
+            reason={[
+              cpsOutstanding.length > 0
+                ? t(
+                    `Conditions precedent still to evidence and verify: ${cpsOutstanding.map((c) => c.textEn).join('; ')}.`,
+                    `شروط مسبقة لم يُقدَّم دليلها أو يُتحقق منه بعد: ${cpsOutstanding.map((c) => c.textAr).join('؛ ')}.`,
+                  )
+                : '',
+              payeeConfirmed
+                ? ''
+                : t('The payee account is not yet recorded and confirmed.', 'لم يُسجَّل حساب المستفيد ويُؤكَّد بعد.'),
+            ]
+              .filter((x) => x !== '')
+              .join(' ')}
+          />
+        );
       return (
         <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic} ownWork={a.submittedBy === staff.principalId}>
           <form action={recordDisbursedAction} className="flex flex-wrap items-center justify-between gap-3">
@@ -878,6 +925,7 @@ function NextStep({
           </form>
         </Gate>
       );
+    }
     case 'DISBURSED':
       return (
         <div className="flex flex-col gap-3">
