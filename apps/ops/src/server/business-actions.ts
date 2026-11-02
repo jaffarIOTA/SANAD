@@ -43,6 +43,7 @@ import { uploadBusinessDocument } from './business-storage.ts';
 import { confirmSigning, startSigning } from './business-signing.ts';
 import { recordFixturePaymentResult } from './business-payments.ts';
 import { bookInLoanSystem } from './business-booking.ts';
+import { buyCommodity, sellCommodityOnBehalf, sellCommodityToCustomer, transferCommodityTitle } from './business-tawarruq.ts';
 import {
   approveStraightThrough,
   confirmBankStatementFacts,
@@ -706,4 +707,38 @@ export async function recordFixturePaymentResultAction(form: FormData): Promise<
 export async function bookLoanAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
   return finish(ctx, () => bookInLoanSystem(ctx.tenant, ctx.applicationId, ctx.actor), 'LOAN_BOOKED');
+}
+
+// -- Tawarruq execution (KSA K4) ----------------------------------------------------------
+
+/** Finance (treasury) buys the commodity from the board-approved broker at the quoted cost. */
+export async function buyCommodityAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  return finish(ctx, () => buyCommodity(ctx.tenant, ctx.applicationId, ctx.actor), 'TAWARRUQ_COMMODITY_PURCHASED');
+}
+
+/** The institution sells the commodity to the customer on the signed deferred-sale instrument. */
+export async function sellCommodityToCustomerAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  return finish(
+    ctx,
+    () => sellCommodityToCustomer(ctx.tenant, ctx.applicationId, field(form, 'saleDocumentRef'), ctx.actor),
+    'TAWARRUQ_SOLD_TO_CUSTOMER',
+  );
+}
+
+export async function transferCommodityTitleAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  return finish(ctx, () => transferCommodityTitle(ctx.tenant, ctx.applicationId, ctx.actor), 'TAWARRUQ_TITLE_TRANSFERRED');
+}
+
+/** The commodity is sold on for cash — as the customer's agent where the board permits, naming the appointment. */
+export async function sellCommodityOnBehalfAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  const agencyRef = field(form, 'agencyRef');
+  return finish(
+    ctx,
+    () => sellCommodityOnBehalf(ctx.tenant, ctx.applicationId, agencyRef === '' ? undefined : agencyRef, ctx.actor),
+    'TAWARRUQ_PROCEEDS_REALISED',
+  );
 }

@@ -170,3 +170,32 @@ describe('a Saudi SME application', () => {
     expect(booked.booking).toMatchObject({ source: 'FIXTURE', productCode: 'SME FINANCE SAR RAG' });
   });
 });
+
+describe('the Islamic SME product without its board ruling', () => {
+  it('is refused: the checked-in catalogue keeps it disabled until the ruling is recorded through Admin', async () => {
+    const r = await handOver(
+      'bank-a',
+      {
+        applicationId: 'BA-00009199',
+        upstreamRef: 'upstream-ba-9199',
+        applicant: {
+          businessNameEn: 'Example Co',
+          registrationRef: '1010000101',
+          sector: 'TRADING',
+          yearsInOperation: 5,
+          owners: [{ displayName: 'Owner', ref: 'owner-ba-9199' }],
+          upstreamVerificationRefs: [],
+        },
+        productCode: 'sme-term-islamic',
+        variantCode: 'SME_TERM',
+        purpose: 'WORKING_CAPITAL',
+        requestedMinorUnits: 80_000_000n,
+        tenorMonths: 36,
+        graceMonths: 0,
+        contributionPerTenThousand: 2_000,
+      },
+      'upstream-record-ba',
+    );
+    expect(r.ok ? 'handed over' : r.error.reason).toBe('PRODUCT_NOT_IN_CATALOGUE');
+  });
+});

@@ -157,6 +157,17 @@ import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
 import { tenantUuidByCode } from '@sanad/origination/credentials.ts';
 import { type NewBusinessAct, newBusinessRefusal } from '@sanad/origination/licensing.ts';
 import { smeTermConventional } from '@sanad/products/sme-term-conventional/index.ts';
+import { smeTermIslamic } from '@sanad/products/sme-term-islamic/index.ts';
+import {
+  type SmeIslamicCore,
+  purchaseCommodity,
+  realiseProceeds,
+  sellToCustomer,
+  transferTitle,
+  open as openTawarruq,
+} from '@sanad/products/sme-term-islamic/execution.ts';
+import type { SmeIslamicQuote } from '@sanad/products/sme-term-islamic/pricing.ts';
+import type { CommodityLot } from '@sanad/core/ports/commodity-broker.ts';
 import type { SmeVariant } from '@sanad/products/sme-term-conventional/variants.ts';
 
 import { postgresOutboxStore } from '../../../../services/outbox/src/postgres-store.ts';
@@ -667,6 +678,31 @@ export interface ClosingRecord {
   readonly payee?: Payee;
   /** The drawdown plan; absent until planned or first released (then one tranche of the whole facility). */
   readonly tranches?: readonly Tranche[];
+  /** Tawarruq only (KSA K4): the commodity steps between signature and disbursement. */
+  readonly tawarruq?: TawarruqRecord;
+}
+
+/**
+ * A Tawarruq's execution, step by step, as products/sme-term-islamic validates
+ * it: the institution buys the commodity at exactly the quoted cost, sells it
+ * to the customer for the deferred price on a signed instrument, title passes,
+ * and the customer (or the institution as agent, where the board permits) sells
+ * it on for cash — the proceeds the customer receives. Each step attested
+ * strictly after the one before.
+ */
+export interface TawarruqRecord {
+  readonly state: 'COMMODITY_PURCHASED' | 'SOLD_TO_CUSTOMER' | 'TITLE_TRANSFERRED' | 'PROCEEDS_REALISED';
+  readonly lot: CommodityLot;
+  readonly purchasedAt: TsaInstant;
+  readonly saleDocumentRef?: string;
+  readonly soldAt?: TsaInstant;
+  readonly transferRef?: string;
+  readonly transferredAt?: TsaInstant;
+  readonly saleRef?: string;
+  readonly proceeds?: Money;
+  readonly agencyRef?: string;
+  readonly realisedAt?: TsaInstant;
+  readonly source: 'LIVE' | 'FIXTURE';
 }
 
 // =============================================================================
@@ -683,7 +719,14 @@ interface BusinessRecord {
   bankFacts?: BankStatementFacts;
   security: { collateral: CollateralItem[]; guarantees: Guarantee[] };
   pack: { conditions: Condition[]; covenants: Covenant[]; justifications: Record<string, Justification>; frozen?: FrozenPack };
-  closing: { signing?: SigningInProgress; signer?: SignerRecord; cps: Record<string, CpEvidence>; payee?: Payee; tranches?: Tranche[] };
+  closing: {
+    signing?: SigningInProgress;
+    signer?: SignerRecord;
+    cps: Record<string, CpEvidence>;
+    payee?: Payee;
+    tranches?: Tranche[];
+    tawarruq?: TawarruqRecord;
+  };
   booking?: LoanBookingRecord;
   assessments: AssessmentRun[];
   offers: OfferRun[];
@@ -859,8 +902,24 @@ async function catalogueFor(tenant: TenantCode, at: TsaInstant): Promise<Result<
 interface ProductContext {
   readonly entry: ProductCatalogue['entries'][number];
   readonly variant: SmeVariant;
-  readonly terms: Parameters<typeof smeTermConventional.quote>[0];
+  readonly terms: Parameters<typeof smeTermConventional.quote>[0] | Parameters<typeof smeTermIslamic.quote>[0];
+  /** The product module that quotes and discloses it. */
+  readonly module: typeof smeTermConventional | typeof smeTermIslamic;
 }
+
+/**
+ * The SME product modules a business application is quoted through: the
+ * conventional term loan and, where the tenant's catalogue enables it under
+ * its board's ruling (core/products/catalogue.ts refuses it otherwise), the
+ * Tawarruq module (KSA K4). The modules share the variant and SME rules.
+ */
+const SME_MODULES: Readonly<Record<string, typeof smeTermConventional | typeof smeTermIslamic>> = {
+  [smeTermConventional.descriptor.code]: smeTermConventional,
+  [smeTermIslamic.descriptor.code]: smeTermIslamic,
+};
+
+/** Whether a business application's product is the Tawarruq module: sold for a deferred price, closed by the commodity steps. */
+export const isTawarruq = (productCode: string): boolean => productCode === smeTermIslamic.descriptor.code;
 
 /**
  * The catalogue entry, its parsed term sheet and the variant. Only the
@@ -881,17 +940,16 @@ async function productFor(
     return fail('PRODUCT_NOT_IN_CATALOGUE', 'The product is not enabled in this institution’s catalogue', {
       productCode,
     });
-  if (productCode !== smeTermConventional.descriptor.code)
-    return fail(
-      'PRODUCT_NOT_QUOTED_HERE',
-      'Business applications are quoted through the conventional SME module only',
-      { productCode },
-    );
-  const terms = smeTermConventional.validateTerms(entry.terms);
+  const module = SME_MODULES[productCode];
+  if (module === undefined)
+    return fail('PRODUCT_NOT_QUOTED_HERE', 'Business applications are quoted through the SME modules only', {
+      productCode,
+    });
+  const terms = module.validateTerms(entry.terms);
   if (!terms.ok) return terms;
   const variant = terms.value.variants.find((v) => v.code === variantCode);
   if (variant === undefined) return fail('VARIANT_UNKNOWN', 'No such variant of this product', { variantCode });
-  return ok({ entry, variant, terms: terms.value });
+  return ok({ entry, variant: variant as SmeVariant, terms: terms.value, module });
 }
 
 // -- dates (integer civil-date arithmetic) -------------------------------------
@@ -1090,6 +1148,7 @@ function view(record: BusinessRecord, currency: CurrencyCode): BusinessApplicati
       cps: { ...record.closing.cps },
       ...(record.closing.payee === undefined ? {} : { payee: record.closing.payee }),
       ...(record.closing.tranches === undefined ? {} : { tranches: [...record.closing.tranches] }),
+      ...(record.closing.tawarruq === undefined ? {} : { tawarruq: record.closing.tawarruq }),
     },
     ...(record.booking === undefined ? {} : { booking: record.booking }),
     assessments: [...record.assessments],
@@ -1523,6 +1582,43 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
     case 'PAYEE_CONFIRMED':
       if (r.closing.payee !== undefined) r.closing.payee = { ...r.closing.payee, confirmedBy: e.actor };
       return;
+    case 'TAWARRUQ_STEP': {
+      const at = restoreAttestedInstant({
+        epochSeconds: BigInt(d['atEpoch'] ?? '0'),
+        tokenDigest: d['tokenDigest'] || 'replayed',
+        authorityId: d['authority'] || 'replayed',
+      });
+      const currency = r.application.requested.currency;
+      const step = d['step'];
+      if (step === 'COMMODITY_PURCHASED')
+        r.closing.tawarruq = {
+          state: 'COMMODITY_PURCHASED',
+          lot: {
+            lotRef: d['lotRef'] ?? '',
+            commodityCode: d['commodityCode'] ?? '',
+            quantity: d['quantity'] ?? '',
+            unit: d['unit'] ?? '',
+            price: money(BigInt(d['priceMinorUnits'] ?? '0'), currency),
+            confirmedAtEpochSeconds: BigInt(d['brokerConfirmedAt'] ?? '0'),
+          },
+          purchasedAt: at,
+          source: d['source'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+        };
+      else if (r.closing.tawarruq !== undefined && step === 'SOLD_TO_CUSTOMER')
+        r.closing.tawarruq = { ...r.closing.tawarruq, state: 'SOLD_TO_CUSTOMER', saleDocumentRef: d['saleDocumentRef'] ?? '', soldAt: at };
+      else if (r.closing.tawarruq !== undefined && step === 'TITLE_TRANSFERRED')
+        r.closing.tawarruq = { ...r.closing.tawarruq, state: 'TITLE_TRANSFERRED', transferRef: d['transferRef'] ?? '', transferredAt: at };
+      else if (r.closing.tawarruq !== undefined && step === 'PROCEEDS_REALISED')
+        r.closing.tawarruq = {
+          ...r.closing.tawarruq,
+          state: 'PROCEEDS_REALISED',
+          saleRef: d['saleRef'] ?? '',
+          proceeds: money(BigInt(d['proceedsMinorUnits'] ?? '0'), currency),
+          ...(d['agencyRef'] === undefined ? {} : { agencyRef: d['agencyRef'] }),
+          realisedAt: at,
+        };
+      return;
+    }
     case 'LOAN_BOOKED':
       r.booking = {
         loanAccountNumber: d['loanAccountNumber'] ?? '',
@@ -3862,7 +3958,8 @@ async function generateOfferAt(
   });
   if (!pricing.ok) return pricing;
   // The module's "requested" amount and tenor are what the institution offers: the approved terms.
-  const quote = smeTermConventional.quote(product.value.terms, {
+  const module = product.value.module;
+  const quote = (module.quote as (t: unknown, r: Parameters<typeof smeTermConventional.quote>[1]) => ReturnType<typeof smeTermConventional.quote> | ReturnType<typeof smeTermIslamic.quote>)(product.value.terms, {
     tenantId: tenant,
     programmeId: product.value.variant.documentChecklistRef ?? 'sme-direct-lending',
     counterpartyId: app.applicationId,
@@ -3885,10 +3982,13 @@ async function generateOfferAt(
   });
   if (!quote.ok) return quote;
   const q = quote.value;
-  const offer = buildOffer(smeTermConventional, q, at);
+  const offer = buildOffer(module as typeof smeTermConventional, q as never, at);
   if (!offer.ok) return offer;
 
-  const totalCharge = q.interestAmount;
+  // A term loan charges interest on the facility; a Tawarruq sells a commodity for a deferred price, its profit the charge.
+  const islamic = 'deferredSalePrice' in q;
+  const totalCharge = islamic ? q.profitAmount : q.interestAmount;
+  const totalPayable = islamic ? q.deferredSalePrice : money(facility.minorUnits + totalCharge.minorUnits, facility.currency);
   const letter = buildOfferLetter({
     jurisdiction: { code: ctx.value.profile.code, contractualCalendars: ctx.value.profile.contractualCalendars },
     applicationReference: app.applicationId,
@@ -3897,7 +3997,7 @@ async function generateOfferAt(
       ar: app.applicant.businessNameAr ?? app.applicant.businessNameEn,
     },
     productVariantName: { en: q.variantNameEn, ar: q.variantNameAr },
-    family: smeTermConventional.descriptor.family,
+    family: module.descriptor.family,
     facilityAmount: facility,
     tenorMonths: q.months,
     graceMonths: q.graceMonths,
@@ -3910,12 +4010,14 @@ async function generateOfferAt(
     totals: {
       instalment: q.monthlyInstalment,
       totalCharge,
-      totalPayable: money(facility.minorUnits + totalCharge.minorUnits, facility.currency),
+      totalPayable,
     },
     institutionLegalName: { en: ctx.value.legalNameEn, ar: ctx.value.legalNameAr },
     signatories: [
       { party: 'LENDER', role: { en: 'Authorised Signatory', ar: 'المفوّض بالتوقيع' } },
-      { party: 'BORROWER', role: { en: 'Authorised Signatory of the Borrower', ar: 'المفوّض بالتوقيع عن المقترض' } },
+      islamic
+        ? { party: 'BORROWER', role: { en: 'Authorised Signatory of the Customer (Purchaser)', ar: 'المفوّض بالتوقيع عن العميل (المشتري)' } }
+        : { party: 'BORROWER', role: { en: 'Authorised Signatory of the Borrower', ar: 'المفوّض بالتوقيع عن المقترض' } },
     ],
     conditions: [...q.collateral.map((c) => ({ en: c.labelEn, ar: c.labelAr })), ...packConditionsForLetter(r)],
   }, ummAlQura);
@@ -3928,8 +4030,8 @@ async function generateOfferAt(
     graceMonths: q.graceMonths,
     facilityAmount: facility,
     monthlyInstalment: q.monthlyInstalment,
-    totalInterest: q.interestAmount,
-    totalPayable: money(facility.minorUnits + totalCharge.minorUnits, facility.currency),
+    totalInterest: totalCharge,
+    totalPayable,
     rateBp: q.rateSnapshot.rate.bp,
     rateBasis: q.rateSnapshot.rate.basis,
     ratePeriod: q.rateSnapshot.rate.period,
@@ -4431,6 +4533,8 @@ export async function planTranches(
     if (!open.ok) return open;
     if ((r.closing.tranches ?? []).some((t) => t.releases > 0))
       return fail('TRANCHES_LOCKED', 'The drawdown plan changes only before the first release');
+    if (isTawarruq(r.application.productCode))
+      return fail('TRANCHES_NOT_PERMITTED', 'A Tawarruq pays its proceeds once; it is not drawn in tranches');
     const offer = offerInForce(r);
     if (offer === undefined) return fail('OFFER_NOT_GENERATED', 'Generate the offer first; its facility amount is what the plan divides');
     if (plan.length < 1 || plan.length > MAX_TRANCHES)
@@ -4586,6 +4690,152 @@ export async function bookingTermsOf(
   return ok({ view: view(r, ctx.value.currency), terms: signed.terms });
 }
 
+// -- Tawarruq execution (KSA K4) ------------------------------------------------
+
+export type TawarruqStep =
+  | { readonly step: 'COMMODITY_PURCHASED'; readonly lot: CommodityLot }
+  | { readonly step: 'SOLD_TO_CUSTOMER'; readonly saleDocumentRef: string }
+  | { readonly step: 'TITLE_TRANSFERRED'; readonly transferRef: string }
+  | { readonly step: 'PROCEEDS_REALISED'; readonly saleRef: string; readonly proceeds: Money; readonly agencyRef?: string };
+
+/**
+ * The module's view of this Tawarruq: its core rebuilt from the signed offer
+ * and the approval's evidence. Only the quote's commodity cost and deferred
+ * price are read by the execution functions; the rest of the quote was fixed
+ * into the signed letter.
+ */
+function tawarruqCoreOf(r: BusinessRecord, tenant: TenantCode, terms: OfferTerms, brokerRef: string, agencyPermitted: boolean): Result<SmeIslamicCore> {
+  const signature = r.application.signature;
+  if (signature === undefined) return fail('TAWARRUQ_BEFORE_SIGNATURE', 'The commodity is bought only once the customer has signed');
+  const registry = r.application.applicant.upstreamVerificationRefs.find((x) => /^(wathq|ner)[:-]/.test(x)) ?? r.application.applicant.registrationRef;
+  const quote = { commodityCost: terms.facilityAmount, deferredSalePrice: terms.totalPayable } as unknown as SmeIslamicQuote;
+  return ok({
+    transactionId: r.application.applicationId,
+    tenantId: tenant,
+    applicantRef: r.contact.partyRef,
+    quote,
+    brokerRef,
+    agency: { permitted: agencyPermitted },
+    bureauEnquiryRef: r.inputs?.bureau.reportRef ?? '',
+    consentId: r.inputs?.bureau.consentId ?? '',
+    businessRegistryRef: registry,
+    guaranteeRequired: false,
+    correlationId: r.application.applicationId,
+    // The customer's signature opens the execution: every step is attested after it.
+    openedAt: restoreAttestedInstant({ epochSeconds: signature.atEpochSeconds, tokenDigest: 'signature', authorityId: 'signature' }),
+  });
+}
+
+/** The broker and agency terms of the tenant's Tawarruq catalogue entry. */
+export async function tawarruqTermsOf(
+  tenant: TenantCode,
+  applicationId: string,
+): Promise<Result<{ readonly brokerRef: string; readonly commodityCode: string; readonly agencyPermitted: boolean; readonly view: BusinessApplicationView; readonly offer: OfferTerms }>> {
+  const book = await hydrate(tenant);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  if (!isTawarruq(r.application.productCode)) return fail('NOT_TAWARRUQ', 'This application is not a Tawarruq');
+  const product = await productFor(tenant, r.application.productCode, r.application.variantCode, developmentAttestation());
+  if (!product.ok) return product;
+  const t = product.value.terms as Parameters<typeof smeTermIslamic.quote>[0];
+  const signed = r.offers.find((o) => o.letter.version === r.application.offer?.letterVersion);
+  if (signed === undefined) return fail('OFFER_NOT_GENERATED', 'The signed letter version is not on record');
+  return ok({ brokerRef: t.brokerRef, commodityCode: t.commodityCode, agencyPermitted: t.agencyPermitted, view: view(r, ctx.value.currency), offer: signed.terms });
+}
+
+/**
+ * Record one Tawarruq step, validated by the module's execution functions in
+ * order — the purchase at exactly the quoted cost (SH-03), the sale on a signed
+ * instrument, title, the onward sale (agency only where the board permits,
+ * SH-18) — each attested strictly after the one before. A step out of order is
+ * refused by construction: there is no state to apply it to.
+ */
+export async function recordTawarruqStep(
+  tenant: TenantCode,
+  applicationId: string,
+  step: TawarruqStep,
+  source: 'LIVE' | 'FIXTURE',
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  const terms = await tawarruqTermsOf(tenant, applicationId);
+  if (!terms.ok) return terms;
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    if (r.application.status !== 'SIGNED')
+      return fail('TRANSITION_NOT_ALLOWED', 'The commodity steps run between signature and disbursement', { status: r.application.status });
+    const core = tawarruqCoreOf(r, tenant, terms.value.offer, terms.value.brokerRef, terms.value.agencyPermitted);
+    if (!core.ok) return core;
+    const draft = openTawarruq(core.value);
+    if (!draft.ok) return draft;
+    const at = developmentAttestation();
+    const t = r.closing.tawarruq;
+    let next: TawarruqRecord;
+    let detail: Record<string, string>;
+    if (step.step === 'COMMODITY_PURCHASED') {
+      if (t !== undefined) return fail('TAWARRUQ_STEP_OUT_OF_ORDER', 'The commodity is already bought');
+      const done = purchaseCommodity(draft.value, step.lot, at);
+      if (!done.ok) return done;
+      next = { state: 'COMMODITY_PURCHASED', lot: step.lot, purchasedAt: at, source };
+      detail = {
+        lotRef: step.lot.lotRef,
+        commodityCode: step.lot.commodityCode,
+        quantity: step.lot.quantity,
+        unit: step.lot.unit,
+        priceMinorUnits: step.lot.price.minorUnits.toString(),
+        brokerConfirmedAt: step.lot.confirmedAtEpochSeconds.toString(),
+        source,
+      };
+    } else if (step.step === 'SOLD_TO_CUSTOMER') {
+      if (t?.state !== 'COMMODITY_PURCHASED') return fail('TAWARRUQ_STEP_OUT_OF_ORDER', 'The commodity is sold to the customer once bought');
+      if (!r.documents.some((d) => d.documentRef === step.saleDocumentRef))
+        return fail('SECURITY_EVIDENCE_NOT_ON_FILE', 'The signed deferred-sale instrument is a document on the application');
+      const done = sellToCustomer({ state: 'COMMODITY_PURCHASED', core: core.value, lot: t.lot, purchasedAt: t.purchasedAt }, step.saleDocumentRef, at);
+      if (!done.ok) return done;
+      next = { ...t, state: 'SOLD_TO_CUSTOMER', saleDocumentRef: step.saleDocumentRef, soldAt: at };
+      detail = { saleDocumentRef: step.saleDocumentRef };
+    } else if (step.step === 'TITLE_TRANSFERRED') {
+      if (t?.state !== 'SOLD_TO_CUSTOMER' || t.soldAt === undefined || t.saleDocumentRef === undefined)
+        return fail('TAWARRUQ_STEP_OUT_OF_ORDER', 'Title passes once the commodity is sold to the customer');
+      const done = transferTitle(
+        { state: 'SOLD_TO_CUSTOMER', core: core.value, lot: t.lot, purchasedAt: t.purchasedAt, soldAt: t.soldAt, saleDocumentRef: t.saleDocumentRef },
+        step.transferRef,
+        at,
+      );
+      if (!done.ok) return done;
+      next = { ...t, state: 'TITLE_TRANSFERRED', transferRef: step.transferRef, transferredAt: at };
+      detail = { transferRef: step.transferRef };
+    } else {
+      if (t?.state !== 'TITLE_TRANSFERRED' || t.soldAt === undefined || t.transferRef === undefined || t.transferredAt === undefined)
+        return fail('TAWARRUQ_STEP_OUT_OF_ORDER', 'The commodity is sold on once title has passed');
+      if (step.proceeds.currency !== ctx.value.currency) return fail('CURRENCY_NOT_TENANTS', 'The proceeds are in the tenant’s currency');
+      const done = realiseProceeds(
+        { state: 'TITLE_TRANSFERRED', core: core.value, lot: t.lot, soldAt: t.soldAt, transferRef: t.transferRef, transferredAt: t.transferredAt },
+        { saleRef: step.saleRef, proceeds: step.proceeds, ...(step.agencyRef === undefined ? {} : { agencyRef: step.agencyRef }) },
+        at,
+      );
+      if (!done.ok) return done;
+      next = { ...t, state: 'PROCEEDS_REALISED', saleRef: step.saleRef, proceeds: step.proceeds, ...(step.agencyRef === undefined ? {} : { agencyRef: step.agencyRef }), realisedAt: at };
+      detail = { saleRef: step.saleRef, proceedsMinorUnits: step.proceeds.minorUnits.toString(), ...(step.agencyRef === undefined ? {} : { agencyRef: step.agencyRef }) };
+    }
+    r.closing.tawarruq = next;
+    recordEvent(book, r, {
+      eventType: 'TAWARRUQ_STEP',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at.epochSeconds,
+      detail: { step: step.step, atEpoch: at.epochSeconds.toString(), tokenDigest: at.tokenDigest, authority: at.authorityId, ...detail },
+    });
+    return ok(view(r, ctx.value.currency));
+  });
+}
+
 async function signAt(
   tenant: TenantCode,
   applicationId: string,
@@ -4671,6 +4921,13 @@ async function disburseAt(
   const signed = r.offers.find((o) => o.letter.version === app.offer?.letterVersion);
   if (signed === undefined) return fail('OFFER_NOT_GENERATED', 'The signed letter version is not on record');
 
+  // A Tawarruq pays the customer the proceeds of the onward sale, once, after the commodity steps (SI-3 to SI-5, SI-11).
+  if (isTawarruq(app.productCode)) {
+    const tw = r.closing.tawarruq;
+    if (tw?.state !== 'PROCEEDS_REALISED' || tw.proceeds === undefined)
+      return fail('TAWARRUQ_INCOMPLETE', 'The commodity is bought, sold to the customer, title passed and sold on before the proceeds are paid');
+    r.closing.tranches ??= [{ trancheId: 'T1', amount: tw.proceeds, status: 'PLANNED', releases: 0 }];
+  }
   // The tranche to pay: the first not yet paid, in plan order — or, after a failure, that one again.
   r.closing.tranches ??= [
     { trancheId: 'T1', amount: signed.terms.facilityAmount, status: 'PLANNED', releases: 0 },

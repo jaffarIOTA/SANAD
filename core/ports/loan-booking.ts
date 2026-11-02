@@ -3,9 +3,10 @@
  * M6): the loan system creates the customer if it does not hold one, creates
  * the loan contract on Sanad's terms, and returns the loan account number.
  *
- * A port: capability-named, vendor-free. It is for rate-priced products only
- * (CLAUDE.md §2: the no-rate invariant is scoped to products/murabaha-scf,
- * whose obligations are booked account-shaped through CoreBankingProvider).
+ * A port: capability-named, vendor-free. It is for rate-priced products and,
+ * under ADR 0007, SME Tawarruq (its deferred price stays the contract's figure);
+ * never for Murabaha, whose obligations are booked account-shaped through
+ * CoreBankingProvider (CLAUDE.md §2).
  * The rate and APR are Sanad's — the loan system is told them, never asked;
  * an adapter refuses a booking whose echoed rate differs. Unavailability is a
  * typed outcome, never a throw; a booking that did not happen records nothing.
