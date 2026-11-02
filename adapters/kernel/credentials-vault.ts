@@ -56,6 +56,7 @@ export const VAULT_PROVIDER_CODES = [
   'MOHRE',
   'FTA',
   'PARTNER_BANK',
+  'OPEN_FINANCE',
   'S3_STORAGE',
 ] as const;
 export type VaultProviderCode = (typeof VAULT_PROVIDER_CODES)[number];

@@ -15,7 +15,13 @@
 import { type Result, ok, reject } from '../kernel/result.ts';
 
 export type OutboxKind =
-  'PAYMENT_DISBURSE' | 'PAYMENT_COLLECT' | 'BUREAU_REPORT' | 'PARTNER_CALLBACK' | 'NOTIFICATION' | 'BILL_PRESENT';
+  | 'PAYMENT_DISBURSE'
+  | 'PAYMENT_COLLECT'
+  | 'PAYMENT_INITIATE'
+  | 'BUREAU_REPORT'
+  | 'PARTNER_CALLBACK'
+  | 'NOTIFICATION'
+  | 'BILL_PRESENT';
 
 export interface OutboxEvent {
   readonly eventId: string;

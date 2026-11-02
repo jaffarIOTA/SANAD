@@ -42,6 +42,7 @@ export const VAULT_PROVIDERS = [
   'MOHRE',
   'FTA',
   'PARTNER_BANK',
+  'OPEN_FINANCE',
   'S3_STORAGE',
 ] as const;
 export type VaultProvider = (typeof VAULT_PROVIDERS)[number];

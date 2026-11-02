@@ -2,13 +2,22 @@
   "configId": "bank-a-loan-booking",
   "version": "0.1.0",
   "adapter": "TUUM",
-  "policyRef": "ILLUSTRATIVE — 'SME FINANCE SAR RAG' and 'TAWRROUQ' are riyal products in Tuum's partners sandbox (adapters/tuum/README.md, 2026-10-08) that belong to another partner's test set; the institution's own products replace them. A Murabaha product is never listed here. The Tawarruq product is booked as a loan contract under ADR 0007 (the deferred price stays the contract's figure)",
+  "policyRef": "ILLUSTRATIVE — 'SME FINANCE SAR RAG' and 'TAWRROUQ' are riyal products in Tuum's partners sandbox (adapters/tuum/README.md, 2026-10-08) that belong to another partner's test set; the institution's own products replace them. A Murabaha product is never listed here. The Tawarruq product is booked as a loan contract under ADR 0007 (the deferred price stays the contract's figure). BNPL: 'BNPL SAR 4X' is ILLUSTRATIVE — no Sanad BNPL product exists in Tuum yet; Tuum sets one up on the tenant (four payments thirty days apart, no interest), and the servicing account's customer group and price list are the ones the 2026-10-08 sandbox run accepted (P_RESIDENT, RETAIL_CURR_PRICE_LIST); confirm under TUUM-SERV-01",
   "products": {
     "sme-term-conventional": {
       "loanTypeCode": "SME FINANCE SAR RAG"
     },
     "sme-term-islamic": {
       "loanTypeCode": "TAWRROUQ"
+    },
+    "bnpl": {
+      "loanTypeCode": "BNPL SAR 4X"
     }
+  },
+  "servicingAccount": {
+    "accountTypeCode": "CURRENT",
+    "customerGroupCode": "P_RESIDENT",
+    "priceListTypeCode": "RETAIL_CURR_PRICE_LIST",
+    "repaymentTransactionTypeCode": "LOAN_REPAYMENT"
   }
 }

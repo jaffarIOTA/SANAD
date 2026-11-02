@@ -12,7 +12,11 @@ import { entryFor } from '@sanad/core/products/catalogue.ts';
 
 import { findSession, outboxStore, saveSession } from '../../../../server/checkout-store.ts';
 import { flushConsumerStore, syncConsumerStore } from '../../../../server/durable.ts';
-import { TENANT } from '../../../../server/engine.ts';
+import { recordConsumerLoan } from '@sanad/origination/consumer-loans.ts';
+
+import { demonstrationMandateRef, offeredChannels } from '../../../../server/collection.ts';
+import { TENANT, maturityDates } from '../../../../server/engine.ts';
+import { persistencePool } from '../../../../server/persistence.ts';
 import { currentSession } from '../../../../server/session.ts';
 import { accept, developmentAttestation, findOffer, nextId } from '../../../../server/store.ts';
 
@@ -37,6 +41,9 @@ export async function checkoutAcceptAction(form: FormData): Promise<void> {
   if (session === undefined || session.state !== 'OFFERED') return;
   if (field(form, 'confirm') !== 'yes') fail('CONFIRMATION_REQUIRED', 'OP-DETERMINACY');
   const at = developmentAttestation();
+  // How the instalments are paid: one of the channels offered here, never one the jurisdiction does not carry.
+  const channel = (await offeredChannels(at.epochSeconds)).find((c) => c.channel === field(form, 'collectionChannel'));
+  if (channel === undefined) return fail('COLLECTION_CHANNEL_NOT_OFFERED', 'OP-DETERMINACY');
   // Booking the facility, accepted now: permitted while the licence is valid or in grace, refused after grace
   // ended (ADR 0006 §4) — checked before the acceptance is recorded, so nothing is half done.
   const licence = await newBusinessRefusal({
@@ -82,10 +89,34 @@ export async function checkoutAcceptAction(form: FormData): Promise<void> {
   const booked = bookBnpl(draft.value, developmentAttestation());
   if (!booked.ok) return fail(booked.error.reason, booked.error.control);
   saveSession(bookSession(accepted.value, draft.value.core.transactionId, booked.value.bookedAt));
-  // The acceptance and the booked session are durable first; then the booking's effects — merchant
-  // settlement, bureau report — go to the same durable outbox the session events use. Only then is
-  // the shopper sent back to the shop as BOOKED.
+  // The acceptance and the booked session are durable first; then the loan as accepted, with the channel
+  // its instalments are collected through (booked in the loan system and serviced there, by
+  // services/origination/src/consumer-loan-servicing.ts); then the booking's effects — merchant
+  // settlement, bureau report — go to the same durable outbox the session events use. Only then is the
+  // shopper sent back to the shop as BOOKED.
   await flushConsumerStore();
+  const pool = persistencePool();
+  if (pool !== undefined) {
+    const quote = stored.offer.quote as BnplQuote;
+    await recordConsumerLoan(pool, TENANT, {
+      loanRef: draft.value.core.transactionId,
+      productCode: 'bnpl',
+      applicantRef: identity.applicantRef,
+      originRef: sessionId,
+      merchantRef: session.core.merchantId,
+      principalMinorUnits: quote.basket.minorUnits,
+      currency: quote.basket.currency,
+      rateBp: 0n,
+      aprBp: stored.offer.apr.bp,
+      numberOfInstalments: terms.value.numberOfInstalments,
+      intervalDays: terms.value.intervalDays,
+      firstDueDate: maturityDates(at, terms.value.intervalDays).gregorian,
+      collectionChannel: channel.channel,
+      collectionMandateRef: demonstrationMandateRef(channel.channel, identity.applicantRef),
+      correlationId: session.core.correlationId,
+      createdBy: identity.applicantRef,
+    });
+  }
   await outboxStore().append(booked.value.outbox.events);
   redirect(
     `${session.core.returnUrl}${session.core.returnUrl.includes('?') ? '&' : '?'}sessionId=${sessionId}&state=BOOKED`,

@@ -289,6 +289,58 @@ credentials **and** `person_api_base_url`, which is the opt-in to the live path.
   (`/api/v2/contracts/{headerId}/accept`, `…/activate`, `…/initialise-disbursement`)
   before it services, given Sanad's partner bank pays the money out.
 
+## Consumer loans — booking and servicing (BNPL, 2026-11-02)
+
+The same lending adapter books a **consumer** loan and services it (ports
+`core/ports/loan-booking.ts` and `core/ports/loan-servicing.ts`; decisions in
+`core/servicing/core-held-loan.ts`, acts in
+`services/origination/src/consumer-loan-servicing.ts`). Tuum is the system of
+record for the schedule: Sanad keeps no instalment table for these loans.
+
+1. `POST /api/v2/persons` — the borrower as a natural person (`personTypeCode: "P"`). Its
+   national identifier is resolved from the institution's identity store inside the adapter,
+   immediately before the call, and never returned, logged or traced (TUUM-DEV-002). No
+   identity store is connected yet, so a **live** consumer booking is refused as unavailable.
+2. `POST /api/v4/persons/{personId}/accounts` — the loan's servicing account, from the tenant's
+   `servicingAccount` set-up (account type, customer group, price list). When the shopper chose
+   to be debited from their own account at the institution, that account is used instead and
+   the contract asks for automatic repayment from it.
+3. `POST /api/v1/persons/{personId}/contracts` — `numberOfPayments` and a fixed interval
+   (`paymentFrequency`), Sanad's rate (0% for BNPL) and APR, the servicing account. A contract
+   echoing any other rate is refused (`RATE_MISMATCH`): a price list cannot turn an
+   interest-free purchase into an interest-bearing loan.
+4. Servicing: `GET /api/v1/contracts/{headerId}/receivables` — each instalment's due date,
+   amount, paid amount, status and days past due; `POST /api/v5/accounts/{accountId}/transactions`
+   — a repayment Sanad collected, under the tenant's repayment transaction type, keyed by the
+   collection so one settlement posts once.
+
+**Who collects.** Tuum does not pull money from a shopper. Sanad collects each due instalment
+through the channel the shopper chose, on the transactional outbox — a SADAD bill, a card
+through the payments hub, Open Banking payment initiation (the Kingdom); UAEDDS direct debit or
+a card through the partner bank, Open Finance payment initiation (the UAE) — and posts what
+settled into the servicing account. On the own-account channel Tuum debits the customer's
+account itself and Sanad only reads the result. An instalment Tuum shows overdue is reported to
+the bureau (`ARREARS`, with its currency) and the customer reminded, once each.
+
+**Status: fixture only.** The demonstration transport holds a small loan book in process memory
+(contracts and postings) and derives the receivables from it for the date asked.
+
+### Verification item TUUM-SERV-01
+
+- A BNPL product set up on the tenant: four payments thirty days apart, no interest, and whether
+  `paymentFrequency` is the field and shape for a fixed interval (the 2026-10-08 run found no riyal
+  product accepting a monthly schedule).
+- Whether a supplied `interestRate` of 0 overrides the price list (TUUM-LEND-002); until it does,
+  every booking is refused as `RATE_MISMATCH`, which is the safe failure.
+- The receivables read: path, field names, status codes and how days past due are counted.
+- The servicing account's type, customer group and price list for a consumer; the repayment
+  transaction type and how Tuum allocates a posting across instalments.
+- Automatic repayment from a customer's own account: whether the contract can carry it, and what
+  Tuum reports when the account cannot cover an instalment.
+- How the merchant discount is accounted: the contract is for the basket price, the merchant is
+  paid the basket less the discount by Sanad's payments instruction, and the discount is the
+  institution's income — a question for its finance function.
+
 ## Murabaha booking — account-shaped (Wasl W3, 2026-10-18)
 
 An executed Murabaha is held through `core-banking-adapter.ts` — the party, its

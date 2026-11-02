@@ -606,6 +606,16 @@ export interface LoanBookingConfig {
   readonly adapter: string;
   readonly policyRef: string;
   readonly products: Readonly<Record<string, { readonly loanTypeCode: string }>>;
+  /**
+   * How a consumer loan's servicing account is opened in the loan system, and the transaction type a
+   * collected repayment is posted under. Required for a tenant that books consumer loans.
+   */
+  readonly servicingAccount?: {
+    readonly accountTypeCode: string;
+    readonly customerGroupCode: string;
+    readonly priceListTypeCode: string;
+    readonly repaymentTransactionTypeCode: string;
+  };
 }
 
 const LOAN_BOOKING: Readonly<Partial<Record<TenantCode, unknown>>> = {
@@ -652,10 +662,30 @@ export function loadLoanBookingConfig(tenant: TenantCode): Result<LoanBookingCon
         { code },
       );
   }
+  const account = raw['servicingAccount'];
+  const accountKeys = ['accountTypeCode', 'customerGroupCode', 'priceListTypeCode', 'repaymentTransactionTypeCode'];
+  if (
+    account !== undefined &&
+    (account === null ||
+      typeof account !== 'object' ||
+      !accountKeys.every((k) => {
+        const v = (account as Record<string, unknown>)[k];
+        return typeof v === 'string' && v.trim() !== '';
+      }))
+  )
+    return reject(
+      'OP-DETERMINACY',
+      'LOAN_BOOKING_NOT_CONFIGURED',
+      'servicingAccount names the account type, customer group, price list and repayment transaction type',
+      { tenant },
+    );
   return ok({
     adapter: raw['adapter'],
     policyRef: raw['policyRef'],
     products: products as Record<string, { readonly loanTypeCode: string }>,
+    ...(account === undefined
+      ? {}
+      : { servicingAccount: account as NonNullable<LoanBookingConfig['servicingAccount']> }),
   });
 }
 

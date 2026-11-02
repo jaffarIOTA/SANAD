@@ -24,6 +24,12 @@ export const ACT_REQUIREMENTS = {
   REVIEW: APPROVERS,
   /** Development stand-ins for the servicing platform answering; any approver may press them. */
   SERVICING_STAND_IN: APPROVERS,
+  /**
+   * Run a consumer loan's servicing for a day: book it in the loan system if it is not, post settled
+   * collections, queue the next ones, report overdue instalments. An operational act; standing in for the
+   * rails' answers in a demonstration is SERVICING_STAND_IN.
+   */
+  CONSUMER_LOAN_SERVICE: ['MAKER', ...APPROVERS],
   MERCHANT_ONBOARD: ['MAKER'],
   MERCHANT_VERIFY: ['CHECKER', 'SENIOR_CHECKER'],
   MERCHANT_CHANGE: ['CHECKER', 'SENIOR_CHECKER'],

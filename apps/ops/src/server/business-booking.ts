@@ -17,87 +17,14 @@
  * The call is idempotent on `business:<id>:book`: a retried booking is the
  * same booking at the loan system, and Sanad records it once.
  */
-import { randomUUID } from 'node:crypto';
-
 import { type TenantCode, loadLoanBookingConfig } from '@sanad/config/loader.ts';
 import { type Result, reject } from '@sanad/core/kernel/result.ts';
-import type { LoanBookingPort } from '@sanad/core/ports/loan-booking.ts';
-import { credentialProviderFromEnvironment } from '@sanad/origination/credentials.ts';
-import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
-
-import { HttpTransport } from '../../../../adapters/kernel/http-transport.ts';
-import { createTuumSession, fetchAuthHttp } from '../../../../adapters/tuum/authentication.ts';
-import { TuumDemonstrationTransport, demonstrationSession } from '../../../../adapters/tuum/demonstration.ts';
-import { TuumLendingAdapter } from '../../../../adapters/tuum/lending-adapter.ts';
+import { loanSystemFor } from '@sanad/origination/loan-system.ts';
 import { type BusinessApplicationView, bookingTermsOf, recordLoanBooked } from './business.ts';
 import { persistencePool } from './persistence.ts';
 
 const fail = (reason: string, detail: string, context?: Readonly<Record<string, string>>): Result<never> =>
   reject('OP-DETERMINACY', reason, detail, context);
-
-async function readKey(tenant: TenantCode, keyName: string): Promise<string | undefined> {
-  try {
-    return (
-      await credentialProviderFromEnvironment().get(
-        { tenantId: tenant, provider: 'CORE_BANKING', environment: 'sandbox', keyName },
-        randomUUID(),
-      )
-    ).expose();
-  } catch {
-    return undefined;
-  }
-}
-
-async function loanSystemFor(
-  tenant: TenantCode,
-  adapter: string,
-  env: Readonly<Record<string, string | undefined>> = process.env,
-): Promise<LoanBookingPort | undefined> {
-  if (adapter !== 'TUUM') return undefined;
-  const [auth, person, loan, username, tenantCode] = await Promise.all([
-    readKey(tenant, 'auth_base_url'),
-    readKey(tenant, 'person_api_base_url'),
-    readKey(tenant, 'loan_api_base_url'),
-    readKey(tenant, 'username'),
-    readKey(tenant, 'tenant_code'),
-  ]);
-  if (
-    auth !== undefined &&
-    person !== undefined &&
-    loan !== undefined &&
-    username !== undefined &&
-    tenantCode !== undefined
-  ) {
-    const session = createTuumSession({
-      baseUrl: auth.replace(/\/+$/, ''),
-      http: fetchAuthHttp(),
-      // The password is read through the audited vault function at each login, never kept.
-      credentials: async () => ({
-        username,
-        tenantCode,
-        identityKind: 'EMPLOYEE',
-        password: (await readKey(tenant, 'password')) ?? '',
-      }),
-      nowEpochSeconds: () => Math.floor(Date.now() / 1000),
-    });
-    return new TuumLendingAdapter(
-      { person: person.replace(/\/+$/, ''), loan: loan.replace(/\/+$/, '') },
-      session,
-      new HttpTransport(),
-      tenantCode,
-      'LIVE',
-    );
-  }
-  if (await syntheticDemonstrationPermitted(persistencePool(env), env))
-    return new TuumLendingAdapter(
-      { person: 'https://person.demonstration.invalid', loan: 'https://lending.demonstration.invalid' },
-      demonstrationSession,
-      new TuumDemonstrationTransport(),
-      'DEMO',
-      'FIXTURE',
-    );
-  return undefined;
-}
 
 /** Book the disbursed loan on the signed offer's terms and record the loan account number. */
 export async function bookInLoanSystem(
@@ -119,7 +46,7 @@ export async function bookInLoanSystem(
     return fail('LOAN_PRODUCT_NOT_MAPPED', 'This product has no loan-system product code configured', {
       productCode: a.productCode,
     });
-  const system = await loanSystemFor(tenant, config.value.adapter);
+  const system = await loanSystemFor(tenant, config.value, persistencePool());
   if (system === undefined)
     return fail('RAIL_UNAVAILABLE', 'The loan system is not connected here; nothing was booked', {
       rail: 'CORE_BANKING',

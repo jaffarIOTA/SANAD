@@ -21,15 +21,23 @@
     "CREDIT_BUREAU": ["AECB"],
     "EMPLOYMENT_VERIFICATION": ["MOHRE"],
     "PAYMENTS_HUB": ["PARTNER_BANK"],
+    "OPEN_BANKING": ["OPEN_FINANCE"],
     "RATE_PUBLISHER": ["RATE_PUBLISHER"],
     "SCREENING": ["SCREENING"],
     "TIMESTAMP_AUTHORITY": ["TSA"],
     "WORKFLOW_ENGINE": ["WORKFLOW_ENGINE"]
   },
+  "collectionChannels": {
+    "DIRECT_DEBIT": "PAYMENTS_HUB",
+    "CARD": "PAYMENTS_HUB",
+    "PAYMENT_INITIATION": "OPEN_BANKING",
+    "OWN_ACCOUNT": "CORE_BANKING"
+  },
   "regulatoryDirectory": "ae",
   "citations": [
     "Dates: the Gregorian calendar governs UAE commercial contracts; Hijri is not required on a facility offer letter (confirm with the institution's counsel).",
     "Supervision depends on the licence: a CBUAE-licensed bank or finance company is bound by CBUAE rules; a government development fund may sit outside them. Recorded per tenant as licenceType at onboarding.",
-    "Residency of customer data in the UAE: production data held in the UAE behind a customer-managed HSM (ADR 0005, constraint deployment_profile_production_residency). The governing UAE requirement is to be confirmed with counsel (ADR 0005, open items). Saudi residency rules do not apply."
+    "Residency of customer data in the UAE: production data held in the UAE behind a customer-managed HSM (ADR 0005, constraint deployment_profile_production_residency). The governing UAE requirement is to be confirmed with counsel (ADR 0005, open items). Saudi residency rules do not apply.",
+    "Collection channels in the UAE: direct debit through the UAE Direct Debit System (UAEDDS, operated under the CBUAE) via the partner bank, which also acquires card payments; payment initiation under the CBUAE's Open Finance framework; a debit of the customer's own account at the institution. The UAE has no national bill-presentment scheme equivalent to Saudi Arabia's SADAD; SADAD does not operate in the UAE. Each scheme's mandate and onboarding are confirmed with the institution and its counsel."
   ]
 }

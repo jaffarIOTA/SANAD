@@ -10,6 +10,7 @@
  * the Rules. Nothing else lifts it.
  */
 
+import { COLLECTION_CHANNELS, type CollectionChannel } from '@sanad/core/jurisdiction/profile.ts';
 import { type Money, money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 
@@ -19,14 +20,14 @@ export const ART_22_1_CONSUMER_LIMIT_MINOR_UNITS = 1_000_000n;
 /** Art. 22(2): the number of instalments granted to the consumer must not exceed 12. */
 export const ART_22_2_MAX_INSTALMENTS = 12;
 
-/** Art. 22(3): collection through electronic channels only; a cash request is prohibited. */
-export type CollectionMethod = 'SADAD' | 'CARD' | 'OPEN_BANKING_PIS' | 'DIRECT_DEBIT';
-const COLLECTION_METHODS: ReadonlySet<string> = new Set<CollectionMethod>([
-  'SADAD',
-  'CARD',
-  'OPEN_BANKING_PIS',
-  'DIRECT_DEBIT',
-]);
+/**
+ * Art. 22(3): collection through electronic channels only; a cash request is prohibited. Channels are
+ * named by mechanism; which scheme carries each (a bill scheme, a direct-debit system, an open-banking
+ * framework) is the jurisdiction profile's `collectionChannels`, and a channel the tenant's jurisdiction
+ * does not list is never offered to a customer.
+ */
+export type CollectionMethod = CollectionChannel;
+const COLLECTION_METHODS: ReadonlySet<string> = new Set<string>(COLLECTION_CHANNELS);
 
 export interface BnplTerms {
   /** Configured as `instalments` in the term sheet. A count: at most twelve (Art. 22(2)). */
@@ -93,7 +94,8 @@ export function parseBnplTerms(raw: unknown): Result<BnplTerms> {
     return bad('TERMS_MDR', 'merchantDiscountPerTenThousand is an integer in [0, 10000]');
   if (typeof raw['citation'] !== 'string' || raw['citation'].trim().length < 10)
     return bad('TERMS_CITATION_REQUIRED', 'The consumer limit carries the regulation and article it comes from');
-  const methodsRaw = raw['collectionMethods'] ?? ['SADAD', 'CARD', 'OPEN_BANKING_PIS'];
+  // Absent, every electronic channel; the tenant's jurisdiction then narrows it to the channels it carries.
+  const methodsRaw = raw['collectionMethods'] ?? COLLECTION_CHANNELS;
   if (!Array.isArray(methodsRaw) || methodsRaw.length === 0)
     return bad('TERMS_COLLECTION', 'collectionMethods lists at least one electronic channel');
   const notElectronic = methodsRaw.filter((m) => typeof m !== 'string' || !COLLECTION_METHODS.has(m));

@@ -295,6 +295,31 @@ The findings go in the adapter README.
 - **Semgrep** has not been run locally on W2/W3 (not installed here). CI's gate is the
   first run.
 
+## BNPL booked in Tuum and serviced there (branch `bnpl-tuum-servicing`, 2 November)
+
+- **Built, on fixtures.** Each BNPL purchase is booked in Tuum as an interest-free loan of four payments thirty days
+  apart, with its own servicing account (or the shopper's own account). Tuum holds the schedule; Sanad reads it.
+  - The shopper chooses how instalments are collected, from the channels the tenant's jurisdiction carries
+    (`collectionChannels` in `config/jurisdictions/*.json`): in the Kingdom a SADAD bill, a card through the payments
+    hub, Open Banking payment initiation or their own account; in the UAE UAEDDS direct debit or a card through the
+    partner bank, Open Finance or their own account. No scheme is offered outside its country.
+  - The workbench's **BNPL loans** screen books the loan, shows Tuum's position for a date, and runs servicing:
+    collections queued on the outbox through the shopper's channel, settled ones posted into the loan, overdue
+    instalments reported to the bureau (with the currency) and the shopper reminded, once each.
+  - Migration **0038**: `core.consumer_loan` and its events (RLS forced, append-only, audited, the tenant's
+    currency enforced), the outbox's `PAYMENT_INITIATE` kind, and the `OPEN_FINANCE` credential code.
+- **Waiting on Tuum (TUUM-SERV-01, `adapters/tuum/README.md`):** a BNPL product set up on each tenant (no riyal
+  product in the sandbox accepts the schedule); whether a supplied 0% rate overrides the price list (until it does,
+  every live booking is refused `RATE_MISMATCH`, the safe failure); the receivables read; the servicing account's
+  set-up; automatic repayment from a customer's own account; how the merchant discount is accounted.
+- **Waiting on the institution:** an identity store the adapter can resolve a shopper's national identifier from,
+  inside the trust boundary. Without it a live consumer booking is refused as unavailable.
+- **Not built:** the rails' callbacks into `recordCollectionResult` (a SADAD bill paid, a debit settled or returned,
+  an initiated payment settled). In the demonstration the run stands in for them, labelled Fixture, and only an
+  approver may do so. The servicing worker does not yet run consumer loans on its schedule; a person runs them.
+- **UAE BNPL itself is still not built** (ADR 0005): the UAE channels are configured, but there is no UAE BNPL
+  product to offer them on.
+
 ## Journey gaps (hardening plan B)
 
 - **B1 built**, PR #81 (stacked on #80): contact channels at intake.
@@ -361,8 +386,9 @@ The findings go in the adapter README.
 - **SR-040:** the repository is public. Decided 1 November: make it private, but only after moving it to an IOTA
   GitHub organisation on a plan with Code Security. On a personal account a private repository loses branch
   protection (without Pro), and the CodeQL and dependency-review gates stop working. Waiting on the organisation.
-- **SEC-Q01 … SEC-Q08:** open questions for the client (CSCC classification, CSF level,
-  VAPT provider, SOC, notification contacts, disclosure programme, sign-off).
+- **SEC-Q01 … SEC-Q09:** open questions for the client (CSCC classification, CSF level,
+  VAPT provider, SOC, notification contacts, disclosure programme, sign-off; Q09 is the UAE's
+  information-assurance and incident-notification obligations).
 
 ## Housekeeping
 

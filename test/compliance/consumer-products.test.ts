@@ -264,7 +264,7 @@ describe('BNPL', () => {
     ).toBe(true);
   });
   it('Art. 22(3): cash is not a collection method', () => {
-    const r = bnpl.validateTerms({ ...rawTerms, collectionMethods: ['SADAD', 'CASH'] });
+    const r = bnpl.validateTerms({ ...rawTerms, collectionMethods: ['BILL_PRESENTMENT', 'CASH'] });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.reason).toBe('TERMS_COLLECTION_NOT_ELECTRONIC');
     expect(expectOk(bnpl.validateTerms(rawTerms)).collectionMethods).not.toContain('CASH');

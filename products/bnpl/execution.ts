@@ -103,7 +103,13 @@ export function book(t: Draft, at: TsaInstant): Result<Booked> {
     eventId: `${key}:bureau`,
     kind: 'BUREAU_REPORT',
     idempotencyKey: `${key}:bureau`,
-    payload: { facilityRef: t.core.transactionId, event: 'OPENED', minorUnits: String(t.core.quote.basket.minorUnits) },
+    payload: {
+      facilityRef: t.core.transactionId,
+      event: 'OPENED',
+      minorUnits: String(t.core.quote.basket.minorUnits),
+      // Stated, never defaulted by the dispatcher: the bureau is told the facility's own currency.
+      currency: t.core.quote.basket.currency,
+    },
   });
   if (!two.ok) return two;
   return ok({ state: 'BOOKED', core: t.core, bookedAt: at, outbox: two.value });

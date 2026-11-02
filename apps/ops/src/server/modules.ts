@@ -153,9 +153,10 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         jurisdictions: SA,
         titleEn: 'BNPL',
         titleAr: 'اشترِ الآن وادفع لاحقاً',
+        href: '/bnpl',
         readiness: live(),
         reference:
-          'products/bnpl — module, merchant onboarding (core/merchants) and checkout API (api/openapi/checkout.v1.yaml, apps/consumer) built; ceilings cite the SAMA BNPL Rules (Nov 2023) Art. 20 and 22',
+          'products/bnpl — module, merchant onboarding (core/merchants) and checkout API (api/openapi/checkout.v1.yaml, apps/consumer) built; ceilings cite the SAMA BNPL Rules (Nov 2023) Art. 20 and 22. Each purchase is booked as a loan in the loan system and serviced there (core/servicing/core-held-loan.ts): collected through the channel the shopper chose (SADAD, card, Open Banking, own account), posted into the loan, overdue reported. Loan system and rails on fixtures (TUUM-SERV-01).',
       },
       {
         id: 'merchants',

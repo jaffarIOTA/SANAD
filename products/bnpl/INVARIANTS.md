@@ -42,7 +42,7 @@ This module computes none. The offer carries the one `core/pricing/apr.ts` compu
 
 ## B-6 Collection is electronic — Art. 22(3)
 
-`collectionMethods` admits SADAD, card, Open Banking payment initiation and direct debit.
+`collectionMethods` admits the electronic channels only: bill presentment, direct debit, card, payment initiation and the customer's own account. Which scheme carries each is the jurisdiction profile's `collectionChannels` (SADAD, the payments hub and Open Banking in Saudi Arabia); a channel the jurisdiction does not list is never offered.
 Cash is not a value of the type; a term sheet naming it does not parse.
 
 ## B-7 Riyals only — Art. 20(5)
