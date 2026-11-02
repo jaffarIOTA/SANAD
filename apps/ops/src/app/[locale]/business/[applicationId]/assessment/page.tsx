@@ -38,6 +38,7 @@ import {
   type CommitteeApprovalDefaults,
   type BureauSource,
   committeeApprovalDefaults,
+  decisionPack,
   getApplication,
   intakeConsentFor,
   syncBusiness,
@@ -175,6 +176,9 @@ export default async function CreditAssessmentPage({
   // The committee form's starting figures and the limits beside them, from the server; the page only shows them.
   const approvalDefaults =
     a.status === 'IN_COMMITTEE' ? await committeeApprovalDefaults(j.tenant, applicationId) : undefined;
+  // Deviations still to justify in the decision pack: the committee cannot approve until there are none.
+  const pack = a.status === 'IN_COMMITTEE' ? await decisionPack(j.tenant, applicationId) : undefined;
+  const unjustified = pack?.ok === true ? pack.value.deviations.filter((d) => d.justification === undefined).length : 0;
   // Inputs are recorded while the application is open (RECEIVED, SPREADING) and lock at submission; from then on they are shown read-only.
   const inputsOpen = ['RECEIVED', 'SPREADING'].includes(a.status);
   const fact = (name: string, value: unknown): string => f.digits(formatFact(name, value as bigint, f.arabic));
@@ -579,6 +583,17 @@ export default async function CreditAssessmentPage({
           </SectionCard>
 
           <CreditNotesCard segment={segment} view={view} staff={staff} f={f} />
+          {unjustified > 0 ? (
+            <p className="rounded-tile border border-attention/40 bg-attention-wash px-4 py-3 text-[13px] text-ink" data-pack-pending>
+              {t(
+                `${f.n(unjustified)} deviation(s) from policy still need a justification before the committee can approve.`,
+                `${f.n(unjustified)} استثناء من السياسة ما زال بحاجة إلى مبرر قبل أن تعتمد اللجنة.`,
+              )}{' '}
+              <a href={`/${segment}/business/${encodeURIComponent(a.applicationId)}/decision`} className="font-medium text-brand hover:underline">
+                {t('Open the decision pack', 'فتح حزمة القرار')}
+              </a>
+            </p>
+          ) : null}
           <DecisionCard segment={segment} view={view} staff={staff} f={f} approvalDefaults={approvalDefaults} />
         </>
       )}

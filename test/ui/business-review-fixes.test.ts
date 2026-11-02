@@ -189,6 +189,7 @@ const SOURCES = [
   'apps/ops/src/server/business-storage.ts',
   'core/documents/upload.ts',
   'core/origination/security-register.ts',
+  'core/origination/decision-pack.ts',
   'core/origination/business-application.ts',
   'core/applicant/financials.ts',
   'core/origination/business-intake.ts',

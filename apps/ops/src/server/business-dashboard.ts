@@ -439,6 +439,10 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
     en: 'Document recorded by reference. It counts once the checker validates it.',
     ar: 'سُجّل المستند بمرجعه، ويُحتسب بعد تحقق المراجِع منه.',
   },
+  CONDITION_ADDED: { en: 'Condition attached to the decision pack.', ar: 'أُضيف الشرط إلى حزمة القرار.' },
+  COVENANT_ADDED: { en: 'Covenant attached to the decision pack.', ar: 'أُضيف التعهد إلى حزمة القرار.' },
+  PACK_ITEM_WITHDRAWN: { en: 'Withdrawn from the decision pack.', ar: 'سُحب من حزمة القرار.' },
+  DEVIATION_JUSTIFIED: { en: 'Justification recorded.', ar: 'سُجّل المبرر.' },
   COLLATERAL_RECORDED: {
     en: 'Collateral recorded. It counts once a second person confirms it.',
     ar: 'سُجّل الضمان، ويُحتسب بعد تأكيده من شخص آخر.',
@@ -884,6 +888,48 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
   TRN_NOT_RECORDED: {
     en: 'Record the business’s tax registration number before checking it.',
     ar: 'سجّل رقم التسجيل الضريبي للمنشأة قبل التحقق منه.',
+  },
+  // The decision pack (UAE M4). A refusal here changed nothing.
+  DECISION_PACK_LOCKED: {
+    en: 'The decision pack changes only between assessment and approval, and not once a committee member has approved it.',
+    ar: 'لا تُعدَّل حزمة القرار إلا بين التقييم والاعتماد، ولا بعد موافقة أحد أعضاء اللجنة عليها.',
+  },
+  CONDITIONS_ABOVE_RISK_MAXIMUM: {
+    en: 'The risk band allows no more conditions and covenants. Withdraw one to attach another.',
+    ar: 'لا تسمح فئة المخاطر بمزيد من الشروط والتعهدات. اسحب أحدها لإضافة غيره.',
+  },
+  CONDITION_KIND_INVALID: { en: 'A condition is precedent or subsequent.', ar: 'الشرط إما مسبق أو لاحق.' },
+  CONDITION_TEXT_INVALID: {
+    en: 'State the condition in both languages, 3 to 300 characters each: English in English, Arabic in Arabic.',
+    ar: 'اكتب الشرط باللغتين، من ثلاثة أحرف إلى ثلاثمئة لكل منهما: الإنجليزية بالإنجليزية والعربية بالعربية.',
+  },
+  CONDITION_DUE_INVALID: {
+    en: 'A condition subsequent is due a whole number of days after first drawdown, within the policy’s limit; a condition precedent has no due days.',
+    ar: 'يُستحق الشرط اللاحق خلال عدد صحيح من الأيام بعد السحب الأول ضمن حد السياسة؛ ولا أيام استحقاق للشرط المسبق.',
+  },
+  COVENANT_UNKNOWN: { en: 'Choose a covenant from the institution’s list.', ar: 'اختر تعهداً من قائمة المؤسسة.' },
+  COVENANT_DUPLICATE: { en: 'This covenant is already attached.', ar: 'هذا التعهد مُضاف مسبقاً.' },
+  PACK_ITEM_NOT_FOUND: { en: 'That condition or covenant is not on the pack.', ar: 'هذا الشرط أو التعهد غير موجود في الحزمة.' },
+  DEVIATION_NOT_FOUND: { en: 'The assessment records no such deviation.', ar: 'لا يسجّل التقييم هذا الاستثناء.' },
+  JUSTIFICATION_LENGTH: {
+    en: 'State the mitigant in 10 to 1000 characters.',
+    ar: 'اذكر العامل المخفِّف في عشرة أحرف إلى ألف حرف.',
+  },
+  DEVIATIONS_UNJUSTIFIED: {
+    en: 'Every deviation from policy must be justified in the decision pack before the committee approves.',
+    ar: 'يجب تبرير كل استثناء من السياسة في حزمة القرار قبل اعتماد اللجنة.',
+  },
+  FOUR_EYES_SELF_JUSTIFICATION: {
+    en: 'You justified a deviation on this case; another committee member approves it.',
+    ar: 'لقد بررت استثناءً في هذا الطلب؛ يعتمده عضو آخر في اللجنة.',
+  },
+  DECISION_PACK_POLICY_INVALID: {
+    en: 'The institution’s decision-pack policy is not readable, so nothing was changed.',
+    ar: 'تعذّرت قراءة سياسة حزمة القرار لدى المؤسسة، فلم يُعدَّل شيء.',
+  },
+  DECISION_PACK_POLICY_NOT_FOUND: {
+    en: 'No decision-pack policy is configured for this institution.',
+    ar: 'لا توجد سياسة لحزمة القرار مهيأة لهذه المؤسسة.',
   },
   // The security register (UAE M3). A refusal here recorded nothing.
   SECURITY_LOCKED: {

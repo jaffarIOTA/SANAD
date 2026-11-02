@@ -346,7 +346,7 @@ export function FormContext({
 }: {
   readonly segment: string;
   readonly applicationId: string;
-  readonly screen?: 'assessment' | 'offer';
+  readonly screen?: 'assessment' | 'offer' | 'decision';
 }): ReactElement {
   return (
     <>
@@ -445,7 +445,7 @@ export function ApplicationShell({
 }: {
   readonly segment: string;
   readonly view: BusinessApplicationView;
-  readonly screen: 'application' | 'assessment' | 'offer';
+  readonly screen: 'application' | 'assessment' | 'decision' | 'offer';
   readonly query: ShellQuery;
   readonly f: Formatters;
   readonly title: string;
@@ -456,6 +456,7 @@ export function ApplicationShell({
   const tabs = [
     { id: 'application', href: base, label: f.t('Loan application', 'طلب التمويل'), stage: 5 },
     { id: 'assessment', href: `${base}/assessment`, label: f.t('Credit assessment', 'التقييم الائتماني'), stage: 6 },
+    { id: 'decision', href: `${base}/decision`, label: f.t('Decision pack', 'حزمة القرار'), stage: 6 },
     { id: 'offer', href: `${base}/offer`, label: f.t('Offer & contract', 'العرض والعقد'), stage: 7 },
   ] as const;
   const notice = query.notice === undefined ? undefined : NOTICES[query.notice];

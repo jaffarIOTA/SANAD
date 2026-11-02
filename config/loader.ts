@@ -421,3 +421,20 @@ export function loadSecurityPolicy(tenant: TenantCode): Result<SecurityPolicy> {
     });
   return parseSecurityPolicy(raw);
 }
+
+import fundAeDecisionPackPolicy from './tenants/sme-fund-ae/credit-policy/decision-pack.json' with { type: 'json' };
+import { type DecisionPackPolicy, parseDecisionPackPolicy } from '../core/origination/decision-pack.ts';
+
+const DECISION_PACK_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = {
+  'sme-fund-ae': fundAeDecisionPackPolicy,
+};
+
+/** The covenant templates and the longest condition subsequent, for a tenant that configures them. */
+export function loadDecisionPackPolicy(tenant: TenantCode): Result<DecisionPackPolicy> {
+  const raw = DECISION_PACK_POLICIES[tenant];
+  if (raw === undefined)
+    return reject('OP-DETERMINACY', 'DECISION_PACK_POLICY_NOT_FOUND', 'No decision-pack policy is configured for this tenant', {
+      tenant,
+    });
+  return parseDecisionPackPolicy(raw);
+}
