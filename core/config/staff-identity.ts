@@ -19,11 +19,21 @@ import { type Result, ok, reject } from '../kernel/result.ts';
  * a finance user approves nothing, and an approver releases no money (four eyes
  * between the decision and the payment).
  */
-export type StaffAuthority = 'MAKER' | ApprovalAuthority | 'FINANCE' | 'PLATFORM_ADMIN';
+/**
+ * SHARIAH_REVIEWER is the institution's internal Shariah review (W6): records
+ * the board's approvals and their changes, a second reviewer confirming.
+ * SHARIAH_AUDITOR is the board member or Shariah auditor: reads, never acts.
+ * Neither approves credit or releases money, and no credit authority acts for
+ * the board.
+ */
+export type StaffAuthority =
+  'MAKER' | ApprovalAuthority | 'FINANCE' | 'SHARIAH_REVIEWER' | 'SHARIAH_AUDITOR' | 'PLATFORM_ADMIN';
 export const STAFF_AUTHORITIES: readonly StaffAuthority[] = [
   'MAKER',
   ...APPROVAL_AUTHORITIES,
   'FINANCE',
+  'SHARIAH_REVIEWER',
+  'SHARIAH_AUDITOR',
   'PLATFORM_ADMIN',
 ];
 

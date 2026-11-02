@@ -134,6 +134,9 @@ describe('another applicant’s offer cannot be accepted (SR-019)', () => {
     const store = await import('../../apps/consumer/src/server/store.ts');
     const { acceptAction, signInAction } = await import('../../apps/consumer/src/server/actions.ts');
     const { expectOk } = await import('../../core/kernel/result.ts');
+    // The Tawarruq's approval in force, so the owner's acceptance is refused for nothing but who they are (SH-17).
+    const { recordTestApprovals } = await import('../support/shariah-approvals.ts');
+    await recordTestApprovals('bank-a');
 
     const quoted = expectOk(
       quoteFor('tawarruq-personal', 5_000_000n, 12, 'applicant-owner', store.developmentAttestation()),

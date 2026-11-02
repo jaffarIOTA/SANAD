@@ -825,8 +825,10 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         id: 'approvals',
         titleEn: 'Approvals register',
         titleAr: 'سجل الاعتمادات',
-        readiness: soon(),
-        reference: 'BR-F01 · SH-17',
+        href: '/shariah/approvals',
+        readiness: live(),
+        reference:
+          'BR-F01 · BR-F02 · SH-17 — Wasl W6a: each Shariah board approval (body, reference, members, effective and review or expiry dates, the products and template versions it covers) recorded by a Shariah reviewer and confirmed by a second; suspended, reinstated, withdrawn or renewed the same way, and never edited. New origination on an Islamic product — a Wasl request, transaction opening, limit hold, wa’d and purchase; an SME Tawarruq hand-over and offer; a consumer Tawarruq quote and acceptance — is refused under SH-17 unless the approval its configuration cites is in force that day and covers it; a lapse needs nobody to act. Executed transactions keep the approval they were executed under. The approvals cited by the checked-in configuration are ILLUSTRATIVE and must be recorded before anything originates',
       },
       {
         id: 'audit',

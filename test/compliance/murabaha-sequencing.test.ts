@@ -45,6 +45,8 @@ import {
 } from '../../apps/ops/src/server/store.ts';
 import { resetFacilities } from '../../services/origination/src/wasl/facilities.ts';
 import { approveTestFacilities } from '../support/wasl-facilities.ts';
+import { recordTestApprovals } from '../support/shariah-approvals.ts';
+import { resetShariahApprovals } from '../../services/origination/src/shariah/approvals.ts';
 
 // This file's invoices: structural steel (HS 7216), which the board's register permits.
 const TEST_INVOICES = '9e000000-0000-4000-8000-';
@@ -104,7 +106,9 @@ beforeEach(async () => {
   limit.override = undefined;
   resetTransactions();
   resetFacilities();
+  resetShariahApprovals();
   await approveTestFacilities();
+  await recordTestApprovals();
 });
 afterEach(() => {
   vi.useRealTimers();

@@ -48,6 +48,7 @@ import type { Attestation, LegPreparer } from '../../../../adapters/workflow-tem
 import { SequenceRefusal } from '../../../../adapters/workflow-temporal/programs/murabaha.ts';
 import { ummAlQuraIso } from '../hijri.ts';
 import { hostClockInstant } from '../host-clock.ts';
+import { originationApproval } from '../shariah/approvals.ts';
 import { resolveConcentration } from './concentration.ts';
 import { resolveBoard, resolveWaslParties } from './configuration.ts';
 import { HOLDING, PURCHASED, exposureOf } from './exposure.ts';
@@ -79,6 +80,9 @@ export const fail = (reason: string, detail: string, context?: Readonly<Record<s
 /** A step offered in a state it does not belong to. A screen offers each step only where it applies. */
 export const notNow = (state: string): Result<never> =>
   fail('STEP_NOT_AVAILABLE', 'This step does not apply to the transaction as it stands', { state });
+
+/** The states a step reaches by committing the institution to a new sale: each needs the approval in force (SH-17). */
+const NEW_COMMITMENTS: ReadonlySet<string> = new Set(['LIMIT_RESERVED', 'WAAD_EXECUTED', 'PURCHASE_EXECUTED']);
 
 // -- What a step works with -----------------------------------------------------------
 
@@ -208,6 +212,18 @@ export async function step(
 
     const after = out.value.transaction;
     const moved = after !== before;
+    // SH-17, BR-F02: holding the limit, the wa'd and the purchase commit the institution to a new sale, and are
+    // refused once the approval the transaction was opened under is not in force. What follows the purchase —
+    // completing the sale of goods already owned, servicing — continues under it, or the goods are unwound.
+    if (moved && NEW_COMMITMENTS.has(after.state)) {
+      const approval = await originationApproval(
+        tenant,
+        WASL_PRODUCT,
+        before.core.shariahApprovalId,
+        await attestation.occurred(),
+      );
+      if (!approval.ok) return approval;
+    }
     const leg = legsOf(after).length > legsOf(before).length ? legsOf(after).at(-1) : undefined;
     const { evidence, supersedes, obligation, paidDelta, outbox, charity } = out.value;
     // Buying the goods finances the invoice, once (SH-10): checked here for every path to the purchase, and again

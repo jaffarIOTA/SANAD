@@ -47,6 +47,8 @@ import {
   proposeFacility,
   resetFacilities,
 } from '../../services/origination/src/wasl/facilities.ts';
+import { resetShariahApprovals } from '../../services/origination/src/shariah/approvals.ts';
+import { recordTestApprovals } from '../support/shariah-approvals.ts';
 import { limitMovement } from '../../services/origination/src/wasl/steps.ts';
 
 vi.mock('../../apps/ops/src/server/invoices.ts', async (original) => {
@@ -84,12 +86,14 @@ const advance = (seconds: number) => {
   vi.setSystemTime(clock);
 };
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.stubEnv('SANAD_DATABASE_URL', '');
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(clock);
   resetTransactions();
   resetFacilities();
+  resetShariahApprovals();
+  await recordTestApprovals();
   policy.override = undefined;
 });
 afterEach(() => {

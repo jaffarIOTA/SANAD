@@ -85,6 +85,25 @@ export const DEVELOPMENT_STAFF: readonly DevelopmentStaff[] = [
     tenantId: 'bank-a',
     groups: ['sanad.bank-a.finance'],
   },
+  // Two Shariah reviewers, so a change to the approvals register can be proposed by one and confirmed by the other.
+  {
+    environmentName: 'STAFF_DEV_TOKEN_SA_SHARIAH_1',
+    principalId: 'stf-shariah-01',
+    tenantId: 'bank-a',
+    groups: ['sanad.bank-a.shariah-reviewers'],
+  },
+  {
+    environmentName: 'STAFF_DEV_TOKEN_SA_SHARIAH_2',
+    principalId: 'stf-shariah-02',
+    tenantId: 'bank-a',
+    groups: ['sanad.bank-a.shariah-reviewers'],
+  },
+  {
+    environmentName: 'STAFF_DEV_TOKEN_SA_SHARIAH_AUDITOR',
+    principalId: 'stf-shariah-auditor-01',
+    tenantId: 'bank-a',
+    groups: ['sanad.bank-a.shariah-auditors'],
+  },
   {
     environmentName: 'STAFF_DEV_TOKEN_FB_OFFICER',
     principalId: 'stf-fb-officer-01',
@@ -110,6 +129,18 @@ export const DEVELOPMENT_STAFF: readonly DevelopmentStaff[] = [
     groups: ['sanad.fintech-b.finance'],
   },
   {
+    environmentName: 'STAFF_DEV_TOKEN_FB_SHARIAH_1',
+    principalId: 'stf-fb-shariah-01',
+    tenantId: 'fintech-b',
+    groups: ['sanad.fintech-b.shariah-reviewers'],
+  },
+  {
+    environmentName: 'STAFF_DEV_TOKEN_FB_SHARIAH_2',
+    principalId: 'stf-fb-shariah-02',
+    tenantId: 'fintech-b',
+    groups: ['sanad.fintech-b.shariah-reviewers'],
+  },
+  {
     environmentName: 'STAFF_DEV_TOKEN_AE_OFFICER',
     principalId: 'stf-ae-officer-01',
     tenantId: 'sme-fund-ae',
@@ -132,6 +163,18 @@ export const DEVELOPMENT_STAFF: readonly DevelopmentStaff[] = [
     principalId: 'stf-ae-finance-01',
     tenantId: 'sme-fund-ae',
     groups: ['sanad.sme-fund-ae.finance'],
+  },
+  {
+    environmentName: 'STAFF_DEV_TOKEN_AE_SHARIAH_1',
+    principalId: 'stf-ae-shariah-01',
+    tenantId: 'sme-fund-ae',
+    groups: ['sanad.sme-fund-ae.shariah-reviewers'],
+  },
+  {
+    environmentName: 'STAFF_DEV_TOKEN_AE_SHARIAH_2',
+    principalId: 'stf-ae-shariah-02',
+    tenantId: 'sme-fund-ae',
+    groups: ['sanad.sme-fund-ae.shariah-reviewers'],
   },
 ];
 

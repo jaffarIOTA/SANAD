@@ -11,6 +11,7 @@ import { redirect } from 'next/navigation';
 
 import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
 import { newBusinessRefusal } from '@sanad/origination/licensing.ts';
+import { newBusinessShariahRefusal } from '@sanad/origination/shariah/approvals.ts';
 
 import { flushConsumerStore } from './durable.ts';
 import { consumerIdentity } from './identity.ts';
@@ -80,6 +81,9 @@ export async function quoteAction(form: FormData): Promise<void> {
   const licence = await newBusinessRefusal({ productCode });
   if (licence !== undefined) return fail(`/${locale}/apply`, licence.reason, licence.control);
   const at = developmentAttestation();
+  // SH-17: an Islamic product is quoted only while the institution's Shariah approval for it is in force.
+  const shariah = await newBusinessShariahRefusal(TENANT, productCode, at);
+  if (shariah !== undefined) return fail(`/${locale}/apply`, shariah.reason, shariah.control);
   const quoted = quoteFor(
     productCode,
     BigInt(amountMajor) * 100n,
@@ -115,6 +119,9 @@ export async function acceptAction(form: FormData): Promise<void> {
   if (offer === undefined || offer.applicantRef !== session.applicantRef)
     fail(`/${locale}/apply`, 'OFFER_NOT_FOUND', 'OP-DETERMINACY');
   if (field(form, 'confirm') !== 'yes') fail(`/${locale}/offer/${offerId}`, 'CONFIRMATION_REQUIRED', 'OP-DETERMINACY');
+  // SH-17: an offer made before the approval lapsed is not accepted after it.
+  const shariah = await newBusinessShariahRefusal(TENANT, offer?.productCode ?? '', developmentAttestation());
+  if (shariah !== undefined) return fail(`/${locale}/offer/${offerId}`, shariah.reason, shariah.control);
   const result = accept({
     offerId,
     identityAssertionId: session.identityAssertionId,

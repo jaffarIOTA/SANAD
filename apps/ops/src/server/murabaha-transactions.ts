@@ -19,6 +19,7 @@ import { type TenantCode, loadCreditPolicyVersions, loadProductCatalogue } from 
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import { resolvePricingInputs } from '@sanad/core/pricing/quotation.ts';
 import { entryFor } from '@sanad/core/products/catalogue.ts';
+import { coversTemplates } from '@sanad/core/shariah/approvals.ts';
 import { murabahaScf } from '@sanad/products/murabaha-scf/index.ts';
 import {
   type TransactionRecord,
@@ -30,6 +31,7 @@ import {
   waslPool,
   withLock,
 } from '@sanad/origination/wasl/book.ts';
+import { catalogueApproval, originationApproval } from '@sanad/origination/shariah/approvals.ts';
 import { resolveBoard, resolveWaslParties } from '@sanad/origination/wasl/configuration.ts';
 import { type TransactionEventRow, encodeCore, insertOpenedTransaction } from '@sanad/origination/wasl/persistence.ts';
 
@@ -112,6 +114,19 @@ export async function openTransactionForRequest(
     if (!board.ok) return board;
     const parties = await resolveWaslParties(tenant);
     if (!parties.ok) return parties;
+    // SH-17: a transaction opens only under an approval in force that covers Wasl and every template the board
+    // approves — the structure's, which the transaction carries, and the catalogue's where it cites another.
+    const approval = await originationApproval(tenant, WASL_PRODUCT, structure.value.shariahApprovalRef, at);
+    if (!approval.ok) return approval;
+    const templates = coversTemplates(
+      approval.value,
+      board.value.approvedTemplates.map((t) => t.templateVersionId),
+    );
+    if (!templates.ok) return templates;
+    if (entry.value.boardRulingRef !== structure.value.shariahApprovalRef) {
+      const cited = await catalogueApproval(tenant, entry.value, at);
+      if (!cited.ok) return cited;
+    }
     const riskGate = structure.value.gates.find((g) => g.id === 'GATE_3_RISK_PERIOD');
     if (riskGate?.kind !== 'ELAPSE')
       return fail('STRUCTURE_HAS_NO_RISK_PERIOD', 'The structure declares no risk-holding interval');
