@@ -32,6 +32,7 @@ import {
   resetTransactions,
 } from '../../apps/ops/src/server/murabaha-transactions.ts';
 import { approveRequest, keyRequest, submit } from '../../apps/ops/src/server/store.ts';
+import { approveTestFacilities } from '../support/wasl-facilities.ts';
 import { bookExecutedSale } from '../../services/origination/src/wasl/booking.ts';
 import { assertionReplayGuard } from '../../services/origination/src/wasl/identity.ts';
 import { recordBillResult } from '../../services/origination/src/wasl/collection-results.ts';
@@ -153,11 +154,13 @@ describe.skipIf(url === undefined)('booking an accepted Murabaha on PostgreSQL (
   afterAll(async () => {
     await pool.end();
   });
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.stubEnv('SANAD_DATABASE_URL', url ?? '');
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(clock);
     resetTransactions();
+    // W5a: no facility, no trade. Approved once in this database; later runs find it in force.
+    await approveTestFacilities();
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -388,6 +391,96 @@ describe.skipIf(url === undefined)('booking an accepted Murabaha on PostgreSQL (
         )
       )?.code,
     ).toBe('23001');
+  });
+
+  it('W5a: the hold is consumed at purchase, the invoice registered once, and the facility repaid on settlement', async () => {
+    const v = await accepted();
+    const ref = v.transactionRef;
+    const cost = v.transaction.core.pricing.costAmount.minorUnits.toString();
+    const row = async () =>
+      (
+        await pool.query<{
+          reservation: string;
+          amount: string;
+          facility: string;
+          approval: string | null;
+          decision: string | null;
+          registered: string;
+        }>(
+          `select r.state reservation, r.amount_minor::text amount, r.facility_id::text facility,
+                  f.approval_id::text approval, f.decision_id::text decision,
+                  (select count(*) from core.financed_invoice_registry g where g.transaction_id = t.id)::text registered
+             from core.transaction t
+             join core.limit_reservation r on r.transaction_id = t.id
+             join core.facility f on f.id = r.facility_id
+            where t.transaction_ref = $1`,
+          [ref],
+        )
+      ).rows[0];
+    const utilised = async (facility: string) =>
+      BigInt(
+        (
+          await pool.query<{ u: string }>('select utilised_minor::text u from core.facility where id = $1::uuid', [
+            facility,
+          ])
+        ).rows[0]?.u ?? '0',
+      );
+    const bought = await row();
+    // Authorised by an approval, not a scored decision; the hold became utilisation at the purchase.
+    expect(bought).toMatchObject({ reservation: 'CONSUMED', amount: cost, decision: null, registered: '1' });
+    expect(bought?.approval).toMatch(/^[0-9a-f-]{36}$/);
+    const facility = bought?.facility ?? '';
+    const before = await utilised(facility);
+    expect(before).toBeGreaterThanOrEqual(BigInt(cost));
+
+    const refused = async (sql: string, values: readonly unknown[]) =>
+      pool.query(sql, [...values]).then(
+        () => undefined,
+        (x: unknown) => x as { code?: string; constraint?: string },
+      );
+    // Financing the same invoice again, even by the owner: the registry's unique constraint.
+    const again = await refused(
+      `insert into core.financed_invoice_registry (tenant_id, invoice_uuid, invoice_hash, issuer_cr, recipient_cr,
+         financed_amount_minor, transaction_id, correlation_id)
+       select tenant_id, invoice_uuid, invoice_hash, issuer_cr, recipient_cr, financed_amount_minor, transaction_id,
+              correlation_id
+         from core.financed_invoice_registry where transaction_id = (select id from core.transaction where transaction_ref = $1)`,
+      [ref],
+    );
+    expect(again?.constraint).toBe('financed_invoice_unique');
+    // A facility's limit below what it carries: refused at commit (0031).
+    expect((await refused('update core.facility set limit_minor = 0 where id = $1::uuid', [facility]))?.code).toMatch(
+      /^(23001|23514)$/,
+    );
+    // A facility approval decided by its own proposer: refused by the table.
+    const self = await refused(
+      `update core.facility_approval set state = 'APPROVED', decided_by = proposed_by, decided_at = now()
+        where id = (select approval_id from core.facility where id = $1::uuid)`,
+      [facility],
+    );
+    expect(self).toBeDefined();
+
+    // Booked, collected and settled: the utilisation goes back to the facility.
+    advance(1);
+    expectOk(await bookExecutedSale(T, ref, MAKER));
+    advance(54 * 86_400);
+    expectOk(await presentDueInstalments(T, ref, MAKER));
+    advance(1);
+    expectOk(
+      await recordCollectionResult(
+        T,
+        ref,
+        {
+          idempotencyKey: `wasl:${ref}:collect:I1`,
+          status: 'PAID',
+          reference: 'SADAD-W5A',
+          receivedOn: '2026-12-11',
+          source: 'FIXTURE',
+        },
+        'sadad',
+      ),
+    );
+    expect(await utilised(facility)).toBe(before - BigInt(cost));
   });
 
   it('the portal’s identity assertions are accepted once per tenant, by tenant code (SR-007)', async () => {

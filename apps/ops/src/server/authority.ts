@@ -61,6 +61,10 @@ export const ACT_REQUIREMENTS = {
   CHARITY_DISBURSE_PROPOSE: ['FINANCE'],
   /** Approve or decline the disbursement: a checker, never the person who proposed it. */
   CHARITY_DISBURSE_APPROVE: ['CHECKER', 'SENIOR_CHECKER'],
+  /** Propose a distributor's facility in a programme, with what it rests on (W5a). */
+  FACILITY_PROPOSE: ['MAKER'],
+  /** Approve or reject a proposed facility: an approver, never the person who proposed it (the service refuses the same person). */
+  FACILITY_APPROVE: APPROVERS,
 } as const satisfies Readonly<Record<string, readonly StaffAuthority[]>>;
 
 export type WorkbenchAct = keyof typeof ACT_REQUIREMENTS;

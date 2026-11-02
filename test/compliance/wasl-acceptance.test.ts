@@ -44,6 +44,8 @@ import {
   resetTransactions,
 } from '../../apps/ops/src/server/murabaha-transactions.ts';
 import { approveRequest, keyRequest, submit } from '../../apps/ops/src/server/store.ts';
+import { resetFacilities } from '../../services/origination/src/wasl/facilities.ts';
+import { approveTestFacilities } from '../support/wasl-facilities.ts';
 import {
   confirmAcceptance,
   confirmSignIn,
@@ -104,13 +106,15 @@ const advance = (seconds: number) => {
   vi.setSystemTime(clock);
 };
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.stubEnv('SANAD_DATABASE_URL', '');
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(clock);
   jar.clear();
   core.withdrawn = false;
   resetTransactions();
+  resetFacilities();
+  await approveTestFacilities();
 });
 afterEach(() => {
   vi.useRealTimers();

@@ -1,0 +1,7 @@
+{
+  "$comment": "ILLUSTRATIVE (Wasl W5a, 2026-10-22): the concentration rules Bank A applies to a Wasl trade before its cost is held, beyond the distributor's facility and the programme's limit. Each rule is chosen by the institution and changed through Admin → Concentration under four eyes (revision area CONCENTRATION); this file is the fallback until a revision is approved. Shares are per ten thousand of a limit (2500 = a quarter): a distributor's share of its programme's limit; an anchor's share of the book, the book being the sum of the institution's programme limits. Values are placeholders until Bank A's credit policy sets them.",
+  "policyRef": "bank-a-wasl-concentration-illustrative-2026-10",
+  "singleTradeCap": { "enabled": true, "maxCostMinorUnits": "500000000" },
+  "distributorShareOfProgramme": { "enabled": true, "maxSharePerTenThousand": 2500 },
+  "anchorShareOfBook": { "enabled": false, "maxSharePerTenThousand": 7000 }
+}

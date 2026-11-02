@@ -70,6 +70,18 @@ export const EVIDENCE_STATUS_LABEL: Readonly<Record<string, Words>> = {
 
 /** What a step that went through says, by the notice code the action sends back. */
 export const NOTICE: Readonly<Record<string, Words>> = {
+  FACILITY_PROPOSED: {
+    en: 'The facility is proposed; a second person approves it before the distributor may draw.',
+    ar: 'اقتُرح التسهيل، ويعتمده شخص ثانٍ قبل أن يسحب الموزع.',
+  },
+  FACILITY_APPROVED: {
+    en: 'Approved: this is now the distributor’s facility in the programme.',
+    ar: 'اعتُمد: أصبح هذا تسهيل الموزع في البرنامج.',
+  },
+  FACILITY_REJECTED: {
+    en: 'Rejected, with the reason recorded. The facility in force is unchanged.',
+    ar: 'رُفض وسُجّل السبب. لم يتغير التسهيل القائم.',
+  },
   LATE_AMOUNT_PROPOSED: {
     en: 'Late amounts are proposed on the instalments unpaid beyond the grace days. Nothing is billed until two people agree.',
     ar: 'اقتُرحت مبالغ تأخير على الأقساط غير المدفوعة بعد مهلة السماح. لا يُفوتر شيء حتى يتفق شخصان.',
@@ -278,10 +290,60 @@ export const LATE_AMOUNT_REFUSAL: Readonly<Record<string, Words>> = {
   },
 };
 
+/** Why a facility step or a hold was refused (W5a). */
+export const LIMIT_REFUSAL: Readonly<Record<string, Words>> = {
+  NO_FACILITY: {
+    en: 'The distributor has no approved facility in this programme. Nothing was held; a facility is proposed and approved under Facilities.',
+    ar: 'لا يوجد للموزع تسهيل معتمد في هذا البرنامج. لم يُحجز شيء؛ يُقترح التسهيل ويُعتمد في صفحة التسهيلات.',
+  },
+  FACILITY_LIMIT_EXCEEDED: {
+    en: 'The distributor’s facility has no room for this cost. Nothing was held.',
+    ar: 'لا يتسع تسهيل الموزع لهذه التكلفة. لم يُحجز شيء.',
+  },
+  CONCENTRATION_SINGLE_TRADE_CAP: {
+    en: 'This trade’s cost is above the institution’s single-trade cap. Nothing was held.',
+    ar: 'تكلفة هذه الصفقة أعلى من الحد الأقصى للصفقة الواحدة لدى المؤسسة. لم يُحجز شيء.',
+  },
+  CONCENTRATION_DISTRIBUTOR_SHARE: {
+    en: 'The distributor would hold more of the programme than the institution’s concentration policy allows. Nothing was held.',
+    ar: 'سيتجاوز نصيب الموزع من البرنامج ما تسمح به سياسة التركّز لدى المؤسسة. لم يُحجز شيء.',
+  },
+  CONCENTRATION_ANCHOR_SHARE: {
+    en: 'The anchor’s programmes would hold more of the book than the institution’s concentration policy allows. Nothing was held.',
+    ar: 'سيتجاوز نصيب برامج الجهة الراعية من المحفظة ما تسمح به سياسة التركّز لدى المؤسسة. لم يُحجز شيء.',
+  },
+  DUPLICATE_FINANCING: {
+    en: 'This invoice is already financed by another transaction. An invoice is financed once.',
+    ar: 'هذه الفاتورة مموّلة بالفعل في معاملة أخرى. تُموّل الفاتورة مرة واحدة فقط.',
+  },
+  FACILITY_ABOVE_PROGRAMME: {
+    en: 'A facility is never more than its programme’s limit.',
+    ar: 'لا يزيد التسهيل أبداً على حد برنامجه.',
+  },
+  FACILITY_LIMIT_NOT_POSITIVE: { en: 'Enter the limit in riyals.', ar: 'أدخل الحد بالريال.' },
+  FACILITY_RATIONALE_REQUIRED: { en: 'Say what the limit rests on.', ar: 'اذكر ما يستند إليه الحد.' },
+  FACILITY_PROPOSAL_OPEN: {
+    en: 'A proposal for this distributor and programme already awaits a decision.',
+    ar: 'يوجد اقتراح لهذا الموزع والبرنامج بانتظار القرار.',
+  },
+  FACILITY_PROPOSAL_NOT_FOUND: { en: 'No such proposal.', ar: 'لا يوجد هذا الاقتراح.' },
+  FACILITY_ALREADY_DECIDED: { en: 'That proposal is already decided.', ar: 'تم البت في هذا الاقتراح بالفعل.' },
+  FOUR_EYES_SELF_APPROVAL: {
+    en: 'Someone other than the proposer decides a facility.',
+    ar: 'يبت في التسهيل شخص غير مقترحه.',
+  },
+  REJECTION_REASON_REQUIRED: { en: 'A rejection says why.', ar: 'يجب ذكر سبب الرفض.' },
+  FACILITY_BELOW_EXPOSURE: {
+    en: 'The distributor already holds more than this limit. A facility is never set below what it carries.',
+    ar: 'يحتفظ الموزع بالفعل بأكثر من هذا الحد. لا يُحدّد التسهيل أبداً بأقل مما يحمله.',
+  },
+};
+
 export const REFUSAL: Readonly<Record<string, Words>> = {
   ...BOOKING_REFUSAL,
   ...SETTLEMENT_REFUSAL,
   ...LATE_AMOUNT_REFUSAL,
+  ...LIMIT_REFUSAL,
   STEP_NOT_AVAILABLE: {
     en: 'That step does not apply to the transaction as it stands. Each step follows the one before it.',
     ar: 'لا تنطبق هذه الخطوة على المعاملة في وضعها الحالي؛ كل خطوة تأتي بعد سابقتها.',

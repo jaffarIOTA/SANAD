@@ -47,6 +47,8 @@ import {
 } from '../../apps/ops/src/server/murabaha-transactions.ts';
 import { runServicingCycleNow } from '../../apps/ops/src/server/servicing-scheduler.ts';
 import { approveRequest, keyRequest, submit } from '../../apps/ops/src/server/store.ts';
+import { resetFacilities } from '../../services/origination/src/wasl/facilities.ts';
+import { approveTestFacilities } from '../support/wasl-facilities.ts';
 import { bookExecutedSale } from '../../services/origination/src/wasl/booking.ts';
 import { reconcilePaidBills, resetReconciliations } from '../../services/origination/src/wasl/reconciliation.ts';
 import {
@@ -79,13 +81,15 @@ const advance = (seconds: number) => {
 };
 const nowSeconds = () => Math.floor(clock / 1000);
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.stubEnv('SANAD_DATABASE_URL', '');
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(clock);
   resetTransactions();
   resetDemonstrationSadadPayments();
   resetReconciliations();
+  resetFacilities();
+  await approveTestFacilities();
 });
 afterEach(() => {
   vi.useRealTimers();

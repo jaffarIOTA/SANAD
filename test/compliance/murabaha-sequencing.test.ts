@@ -43,6 +43,8 @@ import {
   keyRequest,
   submit,
 } from '../../apps/ops/src/server/store.ts';
+import { resetFacilities } from '../../services/origination/src/wasl/facilities.ts';
+import { approveTestFacilities } from '../support/wasl-facilities.ts';
 
 // This file's invoices: structural steel (HS 7216), which the board's register permits.
 const TEST_INVOICES = '9e000000-0000-4000-8000-';
@@ -94,13 +96,15 @@ const advance = (seconds: number) => {
   vi.setSystemTime(clock);
 };
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.stubEnv('SANAD_DATABASE_URL', '');
   vi.useFakeTimers({ toFake: ['Date'] });
   clock = START;
   vi.setSystemTime(clock);
   limit.override = undefined;
   resetTransactions();
+  resetFacilities();
+  await approveTestFacilities();
 });
 afterEach(() => {
   vi.useRealTimers();

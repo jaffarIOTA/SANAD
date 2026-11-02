@@ -8,7 +8,7 @@ Last updated: 21 October 2026.
 - **Merge the stacked PRs.** Each is built on the one before; only #35 targets `main`.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
-  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2.
+  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2 · #68 Wasl W5a.
   Auto mode cannot merge.
 - **Renew the `APICAPIKEY` GitHub secret.**
 - **Bank A's Tawarruq board ruling.** Record it in Admin. `sme-term-islamic` stays
@@ -52,8 +52,26 @@ The findings go in the adapter README.
 - **Standalone Temporal worker process.** Needs import-alias resolution. Today the
   servicing cycle runs from the pipeline.
 - **Wasl.**
-  - Limits are held against the programme limit. Per-distributor facility holds
-    (`core.facility`, `core.limit_reservation`) come with **W5**.
+  - **W5a built**, PR #68 (stacked on #67): distributor facilities, limits, concentration and the financed-invoice registry,
+    as decided on 22 October 2026.
+    - **Facilities:** credit proposes a distributor's limit in a programme and a second person approves it at
+      `/facilities`. This writes `core.facility_approval` and `core.facility` (migration 0031). No facility, no trade.
+    - **Trade validation** checks, in order: the facility, the programme, then the concentration rules the
+      institution chose. The first that doesn't fit refuses, and nothing is held.
+    - **Concentration:** the three rules (single-trade cap, distributor share of programme, anchor share of book) are
+      chosen per institution in **Admin → Concentration**, under four eyes (revision area `CONCENTRATION`). Bank A's
+      fallback file `wasl/concentration.json` is ILLUSTRATIVE: cap SAR 5m and distributor share 25% on, anchor share
+      off. Shares are measured against limits, not utilisation; the book is the sum of programme limits.
+    - **Holds:** in the database each hold is a `core.limit_reservation` row. It is consumed at purchase, released on
+      an unwind before purchase, and repaid on settlement or a later unwind. The invoice goes into
+      `core.financed_invoice_registry` at purchase (SH-10). A hold has the 30-day expiry the schema requires but does
+      not lapse on it; there is no job releasing abandoned holds, since an unwind releases them.
+    - **Not done:** every institution has to approve facilities before Wasl can trade again. Existing demo requests
+      will be refused with NO_FACILITY until someone approves one at `/facilities`. Transactions held before W5a have
+      no reservation, so their facility isn't moved, though their invoice is registered at purchase.
+    - Facilities can't be suspended yet; a lower approved limit is the only way to restrict one. Limits are in SAR only.
+    - **Not reviewed in a browser** in RTL or LTR: `/facilities` and Admin → Concentration (the W4b-2 screens neither).
+    - **W5b next:** the Programmes, Anchors and Goods register screens.
   - Contract legs are hashed canonical content; the PDF rendition through Document
     Engine and an embedded viewer in the SME portal are not built.
   - No cross-transaction evidence workspace for the board (**W6**).
@@ -72,9 +90,8 @@ The findings go in the adapter README.
       charities with invented IBANs. The basis is a **fixed amount per instalment**, since the Murabaha module holds no
       rate. If the board rules a proportion of the overdue amount instead, that is a change to the ruling's shape.
       A board that rules none gets no proposals.
-    - Migration **0030** (unique source on `core.charity_ledger`, write-once trigger widened) has **not been run
-      locally**: Docker Desktop was waiting on an administrator prompt. CI's database job is its first run, together with
-      the W4b-2 case in `test/contract/wasl-booking-persistence.test.ts`.
+    - Migrations **0030** and 0031 and the W4b-2 and W5a database cases ran locally on 22 October on a fresh database
+      (`sanad_w5` in `sanad-w2-pg`), with every migration applied from empty; the full suite passed against it.
     - The charity liability is posted to the core **synchronously** when the collection is recorded, as booking is.
       If the core is unavailable, nothing is recorded, the webhook is answered 503 so SADAD delivers it again, and
       reconciliation lists it as an exception. It is not on the outbox, because the dispatcher has no core-banking
@@ -148,8 +165,9 @@ The findings go in the adapter README.
 - Local database runs: the Docker VM's clock drifts behind the host after sleep (9 s on 19 October), which fails
   `test/contract/spent-tokens-postgres.test.ts` locally. Restart Docker Desktop to resync. Under heavy load (another
   project's kind cluster), the database suite needs `--testTimeout=60000`.
-- A fresh local test database `sanad_d4` was created in `sanad-w2-pg`; the old `postgres` database there is full of
-  earlier runs and exhausts the Murabaha test's request numbers.
+- Fresh local test databases `sanad_d4` and `sanad_w5` (all migrations to 0031) were created in `sanad-w2-pg`; the old
+  `postgres` database there is full of earlier runs and exhausts the Murabaha test's request numbers. Wasl facilities
+  persist across runs in a database, so a long-used one eventually exhausts the test facility (SAR 10m).
 
 - Local Docker containers `sanad-w2-pg` (port 55432) and `sanad-w3-demo` (port 55433)
   are throwaway test databases. Remove them when no longer needed.
