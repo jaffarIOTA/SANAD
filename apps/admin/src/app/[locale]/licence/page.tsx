@@ -2,8 +2,9 @@
  * Licence: the installation's licence (ADR 0006). Its state and how long it
  * has, what it entitles, the full history with each supersession chain (so a
  * POC's whole length is visible), the request file to send the issuer, and
- * installing a new licence — one administrator uploads, a different one
- * approves, as with the jurisdiction.
+ * installing a new licence — one platform operator uploads, a different one
+ * approves, as with the jurisdiction (an institution's administrator only
+ * sees it, SR-047).
  *
  * Nothing here decides anything: the state is `licenceState`, the decision
  * is `assertNewBusinessPermitted`, both in core/licensing. Installing a
@@ -32,6 +33,7 @@ import { decideLicenceAction, proposeLicenceAction } from '../../../server/actio
 import { store } from '../../../server/credentials.ts';
 import { licenceChains, revocationRows } from '../../../server/licence.ts';
 import { currentAdmin } from '../../../server/session.ts';
+import { mayActForDeployment } from '../../../server/tenant-scope.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,6 +96,11 @@ const NOTICE: Readonly<Record<string, Words & { readonly tone: 'settled' | 'bloc
   'REFUSED:FOUR_EYES_SELF_DECISION': {
     en: 'Four eyes: you proposed this licence, so you may not decide it. Sign in as the other administrator.',
     ar: 'أربع أعين: أنت من اقترح هذا الترخيص فلا يجوز أن تقرر فيه. سجّل الدخول بالمدير الآخر.',
+    tone: 'blocked',
+  },
+  'REFUSED:PLATFORM_AUTHORITY_REQUIRED': {
+    en: 'A licence governs every institution in this deployment, so only the platform operator may propose or approve one. Your sign-in is your institution’s.',
+    ar: 'يحكم الترخيص كل المؤسسات في هذا النشر، فلا يقترحه أو يعتمده إلا مشغّل المنصة. تسجيل دخولك خاص بمؤسستك.',
     tone: 'blocked',
   },
   'REFUSED:PROPOSAL_PENDING': {
@@ -260,7 +267,14 @@ export default async function LicencePage({
             )}
           </p>
         ) : null}
-        {pending !== undefined ? (
+        {!mayActForDeployment(admin) ? (
+          <p className="mt-4 text-[14px] text-ink-quiet">
+            {t(
+              'Only the platform operator installs a licence, because it governs every institution here. You can see it; you cannot change it.',
+              'لا يثبّت الترخيص إلا مشغّل المنصة لأنه يحكم كل المؤسسات هنا. يمكنك الاطلاع عليه دون تغييره.',
+            )}
+          </p>
+        ) : pending !== undefined ? (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-tile border border-line p-4">
             <span className="flex flex-col gap-1">
               <span className="text-[15px] font-medium text-heading">

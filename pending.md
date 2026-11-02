@@ -1,7 +1,7 @@
 # Pending
 
 Everything waiting on someone, kept in one place. Updated as items close.
-Last updated: 28 October 2026.
+Last updated: 1 November 2026.
 
 ## Waiting on the product owner
 
@@ -18,6 +18,10 @@ Last updated: 28 October 2026.
     password and point the `sanad-database-url` secret at it, then restart the apps
     (`deploy/azure/README.md`, "Runtime database role"). It changes the live hosted site, so it waits for your
     go-ahead; SR-003 closes when it is done.
+  - **SR-047, the platform operator's sign-in:** in the Entra registration Admin uses, add the app role
+    `sanad.platform.operators` and assign it to the operators (at least two, for four eyes), and add
+    `OIDC_CLIENT_SECRET_PLATFORM_ADMIN` by redeploying `deploy/azure/main.bicep`. Until then nobody in the hosted
+    Admin can change the jurisdiction or install a licence; institution administrators see both read-only.
   - **A5, SR-011:** redeploy `deploy/azure/main.bicep` with `auditAlertEmail` set, push `sanad-worker`,
     start the job once and confirm the alert (`deploy/azure/README.md`, "The daily audit-chain check").
 - **Record each institution's Shariah approvals (W6a).** Since W6a nothing Islamic originates until the approval
@@ -312,7 +316,6 @@ The findings go in the adapter README.
 - **SR-024:** in remediation. CI coverage of the unit, contract and adapter suites.
 - **SR-039:** in remediation. The threat model is drafted, not reviewed.
 - **SR-040:** the repository is public.
-- **SR-047:** deployment-wide Admin actions are open to any institution's administrator.
 - **SEC-Q01 … SEC-Q08:** open questions for the client (CSCC classification, CSF level,
   VAPT provider, SOC, notification contacts, disclosure programme, sign-off).
 
