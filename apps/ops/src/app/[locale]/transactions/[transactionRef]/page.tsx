@@ -29,7 +29,13 @@ import {
 } from '@sanad/design/primitives.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 
+import { hostClockInstant } from '@sanad/origination/host-clock.ts';
+import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
+import { civilDateOf } from '@sanad/origination/wasl/settlement.ts';
+
 import { ummAlQura } from '../../../../server/hijri.ts';
+import { persistencePool } from '../../../../server/persistence.ts';
+import { Settlement } from './Settlement.tsx';
 import { POSSESSION_SOURCES, possessionEvidenceTypes, recorderOf } from '../../../../server/murabaha-sequencing.ts';
 import { getTransaction } from '../../../../server/murabaha-transactions.ts';
 import { pageStaff } from '../../../../server/session.ts';
@@ -157,6 +163,8 @@ export default async function TransactionPage({
   const tenant = staff.tenantId as TenantCode;
   const v = await getTransaction(tenant, transactionRef);
   if (v === undefined) notFound();
+  const fixtures = await syntheticDemonstrationPermitted(persistencePool(), process.env);
+  const asOf = civilDateOf(tenant, hostClockInstant());
   const tx = v.transaction;
   const core = tx.core;
   const p = core.pricing;
@@ -713,6 +721,8 @@ export default async function TransactionPage({
           )}
         </section>
       )}
+
+      <Settlement view={v} segment={segment} arabic={arabic} staff={staff} fixtures={fixtures} asOf={asOf} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-card border border-line bg-surface px-5 py-4 shadow-card" data-trade>

@@ -37,12 +37,28 @@ describe('inbound callbacks verify before parsing (SR-016)', () => {
     .map((f) => relative(ROOT, f))
     .filter((f) => INBOUND.test(f) && !STAFF_SIGN_IN.test(f));
 
+  const verifiesBeforeParsing = (text: string): boolean => {
+    const verified = text.indexOf('verifyWebhook(');
+    const parsed = text.search(/\.json\(\)|JSON\.parse\(/);
+    return verified >= 0 && (parsed < 0 || parsed > verified);
+  };
+
+  /**
+   * Shared verifiers a route may delegate to instead (the Wasl webhooks, W4a): the route then reads its
+   * fields only from what the helper returns and parses nothing itself, and the helper is held to the same rule.
+   */
+  const VERIFIERS: Readonly<Record<string, string>> = {
+    'verifiedDelivery(': 'apps/ops/src/server/wasl-webhooks.ts',
+  };
+
   it('every inbound callback route calls verifyWebhook before reading its body as JSON', () => {
     const offenders = inbound.filter((f) => {
       const text = readFileSync(join(ROOT, f), 'utf8');
-      const verified = text.indexOf('verifyWebhook(');
-      const parsed = text.search(/\.json\(\)|JSON\.parse\(/);
-      return verified < 0 || (parsed >= 0 && parsed < verified);
+      if (verifiesBeforeParsing(text)) return false;
+      const helper = Object.entries(VERIFIERS).find(([call]) => text.includes(call));
+      if (helper === undefined) return true;
+      const parsesItself = /\.json\(\)|JSON\.parse\(|request\.text\(\)/.test(text);
+      return parsesItself || !verifiesBeforeParsing(readFileSync(join(ROOT, helper[1]), 'utf8'));
     });
     expect(offenders).toEqual([]);
   });

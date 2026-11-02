@@ -652,9 +652,12 @@ export interface WaslProgramme {
   readonly nameAr: string;
   readonly structureCode: 'MURABAHA';
   readonly programmeLimitMinorUnits: bigint;
-  /** The supplier whose cleared invoices the programme finances. */
-  readonly anchor: WaslParty;
+  /** The supplier whose cleared invoices the programme finances, and the account the institution pays it at. */
+  readonly anchor: WaslParty & { readonly settlementIban: string };
 }
+
+/** A Saudi IBAN: SA, two check digits, twenty characters (bank code and account). */
+const SA_IBAN = /^SA\d{2}[0-9A-Z]{20}$/;
 
 export interface WaslParties {
   /** The institution: the buyer on the anchor's ownership invoice (gate 1), the seller to the distributor. */
@@ -712,7 +715,12 @@ export function loadWaslParties(tenant: TenantCode): Result<WaslParties> {
     return bad('A sale offer’s validity is a whole number of seconds, from a minute to thirty days');
   const programmes: WaslProgramme[] = [];
   for (const p of Array.isArray(raw.programmes) ? (raw.programmes as Record<string, unknown>[]) : []) {
-    const anchor = partyOf(p['anchor']);
+    const anchorParty = partyOf(p['anchor']);
+    const iban = ((p['anchor'] ?? {}) as Record<string, unknown>)['settlementIban'];
+    const anchor =
+      anchorParty !== undefined && typeof iban === 'string' && SA_IBAN.test(iban)
+        ? { ...anchorParty, settlementIban: iban }
+        : undefined;
     const limit = p['programmeLimitMinorUnits'];
     if (
       typeof p['programmeId'] !== 'string' ||
@@ -724,7 +732,9 @@ export function loadWaslParties(tenant: TenantCode): Result<WaslParties> {
       !/^\d{1,15}$/.test(limit) ||
       anchor === undefined
     )
-      return bad('A programme needs an id, names, the MURABAHA structure, a limit in minor units and an anchor');
+      return bad(
+        'A programme needs an id, names, the MURABAHA structure, a limit in minor units and an anchor with its settlement IBAN',
+      );
     programmes.push({
       programmeId: p['programmeId'],
       nameEn: p['nameEn'],

@@ -34,6 +34,7 @@ import {
 import { approveRequest, keyRequest, submit } from '../../apps/ops/src/server/store.ts';
 import { bookExecutedSale } from '../../services/origination/src/wasl/booking.ts';
 import { assertionReplayGuard } from '../../services/origination/src/wasl/identity.ts';
+import { presentDueInstalments, recordCollectionResult } from '../../services/origination/src/wasl/settlement.ts';
 import { acceptSaleOffer } from '../../services/origination/src/wasl/steps.ts';
 
 const url = process.env['SANAD_TEST_DATABASE_URL'];
@@ -201,6 +202,65 @@ describe.skipIf(url === undefined)('booking an accepted Murabaha on PostgreSQL (
                                 where t.transaction_ref = $1)`,
       'a schedule that no longer sums to the total',
     );
+  });
+
+  it('W4a: the seller’s payment and the SADAD bill are on the outbox, and a receipt settles the obligation', async () => {
+    const v = await accepted();
+    advance(1);
+    expectOk(await bookExecutedSale(T, v.transactionRef, MAKER));
+    const outbox = async (key: string) =>
+      (
+        await pool.query<{ kind: string; payload: Record<string, string>; state: string }>(
+          `select kind, payload, state from core.outbox_event where idempotency_key = $1`,
+          [key],
+        )
+      ).rows;
+    expect(await outbox(`wasl:${v.transactionRef}:seller`)).toEqual([
+      expect.objectContaining({
+        kind: 'PAYMENT_DISBURSE',
+        state: 'PENDING',
+        payload: expect.objectContaining({ beneficiaryIban: 'SA0380000000608010167519' }),
+      }),
+    ]);
+    advance(54 * 86_400);
+    expectOk(await presentDueInstalments(T, v.transactionRef, MAKER));
+    expect(await outbox(`wasl:${v.transactionRef}:collect:I1`)).toEqual([
+      expect.objectContaining({ kind: 'BILL_PRESENT', state: 'PENDING' }),
+    ]);
+    advance(1);
+    const settled = expectOk(
+      await recordCollectionResult(
+        T,
+        v.transactionRef,
+        {
+          idempotencyKey: `wasl:${v.transactionRef}:collect:I1`,
+          status: 'PAID',
+          reference: 'SADAD-DB',
+          receivedOn: '2026-12-11',
+          source: 'FIXTURE',
+        },
+        'sadad',
+      ),
+    );
+    expect(settled.transaction.state).toBe('SETTLED');
+    const row = await pool.query<{ state: string; paid: string; total: string }>(
+      `select t.state, o.paid_amount_minor::text paid, o.total_amount_minor::text total
+         from core.transaction t join core.obligation o on o.transaction_id = t.id where t.transaction_ref = $1`,
+      [v.transactionRef],
+    );
+    expect(row.rows[0]).toEqual({ state: 'SETTLED', paid: row.rows[0]?.total, total: row.rows[0]?.total });
+    // Paid beyond the total: refused by the database, even to the owner.
+    const e = await pool
+      .query(
+        `update core.obligation set paid_amount_minor = paid_amount_minor + 1
+          where transaction_id = (select id from core.transaction where transaction_ref = $1)`,
+        [v.transactionRef],
+      )
+      .then(
+        () => undefined,
+        (x: unknown) => x as { code?: string },
+      );
+    expect(e?.code).toBe('23514');
   });
 
   it('the portal’s identity assertions are accepted once per tenant, by tenant code (SR-007)', async () => {
