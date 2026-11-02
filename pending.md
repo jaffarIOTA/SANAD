@@ -8,7 +8,7 @@ Last updated: 19 October 2026.
 - **Merge the stacked PRs.** Each is built on the one before; only #35 targets `main`.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
-  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#62 document intelligence D1–D3. Auto mode cannot merge.
+  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#63 document intelligence D1–D4. Auto mode cannot merge.
 - **Renew the `APICAPIKEY` GitHub secret.**
 - **Bank A's Tawarruq board ruling.** Record it in Admin. `sme-term-islamic` stays
   disabled until it's recorded.
@@ -83,9 +83,18 @@ The findings go in the adapter README.
     today the adapter sends Sanad's own document reference.
   - Seeded and partner-handed-over applications have no Sanad consent, so their authenticity check reads "not
     checked: no consent".
-- **D4–D5 next:**
-  - D4: gap requests and resume;
-  - D5: throughput view.
+- **D4 built**, PR #63 (stacked on #62): the gaps on a business application, one request to the applicant per gap set,
+  and the case shown ready again when the last gap closes.
+  - The notification goes to the outbox. What the applicant actually receives depends on the notifications adapter
+    and its templates for `INFORMATION_REQUESTED`, which aren't built (the development port only records it).
+  - **Applications from Sanad's own intake can't be sent a request yet**, and can't be sent the offer either
+    (`OFFER_NOTICE_NO_CHANNEL`). Intake records the contact party but not whether it has an email or mobile, so
+    both refuse with no channel. Seeded and partner applications carry it. Intake needs to capture the signatory's
+    contact channels (masked, as everywhere else).
+  - The stage clock doesn't pause while a case waits on the applicant. Whether it should is a policy decision for
+    the product owner.
+  - Wasl isn't covered until its documents are uploaded rather than referenced.
+- **D5 next:** throughput view.
 - **Live reading needs:** the Document Engine configured for the tenant, V-05/V-06 verified on real Saudi and UAE
   samples, and the catalogues (ILLUSTRATIVE) tuned against them.
 - **Images (PNG, JPEG) are not read.** They need the engine's OCR path.
@@ -103,6 +112,12 @@ The findings go in the adapter README.
   VAPT provider, SOC, notification contacts, disclosure programme, sign-off).
 
 ## Housekeeping
+
+- Local database runs: the Docker VM's clock drifts behind the host after sleep (9 s on 19 October), which fails
+  `test/contract/spent-tokens-postgres.test.ts` locally. Restart Docker Desktop to resync. Under heavy load (another
+  project's kind cluster), the database suite needs `--testTimeout=60000`.
+- A fresh local test database `sanad_d4` was created in `sanad-w2-pg`; the old `postgres` database there is full of
+  earlier runs and exhausts the Murabaha test's request numbers.
 
 - Local Docker containers `sanad-w2-pg` (port 55432) and `sanad-w3-demo` (port 55433)
   are throwaway test databases. Remove them when no longer needed.

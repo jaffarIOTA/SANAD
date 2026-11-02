@@ -149,6 +149,27 @@ upload ─▶ store (object store, unchanged)
 - When a document arrives that closes the last gap, the application records it and the officer's queue shows the case
   as ready again. Where a journey has a waiting state (the Wasl request's AWAITING_INFORMATION), it resumes.
 
+**As built (D4, 19 October 2026), business journey:**
+
+- **Gaps** (`core/documents/gaps.ts`): a required item that is missing, expired or refused by the checker, or whose
+  latest document reads as the wrong type, isn't confirmed by its issuer, or fails a declared check.
+  - **Changed from the plan:** "unreadable" is not a gap. The applicant isn't asked to fix what the engine couldn't
+    read; a person reads it.
+  - Optional items and documents the checker has accepted are never gaps.
+- **The request:** the officer sends "Request these documents".
+  - It records `DOCUMENTS_REQUESTED` and queues one `INFORMATION_REQUESTED` notification on the outbox, in the same
+    commit, to the applicant's contact party by reference, by email and SMS where on record.
+  - The notification carries document codes and kinds only. A compliance test asserts the name and registration
+    number are absent.
+  - Asking again for the same open set sends nothing more. A different set is a new request.
+  - Each gap has an Arabic and English sentence the applicant can act on, shown to the officer before sending.
+- **Resume:** when a document arrives (uploaded, or accepted by the checker) and no gap is left, the application
+  records `DOCUMENTS_RECEIVED`.
+  - The queue shows "Awaiting n documents" while the request is open, then "Documents received — ready" until the
+    next event on the case.
+- **Wasl is not covered.** Its request documents are attached by reference, not uploaded, and it has no
+  information-waiting state yet. It joins when uploads come to the SME portal.
+
 ### D5: measurement
 
 - Throughput view, derived from events:

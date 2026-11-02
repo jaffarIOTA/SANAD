@@ -156,6 +156,7 @@ import type { RateBasis, RatePeriod } from '@sanad/core/pricing/rate.ts';
 import type { ProductCatalogue } from '@sanad/core/products/catalogue.ts';
 import { buildOffer } from '@sanad/core/products/offer.ts';
 import { type TsaInstant, restoreAttestedInstant } from '@sanad/core/time/tsa.ts';
+import { type DocumentGap, gapSetKey } from '@sanad/core/documents/gaps.ts';
 import { findingsFor } from '@sanad/origination/documents/findings.ts';
 import { hostClockInstant } from '@sanad/origination/host-clock.ts';
 import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
@@ -550,7 +551,18 @@ export interface BusinessApplicationView {
   readonly offers: readonly OfferRun[];
   readonly latestOffer?: OfferRun;
   readonly portfolio?: PortfolioStatus;
+  /** The latest request to the applicant for documents (D4), while it is open or just answered. */
+  readonly documentRequest?: DocumentRequestState;
   readonly events: readonly ApplicationEvent[];
+}
+
+export interface DocumentRequestState {
+  readonly status: 'AWAITING' | 'RECEIVED';
+  readonly requestedAtEpochSeconds: bigint;
+  /** The gap set asked for, as codes (`gapSetKey`). */
+  readonly gapSet: string;
+  readonly count: number;
+  readonly receivedAtEpochSeconds?: bigint;
 }
 
 export interface FigureReadiness {
@@ -1312,8 +1324,37 @@ function view(record: BusinessRecord, currency: CurrencyCode): BusinessApplicati
     offers: [...record.offers],
     ...(latestOffer === undefined ? {} : { latestOffer }),
     ...(record.portfolio === undefined ? {} : { portfolio: record.portfolio }),
+    ...documentRequestOf(record),
     events: [...record.events],
   };
+}
+
+/**
+ * Where the latest request for documents stands (D4), from the events: AWAITING
+ * until the documents that close it arrive; RECEIVED while that arrival is the
+ * latest thing on the case, so the officer's queue shows it ready again.
+ */
+function documentRequestOf(record: BusinessRecord): { documentRequest?: DocumentRequestState } {
+  const events = [...record.events].sort((a, b) => a.sequence - b.sequence);
+  const at = events.findLastIndex((e) => e.eventType === 'DOCUMENTS_REQUESTED');
+  const requested = events[at];
+  if (requested === undefined) return {};
+  const base = {
+    requestedAtEpochSeconds: requested.atEpochSeconds,
+    gapSet: requested.detail['gaps'] ?? '',
+    count: Number(requested.detail['count'] ?? '0'),
+  };
+  const received = events.slice(at + 1).findIndex((e) => e.eventType === 'DOCUMENTS_RECEIVED');
+  if (received < 0) return { documentRequest: { ...base, status: 'AWAITING' } };
+  return at + 1 + received === events.length - 1
+    ? {
+        documentRequest: {
+          ...base,
+          status: 'RECEIVED',
+          receivedAtEpochSeconds: events[at + 1 + received]?.atEpochSeconds ?? 0n,
+        },
+      }
+    : {};
 }
 
 // =============================================================================
@@ -4568,6 +4609,101 @@ async function sendOfferAt(
   commitSideEffects(book, queued.value);
   apply(book, r, t.value);
   return ok(view(r, ctx.value.currency));
+}
+
+// -- document requests (document intelligence D4) ---------------------------------
+
+/**
+ * Ask the applicant for the documents the application still needs: records
+ * DOCUMENTS_REQUESTED and queues one INFORMATION_REQUESTED notification on the
+ * outbox in the same commit, to the applicant's contact party by reference.
+ * The gaps are codes on the event and the notification — never a value read
+ * from a document. Asking again for the same open set sends nothing more.
+ */
+export async function recordDocumentRequest(
+  tenant: TenantCode,
+  applicationId: string,
+  gaps: readonly DocumentGap[],
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    if (!SPREAD_OPEN.has(r.application.status))
+      return fail('TRANSITION_NOT_ALLOWED', 'Documents are requested while the application is in credit assessment', {
+        status: r.application.status,
+      });
+    if (gaps.length === 0) return fail('NO_DOCUMENT_GAPS', 'The application needs no documents from the applicant');
+    const key = gapSetKey(gaps);
+    const open = documentRequestOf(r).documentRequest;
+    if (open?.status === 'AWAITING' && open.gapSet === key) return ok(view(r, ctx.value.currency));
+    const channels = [
+      ...(r.contact.emailMasked === undefined ? [] : ['EMAIL']),
+      ...(r.contact.mobileMasked === undefined ? [] : ['SMS']),
+    ];
+    if (channels.length === 0)
+      return fail('NO_CONTACT_CHANNEL', 'The applicant has no email or mobile on record to send the request to');
+    const n = r.events.filter((e) => e.eventType === 'DOCUMENTS_REQUESTED').length + 1;
+    const queued = queueSideEffects([
+      {
+        eventId: randomUUID(),
+        tenantId: tenant,
+        kind: 'NOTIFICATION',
+        subjectRef: applicationId,
+        idempotencyKey: `${applicationId}:documents-requested:${String(n)}`,
+        correlationId: applicationId,
+        payload: {
+          recipientKind: 'COUNTERPARTY',
+          recipientRef: r.contact.partyRef,
+          event: 'INFORMATION_REQUESTED',
+          channels: channels.join(','),
+          applicationId,
+          documents: key,
+          count: String(gaps.length),
+        },
+      },
+    ]);
+    if (!queued.ok) return queued;
+    commitSideEffects(book, queued.value);
+    recordEvent(book, r, {
+      eventType: 'DOCUMENTS_REQUESTED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: developmentAttestation().epochSeconds,
+      detail: { gaps: key, count: String(gaps.length), channels: channels.join(',') },
+    });
+    return ok(view(r, ctx.value.currency));
+  });
+}
+
+/** The documents asked for have arrived and no gap is left: the case is ready for the officer again. */
+export async function recordDocumentsReceived(
+  tenant: TenantCode,
+  applicationId: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    if (documentRequestOf(r).documentRequest?.status !== 'AWAITING')
+      return fail('NO_OPEN_DOCUMENT_REQUEST', 'No request for documents is open on this application');
+    recordEvent(book, r, {
+      eventType: 'DOCUMENTS_RECEIVED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: developmentAttestation().epochSeconds,
+      detail: {},
+    });
+    return ok(view(r, ctx.value.currency));
+  });
 }
 
 /**

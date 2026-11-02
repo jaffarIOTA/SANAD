@@ -126,6 +126,16 @@ export function statusChip(v: BusinessApplicationView, nowEpochSeconds: bigint):
       tone: 'bad',
     };
   if (a.status === 'DISBURSED') return { code: 'ON_TRACK', en: 'On track', ar: 'منتظم', tone: 'good' };
+  // D4: a case waiting on the applicant says so; one whose documents just came back is ready for the officer again.
+  if (v.documentRequest?.status === 'AWAITING')
+    return {
+      code: 'AWAITING_DOCUMENTS',
+      en: `Awaiting ${String(v.documentRequest.count)} documents from the applicant`,
+      ar: `بانتظار ${String(v.documentRequest.count)} مستندات من مقدم الطلب`,
+      tone: 'warn',
+    };
+  if (v.documentRequest?.status === 'RECEIVED')
+    return { code: 'DOCUMENTS_RECEIVED', en: 'Documents received — ready', ar: 'وصلت المستندات — جاهز', tone: 'good' };
 
   const clock = stageClock(v, nowEpochSeconds);
   const ofTarget = (en: string, ar: string): StatusChip => {
@@ -593,6 +603,10 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
   },
   INTAKE_WITHDRAWN: { en: 'Application withdrawn.', ar: 'سُحب الطلب.' },
   OFFER_GENERATED: { en: 'Offer letter generated.', ar: 'أُعدّ خطاب العرض.' },
+  DOCUMENTS_REQUESTED: {
+    en: 'Documents requested: the notification to the applicant is queued on the outbox.',
+    ar: 'طُلبت المستندات: الإشعار إلى مقدم الطلب في قائمة الإرسال.',
+  },
   OFFER_SENT: {
     en: 'Offer sent: the notification is queued on the outbox.',
     ar: 'أُرسل العرض: الإشعار في قائمة الإرسال.',
@@ -618,6 +632,18 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
   DOCUMENTS_MISSING: {
     en: 'Every mandatory document is presented before the application goes to credit assessment.',
     ar: 'يجب تقديم جميع المستندات الإلزامية قبل الإحالة إلى التقييم.',
+  },
+  NO_DOCUMENT_GAPS: {
+    en: 'Nothing to request: every required document is in, and none is failing a check.',
+    ar: 'لا شيء لطلبه: جميع المستندات الإلزامية مقدَّمة، ولا يفشل أي منها في فحص.',
+  },
+  NO_CONTACT_CHANNEL: {
+    en: 'The applicant has no email or mobile on record to send the request to.',
+    ar: 'لا يوجد لمقدم الطلب بريد إلكتروني أو جوال مسجّل لإرسال الطلب إليه.',
+  },
+  NO_OPEN_DOCUMENT_REQUEST: {
+    en: 'No request for documents is open on this application.',
+    ar: 'لا يوجد طلب مستندات مفتوح على هذا الطلب.',
   },
   AUTHENTICITY_UNRESOLVED: {
     en: 'The issuer did not confirm this document. To accept it, write how you resolved that (at least a sentence).',

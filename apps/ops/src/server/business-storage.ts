@@ -17,7 +17,7 @@
  */
 import type { TenantCode } from '@sanad/config/loader.ts';
 import { acceptUpload } from '@sanad/core/documents/upload.ts';
-import { type Result, reject } from '@sanad/core/kernel/result.ts';
+import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import type { ObjectStoragePort, StorableMediaType } from '@sanad/core/ports/object-storage.ts';
 import { credentialProviderFromEnvironment } from '@sanad/origination/credentials.ts';
 import { readPresentedDocument } from '@sanad/origination/documents/findings.ts';
@@ -26,6 +26,7 @@ import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
 import { InMemoryObjectStorage } from '../../../../adapters/storage/memory.ts';
 import { S3ObjectStorage } from '../../../../adapters/storage/s3/adapter.ts';
 import { type BusinessApplicationView, checklistStatus, getApplication, presentDocument } from './business.ts';
+import { resumeIfComplete } from './business-gaps.ts';
 import { documentAuthenticity } from './business-rails.ts';
 import { persistencePool } from './persistence.ts';
 
@@ -137,7 +138,9 @@ export async function uploadBusinessDocument(
       },
     },
   );
-  return presented;
+  // D4: the document that closes the last gap of an open request records the documents received.
+  await resumeIfComplete(tenant, applicationId, actor);
+  return ok((await getApplication(tenant, applicationId)) ?? presented.value);
 }
 
 /**

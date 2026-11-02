@@ -61,6 +61,8 @@ import type { StaffPrincipal } from '../../../../server/staff.ts';
 import { Gate } from '../../Gate.tsx';
 import { SourceBadge } from '../intake/IntakeUi.tsx';
 import { DocumentFindings } from '../DocumentFindings.tsx';
+import { documentGaps } from '../../../../server/business-gaps.ts';
+import { DocumentGaps } from './DocumentGaps.tsx';
 import { SecurityCard } from './SecurityCard.tsx';
 import {
   ApplicationShell,
@@ -194,12 +196,13 @@ export default async function LoanApplicationPage({
   const f = formatters(locale === 'ar-SA', view.currency);
   const { t } = f;
 
-  const [readiness, checklist, variants, security, findings] = await Promise.all([
+  const [readiness, checklist, variants, security, findings, gaps] = await Promise.all([
     figureReadiness(j.tenant, applicationId),
     checklistStatus(j.tenant, applicationId),
     productVariants(j.tenant),
     securityStatus(j.tenant, applicationId),
     findingsFor(j.tenant, { kind: 'BUSINESS_APPLICATION', ref: applicationId }),
+    documentGaps(j.tenant, applicationId),
   ]);
   const policyResult = loadSmeAssessmentPolicy(j.tenant);
   const policy = policyResult.ok ? policyResult.value : undefined;
@@ -647,6 +650,15 @@ export default async function LoanApplicationPage({
           <p className="text-[13px] text-blocked">{checklist.error.detail}</p>
         ) : (
           <div className="flex flex-col gap-5">
+            <DocumentGaps
+              segment={segment}
+              applicationId={a.applicationId}
+              gaps={gaps.ok ? gaps.value : []}
+              request={view.documentRequest}
+              open={open}
+              staff={staff}
+              f={f}
+            />
             {GROUPS.map((group) => {
               const items = checklist.value.report.filter((r) => documentGroup(r.item.documentType) === group.id);
               if (items.length === 0) return null;
