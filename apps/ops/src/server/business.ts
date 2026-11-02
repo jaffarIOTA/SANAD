@@ -129,6 +129,7 @@ import {
   type Transition,
   approveStraightThrough as approveStraightThroughCore,
   approvedTermsOf,
+  REGISTRATION_FIELDS,
   containsIdentityNumber,
   decideInCommittee as decideInCommitteeCore,
   defaultApprovedTerms,
@@ -374,7 +375,12 @@ export interface AssessmentInputs {
  *   AECB_RAIL_LIVE              fetched through the bureau rail from the live bureau
  * Records written before the rail existed said AECB_FIXTURE and meant keyed; they read as KEYED.
  */
-export type BureauSource = 'KEYED_FROM_UPSTREAM_REPORT' | 'AECB_RAIL_FIXTURE' | 'AECB_RAIL_LIVE';
+export type BureauSource =
+  | 'KEYED_FROM_UPSTREAM_REPORT'
+  | 'AECB_RAIL_FIXTURE'
+  | 'AECB_RAIL_LIVE'
+  | 'SIMAH_RAIL_FIXTURE'
+  | 'SIMAH_RAIL_LIVE';
 
 export type AssessmentInputsEntry = Omit<
   AssessmentInputs,
@@ -1208,7 +1214,12 @@ function restoreBook(book: TenantBook, persisted: Awaited<ReturnType<typeof load
 /** Rebuilds what is recorded only as an event: contact, documents, assessment inputs, portfolio status. */
 /** A stored bureau source: the old AECB_FIXTURE (and an absent one) meant keyed from the upstream report. */
 function bureauSourceOf(stored: string | undefined): BureauSource {
-  return stored === 'AECB_RAIL_FIXTURE' || stored === 'AECB_RAIL_LIVE' ? stored : 'KEYED_FROM_UPSTREAM_REPORT';
+  return stored === 'AECB_RAIL_FIXTURE' ||
+    stored === 'AECB_RAIL_LIVE' ||
+    stored === 'SIMAH_RAIL_FIXTURE' ||
+    stored === 'SIMAH_RAIL_LIVE'
+    ? stored
+    : 'KEYED_FROM_UPSTREAM_REPORT';
 }
 
 function contentOf(d: Readonly<Record<string, string>>): DocumentContent {
@@ -1895,7 +1906,7 @@ async function handOverAt(
   const currency = ctx.value.currency;
 
   // No identity number anywhere in what was handed over — the contact and the upstream reference as much as the applicant.
-  if (containsIdentityNumber(request))
+  if (containsIdentityNumber(request, REGISTRATION_FIELDS, request.applicant.registrationRef))
     return fail(
       'IDENTITY_NUMBER_IN_PAYLOAD',
       'An identity number does not belong in the application record; send a reference',
@@ -2452,7 +2463,15 @@ async function recordAssessmentInputsAt(
       reportRef: fetched.reportRef,
       consentId: fetched.consentId,
       score: fetched.score,
-      source: fetched.source === 'LIVE' ? 'AECB_RAIL_LIVE' : 'AECB_RAIL_FIXTURE',
+      // The jurisdiction's bureau: AECB in the UAE, SIMAH in Saudi Arabia.
+      source:
+        ctx.value.profile.code === 'SA'
+          ? fetched.source === 'LIVE'
+            ? 'SIMAH_RAIL_LIVE'
+            : 'SIMAH_RAIL_FIXTURE'
+          : fetched.source === 'LIVE'
+            ? 'AECB_RAIL_LIVE'
+            : 'AECB_RAIL_FIXTURE',
     };
   } else {
     const keyed = entry.bureau;
@@ -3048,6 +3067,9 @@ const BUREAU_FACT_SOURCE: Readonly<Record<BureauSource, string>> = {
   AECB_RAIL_FIXTURE:
     'AECB commercial report fetched through the bureau rail under the business’s recorded consent — answered by the demonstration transport (FIXTURE)',
   AECB_RAIL_LIVE: 'AECB commercial report fetched through the bureau rail under the business’s recorded consent',
+  SIMAH_RAIL_FIXTURE:
+    'SIMAH commercial report fetched through the bureau rail under the business’s recorded consent — answered by the demonstration transport (FIXTURE)',
+  SIMAH_RAIL_LIVE: 'SIMAH commercial report fetched through the bureau rail under the business’s recorded consent',
 };
 
 export const FACT_SOURCES: Readonly<Record<string, string>> = {

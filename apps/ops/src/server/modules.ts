@@ -391,6 +391,68 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
     ],
   },
   {
+    // The Saudi SME journey, built milestone by milestone (K1–K4) on the UAE one. Each item says what works today.
+    id: 'sme-direct-ksa',
+    jurisdictions: SA,
+    icon: 'building',
+    titleEn: 'SME direct lending (Saudi Arabia)',
+    titleAr: 'تمويل المنشآت المباشر (السعودية)',
+    items: [
+      {
+        id: 'ksa-business-intake',
+        titleEn: 'New application & intake',
+        titleAr: 'طلب جديد واستلامه',
+        href: '/business/intake/new',
+        readiness: live(),
+        reference:
+          'K1: the same intake as the UAE journey with the commercial registration (CR) as the registration number — exempt, by field name, from the identity-number guard because a CR has a national id’s shape (REGISTRATION_FIELDS); beneficial owners against the cited 25% Saudi threshold (config/regulatory/sa/beneficial-ownership.json, articles to confirm)',
+      },
+      {
+        id: 'ksa-business-kyb',
+        titleEn: 'KYB checks (Wathq, Yakeen, screening, zakat)',
+        titleAr: 'فحوصات اعرف عميلك (واثق ويقين والفحص والزكاة)',
+        readiness: {
+          kind: 'BLOCKED',
+          on: 'fixture rails: Wathq, Yakeen, ZATCA (zakat certificate by CR), SIMAH and Open Banking run over the Saudi demonstration transport, labelled Fixture, only where a synthetic demonstration is permitted; elsewhere RAIL_UNAVAILABLE until each adapter in adapters/ksa has made a verified sandbox call',
+        },
+        reference: 'Chosen by the tenant’s jurisdiction (intake-rails.ts); each check under the subject’s recorded consent; outcome and provider reference only',
+      },
+      {
+        id: 'ksa-business-pipeline',
+        titleEn: 'Business applications',
+        titleAr: 'طلبات المنشآت',
+        href: '/business',
+        readiness: live(),
+        reference: 'The same pipeline and application screens as the UAE journey, in SAR',
+      },
+      {
+        id: 'ksa-business-policies',
+        titleEn: 'Assessment, security and decision pack',
+        titleAr: 'التقييم والضمانات وحزمة القرار',
+        readiness: soon(),
+        reference:
+          'K2: Saudi SME assessment, document checklists, security and decision-pack policies for each tenant, and the SAIBOR benchmark from the rate publisher for pricing — until then the assessment refuses with SME_ASSESSMENT_POLICY_NOT_FOUND',
+      },
+      {
+        id: 'ksa-business-closing',
+        titleEn: 'Signing, disbursement and booking',
+        titleAr: 'التوقيع والصرف والتسجيل',
+        readiness: soon(),
+        reference: 'K3: Nafath signing bound to the letter, payment through the payments hub, SIMAH reporting, booking in the loan system',
+      },
+      {
+        id: 'ksa-business-islamic',
+        titleEn: 'Islamic SME finance (Tawarruq)',
+        titleAr: 'تمويل المنشآت الإسلامي (التورق)',
+        readiness: {
+          kind: 'BLOCKED',
+          on: 'K4, and the institution’s Shariah board ruling for SME Tawarruq recorded through Admin → Products (sme-term-islamic stays disabled without it)',
+        },
+        reference: 'products/sme-term-islamic: commodity purchase from the board-approved broker, deferred sale, agency where the board permits, then disbursement',
+      },
+    ],
+  },
+  {
     id: 'sme-direct-uae',
     jurisdictions: AE,
     icon: 'building',

@@ -412,7 +412,7 @@ describe('answers map to the port, and identifiers do not cross', () => {
         status: 'ACTIVE',
         activityCodes: ['469000'],
         signatoryRefs: ['wathq:7000000002:manager:1'],
-        lookupRef: 'wathq:7000000002:1800000000',
+        lookupRef: 'wathq:7000000002:ttro8w0',
         retrievedAtEpochSeconds: 1_800_000_000n,
         paidCapitalMinorUnits: 50_000_000n,
         registeredAtGregorian: '2014-06-01',

@@ -214,13 +214,16 @@ function TaxCell({
   intake,
   open,
   f,
+  saudi = false,
 }: {
   readonly segment: string;
   readonly intake: BusinessIntake;
   readonly open: boolean;
   readonly f: Formatters;
+  /** Saudi Arabia: the zakat certificate, checked with ZATCA by the commercial registration. */
+  readonly saudi?: boolean;
 }): ReactElement {
-  const trn = intake.entity.taxRegistrationNumber;
+  const trn = saudi ? intake.entity.tradeLicence : intake.entity.taxRegistrationNumber;
   if (trn === undefined)
     return <span className="text-[13px] text-ink-quiet">{f.t('No TRN recorded', 'لم يُسجَّل رقم ضريبي')}</span>;
   const c = intake.taxCheck;
@@ -366,8 +369,8 @@ export default async function IntakePage({
               f={f}
             />
           </Row>
-          <Row label={t('VAT registration', 'التسجيل الضريبي')}>
-            <TaxCell segment={segment} intake={i} open={open} f={f} />
+          <Row label={j.code === 'SA' ? t('Zakat certificate (ZATCA)', 'شهادة الزكاة (هيئة الزكاة والضريبة والجمارك)') : t('VAT registration', 'التسجيل الضريبي')}>
+            <TaxCell saudi={j.code === 'SA'} segment={segment} intake={i} open={open} f={f} />
           </Row>
         </dl>
       </SectionCard>

@@ -256,6 +256,10 @@ describe('the sidebar, by jurisdiction', () => {
     expect(sa.groups).not.toContain('uae-rails');
     expect(sa.groups).not.toContain('sme-direct-uae');
     expect(sa.items).toEqual(expect.arrayContaining(['murabaha-scf', 'bnpl', 'nafath', 'simah']));
+    // K1: the Saudi SME journey has its own group, and the UAE deployment does not see it.
+    expect(sa.groups).toContain('sme-direct-ksa');
+    expect(sa.items).toEqual(expect.arrayContaining(['ksa-business-intake', 'ksa-business-kyb', 'ksa-business-pipeline']));
+    expect(ids(navigationFor('AE')).groups).not.toContain('sme-direct-ksa');
   });
 
   it('loses nothing: every module is listed in one jurisdiction or the other', () => {

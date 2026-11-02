@@ -139,6 +139,8 @@ const BUREAU_SOURCE_WORDS: Readonly<Record<BureauSource, { readonly en: string; 
   KEYED_FROM_UPSTREAM_REPORT: { en: 'Keyed from the upstream report', ar: 'مُدخلة من تقرير الجهة المُحيلة' },
   AECB_RAIL_FIXTURE: { en: 'AECB rail (fixture)', ar: 'الربط مع المكتب (تجريبي)' },
   AECB_RAIL_LIVE: { en: 'AECB rail', ar: 'الربط مع المكتب' },
+  SIMAH_RAIL_FIXTURE: { en: 'SIMAH rail (fixture)', ar: 'الربط مع سمة (تجريبي)' },
+  SIMAH_RAIL_LIVE: { en: 'SIMAH rail', ar: 'الربط مع سمة' },
 };
 
 /** A weight per ten thousand as a whole percentage where it is one: 4000 → '40%'. */
