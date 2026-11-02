@@ -25,7 +25,7 @@
 import { notFound } from 'next/navigation';
 import type { ReactElement } from 'react';
 
-import { loadSmeAssessmentPolicy } from '@sanad/config/loader.ts';
+import { loadSmeAssessmentPolicy, loadStatementReadingPolicy } from '@sanad/config/loader.ts';
 import type { FinancialRatio, FinancialRatioCode } from '@sanad/core/applicant/financials.ts';
 import type { SmeAssessmentPolicy } from '@sanad/core/decisioning/sme-assessment.ts';
 import type { Result } from '@sanad/core/kernel/result.ts';
@@ -36,6 +36,7 @@ import {
   fetchBankStatementsAction,
   proposeFigureAction,
   presentDocumentAction,
+  readStatementAction,
   submitForAssessmentAction,
   uploadDocumentAction,
   validateDocumentAction,
@@ -199,6 +200,8 @@ export default async function LoanApplicationPage({
   ]);
   const policyResult = loadSmeAssessmentPolicy(j.tenant);
   const policy = policyResult.ok ? policyResult.value : undefined;
+  const reading = loadStatementReadingPolicy(j.tenant);
+  const readableTypes: ReadonlySet<string> = new Set(reading.ok ? reading.value.documentTypes : []);
   const a = view.application;
   const variant = variants.get(a.variantCode);
   const open = OPEN.has(a.status);
@@ -617,8 +620,8 @@ export default async function LoanApplicationPage({
         note={
           !checklist.ok ? undefined : f.arabic ? (
             <>
-              قائمة فئة {variant?.nameAr ?? a.variantCode} (الإصدار <Id>{checklist.value.checklist.version}</Id>).
-              يُحفظ الملف المرفوع في مخزن المستندات ويُسجَّل هنا ببصمته.
+              قائمة فئة {variant?.nameAr ?? a.variantCode} (الإصدار <Id>{checklist.value.checklist.version}</Id>). يُحفظ
+              الملف المرفوع في مخزن المستندات ويُسجَّل هنا ببصمته.
             </>
           ) : (
             <>
@@ -701,6 +704,26 @@ export default async function LoanApplicationPage({
                                 >
                                   {held.content.sha256Hex.slice(0, 12)}
                                 </bdi>
+                                {open &&
+                                held.content.mediaType === 'application/pdf' &&
+                                readableTypes.has(held.documentType) ? (
+                                  <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+                                    <form action={readStatementAction} data-statement-read>
+                                      <FormContext segment={segment} applicationId={a.applicationId} />
+                                      <input type="hidden" name="documentRef" value={held.documentRef} />
+                                      <button
+                                        type="submit"
+                                        className={BTN_SMALL}
+                                        title={t(
+                                          'The document engine reads the statement’s tables; each figure is then verified by a person.',
+                                          'يقرأ محرك المستندات جداول القوائم المالية، ثم يتحقق شخص من كل رقم.',
+                                        )}
+                                      >
+                                        {t('Read figures', 'قراءة الأرقام')}
+                                      </button>
+                                    </form>
+                                  </Gate>
+                                ) : null}
                               </span>
                             )}
                           </span>

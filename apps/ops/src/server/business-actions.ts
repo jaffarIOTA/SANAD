@@ -44,6 +44,7 @@ import { confirmSigning, startSigning } from './business-signing.ts';
 import { recordFixtureCollectionResult, recordFixturePaymentResult } from './business-payments.ts';
 import { bookInLoanSystem } from './business-booking.ts';
 import { renderOfferPdf, sealSignedLetter } from './business-letter-pdf.ts';
+import { readFiguresFromStatement } from './business-statement-reading.ts';
 import {
   buyCommodity,
   sellCommodityOnBehalf,
@@ -260,6 +261,21 @@ export async function uploadDocumentAction(form: FormData): Promise<void> {
         randomUUID(),
       ),
     'DOCUMENT_UPLOADED',
+  );
+}
+
+/**
+ * The officer asks the document engine to read an uploaded statement. The form
+ * carries the document reference only: every value proposed comes from the
+ * document as read, through the system's ingestion principal, and is verified
+ * by a person before it is used.
+ */
+export async function readStatementAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(
+    ctx,
+    () => readFiguresFromStatement(ctx.tenant, ctx.applicationId, field(form, 'documentRef'), randomUUID()),
+    'STATEMENT_READ',
   );
 }
 

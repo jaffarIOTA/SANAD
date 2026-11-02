@@ -166,6 +166,33 @@ The adapter floors confidence to an integer per ten thousand, rounding down
 trusted. Record which fields it found on the Arabic sample; Arabic extraction fidelity is
 OI-05's question for intelligence as well as rendering.
 
+**Run 2026-10-17, tables on a synthetic statement:** the engine reads documents itself, on
+the local engine with no cloud service. `POST /api/build` with the PDF as a file part and
+`output: {type: "json-content", plainText, tables, keyValuePairs}` returned, per page,
+`plainText`, `tables[]` (`confidence`, then `cells[]` of `rowIndex`, `columnIndex`, `text`,
+`isHeader`) and `keyValuePairs[]` (`key.content`, `value.content`, `value.dataType`,
+`confidence`).
+
+- **Confidence scale.** 0–100 with decimals, for example `99.38857`. That settles the scale
+  question for `NUTR-DEV-001`.
+- **What came back from a two-year statement** (`2025 | 2024` columns, profit-or-loss above
+  financial position):
+  - the two tables came back as one grid;
+  - the first table's year header was dropped, and the second's appeared mid-grid;
+  - bracketed losses came through as printed;
+  - two totals were also offered as key-value pairs.
+- **Arabic.** Plain-text extraction of the Arabic column of the rendered offer letter came
+  back garbled, while English and digits were clean. Arabic statements need a sample of
+  their own, still open.
+- **How Sanad uses it.**
+  1. `adapters/nutrient/document-extraction.ts` reads tables and text only.
+  2. `core/documents/statement-figures.ts` turns the grid into figures under the tenant's
+     exact row labels and a year row the table states. It refuses scaled statements, low
+     confidence, conflicts and a negative revenue.
+  3. The figures are proposed through `ingestReadFigures` as OCR, for a person to verify.
+  - Through Sanad, all five figures were read correctly from the synthetic statement:
+    revenue for both years, net profit, and current assets and liabilities.
+
 ### V-07 — the browser never holds a secret
 With the viewer open, inspect what reached the browser: the licence key (expected) and a
 short-lived JWT signed by the server (expected), and nothing else. **Question:** is the

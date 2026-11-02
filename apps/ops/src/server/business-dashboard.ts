@@ -430,6 +430,10 @@ export const arabicDigits = (s: string): string =>
 
 export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar: string }>> = {
   FIGURE_PROPOSED: { en: 'Figure recorded. It is used once verified.', ar: 'سُجّل الرقم، ويُعتمد بعد التحقق منه.' },
+  STATEMENT_READ: {
+    en: 'Figures read from the statement. Verify each one against the document before it is used.',
+    ar: 'قُرئت الأرقام من القوائم المالية. تحقّق من كل رقم مقابل المستند قبل اعتماده.',
+  },
   FIGURE_VERIFIED: { en: 'Figure verified.', ar: 'تم التحقق من الرقم.' },
   FIGURE_CORRECTED: {
     en: 'Correction recorded. The corrected figure is verified by a second principal.',
@@ -971,6 +975,35 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
   DOCUMENT_ENGINE_UNAVAILABLE: {
     en: 'The document engine did not render the letter, so nothing was stored. The preview below is the letter.',
     ar: 'لم يُصدر محرك المستندات الخطاب، فلم يُحفظ شيء. المعاينة أدناه هي الخطاب.',
+  },
+  // Reading figures from a statement. A refusal here proposed nothing; the figures can still be keyed by hand.
+  DOCUMENT_READING_UNAVAILABLE: {
+    en: 'The document engine did not read the statement, so nothing was proposed. Key the figures from the statement.',
+    ar: 'لم يقرأ محرك المستندات القوائم المالية، فلم يُقترح شيء. أدخل الأرقام من القوائم يدويًا.',
+  },
+  STATEMENT_TYPE_NOT_READ: {
+    en: 'Figures are read only from the financial statements your institution’s policy names.',
+    ar: 'لا تُقرأ الأرقام إلا من القوائم المالية التي تحددها سياسة مؤسستك.',
+  },
+  STATEMENT_NOT_UPLOADED_PDF: {
+    en: 'Only an uploaded PDF statement can be read. Upload the file, or key the figures.',
+    ar: 'لا يُقرأ إلا ملف PDF مرفوع للقوائم المالية. ارفع الملف أو أدخل الأرقام يدويًا.',
+  },
+  STATEMENT_NOTHING_READ: {
+    en: 'No figure could be read with enough confidence. Key the figures from the statement.',
+    ar: 'تعذّرت قراءة أي رقم بثقة كافية. أدخل الأرقام من القوائم المالية يدويًا.',
+  },
+  STATEMENT_SCALE_NOT_UNITS: {
+    en: 'The statement is presented in thousands or millions. Key its figures by hand so the scale is applied by a person.',
+    ar: 'القوائم معروضة بالآلاف أو الملايين. أدخل أرقامها يدويًا ليطبّق المقياسَ شخصٌ.',
+  },
+  STATEMENT_POLICY_NOT_FOUND: {
+    en: 'No statement-reading policy is configured for your institution, so nothing was read.',
+    ar: 'لم تُضبط سياسة لقراءة القوائم المالية لمؤسستك، فلم يُقرأ شيء.',
+  },
+  STATEMENT_POLICY_INVALID: {
+    en: 'Your institution’s statement-reading policy is not valid, so nothing was read. Report this to the administrator.',
+    ar: 'سياسة قراءة القوائم المالية لمؤسستك غير صالحة، فلم يُقرأ شيء. أبلغ مسؤول النظام.',
   },
   // Sealing the signed letter. A refusal here sealed and stored nothing.
   DOCUMENT_SIGNING_UNAVAILABLE: {

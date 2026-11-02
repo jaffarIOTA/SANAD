@@ -464,10 +464,41 @@ const DECISION_PACK_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = {
 export function loadDecisionPackPolicy(tenant: TenantCode): Result<DecisionPackPolicy> {
   const raw = DECISION_PACK_POLICIES[tenant];
   if (raw === undefined)
-    return reject('OP-DETERMINACY', 'DECISION_PACK_POLICY_NOT_FOUND', 'No decision-pack policy is configured for this tenant', {
-      tenant,
-    });
+    return reject(
+      'OP-DETERMINACY',
+      'DECISION_PACK_POLICY_NOT_FOUND',
+      'No decision-pack policy is configured for this tenant',
+      {
+        tenant,
+      },
+    );
   return parseDecisionPackPolicy(raw);
+}
+
+import fundAeStatementReading from './tenants/sme-fund-ae/credit-policy/statement-reading.json' with { type: 'json' };
+import bankAStatementReading from './tenants/bank-a/credit-policy/statement-reading.json' with { type: 'json' };
+import fintechBStatementReading from './tenants/fintech-b/credit-policy/statement-reading.json' with { type: 'json' };
+import { type StatementReadingPolicy, parseStatementReadingPolicy } from '../core/documents/statement-figures.ts';
+
+const STATEMENT_READING_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = {
+  'sme-fund-ae': fundAeStatementReading,
+  'bank-a': bankAStatementReading,
+  'fintech-b': fintechBStatementReading,
+};
+
+/** Which documents' tables are read, the row labels for each metric, and the confidence floor. */
+export function loadStatementReadingPolicy(tenant: TenantCode): Result<StatementReadingPolicy> {
+  const raw = STATEMENT_READING_POLICIES[tenant];
+  if (raw === undefined)
+    return reject(
+      'OP-DETERMINACY',
+      'STATEMENT_POLICY_NOT_FOUND',
+      'No statement-reading policy is configured for this tenant',
+      {
+        tenant,
+      },
+    );
+  return parseStatementReadingPolicy(raw);
 }
 
 import fundAeLoanProducts from './tenants/sme-fund-ae/core-banking/loan-products.json' with { type: 'json' };
@@ -488,18 +519,40 @@ const LOAN_BOOKING: Readonly<Partial<Record<TenantCode, unknown>>> = {
 export function loadLoanBookingConfig(tenant: TenantCode): Result<LoanBookingConfig> {
   const raw = LOAN_BOOKING[tenant] as Record<string, unknown> | undefined;
   if (raw === undefined)
-    return reject('OP-DETERMINACY', 'LOAN_BOOKING_NOT_CONFIGURED', 'No loan-system product mapping is configured for this tenant', {
+    return reject(
+      'OP-DETERMINACY',
+      'LOAN_BOOKING_NOT_CONFIGURED',
+      'No loan-system product mapping is configured for this tenant',
+      {
+        tenant,
+      },
+    );
+  const products = raw['products'];
+  if (
+    typeof raw['adapter'] !== 'string' ||
+    typeof raw['policyRef'] !== 'string' ||
+    products === null ||
+    typeof products !== 'object'
+  )
+    return reject('OP-DETERMINACY', 'LOAN_BOOKING_NOT_CONFIGURED', 'The loan-system product mapping is malformed', {
       tenant,
     });
-  const products = raw['products'];
-  if (typeof raw['adapter'] !== 'string' || typeof raw['policyRef'] !== 'string' || products === null || typeof products !== 'object')
-    return reject('OP-DETERMINACY', 'LOAN_BOOKING_NOT_CONFIGURED', 'The loan-system product mapping is malformed', { tenant });
   for (const [code, v] of Object.entries(products as Record<string, unknown>)) {
     const t = (v as Record<string, unknown> | null)?.['loanTypeCode'];
     if (typeof t !== 'string' || t.trim() === '')
-      return reject('OP-DETERMINACY', 'LOAN_BOOKING_NOT_CONFIGURED', 'Each product names its loan-system product code', { code });
+      return reject(
+        'OP-DETERMINACY',
+        'LOAN_BOOKING_NOT_CONFIGURED',
+        'Each product names its loan-system product code',
+        { code },
+      );
     if (code === 'murabaha-scf')
-      return reject('OP-DETERMINACY', 'LOAN_BOOKING_NOT_CONFIGURED', 'A Murabaha product is never booked as a loan contract', { code });
+      return reject(
+        'OP-DETERMINACY',
+        'LOAN_BOOKING_NOT_CONFIGURED',
+        'A Murabaha product is never booked as a loan contract',
+        { code },
+      );
   }
   return ok({
     adapter: raw['adapter'],
@@ -523,6 +576,8 @@ const SERVICING_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = {
 export function loadServicingPolicy(tenant: TenantCode): Result<ServicingPolicy> {
   const raw = SERVICING_POLICIES[tenant];
   if (raw === undefined)
-    return reject('OP-DETERMINACY', 'SERVICING_POLICY_NOT_FOUND', 'No servicing policy is configured for this tenant', { tenant });
+    return reject('OP-DETERMINACY', 'SERVICING_POLICY_NOT_FOUND', 'No servicing policy is configured for this tenant', {
+      tenant,
+    });
   return parseServicingPolicy(raw);
 }

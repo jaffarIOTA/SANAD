@@ -2563,9 +2563,12 @@ export async function proposeFigures(
 }
 
 /**
- * The system path for figures read from a statement (OCR) or a rail. Not
- * reachable from a workbench form: the server actions do not import it, and
- * it refuses an OFFICER_ENTRY. `source` is the ingesting system's principal.
+ * The system path for figures read from a statement (OCR) or a rail. No
+ * workbench form carries a value into it: the server actions do not import
+ * it, and it refuses an OFFICER_ENTRY. The one form that leads here is "Read
+ * figures" (business-statement-reading.ts), which carries a document
+ * reference only; the values come from the document as the engine read it.
+ * `source` is the ingesting system's principal.
  */
 export async function ingestReadFigures(
   tenant: TenantCode,
