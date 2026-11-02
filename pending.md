@@ -1,7 +1,7 @@
 # Pending
 
 Everything waiting on someone, kept in one place. Updated as items close.
-Last updated: 1 November 2026.
+Last updated: 2 November 2026.
 
 ## Waiting on the product owner
 
@@ -17,12 +17,10 @@ Last updated: 1 November 2026.
   - **Since 1 November `main` is protected (SR-021):** a merge into `main` needs an approving review from someone
     other than the author, all twelve security gates green and signed commits, and admins are bound too. Name a
     second reviewer. Squash-merge, so GitHub signs the commit on `main`.
-  - **#81 is the first PR with every check green.** Two fixes on it are needed lower in the stack:
-    - minimatch 11 (GHSA-g3hv-75wg-m249, published 1 November) fails "SCA — dependencies" on #35–#80, and #35
-      needs it before it can merge into `main`;
-    - Temporal 1.25.0 and the worker image without the viewer fail "Image scan (worker)" on #76–#80.
-    Either carry the two commits down to #35 and merge them up the stack, or merge the stack in order and let #81
-    bring them.
+  - **The two dependency fixes are carried down the stack (2 November).** minimatch 11.0.3
+    (GHSA-g3hv-75wg-m249) is committed on #35 and merged up through #81; Temporal 1.25.0 and the worker image
+    without the viewer are committed on #76 and merged up. #75–#77 still fail typecheck on the A3 TSA body type,
+    which #78 fixes.
   - Once #76 is on `main`, add `Image scan (worker)` to the required checks, and remove it from `NOT_YET_ON_MAIN` in
     `test/architecture/branch-protection.test.ts`.
   - Add this machine's SSH key to GitHub as a signing key, so its signed commits show as verified:
