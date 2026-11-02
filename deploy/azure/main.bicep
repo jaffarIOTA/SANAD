@@ -55,6 +55,12 @@ param githubOidcRepository string = 'jaffarIOTA@216283503/SANAD@1379562991'
 @description('Admin connects with its own login, sanad_admin (SR-046), whose connection string is the Key Vault secret sanad-admin-database-url. Set true once that secret exists (README, "Admin database login"); until then Admin shares sanad-database-url.')
 param adminOwnLogin bool = false
 
+@description('Who is told when the daily audit-chain check finds a break, cannot run, or does not run (SR-011). Empty: no alert is created.')
+param auditAlertEmail string = ''
+
+@description('When the audit-chain check runs, as cron in UTC.')
+param auditCron string = '15 1 * * *'
+
 var tags = {
   product: 'sanad'
   phase: '1-synthetic'
@@ -349,6 +355,106 @@ resource containerApps 'Microsoft.App/containerApps@2024-03-01' = [
     dependsOn: [appAcrPull, appSecrets]
   }
 ]
+
+// SR-011: every tenant's audit chain, verified twice (in the database and independently) once a day, by
+// services/origination/src/audit-verify-cli.ts in the worker image, which carries the TypeScript sources.
+// One line per tenant, `audit <tenant> OK|BROKEN …`; a non-zero exit is a failed execution. No retry: a
+// broken chain is not transient, and a second run would only repeat the line.
+var auditJobName = 'job-${name}-audit-verify'
+
+resource auditJob 'Microsoft.App/jobs@2024-03-01' = if (deployApps) {
+  name: auditJobName
+  location: location
+  tags: union(tags, { app: 'audit-verify' })
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: { '${appIdentity.id}': {} }
+  }
+  properties: {
+    environmentId: environment.id
+    workloadProfileName: 'Consumption'
+    configuration: {
+      triggerType: 'Schedule'
+      scheduleTriggerConfig: { cronExpression: auditCron, parallelism: 1, replicaCompletionCount: 1 }
+      replicaTimeout: 900
+      replicaRetryLimit: 0
+      registries: [{ server: registry.properties.loginServer, identity: appIdentity.id }]
+      secrets: [
+        {
+          name: 'sanad-database-url'
+          keyVaultUrl: '${vault.properties.vaultUri}secrets/sanad-database-url'
+          identity: appIdentity.id
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'audit-verify'
+          image: '${registry.properties.loginServer}/sanad-worker:${imageTag}'
+          command: [
+            'node'
+            '--experimental-transform-types'
+            '--no-warnings'
+            '--import'
+            './services/worker/aliases.mjs'
+            'services/origination/src/audit-verify-cli.ts'
+          ]
+          env: [{ name: 'SANAD_DATABASE_URL', secretRef: 'sanad-database-url' }]
+          resources: { cpu: json('0.25'), memory: '0.5Gi' }
+        }
+      ]
+    }
+  }
+  dependsOn: [appAcrPull, appSecrets]
+}
+
+resource auditActionGroup 'Microsoft.Insights/actionGroups@2023-01-01' = if (deployApps && !empty(auditAlertEmail)) {
+  name: 'ag-${name}-audit'
+  location: 'global'
+  tags: tags
+  properties: {
+    groupShortName: 'sanadaudit'
+    enabled: true
+    emailReceivers: [{ name: 'audit-owner', emailAddress: auditAlertEmail, useCommonAlertSchema: true }]
+  }
+}
+
+// Silence is not success: the alert fires on a BROKEN line, on a run that could not reach the database,
+// and on a day with no verdict at all (the job never ran or never logged).
+resource auditAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-preview' = if (deployApps && !empty(auditAlertEmail)) {
+  name: 'alert-${name}-audit-chain'
+  location: location
+  tags: tags
+  properties: {
+    displayName: 'Audit chain broken, or not verified today (SR-011)'
+    description: 'The daily audit-chain check found a break, could not run, or produced no verdict in 26 hours.'
+    severity: 1
+    enabled: true
+    evaluationFrequency: 'PT1H'
+    windowSize: 'P1D'
+    scopes: [logs.id]
+    criteria: {
+      allOf: [
+        {
+          query: '''
+let lines = ContainerAppConsoleLogs_CL
+  | where TimeGenerated > ago(26h) and ContainerJobName_s == '${auditJobName}'
+  | project Log_s;
+union
+  (lines | where Log_s has 'BROKEN' or Log_s has 'could not run' | project reason = 'broken or could not run'),
+  (lines | where Log_s startswith 'audit ' | summarize verdicts = count() | where verdicts == 0 | project reason = 'no verdict')
+'''
+          timeAggregation: 'Count'
+          operator: 'GreaterThan'
+          threshold: 0
+          failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
+        }
+      ]
+    }
+    actions: { actionGroups: [auditActionGroup.id] }
+  }
+}
 
 output registryLoginServer string = registry.properties.loginServer
 output registryName string = registry.name

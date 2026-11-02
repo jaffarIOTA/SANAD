@@ -1,7 +1,7 @@
 # Pending
 
 Everything waiting on someone, kept in one place. Updated as items close.
-Last updated: 26 October 2026.
+Last updated: 28 October 2026.
 
 ## Waiting on the product owner
 
@@ -9,8 +9,17 @@ Last updated: 26 October 2026.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
   #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2 · #68–#69 Wasl W5a, W5b ·
-  #70 Wasl W6a · #71 Wasl W6b-1 · #72 Wasl W6b-2 · #73 Wasl W6c.
+  #70 Wasl W6a · #71 Wasl W6b-1 · #72 Wasl W6b-2 · #73 Wasl W6c ·
+  #74 A1 viewer without .NET (SR-049) · #75 A3 timestamping authority (SR-006) · #76 A4 standalone worker ·
+  #77 A5 scheduled audit check (SR-011).
   Auto mode cannot merge.
+- **Hosted environment, operator steps (go-live hardening A).**
+  - **A2, SR-003 (High):** apply migrations through 0018 to the hosted database, set the `sanad_runtime`
+    password and point the `sanad-database-url` secret at it, then restart the apps
+    (`deploy/azure/README.md`, "Runtime database role"). It changes the live hosted site, so it waits for your
+    go-ahead; SR-003 closes when it is done.
+  - **A5, SR-011:** redeploy `deploy/azure/main.bicep` with `auditAlertEmail` set, push `sanad-worker`,
+    start the job once and confirm the alert (`deploy/azure/README.md`, "The daily audit-chain check").
 - **Record each institution's Shariah approvals (W6a).** Since W6a nothing Islamic originates until the approval
   its configuration cites is in the register: Bank A `SSB-A-2026-014` (Wasl) and `SSB-A-2026-021` (personal
   Tawarruq), Fintech B `SSB-B-2026-007` (its structure) and `SSB-B-2026-003` (its catalogue's Wasl entry). A Shariah
