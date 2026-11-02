@@ -471,6 +471,10 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
     ar: 'قُدّمت الأقساط للتحصيل، وتصل نتيجة كل منها من القناة.',
   },
   COLLECTION_RESULT_RECORDED: { en: 'Collection result recorded.', ar: 'سُجّلت نتيجة التحصيل.' },
+  SERVICING_CYCLE_RUN: {
+    en: 'Today’s servicing cycle ran. Running it again today changes nothing.',
+    ar: 'نُفّذت دورة خدمة التمويل لليوم. ولا يغيّر تشغيلها مجدداً اليوم شيئاً.',
+  },
   BUREAU_STATUS_REPORTED: {
     en: 'This month’s status queued for the credit bureau.',
     ar: 'أُدرجت حالة هذا الشهر للإبلاغ إلى المكتب الائتماني.',
@@ -1074,6 +1078,10 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
   },
   // Servicing (S2). A refusal here presented and reported nothing.
   NOTHING_TO_COLLECT: { en: 'No instalment is due for collection now.', ar: 'لا يوجد قسط مستحق للتحصيل الآن.' },
+  SERVICING_CYCLE_FAILED: {
+    en: 'The servicing cycle stopped before the end. What it finished is recorded; running it again continues safely.',
+    ar: 'توقفت دورة خدمة التمويل قبل اكتمالها. ما أُنجز منها مسجّل، وإعادة تشغيلها تكمل بأمان.',
+  },
   COLLECTION_NOT_FOUND: {
     en: 'No presented instalment matches that result.',
     ar: 'لا يوجد قسط مُقدَّم يطابق هذه النتيجة.',

@@ -27,6 +27,9 @@ import {
   type TawarruqSequenceInput,
   runTawarruqSequence,
 } from '../programs/tawarruq.ts';
+import type { ServicingActivities } from '../activities-servicing.ts';
+import { type ServicingDayInput, type ServicingEffects, runServicingDay } from '../programs/servicing.ts';
+import type { ServicingDayReport } from '../../../core/servicing/schedule.ts';
 
 export interface RetryInput {
   readonly maxAttempts: number;
@@ -121,4 +124,26 @@ export async function tawarruqSequence(
     },
   };
   return runTawarruqSequence(fx, input);
+}
+
+/**
+ * One tenant's servicing day. Started by the tenant's Temporal Schedule at its
+ * local run time (see ensureServicingSchedule in ../adapter.ts), or by hand;
+ * the schedule only wakes it — the date comes from an attested instant in the
+ * planning activity.
+ */
+export async function servicingDay(
+  input: ServicingDayInput & { readonly retry: RetryInput },
+): Promise<ServicingDayReport> {
+  const acts = activities<ServicingActivities>(input.retry);
+  let progress = 'STARTED';
+  setHandler(progressQuery, () => progress);
+  const fx: ServicingEffects = {
+    plan: () => acts.planServicingDay({ tenantId: input.tenantId }),
+    runTask: (applicationId, task) => acts.runServicingTask({ tenantId: input.tenantId, applicationId, task }),
+    progress: (step) => {
+      progress = step;
+    },
+  };
+  return runServicingDay(fx, input);
 }
