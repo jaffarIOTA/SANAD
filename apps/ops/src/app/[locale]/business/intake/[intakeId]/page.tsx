@@ -10,7 +10,12 @@ import { notFound } from 'next/navigation';
 import type { ReactElement, ReactNode } from 'react';
 
 import { loadBeneficialOwnership } from '@sanad/config/loader.ts';
-import type { BusinessIntake, IntakeConsentType, ScreeningCheck } from '@sanad/core/origination/business-intake.ts';
+import type {
+  BusinessIntake,
+  IntakeConsentType,
+  IntakeParty,
+  ScreeningCheck,
+} from '@sanad/core/origination/business-intake.ts';
 import { hasConsent } from '@sanad/core/origination/business-intake.ts';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 
@@ -20,6 +25,7 @@ import {
   handOverIntakeAction,
   identityCheckAction,
   intakeConsentAction,
+  recordContactAction,
   registryCheckAction,
   taxCheckAction,
   screeningAction,
@@ -50,6 +56,72 @@ function Hidden({ segment, intakeId }: { readonly segment: string; readonly inta
       <input type="hidden" name="locale" value={segment} />
       <input type="hidden" name="intakeId" value={intakeId} />
     </>
+  );
+}
+
+/**
+ * How a signing party is reached: the masked forms only, and while the intake
+ * is a draft a form to record or correct them. What was keyed is never shown
+ * back; the fields start empty every time.
+ */
+function ContactCell({
+  segment,
+  intakeId,
+  party,
+  open,
+  f,
+}: {
+  readonly segment: string;
+  readonly intakeId: string;
+  readonly party: IntakeParty;
+  readonly open: boolean;
+  readonly f: Formatters;
+}): ReactElement {
+  const { t } = f;
+  const c = party.contact;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-[12px] text-ink-quiet">{t('Contact for requests and the offer', 'التواصل للطلبات والعرض')}</p>
+      <div className="flex flex-wrap items-center gap-2 text-[14px]">
+        {c === undefined ? (
+          <Chip tone="bad">{t('No email or mobile', 'لا بريد ولا جوال')}</Chip>
+        ) : (
+          <>
+            {c.emailMasked === undefined ? null : <Id>{c.emailMasked}</Id>}
+            {c.mobileMasked === undefined ? null : <Id>{c.mobileMasked}</Id>}
+          </>
+        )}
+      </div>
+      {open ? (
+        <form action={recordContactAction} className="flex flex-wrap items-center gap-1.5">
+          <Hidden segment={segment} intakeId={intakeId} />
+          <input type="hidden" name="partyRef" value={party.partyRef} />
+          <input
+            name="email"
+            type="email"
+            aria-label={t(`${party.displayName}: email`, `${party.displayName}: البريد الإلكتروني`)}
+            placeholder={t('Email', 'البريد الإلكتروني')}
+            dir="ltr"
+            autoComplete="off"
+            className={`${INPUT} mt-0 h-9 w-56 text-[13px]`}
+          />
+          <input
+            name="mobile"
+            type="tel"
+            aria-label={t(`${party.displayName}: mobile`, `${party.displayName}: الجوال`)}
+            placeholder={t('Mobile, with country code', 'الجوال مع رمز الدولة')}
+            dir="ltr"
+            autoComplete="off"
+            className={`${INPUT} mt-0 h-9 w-48 text-[13px] tabular-nums`}
+          />
+          <PendingButton className={BTN_SMALL}>
+            {c === undefined
+              ? t('Record contact', 'تسجيل وسيلة التواصل')
+              : t('Replace contact', 'استبدال وسيلة التواصل')}
+          </PendingButton>
+        </form>
+      ) : null}
+    </div>
   );
 }
 
@@ -546,6 +618,9 @@ export default async function IntakePage({
                   </dd>
                 </div>
               </dl>
+              {p.role === 'OWNER' ? null : (
+                <ContactCell segment={segment} intakeId={i.intakeId} party={p} open={open} f={f} />
+              )}
             </div>
           ))}
         </div>

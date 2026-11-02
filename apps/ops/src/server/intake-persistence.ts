@@ -4,6 +4,7 @@
  *   core.business_intake        one row per intake, upserted on every change
  *   core.business_intake_event  append-only: every consent, check, clearance and hand-over
  *   core.consent_record         append-only: one row per grant (or withdrawal)
+ *   core.party_contact          append-only: a party's email and mobile (0037), read by delivery only
  *
  * The service (`intake.ts`) keeps its working set in process and marks what
  * changed; this module loads a tenant's intakes once and writes the marked
@@ -17,6 +18,7 @@
 import type { Pool } from 'pg';
 
 import type { ConsentRecord } from '@sanad/core/consent/consent.ts';
+import type { PartyContact, PartyContactDirectory } from '@sanad/core/ports/party-contacts.ts';
 import type { BusinessIntake, IntakeEvent } from '@sanad/core/origination/business-intake.ts';
 import { decodeJson, encodeJson } from '@sanad/origination/codec.ts';
 import { tenantUuidByCode } from '@sanad/origination/credentials.ts';
@@ -36,6 +38,8 @@ export interface IntakeChanges {
   readonly intakes: readonly { readonly intake: BusinessIntake; readonly expected?: IntakeVersion }[];
   readonly events: readonly (IntakeEvent & { readonly intakeId: string })[];
   readonly consents: readonly (ConsentRecord & { readonly contextRef: string; readonly createdBy: string })[];
+  /** The details behind a masked contact the intake now carries, written in the same transaction. */
+  readonly contacts?: readonly PartyContact[];
 }
 
 export type IntakeSaveOutcome =
@@ -73,7 +77,7 @@ export async function saveIntakeChanges(
   changes: IntakeChanges,
 ): Promise<IntakeSaveOutcome> {
   const versions = new Map<string, IntakeVersion>();
-  if (changes.intakes.length + changes.events.length + changes.consents.length === 0)
+  if (changes.intakes.length + changes.events.length + changes.consents.length + (changes.contacts?.length ?? 0) === 0)
     return { kind: 'SAVED', versions };
   const tenant = await tenantUuidByCode(pool, tenantCode);
   return inTenant(pool, tenant, async (client): Promise<IntakeSaveOutcome> => {
@@ -153,6 +157,46 @@ export async function saveIntakeChanges(
         [tenant, e.intakeId, e.eventType, e.actor, JSON.stringify(e.detail), e.atEpochSeconds.toString(), e.intakeId],
       );
     }
+    for (const c of changes.contacts ?? []) {
+      await client.query(
+        `insert into core.party_contact (tenant_id, contact_ref, email, mobile, context_ref, correlation_id, created_by)
+         values ($1::uuid, $2, $3, $4, $5, $6, $7)`,
+        [tenant, c.contactRef, c.email ?? null, c.mobile ?? null, c.contextRef, c.contextRef, c.recordedBy],
+      );
+    }
     return { kind: 'SAVED', versions };
   });
+}
+
+/**
+ * The delivery adapter's view of the contacts (core/ports/party-contacts.ts):
+ * the latest recording under a reference, in this tenant only.
+ */
+export function postgresPartyContacts(pool: Pool, tenantCode: string): PartyContactDirectory {
+  return {
+    async resolve(contactRef: string): Promise<PartyContact | undefined> {
+      const tenant = await tenantUuidByCode(pool, tenantCode);
+      return inTenant(pool, tenant, async (client) => {
+        const r = await client.query<{
+          email: string | null;
+          mobile: string | null;
+          context_ref: string;
+          created_by: string;
+        }>(
+          `select email, mobile, context_ref, created_by from core.party_contact
+            where contact_ref = $1 order by sequence desc limit 1`,
+          [contactRef],
+        );
+        const row = r.rows[0];
+        if (row === undefined) return undefined;
+        return {
+          contactRef,
+          contextRef: row.context_ref,
+          recordedBy: row.created_by,
+          ...(row.email === null ? {} : { email: row.email }),
+          ...(row.mobile === null ? {} : { mobile: row.mobile }),
+        };
+      });
+    },
+  };
 }

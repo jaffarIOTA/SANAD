@@ -67,6 +67,10 @@ const GAP_WORDS: Readonly<Record<KybGap['code'], { readonly en: string; readonly
   SCREENING_NOT_CLEAR: { en: 'Screening referral not cleared', ar: 'إحالة الفحص لم تُعالج' },
   UBO_NOT_DECLARED: { en: 'Beneficial owners not declared', ar: 'لم يُصرَّح بالمستفيدين الحقيقيين' },
   BUREAU_CONSENT_MISSING: { en: 'Credit bureau consent missing', ar: 'موافقة المكتب الائتماني غير مسجلة' },
+  CONTACT_NOT_RECORDED: {
+    en: 'No email or mobile for anyone who signs, so no request or offer could reach the business',
+    ar: 'لا بريد إلكتروني ولا جوال لأي مفوَّض بالتوقيع، فلن يصل أي طلب أو عرض إلى المنشأة',
+  },
 };
 
 export const gapWords = (gap: KybGap, f: Formatters, nameOf: (ref: string) => string): string => {

@@ -51,7 +51,13 @@ const INPUT: OpenIntakeInput = {
     contributionPerTenThousand: 2000,
   },
   parties: [
-    { partyRef: 'party-owner-a', displayName: 'Owner A', role: 'OWNER_SIGNATORY', ownershipPerTenThousand: 6000 },
+    {
+      partyRef: 'party-owner-a',
+      displayName: 'Owner A',
+      role: 'OWNER_SIGNATORY',
+      ownershipPerTenThousand: 6000,
+      contact: { emailMasked: 'o***@example.com' },
+    },
     { partyRef: 'party-owner-b', displayName: 'Owner B', role: 'OWNER', ownershipPerTenThousand: 3000 },
     { partyRef: 'party-owner-c', displayName: 'Owner C', role: 'OWNER', ownershipPerTenThousand: 1000 },
   ],

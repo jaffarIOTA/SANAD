@@ -577,6 +577,10 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
   CONSENT_RECORDED: { en: 'Consent recorded in the consent ledger.', ar: 'سُجّلت الموافقة في سجل الموافقات.' },
   REGISTRY_CHECKED: { en: 'Trade licence checked in the register.', ar: 'تم التحقق من الرخصة التجارية في السجل.' },
   IDENTITY_CHECKED: { en: 'Identity checked with the identity authority.', ar: 'تم التحقق من الهوية لدى جهة الهوية.' },
+  CONTACT_RECORDED: {
+    en: 'Contact recorded. Only its masked form is shown.',
+    ar: 'سُجّلت وسيلة التواصل، ولا يظهر منها إلا شكلها المُقنّع.',
+  },
   SCREENED: { en: 'Screening result recorded.', ar: 'سُجّلت نتيجة الفحص الأمني.' },
   SCREENING_REFERRAL_CLEARED: {
     en: 'Referral cleared and the reason recorded.',
@@ -834,6 +838,18 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
     ar: 'يُرسل البريد الإلكتروني مُقنّعاً فقط.',
   },
   CONTACT_MOBILE_NOT_MASKED: { en: 'A mobile number travels masked only.', ar: 'يُرسل رقم الهاتف مُقنّعاً فقط.' },
+  CONTACT_NO_CHANNEL: {
+    en: 'Enter an email address or a mobile number, or both.',
+    ar: 'أدخل بريداً إلكترونياً أو رقم جوال أو كليهما.',
+  },
+  CONTACT_EMAIL_INVALID: {
+    en: 'That email address is not valid. Check it and enter it again.',
+    ar: 'عنوان البريد الإلكتروني غير صحيح. تحقق منه وأدخله مرة أخرى.',
+  },
+  CONTACT_MOBILE_INVALID: {
+    en: 'Enter the mobile number in international form, with its country code, for example +966 50 123 4567.',
+    ar: 'أدخل رقم الجوال بالصيغة الدولية مع رمز الدولة، مثل ‎+966 50 123 4567.',
+  },
   TRANSITION_NOT_ALLOWED: {
     en: 'This action is not available at the application’s current stage.',
     ar: 'هذا الإجراء غير متاح في المرحلة الحالية للطلب.',

@@ -29,6 +29,7 @@ import {
   handOverIntake,
   openIntakeFor,
   recordIntakeConsent,
+  recordIntakeContact,
   runIdentityCheck,
   runRegistryCheck,
   runScreening,
@@ -129,7 +130,16 @@ export async function openIntakeAction(form: FormData): Promise<void> {
     const role = field(form, `party_role_${String(i)}`) as PartyRole;
     const share = perTenThousand(field(form, `party_share_${String(i)}`));
     if (!ROLES.includes(role) || share === undefined) return finish(ctx, refused('INTAKE_PARTY_MALFORMED'), '');
-    parties.push({ partyRef, displayName, role, ownershipPerTenThousand: share });
+    // Read once and handed to the service, which keeps them out of the intake; never echoed into a redirect.
+    const email = field(form, `party_email_${String(i)}`);
+    const mobile = field(form, `party_mobile_${String(i)}`);
+    parties.push({
+      partyRef,
+      displayName,
+      role,
+      ownershipPerTenThousand: share,
+      ...(email === '' && mobile === '' ? {} : { contact: { email, mobile } }),
+    });
   }
   const nameAr = field(form, 'businessNameAr');
   const trn = field(form, 'taxRegistrationNumber').replaceAll(/[\s-]/g, '');
@@ -195,6 +205,23 @@ export async function identityCheckAction(form: FormData): Promise<void> {
     ctx,
     () => runIdentityCheck(ctx.tenant, ctx.intakeId, field(form, 'partyRef'), ctx.actor),
     'IDENTITY_CHECKED',
+  );
+}
+
+/** Record or correct how a party is reached. The address and number are never echoed back. */
+export async function recordContactAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(
+    ctx,
+    () =>
+      recordIntakeContact(
+        ctx.tenant,
+        ctx.intakeId,
+        field(form, 'partyRef'),
+        { email: field(form, 'email'), mobile: field(form, 'mobile') },
+        ctx.actor,
+      ),
+    'CONTACT_RECORDED',
   );
 }
 

@@ -51,7 +51,13 @@ const form = (tradeLicence: string, extra: Partial<OpenIntakeForm> = {}): OpenIn
   graceMonths: 0,
   contributionPerTenThousand: 2000,
   parties: [
-    { partyRef: 'party-solo', displayName: 'Owner Solo', role: 'OWNER_SIGNATORY', ownershipPerTenThousand: 10_000 },
+    {
+      partyRef: 'party-solo',
+      displayName: 'Owner Solo',
+      role: 'OWNER_SIGNATORY',
+      ownershipPerTenThousand: 10_000,
+      contact: { mobile: '+971 50 123 4567' },
+    },
   ],
   ...extra,
 });

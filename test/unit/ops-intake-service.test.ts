@@ -44,7 +44,13 @@ const FORM: OpenIntakeForm = {
   graceMonths: 0,
   contributionPerTenThousand: 2000,
   parties: [
-    { partyRef: 'party-a', displayName: 'Owner A', role: 'OWNER_SIGNATORY', ownershipPerTenThousand: 7000 },
+    {
+      partyRef: 'party-a',
+      displayName: 'Owner A',
+      role: 'OWNER_SIGNATORY',
+      ownershipPerTenThousand: 7000,
+      contact: { email: 'Owner.A@Example.COM', mobile: '+971 50 123 4567' },
+    },
     { partyRef: 'party-b', displayName: 'Owner B', role: 'OWNER', ownershipPerTenThousand: 3000 },
   ],
 };

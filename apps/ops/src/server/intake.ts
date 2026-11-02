@@ -23,13 +23,17 @@ import {
   type IntakeParty,
   type IntakeTransition,
   type KybGap,
+  type OpenIntakeInput,
   type PartyRole,
   clearScreeningReferral,
+  contactRefOf,
   declareBeneficialOwners,
+  handoverContact,
   kybGaps,
   markHandedOver,
   openIntake,
   recordConsent,
+  recordPartyContact,
   recordIdentityCheck,
   recordRegistryCheck,
   recordScreening,
@@ -38,8 +42,11 @@ import {
   withdrawIntake,
 } from '@sanad/core/origination/business-intake.ts';
 
+import { type MaskedContact, contactFrom } from '@sanad/core/notifications/contact.ts';
+import type { PartyContact, PartyContactDirectory } from '@sanad/core/ports/party-contacts.ts';
+
 import { handOver, mutateBusiness, productVariants } from './business.ts';
-import { type IntakeVersion, loadIntakeBook, saveIntakeChanges } from './intake-persistence.ts';
+import { type IntakeVersion, loadIntakeBook, postgresPartyContacts, saveIntakeChanges } from './intake-persistence.ts';
 import { kybRails } from './intake-rails.ts';
 import { persistencePool } from './persistence.ts';
 import { developmentAttestation } from './store.ts';
@@ -53,6 +60,8 @@ interface IntakeBook {
   readonly intakes: Map<string, { intake: BusinessIntake; version?: IntakeVersion }>;
   readonly events: Map<string, (IntakeEvent & { readonly intakeId: string })[]>;
   consents: ConsentRecord[];
+  /** Without a database: the contact details by reference, the latest only. With one they are in 0037. */
+  readonly contacts: Map<string, PartyContact>;
 }
 
 const KEY = Symbol.for('sanad.ops.intake');
@@ -66,7 +75,7 @@ const state: State = ((globalThis as Record<symbol, unknown>)[KEY] as State | un
 function bookOf(tenant: string): IntakeBook {
   let book = state.books.get(tenant);
   if (book === undefined) {
-    book = { loaded: false, intakes: new Map(), events: new Map(), consents: [] };
+    book = { loaded: false, intakes: new Map(), events: new Map(), consents: [], contacts: new Map() };
     state.books.set(tenant, book);
   }
   return book;
@@ -114,6 +123,7 @@ async function commit(
   book: IntakeBook,
   t: IntakeTransition,
   consents: readonly ConsentRecord[] = [],
+  contacts: readonly PartyContact[] = [],
 ): Promise<Result<BusinessIntake>> {
   const entry = book.intakes.get(t.intake.intakeId);
   const event = { ...t.event, intakeId: t.intake.intakeId };
@@ -123,6 +133,7 @@ async function commit(
       intakes: [{ intake: t.intake, ...(entry?.version === undefined ? {} : { expected: entry.version }) }],
       events: [event],
       consents: consents.map((c) => ({ ...c, contextRef: t.intake.intakeId, createdBy: t.event.actor })),
+      contacts,
     });
     if (saved.kind === 'STALE') {
       book.loaded = false;
@@ -133,6 +144,7 @@ async function commit(
     book.intakes.set(t.intake.intakeId, { intake: t.intake, ...(version === undefined ? {} : { version }) });
   } else {
     book.intakes.set(t.intake.intakeId, { intake: t.intake });
+    for (const c of contacts) book.contacts.set(c.contactRef, c);
   }
   book.consents = [...book.consents, ...consents];
   book.events.set(t.intake.intakeId, [...(book.events.get(t.intake.intakeId) ?? []), event]);
@@ -217,7 +229,38 @@ export interface OpenIntakeForm {
     readonly displayName: string;
     readonly role: PartyRole;
     readonly ownershipPerTenThousand: number;
+    /** As keyed. Normalised and masked here; the intake keeps the masked forms only. */
+    readonly contact?: KeyedContact;
   }[];
+}
+
+/** An email address and a mobile number as an officer keyed them; either may be empty. */
+export interface KeyedContact {
+  readonly email?: string;
+  readonly mobile?: string;
+}
+
+const keyed = (c: KeyedContact | undefined): boolean =>
+  c !== undefined && ((c.email ?? '').trim() !== '' || (c.mobile ?? '').trim() !== '');
+
+/** The masked form for the intake and the details for the directory, or the refusal naming the party. */
+function captureContact(
+  intakeId: string,
+  partyRef: string,
+  raw: KeyedContact,
+  actor: string,
+): Result<{ readonly masked: MaskedContact; readonly contact: PartyContact }> {
+  const c = contactFrom(raw);
+  if (!c.ok) return reject(c.error.control, c.error.reason, c.error.detail, { partyRef });
+  return ok({
+    masked: c.value.masked,
+    contact: {
+      ...c.value.details,
+      contactRef: contactRefOf(intakeId, partyRef),
+      contextRef: intakeId,
+      recordedBy: actor,
+    },
+  });
 }
 
 /** Open an intake under the next id. The amount is in the tenant's base currency, from onboarding. */
@@ -240,9 +283,22 @@ export async function openIntakeFor(
   return withLock(tenant, async () => {
     const book = await hydrate(tenant);
     const next = Math.max(0, ...[...book.intakes.keys()].map((id) => Number(id.slice(4)))) + 1;
+    const intakeId = `INT-${String(next).padStart(6, '0')}`;
+    const parties: OpenIntakeInput['parties'][number][] = [];
+    const contacts: PartyContact[] = [];
+    for (const { contact: raw, ...party } of form.parties) {
+      if (raw === undefined || !keyed(raw)) {
+        parties.push(party);
+        continue;
+      }
+      const captured = captureContact(intakeId, party.partyRef, raw, actor);
+      if (!captured.ok) return captured;
+      parties.push({ ...party, contact: captured.value.masked });
+      contacts.push(captured.value.contact);
+    }
     const t = openIntake(
       {
-        intakeId: `INT-${String(next).padStart(6, '0')}`,
+        intakeId,
         tenantId: tenant,
         entity: {
           tradeLicence: form.tradeLicence,
@@ -262,15 +318,46 @@ export async function openIntakeFor(
           graceMonths: form.graceMonths,
           contributionPerTenThousand: form.contributionPerTenThousand,
         },
-        parties: form.parties,
+        parties,
       },
       currency.value,
       actor,
       developmentAttestation().epochSeconds,
     );
     if (!t.ok) return t;
-    return commit(tenant, book, t.value);
+    return commit(tenant, book, t.value, [], contacts);
   });
+}
+
+/**
+ * Record how a party is reached, or correct it, while the intake is a draft.
+ * The masked forms go on the intake and the details to the directory, in one
+ * change.
+ */
+export async function recordIntakeContact(
+  tenant: TenantCode,
+  intakeId: string,
+  partyRef: string,
+  raw: KeyedContact,
+  actor: string,
+): Promise<Result<BusinessIntake>> {
+  return withIntake(tenant, intakeId, async (book, intake) => {
+    const captured = captureContact(intakeId, partyRef, raw, actor);
+    if (!captured.ok) return captured;
+    const t = recordPartyContact(intake, partyRef, captured.value.masked, actor, developmentAttestation().epochSeconds);
+    if (!t.ok) return t;
+    return commit(tenant, book, t.value, [], [captured.value.contact]);
+  });
+}
+
+/**
+ * Where the delivery adapter finds a party's details (core/ports/party-contacts.ts):
+ * migration 0037 with a database, this process's memory without one.
+ */
+export function partyContactDirectory(tenant: TenantCode): PartyContactDirectory {
+  const pool = persistencePool();
+  if (pool !== undefined) return postgresPartyContacts(pool, tenant);
+  return { resolve: (contactRef) => Promise.resolve(bookOf(tenant).contacts.get(contactRef)) };
 }
 
 const PURPOSE: Readonly<Record<IntakeConsentType, string>> = {
@@ -580,7 +667,8 @@ export async function handOverIntake(
     });
   const applicationId = applicationIdFor(intakeId);
   const owners = intake.parties.filter((p: IntakeParty) => p.role !== 'SIGNATORY');
-  const signatory = intake.parties.find((p) => p.role !== 'OWNER');
+  // Masked only, under the intake-scoped reference its details are kept by; kybGaps refused hand-over without one.
+  const contact = handoverContact(intake);
   const created = await mutateBusiness(tenant, () =>
     handOver(
       tenant,
@@ -603,7 +691,7 @@ export async function handOverIntake(
         tenorMonths: intake.request.tenorMonths,
         graceMonths: intake.request.graceMonths,
         contributionPerTenThousand: intake.request.contributionPerTenThousand,
-        ...(signatory === undefined ? {} : { contact: { partyRef: signatory.partyRef } }),
+        ...(contact === undefined ? {} : { contact }),
       },
       actor,
     ),

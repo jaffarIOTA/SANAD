@@ -45,7 +45,13 @@ const FORM: OpenIntakeForm = {
   graceMonths: 0,
   contributionPerTenThousand: 2000,
   parties: [
-    { partyRef: 'party-a', displayName: 'Owner A', role: 'OWNER_SIGNATORY', ownershipPerTenThousand: 7000 },
+    {
+      partyRef: 'party-a',
+      displayName: 'Owner A',
+      role: 'OWNER_SIGNATORY',
+      ownershipPerTenThousand: 7000,
+      contact: { mobile: '00966 50 123 4567' },
+    },
     { partyRef: 'party-b', displayName: 'Owner B', role: 'OWNER', ownershipPerTenThousand: 3000 },
   ],
 };
@@ -59,7 +65,9 @@ async function consentAll(intakeId: string): Promise<void> {
     ['IDENTITY_VERIFICATION', 'party-b'],
     ['SCREENING', 'party-b'],
   ] as const)
-    expectOk(await recordIntakeConsent(TENANT, intakeId, { type, subject, evidenceRef: 'consent-form-1' }, 'stf-maker-01'));
+    expectOk(
+      await recordIntakeConsent(TENANT, intakeId, { type, subject, evidenceRef: 'consent-form-1' }, 'stf-maker-01'),
+    );
 }
 
 beforeEach(() => {
