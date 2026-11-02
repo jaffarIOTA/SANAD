@@ -70,6 +70,38 @@ export const EVIDENCE_STATUS_LABEL: Readonly<Record<string, Words>> = {
 
 /** What a step that went through says, by the notice code the action sends back. */
 export const NOTICE: Readonly<Record<string, Words>> = {
+  LATE_AMOUNT_PROPOSED: {
+    en: 'Late amounts are proposed on the instalments unpaid beyond the grace days. Nothing is billed until two people agree.',
+    ar: 'اقتُرحت مبالغ تأخير على الأقساط غير المدفوعة بعد مهلة السماح. لا يُفوتر شيء حتى يتفق شخصان.',
+  },
+  LATE_AMOUNT_ASSESSED: {
+    en: 'The assessment is recorded; a second person confirms it.',
+    ar: 'سُجّل التقييم، ويؤكده شخص ثانٍ.',
+  },
+  LATE_AMOUNT_CONFIRMED: {
+    en: 'Confirmed. Able but unwilling: billed through SADAD on its own bill. Unable: hardship, not billed.',
+    ar: 'تأكّد. القادر غير الراغب: يُفوتر عبر سداد بفاتورة مستقلة. العاجز: تعثّر ولا يُفوتر.',
+  },
+  LATE_AMOUNT_SENT_BACK: {
+    en: 'The assessment went back to the officer. Nothing was billed.',
+    ar: 'أُعيد التقييم إلى الموظف، ولم يُفوتر شيء.',
+  },
+  LATE_BILL_PRESENTED: {
+    en: 'The late amount is presented to SADAD again.',
+    ar: 'عُرض مبلغ التأخير على سداد من جديد.',
+  },
+  CHARITY_DISBURSEMENT_PROPOSED: {
+    en: 'The recipient is proposed; a second person approves the disbursement.',
+    ar: 'اقتُرح المستفيد، ويعتمد الصرف شخص ثانٍ.',
+  },
+  CHARITY_DISBURSED: {
+    en: 'Approved: the payment to the board-approved recipient is instructed, and the charity entry is closed.',
+    ar: 'اعتُمد: وُجّهت الدفعة إلى الجهة المعتمدة من الهيئة، وأُقفل قيد التبرع.',
+  },
+  CHARITY_DISBURSEMENT_DECLINED: {
+    en: 'Declined. The amount stays held for charity.',
+    ar: 'رُفض. يبقى المبلغ محتجزاً للتبرع.',
+  },
   SADAD_FILE_FIXTURE_RECORDED: {
     en: 'Fixture: SADAD has the payment. It is applied when SADAD’s paid-bills file is next read (Reconciliation).',
     ar: 'تجريبي: سجّل سداد الدفعة. تُطبّق عند قراءة ملف الفواتير المدفوعة التالي (المطابقة).',
@@ -185,9 +217,71 @@ export const SETTLEMENT_REFUSAL: Readonly<Record<string, Words>> = {
   OBLIGATION_NOT_BOOKED: { en: 'The obligation is not booked yet.', ar: 'لم يُقيّد الالتزام بعد.' },
 };
 
+export const LATE_AMOUNT_REFUSAL: Readonly<Record<string, Words>> = {
+  NO_LATE_CHARGE_DUE: {
+    en: 'No instalment is unpaid beyond the grace days without a late amount already.',
+    ar: 'لا يوجد قسط غير مدفوع بعد مهلة السماح إلا وعليه مبلغ تأخير.',
+  },
+  LATE_AMOUNTS_NOT_RULED: {
+    en: 'The board has ruled no late amounts for this institution.',
+    ar: 'لم تقرّ الهيئة الشرعية مبالغ تأخير لهذه المؤسسة.',
+  },
+  LATE_AMOUNT_NOT_FOUND: {
+    en: 'No late amount was proposed on that instalment.',
+    ar: 'لم يُقترح مبلغ تأخير على هذا القسط.',
+  },
+  LATE_AMOUNT_NOT_IN_STATE: {
+    en: 'That step does not apply to the late amount as it stands.',
+    ar: 'لا تنطبق هذه الخطوة على مبلغ التأخير في وضعه الحالي.',
+  },
+  ASSESSMENT_REQUIRED: {
+    en: 'Choose whether the distributor was able but unwilling, or unable.',
+    ar: 'اختر ما إذا كان الموزع قادراً غير راغب أم عاجزاً.',
+  },
+  ASSESSMENT_NOTE_REQUIRED: {
+    en: 'Say what the assessment rests on.',
+    ar: 'اذكر ما يستند إليه التقييم.',
+  },
+  SEND_BACK_NOTE_REQUIRED: { en: 'Say why it goes back.', ar: 'اذكر سبب الإعادة.' },
+  FOUR_EYES_SELF_CONFIRMATION: {
+    en: 'Someone else decides on this: the person who did the work before it may not.',
+    ar: 'يقرر في هذا شخص آخر؛ لا يجوز لمن أنجز الخطوة السابقة.',
+  },
+  LATE_BILL_STANDING: {
+    en: 'The late amount’s bill is still standing at SADAD.',
+    ar: 'فاتورة مبلغ التأخير ما زالت قائمة لدى سداد.',
+  },
+  LATE_AMOUNT_DIFFERS: {
+    en: 'What was paid differs from the late amount billed. Nothing is raised to charity; operations resolves it.',
+    ar: 'المدفوع يختلف عن مبلغ التأخير المفوتر. لم يُقيّد شيء للتبرع، وتعالجه العمليات.',
+  },
+  RETURN_AFTER_CHARITY_RAISED: {
+    en: 'A late amount’s payment came back after it was raised to charity. The entry is not taken back silently; operations resolves it.',
+    ar: 'ارتجعت دفعة مبلغ تأخير بعد قيده للتبرع. لا يُلغى القيد بصمت، وتعالجه العمليات.',
+  },
+  HARDSHIP_SUSPENDS_LATE_AMOUNTS: {
+    en: 'The distributor was assessed unable to pay; late amounts are suspended.',
+    ar: 'قُيّم الموزع عاجزاً عن السداد؛ تُعلّق مبالغ التأخير.',
+  },
+  RECIPIENT_NOT_APPROVED: {
+    en: 'That recipient is not on the board-approved register.',
+    ar: 'هذا المستفيد ليس في سجل الجهات المعتمدة من الهيئة.',
+  },
+  ALREADY_DISBURSED: { en: 'This charity entry is already disbursed.', ar: 'صُرف قيد التبرع هذا بالفعل.' },
+  CHARITY_ACCOUNT_UNMAPPED: {
+    en: 'No segregated charity liability account is configured. Nothing was raised.',
+    ar: 'لم يُعدّ حساب التزام التبرع المستقل. لم يُقيّد شيء.',
+  },
+  CHARITY_ALREADY_RAISED: {
+    en: 'This collection is already raised to charity.',
+    ar: 'قُيّد هذا التحصيل للتبرع بالفعل.',
+  },
+};
+
 export const REFUSAL: Readonly<Record<string, Words>> = {
   ...BOOKING_REFUSAL,
   ...SETTLEMENT_REFUSAL,
+  ...LATE_AMOUNT_REFUSAL,
   STEP_NOT_AVAILABLE: {
     en: 'That step does not apply to the transaction as it stands. Each step follows the one before it.',
     ar: 'لا تنطبق هذه الخطوة على المعاملة في وضعها الحالي؛ كل خطوة تأتي بعد سابقتها.',

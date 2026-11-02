@@ -65,6 +65,7 @@ import {
   withLock,
 } from './book.ts';
 import {
+  type CharityWrite,
   type ObligationWrite,
   type TransactionEventRow,
   encodeEvidence,
@@ -107,6 +108,8 @@ export interface StepOutcome {
   readonly paidDelta?: Money;
   /** External side effects this step causes, written with it (the transactional outbox). */
   readonly outbox?: readonly OutboxEvent[];
+  /** A charity ledger entry raised by a collected late amount, or its disbursement (W4b-2). */
+  readonly charity?: CharityWrite;
   readonly detail?: Readonly<Record<string, string>>;
 }
 
@@ -205,7 +208,7 @@ export async function step(
     const after = out.value.transaction;
     const moved = after !== before;
     const leg = legsOf(after).length > legsOf(before).length ? legsOf(after).at(-1) : undefined;
-    const { evidence, supersedes, obligation, paidDelta, outbox } = out.value;
+    const { evidence, supersedes, obligation, paidDelta, outbox, charity } = out.value;
     const event: TransactionEventRow = {
       eventType: out.value.eventType,
       fromState: moved ? before.state : null,
@@ -227,6 +230,7 @@ export async function step(
         ...(obligation === undefined ? {} : { obligation }),
         ...(paidDelta === undefined ? {} : { paidDelta }),
         ...(outbox === undefined ? {} : { outbox }),
+        ...(charity === undefined ? {} : { charity }),
         ...(after.state === 'POSSESSION_CONFIRMED' ? { riskPeriodStartAt: after.riskPeriodStartAt } : {}),
         ...(after.state === 'SALE_OFFERED' ? { saleOfferedAt: after.saleOfferedAt } : {}),
         correlationId: before.core.correlationId,
@@ -254,8 +258,9 @@ export async function step(
  * alone rebuilds the transaction and shows what was instructed.
  */
 function eventDetail(out: StepOutcome, moved: boolean): Record<string, unknown> {
-  const { evidence, supersedes, obligation, paidDelta, outbox } = out;
+  const { evidence, supersedes, obligation, paidDelta, outbox, charity } = out;
   return {
+    ...(charity === undefined ? {} : { charity: encodeCharity(charity) }),
     ...out.detail,
     ...(moved ? { state: encodeState(out.transaction) } : {}),
     ...(evidence === undefined ? {} : { evidence: encodeEvidence(evidence) }),
@@ -273,6 +278,29 @@ function eventDetail(out: StepOutcome, moved: boolean): Record<string, unknown> 
           })),
         }),
   };
+}
+
+/** A charity write as its event records it: amounts as minor-unit strings, instants as epoch seconds. */
+function encodeCharity(c: CharityWrite): Record<string, string> {
+  return c.kind === 'RAISE'
+    ? {
+        kind: c.kind,
+        entryId: c.entryId,
+        amountMinor: c.amount.minorUnits.toString(),
+        currency: c.amount.currency,
+        sourceRef: c.sourceRef,
+        computationBasisKey: c.computationBasisKey,
+        recordedAtEpoch: c.recordedAt.epochSeconds.toString(),
+        recordedAtDigest: c.recordedAt.tokenDigest,
+        recordedAtAuthority: c.recordedAt.authorityId,
+      }
+    : {
+        kind: c.kind,
+        entryId: c.entryId,
+        recipientId: c.recipientId,
+        disbursementRef: c.disbursementRef,
+        disbursedAtEpoch: c.disbursedAt.epochSeconds.toString(),
+      };
 }
 
 /** The obligation as its event records it: amounts as minor-unit strings. */

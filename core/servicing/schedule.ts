@@ -77,6 +77,8 @@ export type TaskOutcome =
 const NOTHING_DUE: ReadonlySet<string> = new Set([
   'NOTHING_TO_COLLECT',
   'NO_LATE_CHARGE_DUE',
+  // A board may rule no late amounts at all (Wasl W4b-2): then none is ever due.
+  'LATE_AMOUNTS_NOT_RULED',
   'BUREAU_ALREADY_REPORTED',
   'NOTHING_TO_RECONCILE',
   // A task the facility's product does not have (a Wasl transaction is not reported by this task): nothing to do.

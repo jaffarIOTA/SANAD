@@ -27,6 +27,7 @@ import {
   servicingCalendarOf,
 } from './business.ts';
 import { getTransaction, listTransactions } from '@sanad/origination/wasl/book.ts';
+import { proposeLateAmounts } from '@sanad/origination/wasl/late-amounts.ts';
 import { reconcilePaidBills } from '@sanad/origination/wasl/reconciliation.ts';
 import { presentDueInstalments } from '@sanad/origination/wasl/settlement.ts';
 
@@ -49,12 +50,17 @@ const notForThisFacility = (task: string): Result<never> =>
 
 /**
  * A Wasl transaction's tasks. Collections present what falls due (W4a), each
- * step persisting itself. Late amounts come with W4b-2 (proposed by the cycle,
- * confirmed by two people); credit-bureau reporting of Wasl facilities is not
- * built yet — both are reported as not this facility's, never as done.
+ * step persisting itself. Late amounts (W4b-2) are only proposed here: an
+ * officer assesses each and a second person confirms before anything is
+ * billed. Credit-bureau reporting of Wasl facilities is not built yet — it is
+ * reported as not this facility's, never as done.
  */
 const WASL_TASKS: Readonly<Record<ServicingTask, (tenant: TenantCode, ref: string) => Promise<Result<unknown>>>> = {
-  LATE_CHARGES: () => Promise.resolve(notForThisFacility('LATE_CHARGES')),
+  // As with collections: a transaction the morning's reading settled has nothing overdue.
+  LATE_CHARGES: async (t, ref) =>
+    (await getTransaction(t, ref))?.transaction.state === 'ACTIVE'
+      ? proposeLateAmounts(t, ref, SERVICING_SCHEDULER)
+      : reject('OP-DETERMINACY', 'NO_LATE_CHARGE_DUE', 'The transaction is no longer being collected'),
   // The day's plan is made before the paid-bills file is read: a transaction that reading settled has nothing to collect.
   COLLECTIONS: async (t, ref) =>
     (await getTransaction(t, ref))?.transaction.state === 'ACTIVE'

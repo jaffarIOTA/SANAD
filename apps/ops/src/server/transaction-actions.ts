@@ -31,10 +31,21 @@ import {
   paySellerAgain,
   presentDueInstalments,
   presentations,
-  recordCollectionResult,
   recordSellerPaymentResult,
 } from '@sanad/origination/wasl/settlement.ts';
 import { getTransaction } from '@sanad/origination/wasl/book.ts';
+import { recordBillResult } from '@sanad/origination/wasl/collection-results.ts';
+import {
+  approveDisbursement,
+  assessLateAmount,
+  confirmLateAmount,
+  declineDisbursement,
+  lateAmounts,
+  presentLateBillAgain,
+  proposeDisbursement,
+  proposeLateAmounts,
+  sendBackLateAmount,
+} from '@sanad/origination/wasl/late-amounts.ts';
 import { reconcilePaidBills } from '@sanad/origination/wasl/reconciliation.ts';
 import { hostClockInstant } from '@sanad/origination/host-clock.ts';
 
@@ -211,7 +222,7 @@ export async function fixtureCollectionAction(form: FormData): Promise<void> {
     () =>
       status === undefined
         ? Promise.resolve({ ok: false, error: { control: 'OP-DETERMINACY', reason: 'STEP_UNKNOWN', detail: '' } })
-        : recordCollectionResult(
+        : recordBillResult(
             ctx.tenant,
             ctx.transactionRef,
             {
@@ -240,11 +251,13 @@ export async function fixtureSadadFileAction(form: FormData): Promise<void> {
     ctx,
     async () => {
       const view = await getTransaction(ctx.tenant, ctx.transactionRef);
+      const key = field(form, 'idempotencyKey');
+      // An instalment's bill, or a late amount's (W4b-2): the same file carries both.
       const bill =
         view === undefined
           ? undefined
-          : presentations(view).find(
-              (p) => p.idempotencyKey === field(form, 'idempotencyKey') && p.result === undefined,
+          : [...presentations(view), ...lateAmounts(view).flatMap((a) => a.bills)].find(
+              (p) => p.idempotencyKey === key && p.result === undefined,
             );
       if (bill === undefined)
         return { ok: false, error: { control: 'OP-DETERMINACY', reason: 'COLLECTION_NOT_FOUND', detail: '' } };
@@ -266,6 +279,95 @@ export async function reconcileAction(form: FormData): Promise<void> {
   const base = await contextOf(form, 'TRADE_SETTLEMENT');
   const ctx = { ...base, path: `/${base.locale}/transactions/reconciliation` };
   return finish(ctx, () => reconcilePaidBills(ctx.tenant, ctx.actor), 'RECONCILED');
+}
+
+// -- Late amounts and charity (W4b-2) ----------------------------------------------------
+
+const sequenceOf = (form: FormData): number => {
+  const n = Number(field(form, 'sequenceNumber'));
+  return Number.isInteger(n) && n > 0 && n < 1000 ? n : 0;
+};
+
+/** Propose late amounts now, as the daily cycle does each morning: a proposal only, nothing billed. */
+export async function proposeLateAmountsAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'TRADE_LATE_ASSESS');
+  return finish(ctx, () => proposeLateAmounts(ctx.tenant, ctx.transactionRef, ctx.actor), 'LATE_AMOUNT_PROPOSED');
+}
+
+/** The officer's assessment: able but unwilling, or unable, with what it rests on (kept on the transaction only). */
+export async function assessLateAmountAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'TRADE_LATE_ASSESS');
+  const assessment = field(form, 'assessment');
+  return finish(
+    ctx,
+    () =>
+      assessment === 'ABLE_BUT_UNWILLING' || assessment === 'UNABLE'
+        ? assessLateAmount(ctx.tenant, ctx.transactionRef, ctx.actor, {
+            sequenceNumber: sequenceOf(form),
+            assessment,
+            note: field(form, 'note').slice(0, 500),
+          })
+        : Promise.resolve({
+            ok: false,
+            error: { control: 'OP-DETERMINACY', reason: 'ASSESSMENT_REQUIRED', detail: '' },
+          }),
+    'LATE_AMOUNT_ASSESSED',
+  );
+}
+
+/** A second person confirms the assessment, or sends it back with their reason. */
+export async function decideLateAmountAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'TRADE_LATE_CONFIRM');
+  const confirm = field(form, 'decision') === 'CONFIRM';
+  return finish(
+    ctx,
+    () =>
+      confirm
+        ? confirmLateAmount(ctx.tenant, ctx.transactionRef, ctx.actor, sequenceOf(form))
+        : sendBackLateAmount(ctx.tenant, ctx.transactionRef, ctx.actor, {
+            sequenceNumber: sequenceOf(form),
+            note: field(form, 'note').slice(0, 500),
+          }),
+    confirm ? 'LATE_AMOUNT_CONFIRMED' : 'LATE_AMOUNT_SENT_BACK',
+  );
+}
+
+/** Present a late amount's bill again after SADAD returned its payment. */
+export async function presentLateBillAgainAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'TRADE_LATE_ASSESS');
+  return finish(
+    ctx,
+    () => presentLateBillAgain(ctx.tenant, ctx.transactionRef, ctx.actor, sequenceOf(form)),
+    'LATE_BILL_PRESENTED',
+  );
+}
+
+/** Finance proposes the board-approved recipient; the register is checked by the service, not the form. */
+export async function proposeDisbursementAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'CHARITY_DISBURSE_PROPOSE');
+  return finish(
+    ctx,
+    () =>
+      proposeDisbursement(ctx.tenant, ctx.transactionRef, ctx.actor, {
+        sequenceNumber: sequenceOf(form),
+        recipientId: field(form, 'recipientId').slice(0, 64),
+      }),
+    'CHARITY_DISBURSEMENT_PROPOSED',
+  );
+}
+
+/** A different person approves the disbursement, which instructs the payment, or declines it. */
+export async function decideDisbursementAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'CHARITY_DISBURSE_APPROVE');
+  const approve = field(form, 'decision') === 'APPROVE';
+  return finish(
+    ctx,
+    () =>
+      approve
+        ? approveDisbursement(ctx.tenant, ctx.transactionRef, ctx.actor, sequenceOf(form))
+        : declineDisbursement(ctx.tenant, ctx.transactionRef, ctx.actor, sequenceOf(form)),
+    approve ? 'CHARITY_DISBURSED' : 'CHARITY_DISBURSEMENT_DECLINED',
+  );
 }
 
 /** Unwind before the sale, with what happens to the goods, in the checker's words (kept on the transaction, never in a URL). */

@@ -74,7 +74,14 @@ export function answer(r: Result<unknown>): Response {
   if (r.ok || r.error.reason === 'RESULT_ALREADY_RECORDED')
     return new Response(null, { status: 204, headers: NO_STORE });
   const missing = ['TRANSACTION_NOT_FOUND', 'PAYMENT_NOT_FOUND', 'COLLECTION_NOT_FOUND'].includes(r.error.reason);
-  return new Response(null, { status: missing ? 404 : 422, headers: NO_STORE });
+  // The core banking platform did not take the charity posting (W4b-2): nothing was recorded; deliver it again.
+  const unavailable = ['CORE_BANKING_UNAVAILABLE', 'CORE_BANKING_CALL_FAILED', 'SERVICING_UNAVAILABLE'].includes(
+    r.error.reason,
+  );
+  let status = 422;
+  if (missing) status = 404;
+  else if (unavailable) status = 503;
+  return new Response(null, { status, headers: NO_STORE });
 }
 
 export const isTransactionRef = (v: string | undefined): v is string => v !== undefined && /^WT-\d{6,10}$/.test(v);

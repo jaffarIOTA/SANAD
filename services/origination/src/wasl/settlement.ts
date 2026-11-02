@@ -61,6 +61,10 @@ const outboxOf = (e: TransactionEventRow) =>
       }[])
     : [];
 
+/** The keys instructions.ts gives the seller's payment and an instalment's bill; late amounts have their own. */
+const SELLER_KEY = /^wasl:WT-\d{6,10}:seller(:R\d{1,3})?$/;
+const INSTALMENT_KEY = /^wasl:WT-\d{6,10}:collect:I\d{1,3}(:R\d{1,3})?$/;
+
 // -- Paying the seller ----------------------------------------------------------------
 
 export interface SellerPayment {
@@ -80,7 +84,8 @@ export function sellerPayments(record: TransactionRecord): readonly SellerPaymen
   const out: SellerPayment[] = [];
   for (const e of record.events) {
     for (const o of outboxOf(e)) {
-      if (o.kind !== 'PAYMENT_DISBURSE') continue;
+      // The seller's payments only: a disbursement to charity (W4b-2) is not one of them.
+      if (o.kind !== 'PAYMENT_DISBURSE' || !SELLER_KEY.test(o.idempotencyKey)) continue;
       out.push({
         idempotencyKey: o.idempotencyKey,
         attempt: out.length,
@@ -293,7 +298,8 @@ export function presentations(record: TransactionRecord): readonly Presentation[
   const currency = record.transaction.core.pricing.salePriceAmount.currency;
   for (const e of record.events) {
     for (const o of outboxOf(e)) {
-      if (o.kind !== 'BILL_PRESENT') continue;
+      // An instalment's bills only: a late amount's bill (W4b-2) is never part of the obligation.
+      if (o.kind !== 'BILL_PRESENT' || !INSTALMENT_KEY.test(o.idempotencyKey)) continue;
       out.push({
         idempotencyKey: o.idempotencyKey,
         sequenceNumber: Number(/:collect:I(\d+)/.exec(o.idempotencyKey)?.[1] ?? '0'),

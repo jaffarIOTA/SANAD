@@ -19,5 +19,25 @@
     { "document": "purchase_contract", "templateVersionId": "purchase_contract@3" },
     { "document": "murabaha_offer", "templateVersionId": "murabaha_offer@3" },
     { "document": "murabaha_acceptance", "templateVersionId": "murabaha_acceptance@3" }
-  ]
+  ],
+  "lateAmounts": {
+    "$comment": "ILLUSTRATIVE until the board rules (Wasl W4b-2, 2026-10-21): the basis on which a late amount is computed, the grace after the due date, and the charities a collected late amount may be given to. A late amount is the distributor's undertaking to give to charity, held in the segregated charity liability and never the institution's income (SH-13); an assessment of inability suspends it (SH-14). The amount, the grace and the recipients are placeholders; the recipients are invented, with invented IBANs in the Saudi format. The board's ruling replaces all of it.",
+    "computationBasisKey": "SSB-A-2026-014/late-amount/fixed-per-instalment",
+    "graceDays": 5,
+    "amountPerInstalmentMinorUnits": "50000",
+    "approvedRecipients": [
+      {
+        "recipientId": "chr-a-01",
+        "nameAr": "جمعية خيرية توضيحية (أ)",
+        "nameEn": "Illustrative charitable association A",
+        "iban": "SA1380000000000000000101"
+      },
+      {
+        "recipientId": "chr-a-02",
+        "nameAr": "جمعية خيرية توضيحية (ب)",
+        "nameEn": "Illustrative charitable association B",
+        "iban": "SA0280000000000000000202"
+      }
+    ]
+  }
 }

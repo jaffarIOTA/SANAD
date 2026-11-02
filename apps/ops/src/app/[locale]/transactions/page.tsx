@@ -39,6 +39,12 @@ export default async function TransactionsPage({ params }: { readonly params: Pr
         >
           {t('Reconciliation with SADAD', 'المطابقة مع سداد')}
         </a>
+        <a
+          href={`/${segment}/transactions/charity`}
+          className="ms-4 mt-2 inline-block text-[13px] font-semibold text-brand hover:underline"
+        >
+          {t('Charity ledger', 'سجل التبرعات')}
+        </a>
       </div>
       <section className="overflow-x-auto rounded-card border border-line bg-surface shadow-card">
         {rows.length === 0 ? (

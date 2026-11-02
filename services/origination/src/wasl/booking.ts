@@ -42,8 +42,11 @@ import { syntheticDemonstrationPermitted } from '../profile.ts';
 import { type TransactionView, waslPool } from './book.ts';
 import { fail, notNow, scheduleOf, step } from './steps.ts';
 
-/** The institution's core banking platform for holding a Murabaha, or undefined where none may be reached. */
-async function coreBankingFor(
+/**
+ * The institution's core banking platform for holding a Murabaha, or a refusal where none may be reached.
+ * Booking uses it; so does raising the charity liability on a collected late amount (late-amounts.ts).
+ */
+export async function coreBankingFor(
   tenant: TenantCode,
   at: TsaInstant,
 ): Promise<Result<{ readonly core: CoreBankingProvider; readonly source: 'FIXTURE' }>> {

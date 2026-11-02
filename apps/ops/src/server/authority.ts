@@ -50,6 +50,17 @@ export const ACT_REQUIREMENTS = {
   TRADE_UNWIND: ['CHECKER', 'SENIOR_CHECKER'],
   /** Instruct the seller's payment again after the payments hub rejected or returned it: money out, finance's act. */
   TRADE_SETTLEMENT: ['FINANCE'],
+  /**
+   * Late amounts (W4b-2): the officer records whether the distributor was able but unwilling to pay, or unable;
+   * presents a late amount's bill again after a return.
+   */
+  TRADE_LATE_ASSESS: ['MAKER'],
+  /** Confirm the assessment or send it back: a checker, never the officer who assessed (the service refuses the same person). */
+  TRADE_LATE_CONFIRM: ['CHECKER', 'SENIOR_CHECKER'],
+  /** Propose which board-approved charity a collected late amount goes to: money out, finance's act. */
+  CHARITY_DISBURSE_PROPOSE: ['FINANCE'],
+  /** Approve or decline the disbursement: a checker, never the person who proposed it. */
+  CHARITY_DISBURSE_APPROVE: ['CHECKER', 'SENIOR_CHECKER'],
 } as const satisfies Readonly<Record<string, readonly StaffAuthority[]>>;
 
 export type WorkbenchAct = keyof typeof ACT_REQUIREMENTS;

@@ -3,9 +3,10 @@
  * by the presentation's idempotency key. Verified before it is parsed, with
  * the tenant's BILL_COLLECTION webhook secret (server/wasl-webhooks.ts).
  * A receipt reduces what is owed and may settle the transaction; a return
- * takes a receipt off again. Recorded once.
+ * takes a receipt off again. A late amount's bill (W4b-2) is routed by its
+ * key to the charity liability instead, never to the obligation. Recorded once.
  */
-import { recordCollectionResult } from '@sanad/origination/wasl/settlement.ts';
+import { recordBillResult } from '@sanad/origination/wasl/collection-results.ts';
 
 import { NO_STORE, answer, isTransactionRef, verifiedDelivery } from '../../../../../../../server/wasl-webhooks.ts';
 
@@ -32,7 +33,7 @@ export async function POST(
   )
     return new Response(null, { status: 400, headers: NO_STORE });
   return answer(
-    await recordCollectionResult(
+    await recordBillResult(
       d.tenant,
       transactionRef,
       {

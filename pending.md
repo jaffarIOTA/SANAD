@@ -1,17 +1,21 @@
 # Pending
 
 Everything waiting on someone, kept in one place. Updated as items close.
-Last updated: 19 October 2026.
+Last updated: 21 October 2026.
 
 ## Waiting on the product owner
 
 - **Merge the stacked PRs.** Each is built on the one before; only #35 targets `main`.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
-  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5. Auto mode cannot merge.
+  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2.
+  Auto mode cannot merge.
 - **Renew the `APICAPIKEY` GitHub secret.**
 - **Bank A's Tawarruq board ruling.** Record it in Admin. `sme-term-islamic` stays
   disabled until it's recorded.
+- **Bank A's late-amount ruling (Wasl W4b-2).** The basis (a fixed amount per instalment is assumed), the grace
+  period, and the charities a collected late amount may go to, with their accounts. They replace the ILLUSTRATIVE
+  `lateAmounts` in `config/tenants/bank-a/shariah/board-positions.json`.
 - **ADR 0007 board view.** Each institution's Shariah board states its view on servicing
   a Tawarruq debt through a rate-carrying loan contract before go-live.
 - **SME portal deployment.** It is behind sign-in since W3 (SR-019) but not deployed.
@@ -59,15 +63,30 @@ The findings go in the adapter README.
     - The latest reading and its exceptions are held in memory and shown until the process restarts. Unmatched
       bills reappear at the next reading, but there is no persistent exceptions queue yet.
     - Credit-bureau reporting of Wasl facilities is not built. The cycle reports that task as not this facility's.
-  - **W4b-2 next** (decided with the product owner on 21 October 2026):
-    - the cycle **proposes** a late amount on an instalment overdue past the grace period;
-    - an officer records whether the distributor was able but unwilling, or unable (hardship), and a **second
-      person confirms**;
-    - a confirmed amount is billed through SADAD as its own bill, and raised to `core.charity_ledger` and the core's
-      charity liability **only when collected**;
-    - then disbursement to board-approved recipients.
-    - Needs from the board: the late-amount computation basis, the grace period, and the approved recipients. These
-      go in `board-positions.json` (ILLUSTRATIVE until the board rules).
+  - **W4b-2 built**, PR #67 (stacked on #66): late amounts and the charity ledger, as decided on 21 October 2026. The cycle
+    proposes, an officer assesses, a second person confirms. A confirmed amount is billed on its own SADAD bill. It is
+    raised to `core.charity_ledger` and the core's charity liability only when collected, then disbursed to a
+    board-approved recipient after a second person approves. Ledger view at `/transactions/charity`.
+    - **Needs from the board:** the late-amount basis, the grace period and the approved recipients. They are in
+      `board-positions.json` → `lateAmounts`, all ILLUSTRATIVE: SAR 500 per instalment, 5 days' grace, two invented
+      charities with invented IBANs. The basis is a **fixed amount per instalment**, since the Murabaha module holds no
+      rate. If the board rules a proportion of the overdue amount instead, that is a change to the ruling's shape.
+      A board that rules none gets no proposals.
+    - Migration **0030** (unique source on `core.charity_ledger`, write-once trigger widened) has **not been run
+      locally**: Docker Desktop was waiting on an administrator prompt. CI's database job is its first run, together with
+      the W4b-2 case in `test/contract/wasl-booking-persistence.test.ts`.
+    - The charity liability is posted to the core **synchronously** when the collection is recorded, as booking is.
+      If the core is unavailable, nothing is recorded, the webhook is answered 503 so SADAD delivers it again, and
+      reconciliation lists it as an exception. It is not on the outbox, because the dispatcher has no core-banking
+      port.
+    - The payments hub's result for a charity disbursement is not recorded. The payment-results webhook only knows
+      seller payments, so the outbox delivery is the only evidence it was paid.
+    - A late amount's payment that comes back after it was raised to charity is refused for operations. There is no
+      queue for it, and no reversal of the ledger entry, which is write-once.
+    - The hardship assessment closes the late amount only. Wasl collections are not suspended for hardship (the
+      Hardship module stays NOT_BUILT).
+    - The four screens (assess, confirm, propose a recipient, approve) were typechecked but **not reviewed in a
+      browser** in RTL or LTR.
   - A return that arrives after an obligation has settled is refused for operations to resolve. There is no
     operations queue for it yet.
   - Wasl's payment and collection webhooks need each tenant's PAYMENTS_HUB and BILL_COLLECTION `webhook_secret`

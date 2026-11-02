@@ -360,8 +360,32 @@ export interface StepWrite {
   readonly paidDelta?: Money;
   /** External side effects, written in the same transaction as the step that caused them (the transactional outbox). */
   readonly outbox?: readonly OutboxEvent[];
+  /** A charity ledger entry raised, or its disbursement completed (W4b-2). */
+  readonly charity?: CharityWrite;
   readonly correlationId: string;
 }
+
+/**
+ * The segregated charity ledger (0003, 0030): an entry raised when a late
+ * amount is collected, and later its disbursement to a board-approved
+ * recipient, once. The database's write-once trigger refuses anything else.
+ */
+export type CharityWrite =
+  | {
+      readonly kind: 'RAISE';
+      readonly entryId: string;
+      readonly amount: Money;
+      readonly sourceRef: string;
+      readonly computationBasisKey: string;
+      readonly recordedAt: TsaInstant;
+    }
+  | {
+      readonly kind: 'DISBURSE';
+      readonly entryId: string;
+      readonly recipientId: string;
+      readonly disbursementRef: string;
+      readonly disbursedAt: TsaInstant;
+    };
 
 export interface ObligationWrite {
   readonly obligationId: string;
@@ -396,6 +420,8 @@ function refusalOf(error: unknown): Result<never> {
     return reject('SH-02', 'SCHEDULE_NOT_TOTAL', 'The database refused a schedule that does not sum to the total');
   if (e.constraint === 'contract_leg_one_document_per_leg')
     return reject('SH-07', 'DOCUMENT_ALREADY_BOUND_TO_A_LEG', 'The database refused a document on a second leg');
+  if (e.constraint === 'charity_ledger_source_once')
+    return reject('SH-13', 'CHARITY_ALREADY_RAISED', 'The database refused a second charity entry for one collection');
   if (e.code === '23001' || e.code === '23505' || e.code === '23514')
     return reject('OP-CHAIN', 'DATABASE_REFUSED', 'The database refused the step; nothing was written', {
       constraint: e.constraint ?? e.code,
@@ -531,6 +557,10 @@ export async function recordStep(pool: Pool, tenant: TenantCode, w: StepWrite): 
             'The transaction has no obligation to apply this to',
           );
       }
+      if (w.charity !== undefined) {
+        const written = await writeCharity(db, tenantUuid, row.id, w.charity, correlation);
+        if (!written.ok) return written;
+      }
       // The outbox table keys on the tenant's uuid; the events carry its code. One event per (tenant, kind, key).
       for (const o of w.outbox ?? [])
         await db.query(
@@ -553,6 +583,55 @@ export async function recordStep(pool: Pool, tenant: TenantCode, w: StepWrite): 
   } catch (error) {
     return refusalOf(error);
   }
+}
+
+/** Raise a charity entry, or complete its disbursement, inside the step's transaction. */
+async function writeCharity(
+  db: Scoped,
+  tenantUuid: string,
+  transactionId: string,
+  charity: CharityWrite,
+  correlation: string,
+): Promise<Result<true>> {
+  if (charity.kind === 'RAISE') {
+    // Under the board approval the transaction runs under; the account class is the only one the table admits.
+    await db.query(
+      `insert into core.charity_ledger (id, tenant_id, transaction_id, currency, amount_minor, reason,
+         computation_basis_config_key, shariah_approval_id, recorded_at, source_ref, correlation_id)
+       select $1, $2, t.id, $3, $4, 'LATE_PAYMENT', $5, t.shariah_approval_id, to_timestamp($6), $7, $8
+         from core.transaction t where t.tenant_id = $2 and t.id = $9`,
+      [
+        charity.entryId,
+        tenantUuid,
+        charity.amount.currency,
+        charity.amount.minorUnits.toString(),
+        charity.computationBasisKey,
+        charity.recordedAt.epochSeconds.toString(),
+        charity.sourceRef,
+        correlation,
+        transactionId,
+      ],
+    );
+    return ok(true);
+  }
+  const disbursed = await db.query(
+    `update core.charity_ledger
+        set disbursement_ref = $3, disbursed_at = to_timestamp($4), recipient_id = $5
+      where tenant_id = $1 and id = $2::uuid and transaction_id = $6 and disbursement_ref is null`,
+    [
+      tenantUuid,
+      charity.entryId,
+      charity.disbursementRef,
+      charity.disbursedAt.epochSeconds.toString(),
+      charity.recipientId,
+      transactionId,
+    ],
+  );
+  return disbursed.rowCount === 1
+    ? ok(true)
+    : reject('SH-13', 'ALREADY_DISBURSED', 'This charity entry is disbursed already, or is not this one', {
+        entryId: charity.entryId,
+      });
 }
 
 async function insertEvent(
