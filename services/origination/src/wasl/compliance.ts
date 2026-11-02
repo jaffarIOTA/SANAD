@@ -25,7 +25,7 @@ import { raiseIncident } from '../shariah/incidents.ts';
 import { type TransactionRecord, WASL_PRODUCT, hydrate, structureOf } from './book.ts';
 import { resolveBoard, resolveWaslParties } from './configuration.ts';
 import { purifications, raisePurificationsDue } from './purification.ts';
-import { instrumentHash, termsAtOpening } from './steps.ts';
+import { rebuiltInstrumentHash, termsAtOpening } from './steps.ts';
 
 export interface ShariahReview {
   /** Transactions checked. */
@@ -70,7 +70,10 @@ export async function findingsFor(tenant: TenantCode, record: TransactionRecord)
     for (const leg of 'legs' in t ? t.legs : []) {
       const document = structure.value.legs.find((l) => l.type === leg.legType)?.document;
       if (document !== undefined)
-        rebuilt.set(leg.legId, instrumentHash(leg, { document, institutionCr, terms: terms.value, core: t.core }));
+        rebuilt.set(
+          leg.legId,
+          rebuiltInstrumentHash(leg, { document, institutionCr, terms: terms.value, core: t.core }),
+        );
     }
   return ok(
     checkTransaction({

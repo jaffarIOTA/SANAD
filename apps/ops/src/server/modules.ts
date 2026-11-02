@@ -321,6 +321,16 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         },
         reference: 'rate-publisher port — benchmarks and market APRs',
       },
+      {
+        id: 'timestamp-authority',
+        titleEn: 'Timestamping authority',
+        titleAr: 'هيئة الختم الزمني',
+        readiness: {
+          kind: 'BLOCKED',
+          on: 'E-04 — no accredited authority chosen. The RFC 3161 adapter is built and checks every token (signature, signing certificate, chain, imprint, nonce), verified against a public authority’s token on 2026-10-28; until an institution enables its authority the host clock stands in, on synthetic data only (SR-006) — see adapters/tsa/README.md',
+        },
+        reference: 'timestamp authority port — attested instants for legs and evidence',
+      },
     ],
   },
   {
@@ -388,6 +398,16 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         readiness: { kind: 'BLOCKED', on: 'fixture transport only — see adapters/uae/open-finance/README.md' },
         reference:
           'account-information port — affordability facts from CBUAE Open Finance v2.1; read on the loan application under the intake consent and confirmed by a second person; labelled demonstration answers',
+      },
+      {
+        id: 'uae-timestamp-authority',
+        titleEn: 'Timestamping authority',
+        titleAr: 'هيئة الختم الزمني',
+        readiness: {
+          kind: 'BLOCKED',
+          on: 'no authority chosen — the RFC 3161 adapter is built and verified against a public authority’s token (2026-10-28); the host clock stands in on synthetic data only (SR-006) — see adapters/tsa/README.md',
+        },
+        reference: 'timestamp authority port — attested instants for what has contractual effect',
       },
     ],
   },

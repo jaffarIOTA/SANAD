@@ -24,8 +24,16 @@ import type { TimestampAuthorityPort } from '@sanad/core/time/tsa.ts';
 
 import { type ContractLeg, verifyChain } from './leg.ts';
 
-/** The digest a leg's timestamp token is stamped over. Versioned, so the binding can evolve without ambiguity. */
-export function legAnchorDigest(leg: ContractLeg): string {
+/**
+ * The digest a leg's timestamp token is stamped over. Versioned, so the binding can evolve without ambiguity.
+ * It names no instant: the token stamped over it is where the leg's instant comes from.
+ */
+export function legAnchorDigest(
+  leg: Pick<
+    ContractLeg,
+    'tenantId' | 'transactionId' | 'sequenceNo' | 'legType' | 'documentId' | 'contentHash' | 'prevLegHash'
+  >,
+): string {
   const fields = [
     'sanad-leg-anchor-v1',
     leg.tenantId,
