@@ -28,6 +28,8 @@ COPY --chown=0:0 core ./core
 COPY --chown=0:0 services/origination ./services/origination
 COPY --chown=0:0 api/openapi ./api/openapi
 COPY --chown=0:0 tsconfig.json ./
+# The database provider's root, for sslmode=verify-full&sslrootcert=… (SR-051).
+COPY --chown=0:0 deploy/certs ./deploy/certs
 
 # An arbitrary UID is a member of group 0 and nothing else. Group-write on the
 # working tree is what makes that UID able to run at all.

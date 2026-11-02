@@ -20,6 +20,8 @@ import { ADAPTER_CATALOGUE } from '../../../adapters/catalogue.ts';
 import { TENANT_CODES, loadRailsConfiguration } from '../../../config/loader.ts';
 import type { CredentialProvider } from '../../../core/ports/credentials.ts';
 
+import { assertDatabaseTransport } from './database-transport.ts';
+
 export function databaseUrlFromEnvironment(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): string | undefined {
@@ -34,9 +36,13 @@ interface State {
 }
 const state: State = ((globalThis as { __sanadCredentials?: State }).__sanadCredentials ??= {});
 
-/** One pool per process; the tenant code → uuid lookup is the only query this module owns. */
+/**
+ * One pool per process; the tenant code → uuid lookup is the only query this module owns.
+ * A deployed process opens it only over verified TLS (SR-051).
+ */
 export function sharedPool(url: string): Pool {
   if (state.pool === undefined || state.url !== url) {
+    assertDatabaseTransport(url);
     state.pool = new Pool({ connectionString: url, max: 4 });
     state.url = url;
   }

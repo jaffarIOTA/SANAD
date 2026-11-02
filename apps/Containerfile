@@ -32,7 +32,8 @@ RUN mkdir -p /out && cp -r "apps/$APP/.next/standalone/." /out/ \
  && mkdir -p "/out/apps/$APP/.next" && cp -r "apps/$APP/.next/static" "/out/apps/$APP/.next/static" \
  && if [ -d "apps/$APP/public" ]; then cp -r "apps/$APP/public" "/out/apps/$APP/public"; fi \
  && echo '{"type":"commonjs"}' > "/out/apps/$APP/package.json" \
- && mkdir -p /out/api && cp -r api/openapi /out/api/openapi
+ && mkdir -p /out/api && cp -r api/openapi /out/api/openapi \
+ && mkdir -p /out/deploy && cp -r deploy/certs /out/deploy/certs
 
 FROM ${NODE_RUN}
 ARG APP
