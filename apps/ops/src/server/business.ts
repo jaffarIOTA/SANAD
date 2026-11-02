@@ -620,11 +620,31 @@ export interface Payee {
   readonly confirmedBy?: string;
 }
 
+export type TrancheStatus = 'PLANNED' | 'RELEASED' | 'SETTLED' | 'FAILED';
+
+/** One drawdown of the facility, paid by one instruction (re-instructed under a new key after a failure). */
+export interface Tranche {
+  readonly trancheId: string;
+  readonly amount: Money;
+  /** The civil date (yyyy-mm-dd) it may be released from; the first defaults to the signed offer's disbursement date. */
+  readonly plannedDate?: string;
+  readonly status: TrancheStatus;
+  /** How many instructions have gone out for it. */
+  readonly releases: number;
+  readonly idempotencyKey?: string;
+  readonly releasedBy?: string;
+  readonly instructionRef?: string;
+  readonly failureCode?: string;
+  readonly failedAtEpochSeconds?: bigint;
+}
+
 export interface ClosingRecord {
   readonly signing?: SigningInProgress;
   readonly signer?: SignerRecord;
   readonly cps: Readonly<Record<string, CpEvidence>>;
   readonly payee?: Payee;
+  /** The drawdown plan; absent until planned or first released (then one tranche of the whole facility). */
+  readonly tranches?: readonly Tranche[];
 }
 
 // =============================================================================
@@ -641,7 +661,7 @@ interface BusinessRecord {
   bankFacts?: BankStatementFacts;
   security: { collateral: CollateralItem[]; guarantees: Guarantee[] };
   pack: { conditions: Condition[]; covenants: Covenant[]; justifications: Record<string, Justification>; frozen?: FrozenPack };
-  closing: { signing?: SigningInProgress; signer?: SignerRecord; cps: Record<string, CpEvidence>; payee?: Payee };
+  closing: { signing?: SigningInProgress; signer?: SignerRecord; cps: Record<string, CpEvidence>; payee?: Payee; tranches?: Tranche[] };
   assessments: AssessmentRun[];
   offers: OfferRun[];
   events: ApplicationEvent[];
@@ -1046,6 +1066,7 @@ function view(record: BusinessRecord, currency: CurrencyCode): BusinessApplicati
       ...(record.closing.signer === undefined ? {} : { signer: record.closing.signer }),
       cps: { ...record.closing.cps },
       ...(record.closing.payee === undefined ? {} : { payee: record.closing.payee }),
+      ...(record.closing.tranches === undefined ? {} : { tranches: [...record.closing.tranches] }),
     },
     assessments: [...record.assessments],
     ...(latestAssessment === undefined ? {} : { latestAssessment }),
@@ -1282,6 +1303,36 @@ function withdrawPackItemIn(r: BusinessRecord, itemId: string, actor: string): b
   return false;
 }
 
+// -- tranches and payment results (UAE M5b) ------------------------------------
+
+/** A failed payment withdraws the payee confirmation: a second person confirms the account (corrected or not) before money goes again. */
+function withdrawPayeeConfirmation(r: BusinessRecord): void {
+  if (r.closing.payee === undefined) return;
+  const { confirmedBy: _withdrawn, ...unconfirmed } = r.closing.payee;
+  r.closing.payee = unconfirmed;
+}
+
+function updateTranche(r: BusinessRecord, trancheId: string, f: (t: Tranche) => Tranche): void {
+  const i = (r.closing.tranches ?? []).findIndex((t) => t.trancheId === trancheId);
+  if (i < 0 || r.closing.tranches === undefined) return;
+  r.closing.tranches[i] = f(r.closing.tranches[i] as Tranche);
+}
+
+/** A bank status on a released tranche: settled, or failed (rejected, returned). Accepted changes only the reference. */
+function applyPaymentResult(
+  t: Tranche,
+  status: string,
+  instructionRef: string | undefined,
+  reasonCode: string | undefined,
+  at: bigint,
+): Tranche {
+  const ref = instructionRef === undefined ? {} : { instructionRef };
+  if (status === 'SETTLED') return { ...t, ...ref, status: 'SETTLED' };
+  if (status === 'REJECTED' || status === 'RETURNED')
+    return { ...t, ...ref, status: 'FAILED', failureCode: reasonCode ?? status, failedAtEpochSeconds: at };
+  return { ...t, ...ref };
+}
+
 function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
   const d = e.detail;
   switch (e.eventType) {
@@ -1442,6 +1493,36 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
       return;
     case 'PAYEE_CONFIRMED':
       if (r.closing.payee !== undefined) r.closing.payee = { ...r.closing.payee, confirmedBy: e.actor };
+      return;
+    case 'TRANCHES_PLANNED': {
+      const amounts = (d['amounts'] ?? '').split(',');
+      const dates = (d['dates'] ?? '').split(',');
+      r.closing.tranches = amounts.map((a, i) => ({
+        trancheId: `T${String(i + 1)}`,
+        amount: money(BigInt(a || '0'), r.application.requested.currency),
+        ...(dates[i] ? { plannedDate: dates[i] } : {}),
+        status: 'PLANNED' as const,
+        releases: 0,
+      }));
+      return;
+    }
+    case 'TRANCHE_RELEASED': {
+      const id = d['trancheId'] ?? 'T1';
+      r.closing.tranches ??= [
+        { trancheId: 'T1', amount: money(BigInt(d['minorUnits'] ?? '0'), r.application.requested.currency), status: 'PLANNED', releases: 0 },
+      ];
+      updateTranche(r, id, (t) => ({
+        ...t,
+        status: 'RELEASED',
+        releases: t.releases + 1,
+        idempotencyKey: d['idempotencyKey'] ?? '',
+        releasedBy: e.actor,
+      }));
+      return;
+    }
+    case 'PAYMENT_RESULT_RECORDED':
+      updateTranche(r, d['trancheId'] ?? '', (t) => applyPaymentResult(t, d['status'] ?? '', d['instructionRef'], d['reasonCode'], e.atEpochSeconds));
+      if (d['status'] === 'REJECTED' || d['status'] === 'RETURNED') withdrawPayeeConfirmation(r);
       return;
     case 'PORTFOLIO_STATUS_RECORDED':
       r.portfolio = {
@@ -3973,6 +4054,12 @@ export async function sendOffer(
 /** Between approval and disbursement: the window in which closing steps are recorded. */
 const CLOSING_OPEN = new Set(['APPROVED', 'OFFER_SENT', 'SIGNED']);
 
+/** The payee may also be corrected after disbursement, while a tranche's payment has failed. */
+function payeeOpen(r: BusinessRecord): Result<true> {
+  if (r.application.status === 'DISBURSED' && (r.closing.tranches ?? []).some((t) => t.status === 'FAILED')) return ok(true);
+  return closingOpen(r);
+}
+
 function closingOpen(r: BusinessRecord): Result<true> {
   return CLOSING_OPEN.has(r.application.status)
     ? ok(true)
@@ -4198,7 +4285,7 @@ async function recordPayeeAt(
   at: bigint,
 ): Promise<Result<BusinessApplicationView>> {
   return closingChangeAt(tenant, applicationId, at, (r, book, ctx) => {
-    const open = closingOpen(r);
+    const open = payeeOpen(r);
     if (!open.ok) return open;
     const iban = validateIban(entry.iban, ctx.profile.code);
     if (!iban.ok) return iban;
@@ -4238,7 +4325,7 @@ async function confirmPayeeAt(
   at: bigint,
 ): Promise<Result<BusinessApplicationView>> {
   return closingChangeAt(tenant, applicationId, at, (r, book) => {
-    const open = closingOpen(r);
+    const open = payeeOpen(r);
     if (!open.ok) return open;
     const payee = r.closing.payee;
     if (payee === undefined) return fail('PAYEE_NOT_RECORDED', 'Record the payee account first');
@@ -4265,6 +4352,122 @@ export async function confirmPayee(
   confirmer: string,
 ): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, () => confirmPayeeAt(tenant, applicationId, confirmer, developmentAttestation().epochSeconds));
+}
+
+/** The most tranches a facility is drawn in. */
+const MAX_TRANCHES = 12;
+
+/** The letter the borrower signed (or, before signing, the one sent or latest): its terms fix the facility amount. */
+const offerInForce = (r: BusinessRecord) =>
+  r.offers.find((o) => o.letter.version === r.application.offer?.letterVersion) ?? r.offers[r.offers.length - 1];
+
+/** The officer plans the drawdowns: amounts that add up to the facility exactly, dates in order. Changes only before the first release. */
+export async function planTranches(
+  tenant: TenantCode,
+  applicationId: string,
+  plan: readonly { readonly amountMinorUnits: bigint; readonly plannedDate?: string }[],
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, ctx, at) => {
+    const open = closingOpen(r);
+    if (!open.ok) return open;
+    if ((r.closing.tranches ?? []).some((t) => t.releases > 0))
+      return fail('TRANCHES_LOCKED', 'The drawdown plan changes only before the first release');
+    const offer = offerInForce(r);
+    if (offer === undefined) return fail('OFFER_NOT_GENERATED', 'Generate the offer first; its facility amount is what the plan divides');
+    if (plan.length < 1 || plan.length > MAX_TRANCHES)
+      return fail('TRANCHES_INVALID', 'A facility is drawn in 1 to 12 tranches', { max: String(MAX_TRANCHES) });
+    if (plan.some((t) => t.amountMinorUnits <= 0n)) return fail('TRANCHES_INVALID', 'Every tranche is a positive amount');
+    const facility = offer.terms.facilityAmount;
+    const total = plan.reduce((sum, t) => sum + t.amountMinorUnits, 0n);
+    if (total !== facility.minorUnits)
+      return fail('TRANCHES_NOT_FACILITY', 'The tranches add up to the facility amount exactly', {
+        facilityMinorUnits: facility.minorUnits.toString(),
+        plannedMinorUnits: total.toString(),
+      });
+    const dates = plan.map((t) => t.plannedDate ?? '');
+    for (const d of dates)
+      if (d !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(d)) return fail('TRANCHES_INVALID', 'A tranche date is yyyy-mm-dd');
+    const given = dates.filter((d) => d !== '');
+    if (given.some((d, i) => i > 0 && d < (given[i - 1] ?? '')))
+      return fail('TRANCHES_INVALID', 'Tranche dates run in order');
+    if (given[0] !== undefined && given[0] < offer.terms.disbursementDate)
+      return fail('TRANCHES_INVALID', 'No tranche is planned before the offer’s disbursement date', {
+        disbursementDate: offer.terms.disbursementDate,
+      });
+    r.closing.tranches = plan.map((t, i) => ({
+      trancheId: `T${String(i + 1)}`,
+      amount: money(t.amountMinorUnits, ctx.currency),
+      ...(t.plannedDate === undefined || t.plannedDate === '' ? {} : { plannedDate: t.plannedDate }),
+      status: 'PLANNED' as const,
+      releases: 0,
+    }));
+    recordEvent(book, r, {
+      eventType: 'TRANCHES_PLANNED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { amounts: plan.map((t) => t.amountMinorUnits.toString()).join(','), dates: dates.join(',') },
+    });
+    return ok(true);
+  });
+}
+
+export type PaymentResultStatus = 'ACCEPTED' | 'SETTLED' | 'REJECTED' | 'RETURNED';
+
+/**
+ * The bank's status for one instruction, by its idempotency key: settled, or
+ * failed (rejected, returned). The same result twice changes nothing. A
+ * failed tranche can be released again once the payee has been recorded and
+ * confirmed afresh.
+ */
+export async function recordPaymentResult(
+  tenant: TenantCode,
+  applicationId: string,
+  result: {
+    readonly idempotencyKey: string;
+    readonly status: PaymentResultStatus;
+    readonly instructionRef?: string;
+    readonly reasonCode?: string;
+    readonly source: 'LIVE' | 'FIXTURE';
+  },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    closingChangeAt(tenant, applicationId, developmentAttestation().epochSeconds, (r, book, _ctx, at) => {
+      const tranche = (r.closing.tranches ?? []).find((t) => t.idempotencyKey === result.idempotencyKey);
+      if (tranche === undefined)
+        return fail('PAYMENT_NOT_FOUND', 'No released tranche carries that instruction key', { applicationId });
+      if (!['ACCEPTED', 'SETTLED', 'REJECTED', 'RETURNED'].includes(result.status))
+        return fail('PAYMENT_STATUS_INVALID', 'A payment status is accepted, settled, rejected or returned');
+      if (result.instructionRef !== undefined && !REF_SHAPE.test(result.instructionRef))
+        return fail('PAYMENT_STATUS_INVALID', 'The bank’s reference is not usable');
+      if (result.reasonCode !== undefined && !/^[A-Z0-9]{2,8}$/.test(result.reasonCode))
+        return fail('PAYMENT_STATUS_INVALID', 'A reason is the bank’s ISO 20022 reason code');
+      const next = applyPaymentResult(tranche, result.status, result.instructionRef, result.reasonCode, at);
+      if (next.status === tranche.status && next.instructionRef === tranche.instructionRef) return ok(true);
+      if (tranche.status === 'FAILED') return ok(true);
+      updateTranche(r, tranche.trancheId, () => next);
+      if (next.status === 'FAILED') withdrawPayeeConfirmation(r);
+      recordEvent(book, r, {
+        eventType: 'PAYMENT_RESULT_RECORDED',
+        fromStage: null,
+        toStage: null,
+        actor,
+        atEpochSeconds: at,
+        detail: {
+          trancheId: tranche.trancheId,
+          idempotencyKey: result.idempotencyKey,
+          status: result.status,
+          ...(result.instructionRef === undefined ? {} : { instructionRef: result.instructionRef }),
+          ...(result.reasonCode === undefined ? {} : { reasonCode: result.reasonCode }),
+          source: result.source,
+        },
+      });
+      return ok(true);
+    }),
+  );
 }
 
 async function signAt(
@@ -4341,56 +4544,93 @@ async function disburseAt(
     return fail('PAYEE_NOT_CONFIRMED', 'The payee account is recorded and confirmed by a second person before disbursement');
   if (actor === payee.recordedBy)
     return reject('OP-DETERMINACY', 'FOUR_EYES_PAYEE', 'Whoever recorded the payee account does not release the payment');
+  // The first release moves the application to DISBURSED; later tranches are paid against it, the row unchanged.
+  const first = app.status === 'SIGNED';
+  if (!first && app.status !== 'DISBURSED')
+    return fail('TRANSITION_NOT_ALLOWED', 'Disbursement follows the borrower’s signature', { status: app.status });
   // Fixture: the partner bank's payment instruction reference until that adapter is verified (adapters/uae/partner-bank/README.md).
   const reference = paymentRef ?? `partner-bank-fixture:pay:${applicationId}`;
-  const t = recordDisbursedCore(app, reference, actor, at.epochSeconds);
-  if (!t.ok) return t;
+  const t = first ? recordDisbursedCore(app, reference, actor, at.epochSeconds) : undefined;
+  if (t !== undefined && !t.ok) return t;
   const signed = r.offers.find((o) => o.letter.version === app.offer?.letterVersion);
   if (signed === undefined) return fail('OFFER_NOT_GENERATED', 'The signed letter version is not on record');
-  // Money goes out on or after the date the borrower signed for: the schedule (and its first due date) is built from it.
+
+  // The tranche to pay: the first not yet paid, in plan order — or, after a failure, that one again.
+  r.closing.tranches ??= [
+    { trancheId: 'T1', amount: signed.terms.facilityAmount, status: 'PLANNED', releases: 0 },
+  ];
+  const tranches = r.closing.tranches;
+  const index = tranches.findIndex((x) => x.status === 'PLANNED' || x.status === 'FAILED');
+  const tranche = tranches[index];
+  if (tranche === undefined) return fail('NO_TRANCHE_TO_RELEASE', 'Every tranche of the facility has been released');
+
+  // Money goes out on or after the date the borrower signed for (the first tranche) or the date planned for this one.
+  const plannedDate = tranche.plannedDate ?? signed.terms.disbursementDate;
   const actualDate = localDate(at.epochSeconds, ctx.value.profile);
-  if (actualDate < signed.terms.disbursementDate) {
+  if (actualDate < plannedDate) {
     return fail(
       'DISBURSEMENT_BEFORE_PLANNED_DATE',
       'The disbursement is recorded on or after the planned disbursement date in the signed offer',
-      { plannedDate: signed.terms.disbursementDate, actualDate },
+      { plannedDate, actualDate },
     );
   }
 
-  // The payment instruction to the partner bank and the bureau's facility-opened report, as products/sme-term-conventional/execution.ts
-  // shapes them, keyed on the application: queued with the DISBURSED change and written in its transaction.
+  // The payment instruction to the partner bank (and, with the first, the bureau's facility-opened report), keyed on the
+  // application and the tranche: queued with the change and written in its transaction.
   const key = `business:${applicationId}`;
+  const n = index + 1;
+  const trancheKey = `${n === 1 ? `${key}:disburse` : `${key}:disburse:T${String(n)}`}${tranche.releases > 0 ? `:R${String(tranche.releases)}` : ''}`;
   const base = { tenantId: tenant, subjectRef: applicationId, correlationId: applicationId };
   const queued = queueSideEffects([
     {
       ...base,
-      eventId: `${key}:disburse`,
+      eventId: trancheKey,
       kind: 'PAYMENT_DISBURSE',
-      idempotencyKey: `${key}:disburse`,
+      idempotencyKey: trancheKey,
       payload: {
         rail: 'PARTNER_BANK',
         beneficiaryRef: applicationId,
         beneficiaryIban: payee.iban,
         paymentRef: reference,
-        minorUnits: String(signed.terms.facilityAmount.minorUnits),
-        currency: signed.terms.facilityAmount.currency,
+        trancheId: tranche.trancheId,
+        minorUnits: String(tranche.amount.minorUnits),
+        currency: tranche.amount.currency,
       },
     },
-    {
-      ...base,
-      eventId: `${key}:bureau`,
-      kind: 'BUREAU_REPORT',
-      idempotencyKey: `${key}:bureau`,
-      payload: {
-        facilityRef: applicationId,
-        event: 'OPENED',
-        minorUnits: String(signed.terms.totalPayable.minorUnits),
-      },
-    },
+    ...(first && tranche.releases === 0
+      ? [
+          {
+            ...base,
+            eventId: `${key}:bureau`,
+            kind: 'BUREAU_REPORT' as const,
+            idempotencyKey: `${key}:bureau`,
+            payload: {
+              facilityRef: applicationId,
+              event: 'OPENED',
+              minorUnits: String(signed.terms.totalPayable.minorUnits),
+            },
+          },
+        ]
+      : []),
   ]);
   if (!queued.ok) return queued;
   commitSideEffects(book, queued.value);
-  apply(book, r, t.value);
+  if (t !== undefined) apply(book, r, t.value);
+  updateTranche(r, tranche.trancheId, (x) => ({
+    ...x,
+    status: 'RELEASED',
+    releases: x.releases + 1,
+    idempotencyKey: trancheKey,
+    releasedBy: actor,
+  }));
+  recordEvent(book, r, {
+    eventType: 'TRANCHE_RELEASED',
+    fromStage: null,
+    toStage: null,
+    actor,
+    atEpochSeconds: at.epochSeconds,
+    detail: { trancheId: tranche.trancheId, idempotencyKey: trancheKey, minorUnits: tranche.amount.minorUnits.toString() },
+  });
   return ok(view(r, ctx.value.currency));
 }
 

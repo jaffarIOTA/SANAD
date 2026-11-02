@@ -11,6 +11,8 @@
 import type { Pool } from 'pg';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { expectOk } from '@sanad/core/kernel/result.ts';
+
 import { preparePayee } from '../support/business-closing.ts';
 
 import { justifyDeviations } from '../support/business-decision-pack.ts';
@@ -45,7 +47,11 @@ import {
   proposeFigures,
   queuedBusinessNotifications,
   recordAssessmentInputs,
+  confirmPayee,
+  planTranches,
   recordDisbursed,
+  recordPayee,
+  recordPaymentResult,
   recordPortfolioStatus,
   recordSigned,
   resetBusinessStore,
@@ -666,6 +672,74 @@ describe('#11 offer dates within the fund’s configured (ILLUSTRATIVE) bounds',
 });
 
 describe('#12 #13 disbursement: a distinct finance principal, payment and bureau report queued', () => {
+  it('UAE M5b: draws the facility in tranches, each its own instruction; a rejected payment is re-released only to a re-confirmed payee', async () => {
+    await driveToApproved();
+    const offered = await generateOffer(TENANT, ID, officer, { disbursementDate: isoAfter(0), firstDueDate: isoAfter(30) });
+    const facility = offered.ok ? (offered.value.latestOffer?.terms.facilityAmount.minorUnits ?? 0n) : 0n;
+    const half = facility / 2n;
+    const reason = (r: { ok: boolean; error?: { reason: string } }) => (r.ok ? 'accepted' : r.error?.reason);
+    // A plan that does not add up, or runs out of order, is refused.
+    expect(reason(await planTranches(TENANT, ID, [{ amountMinorUnits: half }], officer))).toBe('TRANCHES_NOT_FACILITY');
+    expect(
+      reason(
+        await planTranches(
+          TENANT,
+          ID,
+          [
+            { amountMinorUnits: half, plannedDate: isoAfter(5) },
+            { amountMinorUnits: facility - half, plannedDate: isoAfter(1) },
+          ],
+          officer,
+        ),
+      ),
+    ).toBe('TRANCHES_INVALID');
+    expectOk(
+      await planTranches(TENANT, ID, [{ amountMinorUnits: half }, { amountMinorUnits: facility - half, plannedDate: isoAfter(0) }], officer),
+    );
+    const sent = await sendOffer(TENANT, ID, officer);
+    await recordSigned(TENANT, ID, { letterVersion: sent.ok ? (sent.value.application.offer?.letterVersion ?? '') : '' }, officer);
+    await preparePayee(TENANT, ID, officer, checker);
+
+    const first = expectOk(await recordDisbursed(TENANT, ID, finance));
+    expect(first.application.status).toBe('DISBURSED');
+    const second = expectOk(await recordDisbursed(TENANT, ID, finance));
+    expect(second.closing.tranches?.map((t) => t.status)).toEqual(['RELEASED', 'RELEASED']);
+    expect(reason(await recordDisbursed(TENANT, ID, finance))).toBe('NO_TRANCHE_TO_RELEASE');
+    const payments = queuedBusinessNotifications().filter((e) => e.subjectRef === ID && e.kind === 'PAYMENT_DISBURSE');
+    expect(payments.map((p) => [p.idempotencyKey, p.payload['minorUnits']])).toEqual([
+      [`business:${ID}:disburse`, half.toString()],
+      [`business:${ID}:disburse:T2`, (facility - half).toString()],
+    ]);
+    // One bureau report for the facility, not one per tranche.
+    expect(queuedBusinessNotifications().filter((e) => e.subjectRef === ID && e.kind === 'BUREAU_REPORT')).toHaveLength(1);
+
+    // The bank settles T1 and rejects T2 (account closed).
+    expectOk(await recordPaymentResult(TENANT, ID, { idempotencyKey: `business:${ID}:disburse`, status: 'SETTLED', source: 'FIXTURE' }, 'partner-bank'));
+    const rejected = expectOk(
+      await recordPaymentResult(
+        TENANT,
+        ID,
+        { idempotencyKey: `business:${ID}:disburse:T2`, status: 'REJECTED', reasonCode: 'AC04', source: 'FIXTURE' },
+        'partner-bank',
+      ),
+    );
+    expect(rejected.closing.tranches?.map((t) => t.status)).toEqual(['SETTLED', 'FAILED']);
+    // The same result again records nothing new.
+    const again = expectOk(
+      await recordPaymentResult(TENANT, ID, { idempotencyKey: `business:${ID}:disburse`, status: 'SETTLED', source: 'FIXTURE' }, 'partner-bank'),
+    );
+    expect(again.events.filter((e) => e.eventType === 'PAYMENT_RESULT_RECORDED')).toHaveLength(2);
+
+    // The failure withdrew the payee confirmation: nothing is re-released until a second person confirms the account again.
+    expect(rejected.closing.payee?.confirmedBy).toBeUndefined();
+    expect(reason(await recordDisbursed(TENANT, ID, finance))).toBe('PAYEE_NOT_CONFIRMED');
+    const doc = rejected.documents[0]?.documentRef ?? '';
+    expectOk(await recordPayee(TENANT, ID, { iban: 'AE070331234567890123456', accountName: 'Corrected LLC', evidenceRef: doc }, officer));
+    expectOk(await confirmPayee(TENANT, ID, checker));
+    const retried = expectOk(await recordDisbursed(TENANT, ID, finance));
+    expect(retried.closing.tranches?.[1]).toMatchObject({ status: 'RELEASED', releases: 2, idempotencyKey: `business:${ID}:disburse:T2:R1` });
+  });
+
   beforeEach(() => resetBusinessStore({ seed: false }));
 
   it('#6 refuses a disbursement earlier than the signed offer’s planned disbursement date, queuing nothing', async () => {

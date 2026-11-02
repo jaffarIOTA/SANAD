@@ -31,10 +31,10 @@ signing or tenant isolation (SEC-V10).
 |---|---|---|---|---|
 | Critical | 0 | 0 | 0 | 0 |
 | High | 0 | 2 | 0 | 2 |
-| Medium | 4 | 4 | 0 | 8 |
+| Medium | 3 | 4 | 1 | 8 |
 | Low | 0 | 2 | 0 | 2 |
 | Closed (Critical 1, High 7, Medium 19, Low 11) | | | 38 | 38 |
-| **Total** | **4** | **8** | **38** | **50** |
+| **Total** | **3** | **8** | **39** | **50** |
 
 **Release status: conditional.** No Critical is open (SR-001 rotated 2026-10-10). One High (SR-003) is in
 remediation: its code is released, and it closes when the applications connect as `sanad_runtime`.
@@ -75,7 +75,7 @@ required, and the test that proves the item closed.
 | SR-039 | No threat model (requirements §9 gap #6). `docs/THREAT-MODEL.md` drafted 2026-10-08, not yet reviewed or committed | SEC-TM01 | In remediation | 2026-10-08 | 2026-11-07 | CISO (review); Platform engineering (author) | Review, commit, and re-run per release | Evidence: the reviewed, dated model in the release pack (SEC-C01 #5) |
 | SR-040 | The repository is public. Source, schema, invariants, the Supabase project reference (ADR 0004) and the API Connect org and host (`ibm.yml`) are published | SEC-R01, SEC-TM10 | Open | 2026-10-08 | 2026-11-07 | Product owner | Decide whether public visibility is intended. If not, make it private and treat everything published as known | Evidence: the visibility decision recorded as an ADR |
 | SR-047 | Deployment-wide Admin actions are open to any institution's administrator. Proposing and deciding the deployment's jurisdiction and installing a licence act on every tenant, yet single sign-on binds an administrator to one institution (SR-048); two administrators of one bank can change the whole deployment. Each action keeps four eyes and audit. Raised 2026-10-10 | SEC-TM08, SEC-TM12 | Open | 2026-10-10 | 2026-11-09 | Product owner (who holds platform authority); Platform engineering | Decide who holds platform authority: a platform operator's own identity provider, or a named institution. Then refuse deployment-wide actions to every other administrator | `test/compliance/`: an institution's administrator is refused the jurisdiction and licence actions |
-| SR-050 | The outbox counts a payment the bank REJECTED as delivered. `core/outbox/dispatch.ts` `fromRail` maps every `ANSWERED` outcome to `DELIVERED` whatever its status, so a disbursement the partner bank rejects (RJCT) is marked done, no one is alerted, and the application stays DISBURSED. Found 2026-10-15 while building UAE M5a | SEC-TM09 (integrity of money movement) | Medium | Open | 2026-10-15 | 2026-11-14 | Platform engineering | M5b: a REJECTED (or RETURNED) payment status becomes a dead letter for a person and a payment-failed event on the application; SETTLED and ACCEPTED stay delivered. Until then every disbursement is on fixture rails only | A dispatch test where the payments port answers REJECTED and the outcome is not DELIVERED; an application test where a rejected payment is shown as failed |
+| SR-050 | The outbox counted a payment the bank REJECTED as delivered. `core/outbox/dispatch.ts` `fromRail` mapped every `ANSWERED` outcome to `DELIVERED` whatever its status, so a rejected disbursement was marked done, no one was alerted, and the application stayed DISBURSED. Found 2026-10-15 while building UAE M5a; fixed 2026-10-15 in M5b | SEC-TM09 (integrity of money movement) | Medium | Closed | 2026-10-15 | 2026-11-14 | Platform engineering | `fromPayment` in dispatch: a REJECTED or RETURNED payment is a dead letter for a person (`payment rejected: <ref>`); ACCEPTED and SETTLED are delivered. The bank's status report reaches the application through the signed webhook (`api/business/v1/webhooks/payment-results/[tenant]`, verified before parsing with the tenant's vault secret): the tranche shows as failed, the payee confirmation is withdrawn, and the tranche is re-released only after a second person confirms the account again, under a new idempotency key | `test/compliance/outbox-dispatch.test.ts` (SR-050: REJECTED is dead; ACCEPTED and SETTLED delivered). `test/unit/ops-business-service.test.ts` (UAE M5b: a rejected tranche fails, withdraws the payee confirmation, and is re-released as `:T2:R1`). `test/compliance/payment-results-webhook.test.ts` (unsigned, wrong-secret, altered and replayed reports record nothing) |
 
 ### Low
 

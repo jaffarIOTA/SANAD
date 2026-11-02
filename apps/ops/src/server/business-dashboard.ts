@@ -439,6 +439,12 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
     en: 'Document recorded by reference. It counts once the checker validates it.',
     ar: 'سُجّل المستند بمرجعه، ويُحتسب بعد تحقق المراجِع منه.',
   },
+  TRANCHES_PLANNED: { en: 'Drawdown plan recorded.', ar: 'سُجّلت خطة السحب.' },
+  TRANCHE_RELEASED: {
+    en: 'Tranche released to the partner bank. Its result arrives as the bank’s status report.',
+    ar: 'صُرفت الدفعة إلى البنك الشريك، وتصل نتيجتها في تقرير حالة البنك.',
+  },
+  PAYMENT_RESULT_RECORDED: { en: 'Bank result recorded.', ar: 'سُجّلت نتيجة البنك.' },
   SIGNING_STARTED: {
     en: 'Signing opened at the identity service. Check for the signature once the signatory has signed.',
     ar: 'بدأ التوقيع لدى خدمة الهوية. تحقّق من التوقيع بعد أن يوقّع المفوّض.',
@@ -904,6 +910,19 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
     en: 'Record the business’s tax registration number before checking it.',
     ar: 'سجّل رقم التسجيل الضريبي للمنشأة قبل التحقق منه.',
   },
+  // Tranches and payment results (UAE M5b). A refusal here paid nothing.
+  TRANCHES_LOCKED: { en: 'The drawdown plan changes only before the first release.', ar: 'لا تتغير خطة السحب إلا قبل الصرف الأول.' },
+  TRANCHES_INVALID: {
+    en: 'A plan is 1 to 12 positive tranches, dated in order and not before the offer’s disbursement date.',
+    ar: 'الخطة من دفعة إلى اثنتي عشرة دفعة موجبة، بتواريخ متتالية لا تسبق تاريخ الصرف في العرض.',
+  },
+  TRANCHES_NOT_FACILITY: {
+    en: 'The tranches must add up to the facility amount exactly.',
+    ar: 'يجب أن يساوي مجموع الدفعات مبلغ التمويل تماماً.',
+  },
+  NO_TRANCHE_TO_RELEASE: { en: 'Every tranche of the facility has been released.', ar: 'صُرفت جميع دفعات التمويل.' },
+  PAYMENT_NOT_FOUND: { en: 'No released tranche carries that payment instruction.', ar: 'لا توجد دفعة مصروفة تحمل أمر الدفع هذا.' },
+  PAYMENT_STATUS_INVALID: { en: 'The bank’s status report was not usable; nothing was recorded.', ar: 'تقرير حالة البنك غير صالح، فلم يُسجَّل شيء.' },
   // Closing (UAE M5a). A refusal here signed, recorded and paid nothing.
   CLOSING_LOCKED: {
     en: 'Closing steps are recorded between approval and disbursement.',
