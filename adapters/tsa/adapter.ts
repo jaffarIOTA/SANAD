@@ -46,7 +46,8 @@ export class HttpTsaTransport implements TsaTransport {
       const response = await this.fetchImpl(this.url, {
         method: 'POST',
         headers: { 'content-type': 'application/timestamp-query', ...this.headers },
-        body: request,
+        // A copy backed by a plain ArrayBuffer: the DOM body type refuses a possibly shared one.
+        body: new Uint8Array(request),
         signal: controller.signal,
       });
       if (!response.ok) throw new TransportError('tsa', response.status, `tsa: HTTP ${String(response.status)}`);
