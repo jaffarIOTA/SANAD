@@ -63,3 +63,6 @@ adapters/nutrient/compose/.signing/
 
 # Generated synthetic sample documents (scripts/document-intelligence-samples.mjs).
 samples/
+
+# Product library build environment (reportlab, pypdf, python-docx)
+docs/product-library/.venv/

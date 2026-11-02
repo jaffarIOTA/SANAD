@@ -1,208 +1,148 @@
-/* The SANAD product library, in print. The platform's own typeface and colours (packages/design/foundation.css). */
+/* The SANAD product library, in print, to the IOTA brand (~/.claude/skills/iota-branding).
+ *
+ * - IBM Plex Sans Condensed only: Regular (400) for text, Bold (700) for headings and emphasis. No italics.
+ * - IOTA blue #0066FF is the only accent, on ink, greys and the letterhead's off-white page.
+ * - US Letter, one-inch side margins. The page itself is transparent: brand.py lays each page on
+ *   brand/letterhead.pdf and stamps the header and footer, so nothing here draws them.
+ *
+ * Arabic text uses IBM Plex Sans Arabic, Regular and Bold, for Arabic code points only: the Condensed face
+ * has no Arabic glyphs. Commands and code keep a monospace face, because a command must be copied exactly.
+ */
 
 @font-face {
-  font-family: 'Plex';
+  font-family: 'IBM Plex Sans Condensed';
   font-weight: 400;
-  src: url('FONTS/plex-sans-arabic-latin-400.woff2');
-  unicode-range: U+0000-05FF, U+2000-206F, U+20AC, U+2122;
+  font-style: normal;
+  src: url('BRAND/IBMPlexSansCondensed-Regular.ttf');
 }
 @font-face {
-  font-family: 'Plex';
-  font-weight: 600;
-  src: url('FONTS/plex-sans-arabic-latin-600.woff2');
-  unicode-range: U+0000-05FF, U+2000-206F, U+20AC, U+2122;
-}
-@font-face {
-  font-family: 'Plex';
+  font-family: 'IBM Plex Sans Condensed';
   font-weight: 700;
-  src: url('FONTS/plex-sans-arabic-latin-700.woff2');
-  unicode-range: U+0000-05FF, U+2000-206F, U+20AC, U+2122;
+  font-style: normal;
+  src: url('BRAND/IBMPlexSansCondensed-Bold.ttf');
 }
 @font-face {
-  font-family: 'Plex';
+  font-family: 'Plex Arabic';
   font-weight: 400;
+  font-style: normal;
   src: url('FONTS/plex-sans-arabic-arabic-400.woff2');
   unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFF;
 }
 @font-face {
-  font-family: 'Plex';
-  font-weight: 600;
-  src: url('FONTS/plex-sans-arabic-arabic-600.woff2');
+  font-family: 'Plex Arabic';
+  font-weight: 700;
+  font-style: normal;
+  src: url('FONTS/plex-sans-arabic-arabic-700.woff2');
   unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFF;
 }
 
 :root {
-  --brand: #2d60ff;
-  --brand-deep: #1f4ae0;
-  --brand-wash: #e9efff;
-  --heading: #343c6a;
-  --ink: #1d2233;
-  --ink-quiet: #4f6a99;
-  --line: #e5e9f2;
-  --line-strong: #d5dbe8;
-  --sunken: #f5f7fb;
-  --positive: #178f6b;
-  --attention: #b45309;
-  --blocked: #d93a53;
+  --blue: #0066ff;
+  --ink: #1d1d1f;
+  --body: #3a3a3c;
+  --muted: #6b6b6b;
+  --rule: #c9c6c0;
+  --tint: #eaf1ff;
+  --warm: #efece7;
+  --white: #ffffff;
 }
 
+/* brand.py draws the letterhead, header and footer; these margins are the letterhead's frame. */
 @page {
-  size: A4;
-  margin: 22mm 17mm 20mm 17mm;
-  @top-left {
-    content: 'SANAD';
-    font-family: 'Plex', sans-serif;
-    font-weight: 700;
-    font-size: 8pt;
-    letter-spacing: 0.12em;
-    color: #2d60ff;
-  }
-  @top-right {
-    content: 'IOTA Technologies';
-    font-family: 'Plex', sans-serif;
-    font-size: 8pt;
-    color: #4f6a99;
-  }
-  @bottom-left {
-    content: 'General information, not legal or compliance advice · iotatechnologies.io';
-    font-family: 'Plex', sans-serif;
-    font-size: 7pt;
-    color: #4f6a99;
-  }
-  @bottom-right {
-    content: counter(page) ' / ' counter(pages);
-    font-family: 'Plex', sans-serif;
-    font-size: 8pt;
-    color: #4f6a99;
-  }
-}
-@page internal {
-  @top-right {
-    content: 'INTERNAL — IOTA pre-sales and delivery only';
-    font-family: 'Plex', sans-serif;
-    font-weight: 700;
-    font-size: 8pt;
-    color: #d93a53;
-  }
-}
-@page cover {
-  margin: 0;
-  @top-left {
-    content: none;
-  }
-  @top-right {
-    content: none;
-  }
-  @bottom-left {
-    content: none;
-  }
-  @bottom-right {
-    content: none;
-  }
+  size: 8.5in 11in;
+  margin: 132pt 72pt 118pt 72pt;
 }
 
 html {
-  font-family: 'Plex', 'Helvetica Neue', Arial, sans-serif;
-  font-size: 10pt;
-  line-height: 1.5;
+  font-family: 'IBM Plex Sans Condensed', 'Plex Arabic', 'Arial Narrow', sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.38;
+  font-weight: 400;
   color: var(--ink);
+  background: transparent;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
 body {
   margin: 0;
+  background: transparent;
 }
-body.internal main,
-body.internal .toc {
-  page: internal;
+/* No italics: every element a browser italicises by default is set upright. */
+em,
+i,
+cite,
+dfn,
+var,
+address {
+  font-style: normal;
 }
-header.running {
-  display: none;
+b,
+strong,
+th {
+  font-weight: 700;
 }
 
 /* -- The cover ------------------------------------------------------------------------ */
 .cover {
-  page: cover;
-  height: 297mm;
-  box-sizing: border-box;
-  padding: 22mm 20mm 18mm;
-  display: flex;
-  flex-direction: column;
-  background: linear-gradient(160deg, #ffffff 0%, #ffffff 58%, var(--brand-wash) 58%, var(--brand-wash) 100%);
-  position: relative;
+  break-after: page;
+  padding-top: 70pt;
 }
-.cover::after {
-  content: '';
-  position: absolute;
-  inset: auto 0 0 0;
-  height: 6mm;
-  background: linear-gradient(90deg, var(--brand) 0%, var(--heading) 100%);
-}
-.cover-brands {
-  display: flex;
-  align-items: center;
-  gap: 4mm;
-}
-.cover-brands .iota {
-  height: 14mm;
-}
-.cover-brands .iota-name {
-  font-weight: 600;
-  font-size: 11pt;
-  color: var(--heading);
-  letter-spacing: 0.02em;
-}
-.cover-main {
-  margin-top: 46mm;
-}
-.cover-main .sanad {
-  height: 26mm;
-}
-.cover-main .sanad-ar {
-  height: 14mm;
-  margin-inline-start: 6mm;
-  vertical-align: bottom;
+.cover-family {
+  font-weight: 700;
+  font-size: 10pt;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--blue);
+  margin: 0 0 10pt;
 }
 .cover-title {
-  font-size: 30pt;
-  line-height: 1.12;
-  color: var(--heading);
-  margin: 16mm 0 4mm;
+  font-size: 38pt;
+  line-height: 44pt;
   font-weight: 700;
-  max-width: 150mm;
+  color: var(--ink);
+  margin: 0 0 8pt;
+  border: 0;
+  padding: 0;
 }
 .cover-subtitle {
-  font-size: 13pt;
-  color: var(--ink-quiet);
-  max-width: 140mm;
+  font-size: 15pt;
+  line-height: 20pt;
+  color: var(--blue);
   margin: 0;
 }
-.cover-edition {
-  display: inline-block;
-  margin-top: 8mm;
-  padding: 2mm 5mm;
-  border-radius: 2mm;
-  background: var(--brand);
-  color: #fff;
-  font-weight: 600;
-  font-size: 11pt;
+.cover-bar {
+  width: 64pt;
+  height: 4pt;
+  background: var(--blue);
+  margin: 18pt 0 22pt;
 }
-.cover-foot {
-  margin-top: auto;
-  font-size: 9pt;
-  color: var(--ink-quiet);
+.cover-summary {
+  font-size: 11.5pt;
+  line-height: 16.5pt;
+  margin: 0 0 40pt;
 }
-.cover-foot p {
-  margin: 1mm 0;
+.cover-meta {
+  width: 100%;
+  margin: 0;
+  font-size: 9.5pt;
 }
-.classification {
+.cover-meta td {
+  padding: 4pt 0;
+  border-bottom: 0.4pt solid var(--rule);
+  background: transparent;
+}
+.cover-meta td:first-child {
+  width: 100pt;
+  color: var(--muted);
+}
+.cover-meta .internal-mark {
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--heading);
+  color: var(--blue);
 }
-.classification.is-internal {
-  color: var(--blocked);
+.cover-disclaimer {
+  margin-top: 18pt;
+  font-size: 8.5pt;
+  color: var(--muted);
 }
 
 /* -- Contents ------------------------------------------------------------------------- */
@@ -214,12 +154,15 @@ header.running {
   break-before: auto;
 }
 .toc ol {
-  padding-inline-start: 6mm;
-  columns: 1;
+  padding-inline-start: 16pt;
 }
 .toc li {
-  margin: 1.5mm 0;
+  margin: 4pt 0;
   font-size: 11pt;
+}
+.toc li::marker {
+  color: var(--blue);
+  font-weight: 700;
 }
 .toc a {
   color: var(--ink);
@@ -231,19 +174,19 @@ h1,
 h2,
 h3,
 h4 {
-  color: var(--heading);
-  line-height: 1.25;
+  font-weight: 700;
+  line-height: 1.2;
   break-after: avoid;
 }
 main h1 {
-  font-size: 22pt;
-  margin: 0 0 4mm;
+  font-size: 20pt;
+  color: var(--ink);
+  margin: 0 0 6pt;
 }
 h2 {
   font-size: 16pt;
-  margin: 10mm 0 3mm;
-  padding-bottom: 1.5mm;
-  border-bottom: 0.6mm solid var(--brand);
+  color: var(--blue);
+  margin: 0 0 8pt;
   break-before: page;
 }
 .nw {
@@ -253,37 +196,47 @@ main > h2:first-child,
 .compact h2 {
   break-before: auto;
 }
+.compact h2 {
+  margin-top: 14pt;
+}
 h3 {
-  font-size: 12pt;
-  margin: 6mm 0 2mm;
-  color: var(--brand-deep);
+  font-size: 12.5pt;
+  color: var(--blue);
+  margin: 12pt 0 5pt;
 }
 h4 {
-  font-size: 10.5pt;
-  margin: 4mm 0 1mm;
+  font-size: 11pt;
+  color: var(--ink);
+  margin: 8pt 0 3pt;
 }
 p {
-  margin: 0 0 2.5mm;
+  margin: 0 0 7pt;
   orphans: 3;
   widows: 3;
 }
+/* Emphasis is IOTA blue, never italic. */
+em {
+  color: var(--blue);
+}
 a {
-  color: var(--brand-deep);
+  color: var(--blue);
+  text-decoration: none;
 }
 code {
-  font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-family: 'SFMono-Regular', Menlo, Consolas, 'Plex Arabic', monospace;
   font-size: 8.5pt;
-  background: var(--sunken);
-  padding: 0.2mm 1mm;
-  border-radius: 0.8mm;
+  background: var(--warm);
+  padding: 0.5pt 2.5pt;
+  border-radius: 2pt;
 }
 pre {
-  background: var(--sunken);
-  border: 0.3mm solid var(--line-strong);
-  border-radius: 1.5mm;
-  padding: 3mm;
+  background: var(--white);
+  border: 0.75pt solid var(--rule);
+  border-radius: 6pt;
+  padding: 8pt 10pt;
   font-size: 8pt;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   break-inside: avoid;
 }
 pre code {
@@ -292,34 +245,43 @@ pre code {
 }
 ul,
 ol {
-  margin: 0 0 2.5mm;
-  padding-inline-start: 6mm;
+  margin: 0 0 7pt;
+  padding-inline-start: 16pt;
 }
 li {
-  margin: 0.8mm 0;
+  margin: 2pt 0;
+}
+li::marker {
+  color: var(--blue);
 }
 blockquote {
-  margin: 3mm 0;
-  padding: 2mm 4mm;
-  border-inline-start: 1mm solid var(--brand);
-  color: var(--heading);
+  margin: 8pt 0;
+  padding: 4pt 0 4pt 12pt;
+  border-inline-start: 2.5pt solid var(--blue);
+  color: var(--ink);
   font-size: 11pt;
 }
 hr {
   border: 0;
-  border-top: 0.3mm solid var(--line-strong);
-  margin: 5mm 0;
+  border-top: 0.4pt solid var(--rule);
+  margin: 12pt 0;
 }
 .page-break {
   break-after: page;
 }
+img {
+  max-width: 100%;
+  border: 0.75pt solid var(--rule);
+  border-radius: 6pt;
+}
 
-/* -- Tables --------------------------------------------------------------------------- */
+/* -- Tables: tinted header with a blue rule, hairlines between rows, no vertical lines -- */
 table {
   width: 100%;
   border-collapse: collapse;
-  margin: 2mm 0 4mm;
-  font-size: 8.5pt;
+  margin: 4pt 0 10pt;
+  font-size: 9pt;
+  line-height: 1.3;
   break-inside: auto;
 }
 thead {
@@ -329,19 +291,17 @@ tr {
   break-inside: avoid;
 }
 th {
-  background: var(--heading);
-  color: #fff;
-  font-weight: 600;
+  background: var(--tint);
+  color: var(--blue);
   text-align: start;
-  padding: 1.6mm 2mm;
+  vertical-align: bottom;
+  padding: 5pt 6pt;
+  border-bottom: 0.8pt solid var(--blue);
 }
 td {
-  padding: 1.4mm 2mm;
-  border-bottom: 0.25mm solid var(--line);
+  padding: 5pt 6pt;
+  border-bottom: 0.4pt solid var(--rule);
   vertical-align: top;
-}
-tbody tr:nth-child(even) td {
-  background: var(--sunken);
 }
 th.right,
 td.right {
@@ -352,40 +312,41 @@ td.center {
   text-align: center;
 }
 
-/* -- Callouts ------------------------------------------------------------------------- */
+/* -- Callouts: blue is the only accent, so kind is told by the panel, not by colour ---- */
 .callout {
-  border-radius: 1.5mm;
-  padding: 3mm 4mm;
-  margin: 3mm 0 4mm;
+  border-radius: 6pt;
+  padding: 9pt 12pt;
+  margin: 8pt 0 10pt;
   break-inside: avoid;
-  border: 0.3mm solid var(--line-strong);
-  background: var(--sunken);
 }
 .callout p:last-child {
   margin-bottom: 0;
 }
 .callout-title {
   font-weight: 700;
-  color: var(--heading);
+  color: var(--blue);
+  margin-bottom: 3pt;
 }
 .callout-note {
-  background: var(--brand-wash);
-  border-color: #c7d4ff;
-}
-.callout-warn {
-  background: #fdf0dc;
-  border-color: #f5c48a;
-}
-.callout-internal {
-  background: #fde8ec;
-  border-color: #f5a3b1;
+  background: var(--tint);
 }
 .callout-key {
-  background: #ffffff;
-  border: 0.5mm solid var(--brand);
+  background: var(--white);
+  border: 1.5pt solid var(--blue);
+}
+.callout-warn {
+  background: var(--warm);
+  border-inline-start: 3pt solid var(--blue);
+}
+.callout-internal {
+  background: var(--white);
+  border: 0.75pt solid var(--rule);
+  border-inline-start: 3pt solid var(--ink);
+}
+.callout-internal .callout-title {
+  color: var(--ink);
 }
 
-/* Status chips written as `LIVE`, `FIXTURE`, `NOT BUILT`, `BLOCKED` in tables. */
 .status {
   font-weight: 700;
 }

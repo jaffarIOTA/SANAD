@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 /**
  * Builds the SANAD product library: each Markdown source in ./src becomes a
- * branded PDF (Chrome, headless) and a Word document (LibreOffice), in ./dist.
+ * PDF (Chrome, headless) and a Word document (LibreOffice), in ./dist, both to
+ * the IOTA brand: brand.py lays each PDF page on the IOTA letterhead and gives
+ * the Word document the same page, cover, typeface and tables (brand/, from the
+ * iota-branding skill).
  *
  *   node docs/product-library/build.mjs            every document
  *   node docs/product-library/build.mjs api        those whose file name contains "api"
@@ -11,7 +14,8 @@
  * callouts (::: note|warn|internal … :::), page breaks (\pagebreak), inline
  * bold, italic, code and links, and raw HTML lines.
  *
- * Needs Google Chrome and LibreOffice (soffice) on the machine that builds.
+ * Needs Google Chrome, LibreOffice (soffice) and a Python with reportlab, pypdf,
+ * python-docx and Pillow (docs/product-library/.venv; see README.md).
  */
 import { execFileSync } from 'node:child_process';
 import console from 'node:console';
@@ -27,6 +31,7 @@ const dist = join(here, 'dist');
 const work = join(here, '.build');
 const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const SOFFICE = process.env.SOFFICE ?? 'soffice';
+const PYTHON = process.env.BRAND_PYTHON ?? join(here, '.venv', 'bin', 'python');
 
 // -- Markdown, the subset the sources use ----------------------------------------------
 
@@ -198,33 +203,61 @@ function frontMatter(text) {
 
 const dataUri = (path, type) => `data:${type};base64,${readFileSync(path).toString('base64')}`;
 
+/** What the brand needs to know about a document: its name, kind and classification. */
+function brandMeta(meta) {
+  const title = /SANAD/.test(meta.title ?? '') ? meta.title : `SANAD ${meta.title ?? ''}`.trim();
+  const classification = meta.classification ?? 'Client';
+  return {
+    title,
+    subtitle: meta.subtitle ?? '',
+    kind: meta.edition ?? 'Product document',
+    family: 'SANAD  ·  IOTA Labs',
+    coverFamily: 'IOTA Labs  ·  SANAD',
+    classification,
+    internal: /internal/i.test(classification),
+    meta: [
+      ['Document', title],
+      ...(meta.edition ? [['Edition', meta.edition]] : []),
+      ['Version', meta.version ?? '1.0'],
+      ['Date', meta.date ?? ''],
+      ['Classification', classification],
+      ['Owner', 'IOTA Labs'],
+    ],
+    disclaimer: 'General information, not legal or compliance advice.  ·  iotatechnologies.io',
+  };
+}
+
 function page(meta, body, toc, forWord) {
-  const css = readFileSync(join(here, 'style.css'), 'utf8').replace(
-    /url\("FONTS\/([^"]+)"\)/g,
-    (_m, f) => `url("${dataUri(join(repo, 'packages/design/fonts', f), 'font/woff2')}")`,
-  );
-  const iota = dataUri(join(here, 'assets', 'iota-mark.png'), 'image/png');
-  const sanad = dataUri(join(repo, 'docs/brand/logo', 'sanad-logo-en-color.png'), 'image/png');
-  const sanadAr = dataUri(join(repo, 'docs/brand/logo', 'sanad-logo-ar-color.png'), 'image/png');
+  const brand = brandMeta(meta);
+  const css = readFileSync(join(here, 'style.css'), 'utf8')
+    .replace(/url\('BRAND\/([^']+)'\)/g, (_m, f) => `url("${dataUri(join(here, 'brand/fonts', f), 'font/ttf')}")`)
+    .replace(
+      /url\('FONTS\/([^']+)'\)/g,
+      (_m, f) => `url("${dataUri(join(repo, 'packages/design/fonts', f), 'font/woff2')}")`,
+    );
   // LibreOffice's HTML import reads attributes more faithfully than CSS: the Word edition gets them.
+  // brand.py then sets the page, the cover, the rules of every table and the typeface of every run.
   if (forWord)
     body = body
-      .replace(/<table>/g, '<table border="1" cellspacing="0" cellpadding="5" width="100%">')
+      .replace(/<table>/g, '<table border="0" cellspacing="0" cellpadding="5" width="100%">')
       .replace(
         /<th( class="\w+")?>([\s\S]*?)<\/th>/g,
-        '<th bgcolor="#343c6a" align="left"><font color="#ffffff">$2</font></th>',
+        '<th bgcolor="#EAF1FF" align="left"><font color="#0066FF"><b>$2</b></font></th>',
       )
       .replace(
         /<div class="callout callout-(\w+)">([\s\S]*?)<\/div>/g,
         (_m, kind, inner) =>
-          `<table border="1" cellspacing="0" cellpadding="8" width="100%"><tr><td bgcolor="${
-            { warn: '#fdf0dc', internal: '#fde8ec' }[kind] ?? '#e9efff'
-          }">${inner}</td></tr></table><p></p>`,
+          `<table border="0" cellspacing="0" cellpadding="9" width="100%"><tr><td bgcolor="${
+            { warn: '#EFECE7', key: '#FFFFFF', internal: '#FFFFFF' }[kind] ?? '#EAF1FF'
+          }">${inner.replace(
+            /<p class="callout-title">([\s\S]*?)<\/p>/,
+            '<p class="callout-title"><font color="#0066FF"><b>$1</b></font></p>',
+          )}</td></tr></table><p></p>`,
       )
+      .replace(/<em>/g, '<font color="#0066FF">')
+      .replace(/<\/em>/g, '</font>')
       .replace(/<h2 /g, meta.layout === 'compact' ? '<h2 ' : '<h2 style="page-break-before: always" ')
       .replace(/<div class="page-break"><\/div>/g, '<p style="page-break-before: always"></p>');
-  const classification = meta.classification ?? 'Client';
-  const internal = /internal/i.test(classification);
   const contents =
     meta.toc === 'no'
       ? ''
@@ -232,33 +265,32 @@ function page(meta, body, toc, forWord) {
           .filter((t) => t.level === 2)
           .map((t) => `<li><a href="#${t.id}">${t.text}</a></li>`)
           .join('')}</ol></section>`;
+  const cover = forWord
+    ? ''
+    : `<section class="cover">
+  <p class="cover-family">${escape(brand.coverFamily)}</p>
+  <h1 class="cover-title">${escape(brand.title)}</h1>
+  <p class="cover-subtitle">${escape(brand.subtitle)}</p>
+  <div class="cover-bar"></div>
+  <table class="cover-meta"><tbody>${brand.meta
+    .map(
+      ([k, v]) =>
+        `<tr><td>${escape(k)}</td><td${brand.internal && k === 'Classification' ? ' class="internal-mark"' : ''}>${escape(v)}</td></tr>`,
+    )
+    .join('')}</tbody></table>
+  <p class="cover-disclaimer">${escape(brand.disclaimer)}</p>
+</section>`;
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>${escape(meta.title ?? 'SANAD')}</title>
-${forWord ? '' : `<style>${css}</style>`}
+<html lang="en"><head><meta charset="utf-8"><title>${escape(brand.title)}</title>
 ${
   forWord
-    ? `<style>body,p,li,td,th{font-family:Arial,'Helvetica Neue',sans-serif;color:#1d2233;font-size:10pt}
-h1,h2,h3,h4{font-family:Arial,'Helvetica Neue',sans-serif;color:#343c6a}h2{color:#2d60ff;font-size:16pt}h3{color:#1f4ae0;font-size:12pt}
-td,th{font-size:9pt;vertical-align:top}code{font-family:Consolas,monospace;font-size:9pt}</style>`
-    : ''
+    ? `<style>body,p,li,td,th{font-family:'IBM Plex Sans Condensed','Arial Narrow',sans-serif;color:#1D1D1F;font-size:10.5pt}
+h1,h2,h3,h4{font-family:'IBM Plex Sans Condensed','Arial Narrow',sans-serif;font-weight:bold;color:#0066FF}h1{color:#1D1D1F;font-size:20pt}h2{font-size:16pt}h3{font-size:12.5pt}h4{color:#1D1D1F;font-size:11pt}
+td,th{font-size:9pt;vertical-align:top}code,pre{font-family:Menlo,Consolas,monospace;font-size:8.5pt}a{color:#0066FF}</style>`
+    : `<style>${css}</style>`
 }
-</head><body class="${internal ? 'internal' : 'client'}${meta.layout === 'compact' ? ' compact' : ''}">
-<section class="cover">
-  <div class="cover-brands"><img class="iota" src="${iota}" alt="IOTA" ${forWord ? 'width="40"' : ''}><span class="iota-name">IOTA Technologies</span></div>
-  <div class="cover-main">
-    <img class="sanad" src="${sanad}" alt="SANAD" ${forWord ? 'width="260"' : ''}>
-    <img class="sanad-ar" src="${sanadAr}" alt="سند" ${forWord ? 'width="120"' : ''}>
-    <h1 class="cover-title">${escape(meta.title ?? '')}</h1>
-    <p class="cover-subtitle">${escape(meta.subtitle ?? '')}</p>
-    ${meta.edition ? `<p class="cover-edition">${escape(meta.edition)}</p>` : ''}
-  </div>
-  <div class="cover-foot">
-    <p class="classification ${internal ? 'is-internal' : ''}">${escape(classification)}</p>
-    <p>Version ${escape(meta.version ?? '1.0')} · ${escape(meta.date ?? '')}</p>
-    <p>IOTA Labs · Riyadh · Dubai · London</p>
-  </div>
-</section>
-${forWord ? '<p style="page-break-before: always"></p>' : ''}
+</head><body class="${brand.internal ? 'internal' : 'client'}${meta.layout === 'compact' ? ' compact' : ''}">
+${cover}
 ${contents}
 <main>${body}</main>
 </body></html>`;
@@ -278,8 +310,11 @@ function build(file) {
   const name = file.replace(/\.md$/, '');
   const htmlPath = join(work, `${name}.html`);
   const wordPath = join(work, `${name}.word.html`);
+  const metaPath = join(work, `${name}.brand.json`);
   writeFileSync(htmlPath, page(meta, html, toc, false));
   writeFileSync(wordPath, page(meta, html, toc, true));
+  writeFileSync(metaPath, JSON.stringify(brandMeta(meta)));
+  const chromePdf = join(work, `${name}.chrome.pdf`);
   execFileSync(
     CHROME,
     [
@@ -288,7 +323,7 @@ function build(file) {
       '--no-pdf-header-footer',
       '--run-all-compositor-stages-before-draw',
       '--virtual-time-budget=4000',
-      `--print-to-pdf=${join(dist, `${name}.pdf`)}`,
+      `--print-to-pdf=${chromePdf}`,
       `file://${htmlPath}`,
     ],
     { stdio: 'ignore' },
@@ -296,8 +331,14 @@ function build(file) {
   execFileSync(SOFFICE, ['--headless', '--convert-to', 'docx:MS Word 2007 XML', '--outdir', work, wordPath], {
     stdio: 'ignore',
   });
+  execFileSync(PYTHON, [join(here, 'brand.py'), 'pdf', chromePdf, join(dist, `${name}.pdf`), metaPath], {
+    stdio: 'inherit',
+  });
   const docx = join(work, `${name}.word.docx`);
-  if (existsSync(docx)) writeFileSync(join(dist, `${name}.docx`), readFileSync(docx));
+  if (!existsSync(docx)) throw new Error(`LibreOffice did not produce ${name}.docx`);
+  execFileSync(PYTHON, [join(here, 'brand.py'), 'docx', docx, join(dist, `${name}.docx`), metaPath], {
+    stdio: 'inherit',
+  });
   console.log(`built ${name}.pdf and ${name}.docx`);
 }
 
