@@ -427,11 +427,12 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
       },
       {
         id: 'ksa-business-policies',
-        titleEn: 'Assessment, security and decision pack',
-        titleAr: 'التقييم والضمانات وحزمة القرار',
-        readiness: soon(),
+        titleEn: 'Assessment, security, decision pack and offer',
+        titleAr: 'التقييم والضمانات وحزمة القرار والعرض',
+        href: '/business',
+        readiness: live(),
         reference:
-          'K2: Saudi SME assessment, document checklists, security and decision-pack policies for each tenant, and the SAIBOR benchmark from the rate publisher for pricing — until then the assessment refuses with SME_ASSESSMENT_POLICY_NOT_FOUND',
+          'K2: each Saudi tenant’s own SME assessment, document checklist (sme-sa-term: CR, articles, national ids, SIMAH, zakat, GOSI…), security, decision-pack (adds zakat and GOSI covenants) and offer-date policies — every figure ILLUSTRATIVE, adapted from the UAE fund’s with SAR amounts; offers priced at SAIBOR-3M + the tenant’s margin from the rate publisher (demonstration transport, labelled Fixture, until adapters/ksa/rate-publisher is verified), the publisher’s reference kept on the offer; Hijri (Umm al-Qura) dates on the letter',
       },
       {
         id: 'ksa-business-closing',

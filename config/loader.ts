@@ -43,6 +43,19 @@ import fundAeRails from './tenants/sme-fund-ae/rails/rails.json' with { type: 'j
 import fundAeIdentity from './tenants/sme-fund-ae/identity/staff-identity.json' with { type: 'json' };
 import fundAeOrigination from './tenants/sme-fund-ae/origination/policy.json' with { type: 'json' };
 import fundAeSmeAssessment from './tenants/sme-fund-ae/credit-policy/sme-assessment.json' with { type: 'json' };
+// KSA K2: the Saudi tenants' SME policies (ILLUSTRATIVE, adapted from the UAE fund's).
+import bankASmeAssessment from './tenants/bank-a/credit-policy/sme-assessment.json' with { type: 'json' };
+import bankAOfferPolicy from './tenants/bank-a/credit-policy/offer-policy.json' with { type: 'json' };
+import bankASecurityPolicy from './tenants/bank-a/credit-policy/security.json' with { type: 'json' };
+import bankADecisionPackPolicy from './tenants/bank-a/credit-policy/decision-pack.json' with { type: 'json' };
+import bankALoanProducts from './tenants/bank-a/core-banking/loan-products.json' with { type: 'json' };
+import bankAChecklistSmeTerm from './tenants/bank-a/documents/sme-sa-term.json' with { type: 'json' };
+import fintechBSmeAssessment from './tenants/fintech-b/credit-policy/sme-assessment.json' with { type: 'json' };
+import fintechBOfferPolicy from './tenants/fintech-b/credit-policy/offer-policy.json' with { type: 'json' };
+import fintechBSecurityPolicy from './tenants/fintech-b/credit-policy/security.json' with { type: 'json' };
+import fintechBDecisionPackPolicy from './tenants/fintech-b/credit-policy/decision-pack.json' with { type: 'json' };
+import fintechBLoanProducts from './tenants/fintech-b/core-banking/loan-products.json' with { type: 'json' };
+import fintechBChecklistSmeTerm from './tenants/fintech-b/documents/sme-sa-term.json' with { type: 'json' };
 import fundAeChecklistSmallLoan from './tenants/sme-fund-ae/documents/sme-ae-small-loan.json' with { type: 'json' };
 import fundAeChecklistWorkingCapital from './tenants/sme-fund-ae/documents/sme-ae-working-capital.json' with { type: 'json' };
 import fundAeChecklistFixedAssets from './tenants/sme-fund-ae/documents/sme-ae-fixed-assets.json' with { type: 'json' };
@@ -262,8 +275,8 @@ export function loadOriginationPolicy(tenant: TenantCode): Result<OriginationPol
 }
 
 const CHECKLISTS: Readonly<Record<TenantCode, readonly unknown[]>> = {
-  'bank-a': [bankAChecklist],
-  'fintech-b': [fintechBChecklist],
+  'bank-a': [bankAChecklist, bankAChecklistSmeTerm],
+  'fintech-b': [fintechBChecklist, fintechBChecklistSmeTerm],
   // One checklist per SME product variant, keyed by the variant's documentChecklistRef
   // (config/tenants/sme-fund-ae/products/catalogue.json): sme-ae-small-loan, sme-ae-working-capital,
   // sme-ae-fixed-assets, sme-ae-expansion, sme-ae-first-time-founders, sme-ae-advanced-tech.
@@ -312,7 +325,11 @@ export const CHECKLIST_TENANT_CODES: readonly TenantCode[] = TENANT_CODES.filter
 );
 
 /** The SME credit assessment policy (knock-outs, scorecard, risk bands, route) for a tenant that has one. */
-const SME_ASSESSMENT_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = { 'sme-fund-ae': fundAeSmeAssessment };
+const SME_ASSESSMENT_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = {
+  'sme-fund-ae': fundAeSmeAssessment,
+  'bank-a': bankASmeAssessment,
+  'fintech-b': fintechBSmeAssessment,
+};
 
 export function loadSmeAssessmentPolicy(tenant: TenantCode): Result<SmeAssessmentPolicy> {
   const raw = SME_ASSESSMENT_POLICIES[tenant];
@@ -399,7 +416,11 @@ export function loadAllForTenant(tenant: TenantCode): Result<{
 import fundAeOfferPolicy from './tenants/sme-fund-ae/credit-policy/offer-policy.json' with { type: 'json' };
 import { type OfferDatePolicy, parseOfferDatePolicy } from '../core/origination/business-application.ts';
 
-const OFFER_DATE_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = { 'sme-fund-ae': fundAeOfferPolicy };
+const OFFER_DATE_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = {
+  'sme-fund-ae': fundAeOfferPolicy,
+  'bank-a': bankAOfferPolicy,
+  'fintech-b': fintechBOfferPolicy,
+};
 
 /** The bounds and defaults for the dates on a business offer, for a tenant that configures them. */
 export function loadOfferDatePolicy(tenant: TenantCode): Result<OfferDatePolicy> {
@@ -414,7 +435,11 @@ export function loadOfferDatePolicy(tenant: TenantCode): Result<OfferDatePolicy>
 import fundAeSecurityPolicy from './tenants/sme-fund-ae/credit-policy/security.json' with { type: 'json' };
 import { type SecurityPolicy, parseSecurityPolicy } from '../core/origination/security-register.ts';
 
-const SECURITY_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = { 'sme-fund-ae': fundAeSecurityPolicy };
+const SECURITY_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = {
+  'sme-fund-ae': fundAeSecurityPolicy,
+  'bank-a': bankASecurityPolicy,
+  'fintech-b': fintechBSecurityPolicy,
+};
 
 /** The collateral haircuts, valuation age and the requirement behind each catalogue collateral code, for a tenant that configures them. */
 export function loadSecurityPolicy(tenant: TenantCode): Result<SecurityPolicy> {
@@ -431,6 +456,8 @@ import { type DecisionPackPolicy, parseDecisionPackPolicy } from '../core/origin
 
 const DECISION_PACK_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = {
   'sme-fund-ae': fundAeDecisionPackPolicy,
+  'bank-a': bankADecisionPackPolicy,
+  'fintech-b': fintechBDecisionPackPolicy,
 };
 
 /** The covenant templates and the longest condition subsequent, for a tenant that configures them. */
@@ -452,7 +479,11 @@ export interface LoanBookingConfig {
   readonly products: Readonly<Record<string, { readonly loanTypeCode: string }>>;
 }
 
-const LOAN_BOOKING: Readonly<Partial<Record<TenantCode, unknown>>> = { 'sme-fund-ae': fundAeLoanProducts };
+const LOAN_BOOKING: Readonly<Partial<Record<TenantCode, unknown>>> = {
+  'sme-fund-ae': fundAeLoanProducts,
+  'bank-a': bankALoanProducts,
+  'fintech-b': fintechBLoanProducts,
+};
 
 export function loadLoanBookingConfig(tenant: TenantCode): Result<LoanBookingConfig> {
   const raw = LOAN_BOOKING[tenant] as Record<string, unknown> | undefined;

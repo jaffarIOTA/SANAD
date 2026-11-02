@@ -626,7 +626,9 @@ describe('#11 offer dates within the fund’s configured (ILLUSTRATIVE) bounds',
       'OFFER_POLICY_MALFORMED',
     );
     expectRefused(parseOfferDatePolicy({ ...offerPolicyJson, policyRef: '' }), 'OFFER_POLICY_MALFORMED');
-    expectRefused(loadOfferDatePolicy('bank-a'), 'OFFER_POLICY_NOT_FOUND');
+    // KSA K2: each Saudi tenant has its own offer-date policy, marked ILLUSTRATIVE like the fund's.
+    const bankA = loadOfferDatePolicy('bank-a');
+    expect(bankA.ok && bankA.value.policyRef).toMatch(/^ILLUSTRATIVE/);
     // The constants are gone from the service: nothing but the policy carries a bound.
     expect(Object.keys(businessModule)).not.toContain('OFFER_DATE_BOUNDS');
   });

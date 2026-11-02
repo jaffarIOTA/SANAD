@@ -5,6 +5,7 @@
  * register's lending value to `collateralMinor` — so a test written before
  * the register (UAE M3) keeps the collateral cover it was designed with.
  */
+import type { TenantCode } from '../../config/loader.ts';
 import { loadSecurityPolicy } from '../../config/loader.ts';
 import { expectOk } from '../../core/kernel/result.ts';
 import { lendingValue } from '../../core/origination/security-register.ts';
@@ -16,7 +17,7 @@ import {
 } from '../../apps/ops/src/server/business.ts';
 
 export async function meetSecurityRequirements(
-  tenant: 'sme-fund-ae',
+  tenant: TenantCode,
   applicationId: string,
   officer: string,
   checker: string,
