@@ -26,6 +26,10 @@ import {
   reportToBureau,
   servicingCalendarOf,
 } from './business.ts';
+import { getTransaction, listTransactions } from '@sanad/origination/wasl/book.ts';
+import { reconcilePaidBills } from '@sanad/origination/wasl/reconciliation.ts';
+import { presentDueInstalments } from '@sanad/origination/wasl/settlement.ts';
+
 import { developmentAttestation } from './store.ts';
 
 /** The principal the cycle's changes are recorded under. No person; no workbench form can act as it. */
@@ -36,6 +40,58 @@ const TASKS: Readonly<Record<ServicingTask, (tenant: TenantCode, id: string) => 
   COLLECTIONS: (t, id) => presentCollections(t, id, SERVICING_SCHEDULER),
   BUREAU_REPORT: (t, id) => reportToBureau(t, id, SERVICING_SCHEDULER),
 };
+
+/** A Wasl transaction's reference: the cycle services it beside the business loans (W4b). */
+const isWaslRef = (id: string): boolean => /^WT-\d{6,10}$/.test(id);
+
+const notForThisFacility = (task: string): Result<never> =>
+  reject('OP-DETERMINACY', 'NOT_FOR_THIS_FACILITY', 'This task is not one a Wasl transaction has yet', { task });
+
+/**
+ * A Wasl transaction's tasks. Collections present what falls due (W4a), each
+ * step persisting itself. Late amounts come with W4b-2 (proposed by the cycle,
+ * confirmed by two people); credit-bureau reporting of Wasl facilities is not
+ * built yet — both are reported as not this facility's, never as done.
+ */
+const WASL_TASKS: Readonly<Record<ServicingTask, (tenant: TenantCode, ref: string) => Promise<Result<unknown>>>> = {
+  LATE_CHARGES: () => Promise.resolve(notForThisFacility('LATE_CHARGES')),
+  // The day's plan is made before the paid-bills file is read: a transaction that reading settled has nothing to collect.
+  COLLECTIONS: async (t, ref) =>
+    (await getTransaction(t, ref))?.transaction.state === 'ACTIVE'
+      ? presentDueInstalments(t, ref, SERVICING_SCHEDULER)
+      : reject('OP-DETERMINACY', 'NOTHING_TO_COLLECT', 'The transaction is no longer being collected'),
+  BUREAU_REPORT: () => Promise.resolve(notForThisFacility('BUREAU_REPORT')),
+};
+
+/** The Wasl transactions in servicing: those whose obligation is booked and not yet settled. */
+async function activeWaslTransactions(tenant: TenantCode): Promise<readonly string[]> {
+  try {
+    return (await listTransactions(tenant))
+      .filter((v) => v.transaction.state === 'ACTIVE')
+      .map((v) => v.transactionRef)
+      .sort((a, b) => a.localeCompare(b));
+  } catch {
+    // A tenant with no Wasl programme has no transactions to service.
+    return [];
+  }
+}
+
+/**
+ * Read SADAD's paid-bills file and apply what matches (W4b). Nothing applied is
+ * nothing due; an exception is a failure for operations to look at, with the
+ * detail on the reconciliation screen.
+ */
+async function reconcile(tenant: TenantCode): Promise<Result<unknown>> {
+  if ((await activeWaslTransactions(tenant)).length === 0)
+    return reject('OP-DETERMINACY', 'NOTHING_TO_RECONCILE', 'No Wasl transaction is being collected');
+  const r = await reconcilePaidBills(tenant, SERVICING_SCHEDULER);
+  if (!r.ok) return r;
+  if (r.value.exceptions.length > 0)
+    return reject('OP-DETERMINACY', 'RECONCILIATION_EXCEPTIONS', 'Paid bills could not be matched; see reconciliation');
+  if (r.value.applied.length === 0)
+    return reject('OP-DETERMINACY', 'NOTHING_TO_RECONCILE', 'No new receipt in the paid-bills file');
+  return r;
+}
 
 export function servicingHost(): ServicingHost {
   return {
@@ -49,14 +105,22 @@ export function servicingHost(): ServicingHost {
       const policy = loadServicingPolicy(tenantId as TenantCode);
       return policy.ok ? { ok: true, value: policy.value.schedule } : policy;
     },
-    disbursedFacilities: async (tenantId) =>
-      (await listApplications(tenantId as TenantCode))
+    disbursedFacilities: async (tenantId) => [
+      ...(await listApplications(tenantId as TenantCode))
         .filter((v) => v.application.status === 'DISBURSED' && v.servicing !== undefined)
         .map((v) => v.application.applicationId)
         .sort((a, b) => a.localeCompare(b)),
+      ...(await activeWaslTransactions(tenantId as TenantCode)),
+    ],
     // Each task is one operation, persisted as one change, exactly as the button would.
-    run: (tenantId, applicationId, task) =>
-      mutateBusiness(tenantId as TenantCode, () => TASKS[task](tenantId as TenantCode, applicationId)),
+    run: (tenantId, id, task) =>
+      isWaslRef(id)
+        ? WASL_TASKS[task](tenantId as TenantCode, id)
+        : mutateBusiness(tenantId as TenantCode, () => TASKS[task](tenantId as TenantCode, id)),
+    runTenant: (tenantId, task) =>
+      task === 'RECONCILE_COLLECTIONS'
+        ? reconcile(tenantId as TenantCode)
+        : Promise.resolve(reject('OP-DETERMINACY', 'NOT_FOR_THIS_FACILITY', 'Unknown tenant task')),
   };
 }
 

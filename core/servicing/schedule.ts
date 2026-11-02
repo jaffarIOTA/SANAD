@@ -20,6 +20,18 @@ import { civilDay } from './instalment-position.ts';
 
 export type ServicingTask = 'LATE_CHARGES' | 'COLLECTIONS' | 'BUREAU_REPORT';
 
+/**
+ * A task run once for the whole tenant, before any facility (Wasl W4b):
+ * reading the collection rail's paid-bills file. First, so the day's receipts
+ * are applied before anything is charged late or presented again.
+ */
+export type TenantTask = 'RECONCILE_COLLECTIONS';
+
+/** The tenant-wide tasks the cycle runs on a servicing date, in order. A malformed date runs nothing. */
+export function tenantTasksForDay(date: string): readonly TenantTask[] {
+  return civilDay(date) === undefined ? [] : ['RECONCILE_COLLECTIONS'];
+}
+
 export interface ServicingSchedule {
   /** When the cycle runs each day, in the tenant's time zone: HH:MM, 24-hour. */
   readonly runAtLocal: string;
@@ -66,6 +78,9 @@ const NOTHING_DUE: ReadonlySet<string> = new Set([
   'NOTHING_TO_COLLECT',
   'NO_LATE_CHARGE_DUE',
   'BUREAU_ALREADY_REPORTED',
+  'NOTHING_TO_RECONCILE',
+  // A task the facility's product does not have (a Wasl transaction is not reported by this task): nothing to do.
+  'NOT_FOR_THIS_FACILITY',
 ]);
 
 /** What a task's refusal means to the cycle. Anything not known to be harmless is a failure to look at. */
@@ -83,5 +98,10 @@ export interface ServicingDayReport {
   readonly nothingDue: number;
   readonly held: number;
   /** References and codes only: never a name, an amount or an identifier of a person. */
-  readonly failed: readonly { readonly applicationId: string; readonly task: ServicingTask; readonly code: string }[];
+  readonly failed: readonly {
+    /** The facility, or `TENANT` for a tenant-wide task. */
+    readonly applicationId: string;
+    readonly task: ServicingTask | TenantTask;
+    readonly code: string;
+  }[];
 }

@@ -70,6 +70,14 @@ export const EVIDENCE_STATUS_LABEL: Readonly<Record<string, Words>> = {
 
 /** What a step that went through says, by the notice code the action sends back. */
 export const NOTICE: Readonly<Record<string, Words>> = {
+  SADAD_FILE_FIXTURE_RECORDED: {
+    en: 'Fixture: SADAD has the payment. It is applied when SADAD’s paid-bills file is next read (Reconciliation).',
+    ar: 'تجريبي: سجّل سداد الدفعة. تُطبّق عند قراءة ملف الفواتير المدفوعة التالي (المطابقة).',
+  },
+  RECONCILED: {
+    en: 'SADAD’s paid-bills file is read; what matched is applied.',
+    ar: 'قُرئ ملف الفواتير المدفوعة من سداد، وطُبّق ما تطابق.',
+  },
   COLLECTION_PRESENTED: {
     en: 'The instalments falling due are presented to SADAD for the distributor to pay.',
     ar: 'عُرضت الأقساط المستحقة على سداد ليدفعها الموزع.',

@@ -33,6 +33,12 @@ export default async function TransactionsPage({ params }: { readonly params: Pr
             'معاملات المرابحة التي فتحتها طلبات معتمدة. تمر كل معاملة بالوعد والشراء والبوابات الثلاث قبل أن يُعرض البيع، ولا يمكن لأحد تجاوز بوابة.',
           )}
         </p>
+        <a
+          href={`/${segment}/transactions/reconciliation`}
+          className="mt-2 inline-block text-[13px] font-semibold text-brand hover:underline"
+        >
+          {t('Reconciliation with SADAD', 'المطابقة مع سداد')}
+        </a>
       </div>
       <section className="overflow-x-auto rounded-card border border-line bg-surface shadow-card">
         {rows.length === 0 ? (

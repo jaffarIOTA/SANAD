@@ -30,9 +30,15 @@ import {
   type PaymentStatus,
   paySellerAgain,
   presentDueInstalments,
+  presentations,
   recordCollectionResult,
   recordSellerPaymentResult,
 } from '@sanad/origination/wasl/settlement.ts';
+import { getTransaction } from '@sanad/origination/wasl/book.ts';
+import { reconcilePaidBills } from '@sanad/origination/wasl/reconciliation.ts';
+import { hostClockInstant } from '@sanad/origination/host-clock.ts';
+
+import { recordDemonstrationSadadPayment } from '../../../../adapters/ksa/demonstration/transport.ts';
 
 import type { WorkbenchAct } from './authority.ts';
 import {
@@ -219,6 +225,47 @@ export async function fixtureCollectionAction(form: FormData): Promise<void> {
           ),
     status === 'PAID' ? 'PAYMENT_RECEIVED' : 'PAYMENT_RETURNED',
   );
+}
+
+/**
+ * Demonstration only (W4b): SADAD received payment of a presented bill, so the
+ * next paid-bills file carries it. Nothing on the transaction changes until
+ * the file is read. The bill and its amount are taken from the transaction's
+ * own presentation, never from the form.
+ */
+export async function fixtureSadadFileAction(form: FormData): Promise<void> {
+  const ctx = await fixtureContext(form);
+  if (ctx === undefined) redirect('/');
+  return finish(
+    ctx,
+    async () => {
+      const view = await getTransaction(ctx.tenant, ctx.transactionRef);
+      const bill =
+        view === undefined
+          ? undefined
+          : presentations(view).find(
+              (p) => p.idempotencyKey === field(form, 'idempotencyKey') && p.result === undefined,
+            );
+      if (bill === undefined)
+        return { ok: false, error: { control: 'OP-DETERMINACY', reason: 'COLLECTION_NOT_FOUND', detail: '' } };
+      const minor = bill.amount.minorUnits;
+      recordDemonstrationSadadPayment({
+        billNumber: bill.billNumber,
+        amount: `${String(minor / 100n)}.${String(minor % 100n).padStart(2, '0')}`,
+        currency: bill.amount.currency,
+        paidAtEpochSeconds: Number(hostClockInstant().epochSeconds),
+      });
+      return { ok: true, value: true };
+    },
+    'SADAD_FILE_FIXTURE_RECORDED',
+  );
+}
+
+/** Read SADAD's paid-bills file now and apply what matches (W4b): what the daily cycle does first each morning. */
+export async function reconcileAction(form: FormData): Promise<void> {
+  const base = await contextOf(form, 'TRADE_SETTLEMENT');
+  const ctx = { ...base, path: `/${base.locale}/transactions/reconciliation` };
+  return finish(ctx, () => reconcilePaidBills(ctx.tenant, ctx.actor), 'RECONCILED');
 }
 
 /** Unwind before the sale, with what happens to the goods, in the checker's words (kept on the transaction, never in a URL). */
