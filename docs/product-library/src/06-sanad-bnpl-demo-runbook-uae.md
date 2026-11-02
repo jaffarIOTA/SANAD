@@ -3,7 +3,7 @@ title: BNPL Demonstration Runbook
 subtitle: How to present SANAD's buy-now-pay-later journey to a UAE institution, what to say about the Emirates, and every command and click, rehearsed.
 edition: United Arab Emirates
 classification: Internal — IOTA pre-sales only
-version: 1.0
+version: 1.1
 date: 2 November 2026
 ---
 
@@ -20,9 +20,10 @@ Read it in this order:
 1. **The position** below, so that nothing said in the room has to be taken back later.
 2. **Before the day**, then **Setting up**: rehearse the whole script once on the machine you will present from.
 3. **The demonstration script**: seven acts, about 35 minutes, with what to show, what to say and what you should see.
-4. **If something goes wrong** and **Questions and answers**: keep them open beside you.
+4. **Who does what, end to end**: what SANAD does, what Tuum must provide and configure, and what the institution and its providers bring. Read it before the day; it answers most questions about go-live.
+5. **If something goes wrong** and **Questions and answers**: keep them open beside you.
 
-Every command and every screen in this runbook was run on 2 November 2026 against the code at the top of the PR stack (`journey-b1-intake-contact-channels`). The screenshots are from that run.
+Every command and every screen in this runbook was run on 2 November 2026 against the code at the top of the PR stack: branch `bnpl-tuum-servicing` (PR #83, on #82 and #81). Act 4 exists only on that branch. The screenshots are from that run.
 
 ## The position, in one page
 
@@ -89,7 +90,7 @@ The local set-up below uses its own database on your machine. It needs no intern
 ### The machine
 
 - macOS with **Docker Desktop** running, **Node 22**, **Git**, `jq` and a current browser.
-- The repository cloned at `~/Projects/Sanad` on branch `journey-b1-intake-contact-channels`, with `npm ci` run.
+- The repository cloned at `~/Projects/Sanad` on branch `bnpl-tuum-servicing`, with `npm ci` run. An older branch has no BNPL loans screen and no payment choice at checkout.
 - The root `.env.local` holding `MERCHANT_DEV_TOKEN`, `STAFF_DEV_TOKEN_MAKER` and `STAFF_DEV_TOKEN_CHECKER`. Copy it from the engineering lead; never paste it into chat or e-mail.
 - Two browser windows: an ordinary one for the **maker** and a private one for the **checker**, so both stay signed in. A third tab in either for the **shopper**.
 - Three terminal tabs: `consumer`, `ops`, and `shop` (for the merchant's calls).
@@ -294,6 +295,85 @@ Close with the next step: a short scoping session to confirm the licence route a
 
 \pagebreak
 
+## Who does what, end to end
+
+A live BNPL journey takes three parties: SANAD, the core banking platform (Tuum), and the institution with the providers it contracts. The demonstration shows the whole journey, but only SANAD's part runs real code. Tuum and every rail answer from fixtures. This section says what each party must bring before go-live, so that nobody in the room promises SANAD will do another party's part.
+
+:::key The division in one line
+**SANAD originates and orchestrates. Tuum holds the loan and its schedule. The institution holds the licence, the customer's identity, and the contracts with every rail.** SANAD never becomes the biller, the acquirer or the system of record for a consumer loan's schedule.
+:::
+
+### The journey, stage by stage
+
+| Stage | SANAD | Tuum (core banking) | The institution and its providers | Today |
+|---|---|---|---|---|
+| Merchant onboarding | Four-eyes onboarding, verification, suspension; refuses checkouts from any store not active | — | Signs the store contract; supplies the registry lookup (Wathq or NER) and screening; opens the store's settlement account | SANAD built; registry and screening keyed by hand |
+| Checkout | The merchant API, idempotent; the session and the redirect | — | Issues each merchant's API credential; the gateway, if it fronts the API | Built; development credential only |
+| Shopper identity | Calls the identity rail with consent; keeps the result and reference, never the identifier | — | The Nafath or UAE Pass contract; an **identity store** the Tuum adapter can resolve the national identifier from | Fixture; identity store not connected |
+| Credit check and limit | Consent, the bureau enquiry, the consumer limit and outstanding balance, the refusal with its control code | — | Bureau membership (SIMAH or Bayan; AECB in the UAE); the credit policy and limits, each with its citation | Rules built; bureau on fixture |
+| Disclosure and acceptance | Every figure, APR from the one function, both languages, the version accepted | — | The Board-approved contract template | Built |
+| Booking | Books the loan with SANAD's rate (0%), refuses any other rate echoed back | Creates the person, the servicing account and the loan contract; generates the schedule | Sets up the BNPL loan product in Tuum; owns the Tuum tenant and its credentials | SANAD built; Tuum on fixture |
+| Paying the merchant | One payment instruction on the outbox: basket less discount, sent once | — | The payments hub (Saudi Arabia) or partner bank (UAE) that moves the money; accounts for the discount as income | Instruction built; rail on fixture |
+| Reporting the new facility | `OPENED` to the bureau, with its currency, on the outbox | — | The bureau's reporting channel and membership | Built; bureau on fixture |
+| Collecting instalments | On each due date, collects through the shopper's chosen channel, keyed so a retry never collects twice | Debits the shopper's own account when that is the channel | The collection contracts: SADAD biller (Saudi Arabia), UAEDDS through the partner bank (UAE), card acquiring, Open Banking or Open Finance | Orchestration built; rails on fixture |
+| Rail results | Records settled or returned; retries a return under a new key, up to the institution's limit | — | Each rail's callback or file of results | **Not built**: the demonstration stands in for it |
+| Posting and allocation | Posts each settled collection into the loan's servicing account, once | Allocates the posting across the instalments; keeps the balance | — | SANAD built; Tuum on fixture |
+| Arrears | Reads days past due from Tuum; reports `ARREARS` to the bureau and reminds the shopper, once each | Counts days past due | The notification provider (SMS, e-mail); the collections team for anything beyond a reminder | Built on fixtures |
+| Closure | Reports `CLOSED` to the bureau when Tuum shows it paid | Shows the loan paid in full | — | Built on fixtures |
+| Scheduling | Runs servicing for a day | — | — | **Not built** as a scheduled job: a person runs it from the workbench |
+| Returns, refunds, early settlement | **Not built** | Early repayment handling to be confirmed | The refund and dispute process | Open |
+
+### What Tuum must provide
+
+Tuum is the system of record for each BNPL loan's schedule and balance. SANAD keeps no instalment table of its own; it asks Tuum. These are open in verification item TUUM-SERV-01 (`adapters/tuum/README.md`) and must be settled with Tuum, on the institution's Tuum tenant, before the first live booking.
+
+1. **A BNPL loan product on the institution's tenant.** Four payments thirty days apart, no interest, in the tenant's currency. The sandbox run on 8 October found no riyal product that accepts this schedule. The product's code goes into SANAD's tenant configuration (`BNPL SAR 4X` today is illustrative).
+2. **Honour the rate SANAD sends.** A supplied interest rate of 0 must override the product's price list. Until Tuum confirms it does, SANAD refuses every live booking with `RATE_MISMATCH`. That is the safe failure: a price list can never turn an interest-free purchase into an interest-bearing loan.
+3. **A fixed interval on the contract.** Confirm that `paymentFrequency` (30, `DAY`) is the field and shape Tuum expects.
+4. **The servicing account's set-up for a consumer.** The account type, customer group and price list. SANAD holds them as tenant configuration.
+5. **The receivables read.** Its path, field names, statuses, and how days past due are counted. SANAD's overdue reporting relies on Tuum's count.
+6. **Repayment posting and allocation.** The repayment transaction type, and how Tuum allocates a posting across instalments, oldest first or otherwise.
+7. **Automatic repayment from the customer's own account.** Whether a contract can carry it, and what Tuum reports when the account cannot cover an instalment.
+8. **Sandbox access and API credentials** for the institution's tenant. They are stored in the vault, never in configuration, and each read is audited.
+
+:::note The merchant discount is not on the loan
+The loan in Tuum is for the basket price, the amount the shopper repays. The merchant receives the basket less the discount through SANAD's payment instruction. The discount is the institution's income. How it is accounted in the general ledger is a question for the institution's finance function, not for Tuum or SANAD.
+:::
+
+### What the institution must provide
+
+| Item | Why | Country |
+|---|---|---|
+| The licence route and the regulator's rules, cited article by article | Decides the rule set SANAD enforces; a limit with no citation is a guess | SAMA in Saudi Arabia; CBUAE in the UAE |
+| A Tuum tenant, with the BNPL product configured (above) | The loan's system of record | Both |
+| An identity store inside its trust boundary | Tuum needs the shopper's national identifier; SANAD never holds it, so without the store a live booking is refused | Both |
+| Identity rail contract | Shopper sign-in and verification | Nafath (Saudi Arabia); UAE Pass and ICP (UAE) |
+| Credit bureau membership, enquiry and reporting | Limit checks; reporting new facilities, arrears and closures | SIMAH or Bayan (Saudi Arabia); AECB (UAE) |
+| Collection contracts for each channel it offers | SANAD instructs; the institution's contracts move the money | SADAD biller credentials, payments hub, Open Banking (Saudi Arabia); UAEDDS and card through a partner bank, Open Finance (UAE) |
+| Merchant disbursement | Paying the store | Payments hub (Saudi Arabia); partner bank (UAE) |
+| Merchant contracts and settlement accounts | No store transacts without them | Both |
+| Credit policy, limits, number of collection attempts | Configuration SANAD enforces, effective-dated, under four eyes | Both |
+| A Shariah board ruling, if the institution is Islamic | How the merchant discount is treated | Both |
+| Staff identity (OIDC) | Maker and checker sign-in on the workbench | Both |
+| Hosting in its own jurisdiction | Customer data stays in the country of the deployment | In the Kingdom for Saudi Arabia; in the UAE for the UAE |
+| Collections, complaints and disputes beyond a reminder | SANAD reports and reminds; people handle what follows | Both |
+
+### What SANAD still has to build
+
+SANAD has its own open items; they are not Tuum's or the institution's.
+
+- **Rail callbacks.** A SADAD bill paid, a debit settled or returned, or an initiated payment settled must reach SANAD's recorder. In the demonstration an approver stands in for them, labelled Fixture.
+- **Scheduled servicing.** No scheduled job runs BNPL servicing yet; a person runs it from the workbench.
+- **Returns, refunds and early settlement** for BNPL purchases.
+- **A UAE BNPL product.** The CBUAE rule set, AED, the Gregorian age rule, and the UAE rails wired into the journey. The UAE collection channels are already configured.
+- **Live transports and sandbox calls** for each rail and for Tuum. Each stays marked blocked until a verified call is recorded.
+
+:::warn How to say this in the room
+"SANAD originates, decides and orchestrates. Your core holds the loan, and your contracts move the money. We have built our part and shown it end to end on stand-ins. Going live needs your Tuum tenant set up for this product and your rail contracts in place, and we verify each connection in its sandbox before anything carries real money."
+:::
+
+\pagebreak
+
 ## If something goes wrong
 
 | Symptom | Cause | Fix |
@@ -322,7 +402,7 @@ If a step fails in front of the client, say what it is ("a development stand-in 
 | Where is the data held? | The demonstration holds synthetic data only. A production deployment is placed where the institution's regulator requires, in the institution's own environment if it wishes. |
 | How long to a UAE pilot? | Once the licence route and the CBUAE provisions are confirmed, we will give a dated plan. Do not commit to a date in the room. |
 | Can it connect to our core banking and payments? | Yes, through adapters. Each BNPL purchase is booked as a loan in the core (Tuum, through a built adapter), which holds the schedule; payments go through one port, and the institution's hub or partner bank decides the rail. Be precise that today the core and the rails answer from fixtures: Tuum must set up the BNPL product, and the calls are verified in its sandbox before go-live. |
-| Who services the instalments? | The core holds the schedule and allocates repayments. SANAD collects each instalment through the shopper's channel, posts it into the loan, reports an overdue instalment to the bureau and reminds the shopper; where the shopper banks with the institution, the core debits their account itself. All on fixtures today. |
+| Who services the instalments? | The core holds the schedule and allocates repayments. SANAD collects each instalment through the shopper's channel, posts it into the loan, reports an overdue instalment to the bureau and reminds the shopper; where the shopper banks with the institution, the core debits their account itself. All on fixtures today. See *Who does what, end to end* for each party's part. |
 | How would UAE shoppers pay? | Not by SADAD, which is Saudi. The UAE channels are configured separately: direct debit through the UAE Direct Debit System via the partner bank, a card through the partner bank, a payment from the shopper's bank account under the CBUAE's Open Finance framework, or the shopper's own account with the institution. They are offered only once there is a UAE BNPL product. |
 
 ## What not to say or show
@@ -342,6 +422,9 @@ If a step fails in front of the client, say what it is ("a development stand-in 
 | Confirm the client's licence route (finance company, Restricted Licence, or agent) | Pre-sales | Decides the CBUAE provisions that bind it |
 | Obtain the current CBUAE Rulebook text for short-term credit facilities and cite each limit | Pre-sales with counsel | A limit with no citation is a guess |
 | Scope the UAE BNPL rule set: per-jurisdiction rule pack, AED, Gregorian age rule, UAE Pass, AECB, NER, a UAE consumer tenant | Engineering | Follows the UAE SME pattern |
+| Share TUUM-SERV-01 with Tuum and agree a date for the BNPL product on a sandbox tenant | Engineering with the institution | Without it every live booking is refused `RATE_MISMATCH` or unavailable |
+| Ask which collection channels the institution will offer, and with which providers | Pre-sales | Decides the rail contracts it needs (see *What the institution must provide*) |
+| Ask how the institution resolves a customer's national identifier for its core | Engineering | SANAD never holds it; the Tuum adapter needs an identity store |
 | Refuse BNPL checkout on a deployment whose jurisdiction does not offer it | Engineering | Found in rehearsal: the consumer checkout booked a SAR purchase on the AE-switched development database. Not shown to the client |
 
 ## Sources for the UAE position
