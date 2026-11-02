@@ -20,6 +20,7 @@ import { acceptUpload } from '@sanad/core/documents/upload.ts';
 import { type Result, reject } from '@sanad/core/kernel/result.ts';
 import type { ObjectStoragePort, StorableMediaType } from '@sanad/core/ports/object-storage.ts';
 import { credentialProviderFromEnvironment } from '@sanad/origination/credentials.ts';
+import { readPresentedDocument } from '@sanad/origination/documents/findings.ts';
 import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
 
 import { InMemoryObjectStorage } from '../../../../adapters/storage/memory.ts';
@@ -98,16 +99,22 @@ export async function uploadBusinessDocument(
     return fail('STORAGE_UNAVAILABLE', 'The document store did not take the file; nothing was presented', {
       outcome: put.value.kind,
     });
-  return presentDocument(
+  const documentRef = documentRefFor(applicationId, sha256Hex);
+  const presented = await presentDocument(
     tenant,
     applicationId,
-    {
-      documentType,
-      documentRef: documentRefFor(applicationId, sha256Hex),
-      content: { sha256Hex, byteLength, mediaType, storage: store.source },
-    },
+    { documentType, documentRef, content: { sha256Hex, byteLength, mediaType, storage: store.source } },
     actor,
   );
+  if (!presented.ok) return presented;
+  // Document intelligence (D1): read what was presented, for the checker. Never a gate: an engine that is absent,
+  // down or cannot read the file leaves the document unread and checked by a person, exactly as before.
+  await readPresentedDocument(
+    tenant,
+    { kind: 'BUSINESS_APPLICATION', ref: applicationId },
+    { documentRef, declaredType: documentType, sha256Hex, mediaType, bytes },
+  );
+  return presented;
 }
 
 /**

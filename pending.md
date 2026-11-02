@@ -8,7 +8,7 @@ Last updated: 18 October 2026.
 - **Merge the stacked PRs.** Each is built on the one before; only #35 targets `main`.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
-  #56–#58 Wasl W1–W3 · #59 Wasl W4a. Auto mode cannot merge.
+  #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60 document intelligence D1. Auto mode cannot merge.
 - **Renew the `APICAPIKEY` GitHub secret.**
 - **Bank A's Tawarruq board ruling.** Record it in Admin. `sme-term-islamic` stays
   disabled until it's recorded.
@@ -68,6 +68,21 @@ The findings go in the adapter README.
   `core-banking/loan-products.json`, `shariah/board-positions.json`.
 - **Semgrep** has not been run locally on W2/W3 (not installed here). CI's gate is the
   first run.
+
+## Document intelligence (docs/DOCUMENT-INTELLIGENCE-PLAN.md)
+
+- **D1 built**, PR #60: findings and classification on business uploads.
+  - The database test hasn't run locally yet because Docker was down. CI's database job runs it.
+- **D2–D5 next:**
+  - D2: checks on what the document says;
+  - D3: Tahaqoq authenticity;
+  - D4: gap requests and resume;
+  - D5: throughput view.
+- **Live reading needs:** the Document Engine configured for the tenant, V-05/V-06 verified on real Saudi and UAE
+  samples, and the catalogues (ILLUSTRATIVE) tuned against them.
+- **Images (PNG, JPEG) are not read.** They need the engine's OCR path.
+- **Wasl request documents** are attached by reference, not uploaded, so there is nothing to read until they're
+  uploaded.
 
 ## Security register items still open
 

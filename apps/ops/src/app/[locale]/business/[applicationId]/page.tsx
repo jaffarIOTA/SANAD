@@ -30,6 +30,7 @@ import type { FinancialRatio, FinancialRatioCode } from '@sanad/core/applicant/f
 import type { SmeAssessmentPolicy } from '@sanad/core/decisioning/sme-assessment.ts';
 import type { Result } from '@sanad/core/kernel/result.ts';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
+import { findingsFor } from '@sanad/origination/documents/findings.ts';
 
 import {
   confirmBankStatementsAction,
@@ -59,6 +60,7 @@ import { pageStaff } from '../../../../server/session.ts';
 import type { StaffPrincipal } from '../../../../server/staff.ts';
 import { Gate } from '../../Gate.tsx';
 import { SourceBadge } from '../intake/IntakeUi.tsx';
+import { DocumentFindings } from '../DocumentFindings.tsx';
 import { SecurityCard } from './SecurityCard.tsx';
 import {
   ApplicationShell,
@@ -192,11 +194,12 @@ export default async function LoanApplicationPage({
   const f = formatters(locale === 'ar-SA', view.currency);
   const { t } = f;
 
-  const [readiness, checklist, variants, security] = await Promise.all([
+  const [readiness, checklist, variants, security, findings] = await Promise.all([
     figureReadiness(j.tenant, applicationId),
     checklistStatus(j.tenant, applicationId),
     productVariants(j.tenant),
     securityStatus(j.tenant, applicationId),
+    findingsFor(j.tenant, { kind: 'BUSINESS_APPLICATION', ref: applicationId }),
   ]);
   const policyResult = loadSmeAssessmentPolicy(j.tenant);
   const policy = policyResult.ok ? policyResult.value : undefined;
@@ -725,6 +728,9 @@ export default async function LoanApplicationPage({
                                   </Gate>
                                 ) : null}
                               </span>
+                            )}
+                            {held?.content === undefined ? null : (
+                              <DocumentFindings findings={findings.get(held.content.sha256Hex)} f={f} />
                             )}
                           </span>
                           <span className="flex flex-col items-start gap-0.5">
