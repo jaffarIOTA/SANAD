@@ -79,6 +79,7 @@
     },
     "@swc/core": {
       "@swc/helpers": "^0.5.17"
-    }
+    },
+    "minimatch": "^11.0.1"
   }
 }
