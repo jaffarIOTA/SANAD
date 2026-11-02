@@ -22,7 +22,10 @@ COPY --chown=0:0 core/package.json ./core/package.json
 COPY --chown=0:0 products/package.json ./products/package.json
 # As apps/Containerfile installs: the lockfile is checked whole (with --omit=dev, the image's npm 10 refuses
 # optional platform packages the lockfile records for npm 11).
-RUN npm ci --ignore-scripts --no-audit --no-fund
+RUN npm ci --ignore-scripts --no-audit --no-fund \
+ # The document viewer runs in a browser, never in the worker; its SDK bundles a .NET runtime with an
+ # unfixed High (CVE-2026-84008, SR-049), so the worker ships without the viewer at all.
+ && rm -rf node_modules/@nutrient-sdk/viewer
 
 # What the worker runs: the engine, configuration, products, adapters, the services, and the ops
 # server's servicing operations (the host the activities call). No tests, no migrations, no pages.
