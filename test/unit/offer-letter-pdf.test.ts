@@ -33,11 +33,56 @@ describe('the letter as HTML', () => {
     });
     expect(html).not.toContain('<script>alert(1)');
     expect(html).toContain('&lt;script&gt;');
-    expect(html.indexOf('lang="ar"', html.indexOf('<div class="cols">'))).toBeLessThan(
-      html.indexOf('lang="en"', html.indexOf('<div class="cols">')),
-    );
     expect(html).toContain(`letter version ${letter.version}`);
     expect(html).not.toMatch(/src=|href=|@import|url\(/);
+  });
+
+  it('pairs every item in one row, Arabic first, so a line and its translation start level', async () => {
+    resetBusinessStore();
+    const letter = (await listApplications('sme-fund-ae')).find((v) => v.latestOffer !== undefined)?.latestOffer
+      ?.letter;
+    if (letter === undefined) throw new Error('no seeded letter');
+    const html = offerLetterHtml(letter);
+    const rows = [...html.matchAll(/<tr class="([a-z]+)">(.*?)<\/tr>/gs)];
+    // Title, two meta lines, three parties, four headings, each term, each repayment line, each condition,
+    // the validity, each signature.
+    expect(rows).toHaveLength(
+      1 +
+        2 +
+        3 +
+        4 +
+        letter.terms.length +
+        letter.repayment.length +
+        letter.conditions.length +
+        1 +
+        letter.signatures.length,
+    );
+    for (const [, , cells] of rows)
+      expect(cells).toMatch(/^<td lang="ar" dir="rtl">.*<\/td><td lang="en" dir="ltr">.*<\/td>$/s);
+    const signature = rows.filter(([, cls]) => cls === 'signature').map(([, , cells]) => cells ?? '');
+    expect(signature[0]).toContain(letter.signatures[0]?.partyName.ar);
+    expect(signature[0]).toContain(letter.signatures[0]?.partyName.en);
+    // Arabic conditions are numbered in Arabic-Indic digits, English ones in Latin.
+    expect(html).toContain('<span class="n">١.</span>');
+    expect(html).toContain('<span class="n">1.</span>');
+  });
+
+  it('embeds the typeface only as WOFF2 data, and leaves out a face that is not well formed', async () => {
+    resetBusinessStore();
+    const letter = (await listApplications('sme-fund-ae')).find((v) => v.latestOffer !== undefined)?.latestOffer
+      ?.letter;
+    if (letter === undefined) throw new Error('no seeded letter');
+    const html = offerLetterHtml(letter, undefined, [
+      { weight: 400, unicodeRange: 'U+0600-06FF, U+FB50-FDFF', woff2Base64: 'd09GMgABAAA=' },
+      { weight: 700, unicodeRange: 'U+0000-00FF; } body { display: none', woff2Base64: 'd09GMgABAAA=' },
+      { weight: 600, unicodeRange: 'U+0000-00FF', woff2Base64: 'x) ; @import url(https://x.example/a.css' },
+    ]);
+    expect(html.match(/@font-face/g)).toHaveLength(1);
+    expect(html).toContain(
+      "src: url(data:font/woff2;base64,d09GMgABAAA=) format('woff2'); unicode-range: U+0600-06FF, U+FB50-FDFF;",
+    );
+    expect(html).not.toContain('display: none');
+    expect(html).not.toMatch(/src=|href=|@import|url\((?!data:font\/woff2;base64,)/);
   });
 });
 
@@ -135,6 +180,8 @@ describe('rendering through the service', () => {
     expect(html).toContain('<header class="letterhead">');
     expect(html).toContain('aria-label="Sanad"');
     expect(html).toContain('aria-label="سند"');
+    // The platform's one typeface, embedded: three weights, each split by script.
+    expect(html.match(/@font-face \{ font-family: 'Sanad Letter'/g)).toHaveLength(6);
   });
 
   it('prints no interim letterhead where a synthetic demonstration is not permitted', async () => {

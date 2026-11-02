@@ -36,11 +36,11 @@
   --colour-blocked: #d93a53;
   --colour-blocked-quiet: #ffe8ec;
 
-  /* Type. Arabic and Latin are tuned independently: matching point sizes do
-     not produce matching perceived weight. */
-  --font-arabic: 'Noto Kufi Arabic', 'Segoe UI', system-ui, sans-serif;
-  --font-latin: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-numeric: 'Inter', system-ui, monospace;
+  /* Type: one family for both scripts (foundation.css, 2026-10-17), drawn
+     together so matching sizes give matching weight. */
+  --font-arabic: 'IBM Plex Sans Arabic', 'Segoe UI', system-ui, sans-serif;
+  --font-latin: 'IBM Plex Sans Arabic', system-ui, -apple-system, sans-serif;
+  --font-numeric: 'IBM Plex Sans Arabic', system-ui, monospace;
 
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;

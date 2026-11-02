@@ -63,14 +63,16 @@ export function BrandMark({
 
 /**
  * The wordmark: "Sanad." in Inter Black, the full stop in the brand colour —
- * the same lettering as the logo files in docs/brand/logo. The product's name
+ * the same lettering as the logo files in docs/brand/logo. It is the logo, so
+ * it keeps the logo's face ('Sanad Wordmark' in foundation.css) while all text
+ * is set in the one family. The product's name
  * is Latin in both languages; in Arabic the mark sits on the reading side.
  */
 export function Wordmark({ className = 'text-[1.25rem]' }: { readonly className?: string }): ReactElement {
   return (
     // <bdi> isolates the name and takes its direction from the "S", so on an
     // Arabic page the full stop stays after "Sanad" instead of moving before it.
-    <bdi lang="en" className={`font-black leading-none tracking-[-0.02em] text-heading ${className}`}>
+    <bdi lang="en" className={`wordmark font-black leading-none tracking-[-0.02em] text-heading ${className}`}>
       Sanad<span className="text-brand">.</span>
     </bdi>
   );

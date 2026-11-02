@@ -37,6 +37,7 @@ import {
   sealCandidate,
 } from './business.ts';
 import { objectKeyFor, objectStorageFor } from './business-storage.ts';
+import { letterFonts } from './letter-fonts.ts';
 import { persistencePool } from './persistence.ts';
 
 /**
@@ -78,7 +79,7 @@ export async function renderOfferPdf(
   });
   const r = await engine.fromHtml({
     tenantId: tenant,
-    html: offerLetterHtml(offer.letter, await letterheadFor(tenant)),
+    html: offerLetterHtml(offer.letter, await letterheadFor(tenant), letterFonts()),
     correlationId,
   });
   if (!r.ok) return r;

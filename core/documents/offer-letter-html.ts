@@ -4,18 +4,26 @@
  *
  * Pure. It renders exactly the letter's content — the same figures the
  * screen previews and the customer signs, nothing computed here — Arabic
- * first (the governing text, right to left) and English beside it, with the
- * letter's version (the SHA-256 of its content) printed on every page so the
+ * (the governing text, right to left) and English side by side, with the
+ * letter's version (the SHA-256 of its content) closing the letter so the
  * paper and the record can be matched. Every string is escaped; the page
- * loads nothing from outside (no font, no image, no script), so the engine
- * needs no network and nothing can be injected into the document.
+ * loads nothing from outside (no image, no script, no font service), so the
+ * engine needs no network and nothing can be injected into the document.
+ *
+ * Laid out as one bilingual table, not two columns: each item — the title,
+ * each term, each condition, each signature — is one row, the Arabic on the
+ * right and the English on the left, so a line and its translation always
+ * start level, however much longer one of them runs. A row is never split
+ * across pages.
+ *
+ * The typeface is the platform's one family for both scripts, embedded in
+ * the page (data URIs) by the caller, so the PDF is set exactly as the
+ * screens are, whatever fonts the engine's host has.
  */
-import type { BilingualText, OfferLetter } from './offer-letter.ts';
+import { type BilingualText, type OfferLetter, arabicIndic } from './offer-letter.ts';
 
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-
-type Lang = 'ar' | 'en';
 
 const LABELS: Readonly<Record<string, BilingualText>> = {
   lender: { en: 'Lender', ar: 'المُقرض' },
@@ -29,38 +37,45 @@ const LABELS: Readonly<Record<string, BilingualText>> = {
   validUntil: { en: 'Valid until', ar: 'ساري حتى' },
   signHere: { en: 'Signature and date', ar: 'التوقيع والتاريخ' },
 };
+const label = (k: string): BilingualText => LABELS[k] ?? { en: k, ar: k };
 
-function column(letter: OfferLetter, lang: Lang): string {
-  const t = (b: BilingualText) => escapeHtml(b[lang]);
-  const date = (d: OfferLetter['offerDate']) =>
-    `${t(d.gregorian)}${d.hijri === undefined ? '' : ` <span class="hijri">(${escapeHtml(d.hijri)})</span>`}`;
-  const rows = (rs: OfferLetter['terms']) =>
-    rs.map((r) => `<tr><th>${t(r.label)}</th><td>${t(r.value)}</td></tr>`).join('');
-  const label = (k: string) => t(LABELS[k] ?? { en: k, ar: k });
-  return `<section class="col" lang="${lang}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}">
-  <h1>${t(letter.title)}</h1>
-  <p class="meta">${escapeHtml(letter.reference)} · ${label('offerDate')}: ${date(letter.offerDate)}</p>
-  <table class="parties">
-    <tr><th>${label('lender')}</th><td>${t(letter.parties.lender)}</td></tr>
-    <tr><th>${label('borrower')}</th><td>${t(letter.parties.borrower)}</td></tr>
-    <tr><th>${label('product')}</th><td>${t(letter.productVariant)}</td></tr>
-  </table>
-  <h2>${label('terms')}</h2>
-  <table>${rows(letter.terms)}</table>
-  <h2>${label('repayment')}</h2>
-  <table>${rows(letter.repayment)}</table>
-  <h2>${label('conditions')}</h2>
-  <ol>${letter.conditions.map((c) => `<li>${t(c)}</li>`).join('')}</ol>
-  <p class="validity">${t(letter.validity)}</p>
-  <p class="meta">${label('validUntil')}: ${date(letter.validUntil)}</p>
-  <h2>${label('signatures')}</h2>
-  <div class="signatures">${letter.signatures
-    .map(
-      (s) =>
-        `<div class="sig"><p><strong>${t(s.partyName)}</strong></p><p>${t(s.role)}</p><p class="line">${label('signHere')}</p></div>`,
-    )
-    .join('')}</div>
-</section>`;
+/** One bilingual row: the same item in each language, given as markup per language (already escaped). */
+const row = (cls: string, cell: (lang: 'ar' | 'en') => string): string =>
+  `<tr class="${cls}"><td lang="ar" dir="rtl">${cell('ar')}</td><td lang="en" dir="ltr">${cell('en')}</td></tr>`;
+
+function body(letter: OfferLetter): string {
+  const t = (b: BilingualText, lang: 'ar' | 'en') => escapeHtml(b[lang]);
+  const date = (d: OfferLetter['offerDate'], lang: 'ar' | 'en') =>
+    `${t(d.gregorian, lang)}${d.hijri === undefined ? '' : ` <span class="hijri">(${escapeHtml(d.hijri)})</span>`}`;
+  const kv = (k: BilingualText, v: BilingualText) =>
+    row('kv', (l) => `<span class="k">${t(k, l)}</span><span class="v">${t(v, l)}</span>`);
+  const heading = (k: string) => row('section', (l) => `<h2>${t(label(k), l)}</h2>`);
+  const ordinal = (i: number, lang: 'ar' | 'en') => (lang === 'ar' ? arabicIndic(String(i + 1)) : String(i + 1));
+  return [
+    row('title', (l) => `<h1>${t(letter.title, l)}</h1>`),
+    row('meta', (l) => `${escapeHtml(letter.reference)} · ${t(label('offerDate'), l)}: ${date(letter.offerDate, l)}`),
+    kv(label('lender'), letter.parties.lender),
+    kv(label('borrower'), letter.parties.borrower),
+    kv(label('product'), letter.productVariant),
+    heading('terms'),
+    ...letter.terms.map((r) => kv(r.label, r.value)),
+    heading('repayment'),
+    ...letter.repayment.map((r) => kv(r.label, r.value)),
+    heading('conditions'),
+    ...letter.conditions.map((c, i) =>
+      row('condition', (l) => `<span class="n">${ordinal(i, l)}.</span><span class="c">${t(c, l)}</span>`),
+    ),
+    row('validity', (l) => t(letter.validity, l)),
+    row('meta', (l) => `${t(label('validUntil'), l)}: ${date(letter.validUntil, l)}`),
+    heading('signatures'),
+    ...letter.signatures.map((s) =>
+      row(
+        'signature',
+        (l) =>
+          `<p class="party">${t(s.partyName, l)}</p><p class="role">${t(s.role, l)}</p><p class="line">${t(label('signHere'), l)}</p>`,
+      ),
+    ),
+  ].join('\n');
 }
 
 /**
@@ -77,6 +92,36 @@ export interface LetterBranding {
   readonly accent: string;
   /** #rrggbb: headings. */
   readonly heading: string;
+}
+
+/** One face of the letter's typeface, embedded: a weight, the characters it covers, the WOFF2 bytes as Base64. */
+export interface LetterFontFace {
+  readonly weight: 400 | 500 | 600 | 700;
+  /** A CSS unicode-range, e.g. "U+0600-06FF, U+FB50-FDFF". */
+  readonly unicodeRange: string;
+  readonly woff2Base64: string;
+}
+
+const LETTER_FAMILY = 'Sanad Letter';
+const UNICODE_RANGE = /^U\+[0-9A-Fa-f?]{1,6}(?:-[0-9A-Fa-f]{1,6})?(?:,\s*U\+[0-9A-Fa-f?]{1,6}(?:-[0-9A-Fa-f]{1,6})?)*$/;
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/** @font-face rules for the faces that are well formed; a face that is not is left out, never interpolated. */
+function fontFaces(faces: readonly LetterFontFace[]): string {
+  return faces
+    .filter(
+      (f) =>
+        [400, 500, 600, 700].includes(f.weight) &&
+        UNICODE_RANGE.test(f.unicodeRange) &&
+        f.woff2Base64.length > 0 &&
+        f.woff2Base64.length <= 2 * 1024 * 1024 &&
+        BASE64.test(f.woff2Base64),
+    )
+    .map(
+      (f) =>
+        `@font-face { font-family: '${LETTER_FAMILY}'; font-style: normal; font-weight: ${f.weight}; src: url(data:font/woff2;base64,${f.woff2Base64}) format('woff2'); unicode-range: ${f.unicodeRange}; }`,
+    )
+    .join('\n');
 }
 
 const SVG_ELEMENTS = new Set(['svg', 'g', 'path', 'title']);
@@ -106,11 +151,11 @@ export function safeLetterSvg(svg: string): string | undefined {
     const tag = s.slice(open + 1, close);
     if (tag.includes('<')) return undefined;
     const closing = tag.startsWith('/');
-    const body = (closing ? tag.slice(1) : tag).replace(/\/$/, '');
-    const nameEnd = body.search(/\s|$/);
-    const name = body.slice(0, nameEnd);
+    const tagBody = (closing ? tag.slice(1) : tag).replace(/\/$/, '');
+    const nameEnd = tagBody.search(/\s|$/);
+    const name = tagBody.slice(0, nameEnd);
     if (!SVG_ELEMENTS.has(name)) return undefined;
-    let rest = body.slice(nameEnd);
+    let rest = tagBody.slice(nameEnd);
     if (closing && rest.trim().length > 0) return undefined;
     while (rest.trim().length > 0) {
       rest = rest.trimStart();
@@ -143,12 +188,16 @@ function letterhead(branding: LetterBranding | undefined): { readonly html: stri
   .letterhead { display: flex; justify-content: space-between; align-items: center; padding-bottom: 3mm; margin-bottom: 6mm; border-bottom: 0.6mm solid ${accent}; }
   .letterhead .logo svg { height: 11mm; width: auto; display: block; }
   h1, h2 { color: ${heading}; }
-  .footer { border-top: 0.3mm solid ${accent}; padding-top: 1.5mm; }`;
+  .footer { border-top: 0.3mm solid ${accent}; }`;
   return { html, css };
 }
 
-/** The letter as HTML: the letterhead when branded, Arabic column first, English beside it; the version in the footer. */
-export function offerLetterHtml(letter: OfferLetter, branding?: LetterBranding): string {
+/** The letter as HTML: the letterhead when branded, then one bilingual row per item; the version closes it. */
+export function offerLetterHtml(
+  letter: OfferLetter,
+  branding?: LetterBranding,
+  fonts: readonly LetterFontFace[] = [],
+): string {
   const version = escapeHtml(letter.version);
   const head = letterhead(branding);
   return `<!doctype html>
@@ -157,33 +206,39 @@ export function offerLetterHtml(letter: OfferLetter, branding?: LetterBranding):
 <meta charset="utf-8">
 <title>${escapeHtml(letter.title.en)} — ${escapeHtml(letter.reference)}</title>
 <style>
-  @page { size: A4; margin: 18mm 14mm 20mm 14mm; }
-  body { font-family: sans-serif; font-size: 10.5pt; color: #111; margin: 0; }
-  .cols { display: flex; gap: 10mm; align-items: flex-start; }
-  .col { flex: 1 1 0; min-width: 0; }
-  h1 { font-size: 15pt; margin: 0 0 2mm; }
-  h2 { font-size: 10.5pt; margin: 5mm 0 1.5mm; text-transform: uppercase; letter-spacing: 0.02em; color: #444; }${head.css}
-  table { width: 100%; border-collapse: collapse; }
-  th, td { padding: 1.2mm 0; border-bottom: 0.2mm solid #ddd; vertical-align: top; text-align: start; }
-  th { font-weight: normal; color: #555; width: 45%; padding-inline-end: 3mm; }
-  td { font-weight: bold; }
-  ol { padding-inline-start: 5mm; margin: 0; }
-  li { margin-bottom: 1mm; }
-  .meta { color: #555; font-size: 9pt; margin: 0 0 2mm; }
-  .validity { margin-top: 4mm; }
-  .signatures { display: flex; flex-direction: column; gap: 6mm; }
-  .sig .line { border-top: 0.2mm solid #333; padding-top: 1mm; margin-top: 12mm; color: #555; font-size: 9pt; }
-  /* In the flow, after the signatures, so it closes the last page and never sits over the text (a fixed footer
-     in the page margin was printed over the content of the second page). */
+  ${fontFaces(fonts)}
+  @page { size: A4; margin: 16mm 14mm 18mm 14mm; }
+  body { font-family: '${LETTER_FAMILY}', 'IBM Plex Sans Arabic', sans-serif; font-size: 10pt; line-height: 1.45; color: #1d2233; margin: 0; font-variant-numeric: tabular-nums; }
+  h1 { font-size: 16pt; font-weight: 700; margin: 0; line-height: 1.25; }
+  h2 { font-size: 9.5pt; font-weight: 700; margin: 0; letter-spacing: 0.02em; color: #444; }
+  td[lang='en'] h2 { text-transform: uppercase; }${head.css}
+  /* The two languages share every row; 8mm between them, none between rows. */
+  /* border-spacing also pads the outer edges; the negative margin takes that back so the text meets the margins. */
+  table.bilingual { table-layout: fixed; border-collapse: separate; border-spacing: 8mm 0; margin: 0 -8mm; width: calc(100% + 16mm); }
+  table.bilingual td { width: 50%; vertical-align: top; text-align: start; padding: 1.4mm 0; }
+  table.bilingual tr { break-inside: avoid; }
+  tr.title td { padding-bottom: 1mm; }
+  tr.meta td { color: #4f6a99; font-size: 8.5pt; padding: 0.6mm 0 2.5mm; }
+  tr.section td { padding-top: 5mm; padding-bottom: 1.2mm; border-bottom: 0.3mm solid #cfd5e3; }
+  tr.kv td { border-bottom: 0.2mm solid #e3e7ef; }
+  .k { display: inline-block; width: 46%; color: #4f6a99; vertical-align: top; padding-inline-end: 2mm; box-sizing: border-box; }
+  .v { display: inline-block; width: 54%; font-weight: 600; vertical-align: top; }
+  .n { display: inline-block; width: 6mm; color: #4f6a99; vertical-align: top; }
+  .c { display: inline-block; width: calc(100% - 6mm); vertical-align: top; }
+  tr.validity td { padding-top: 4mm; }
+  tr.signature td { padding-top: 4mm; }
+  .party { font-weight: 600; margin: 0; }
+  .role { margin: 0.5mm 0 0; color: #4f6a99; }
+  .line { border-top: 0.25mm solid #1d2233; padding-top: 1mm; margin: 13mm 0 0; color: #4f6a99; font-size: 8.5pt; }
+  /* In the flow, after the signatures, so it closes the last page and never sits over the text. */
   .footer { margin-top: 10mm; padding-top: 1.5mm; font-size: 7.5pt; color: #777; direction: ltr; text-align: center; break-inside: avoid; }
 </style>
 </head>
 <body>
 ${head.html}
-<div class="cols">
-${column(letter, 'ar')}
-${column(letter, 'en')}
-</div>
+<table class="bilingual">
+${body(letter)}
+</table>
 <div class="footer">${escapeHtml(letter.reference)} · letter version ${version}</div>
 </body>
 </html>`;
