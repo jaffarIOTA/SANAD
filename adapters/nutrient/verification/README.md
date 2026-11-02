@@ -72,12 +72,38 @@ Upload one synthetic PDF, read back its metadata, fetch the rendition, hash it. 
 does the hash of what came back equal the hash of what went up? That equality is what
 `RenderedDocument.contentHash` and "what is signed is what was seen" (BR-G06) rest on.
 
+**Run 2026-10-17** (Document Engine 1.19.0 in evaluation mode — Nutrient's trial, no key,
+`adapters/nutrient/compose/` on a developer laptop): `GET /healthcheck` 200; an authenticated
+`GET /api/documents` with `Authorization: Token token=…` 200. **V-02 passes.** The engine is
+bound to 127.0.0.1 only. The log states *"licensed for evaluation use … an evaluation
+watermark is displayed on every document"*.
+
+**V-03, run 2026-10-17:** the synthetic commercial invoice uploaded (`POST /api/documents`,
+multipart `file`) and came back **byte-identical from the stored source**
+(`GET /api/documents/{id}/pdf?source=true`, SHA-256 equal). The default rendition
+(`GET …/pdf`) is re-written on export (annotations applied; in evaluation mode the watermark)
+and differs, as expected. So `RenderedDocument.contentHash` and BR-G06 rest on the stored
+source, and the adapter must fetch with `source=true` when it hashes what was seen.
+
+**Generation (OI-05's rendering question), run 2026-10-17:** `POST /api/build` with an HTML
+part (`instructions={"parts":[{"html":"letter"}]}`) produced a PDF from a bilingual offer-letter
+fragment. The Arabic rendered **joined and right-to-left** with Arabic-Indic digits beside the
+English, in the engine's default font. Open: a licensed font set for both scripts, page
+furniture (headers, page numbers), and whether evaluation mode watermarks build output.
+
 ### V-04 — one digital signature that validates (OI-06)
 Sign the uploaded document through Document Engine with the test certificate, request
 long-term validation material, download, validate with an independent validator (not the
 vendor's own). **Question:** is the result PAdES with LTV, with the chain and the timestamp
 both valid? Until one such file exists the signature design is a hypothesis (README).
 Record: certificate issuer, profile reported, validator used, result.
+
+**Run 2026-10-17:** `POST /api/documents/{id}/sign` answered **500 "Signing service not
+available"**. Document Engine does not hold the certificate: it calls out to a signing
+service the institution runs (`SIGNING_SERVICE_URL`), which holds the key — in production the
+in-Kingdom HSM behind the licensed CSP's certificate. That is the right shape for OI-06. V-04
+needs that service: for plumbing, a small development signing service with a self-signed
+certificate (recorded as self-signed); for the finding, the CSP's test certificate.
 
 ### V-05 — the promissory note as a form
 Render the promissory-note template as a PDF form: payee, amount in figures and in words

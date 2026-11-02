@@ -2,8 +2,9 @@
 
 ```bash
 scripts/nutrient-dev-keys.sh            # once: writes compose/.env and the four SANAD_CREDENTIAL_* lines into .env.local
-$EDITOR adapters/nutrient/compose/.env  # paste ACTIVATION_KEY from the trial licence; nowhere else
-docker compose -f adapters/nutrient/compose/docker-compose.yml up -d
+# No key needed for the trial: the engine starts in evaluation mode (watermark on exports).
+# With a purchased licence: $EDITOR adapters/nutrient/compose/.env and set LICENSE_KEY; nowhere else.
+docker compose -f adapters/nutrient/compose/docker-compose.yml --env-file adapters/nutrient/compose/.env up -d
 curl -s http://127.0.0.1:5000/healthcheck
 ```
 
