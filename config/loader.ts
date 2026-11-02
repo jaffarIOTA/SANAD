@@ -663,7 +663,22 @@ export interface WaslParties {
   readonly saleOfferValiditySeconds: number;
   readonly programmes: readonly WaslProgramme[];
   /** Distributors that draw under the programmes, by the counterparty id their requests carry. */
-  readonly distributors: readonly (WaslParty & { readonly counterpartyId: string })[];
+  readonly distributors: readonly WaslDistributor[];
+}
+
+/** A person who may act for a distributor in the SME portal, by party reference — never a national identifier. */
+export interface WaslSignatory {
+  readonly partyRef: string;
+  readonly nameEn: string;
+  readonly nameAr: string;
+}
+
+export interface WaslDistributor extends WaslParty {
+  readonly counterpartyId: string;
+  /** As the core banking party master records it. */
+  readonly legalForm: string;
+  /** Who may accept a sale offer for the distributor (W3). */
+  readonly signatories: readonly WaslSignatory[];
 }
 
 const WASL_PARTIES: Readonly<Partial<Record<TenantCode, unknown>>> = { 'bank-a': bankAWaslParties };
@@ -719,13 +734,130 @@ export function loadWaslParties(tenant: TenantCode): Result<WaslParties> {
       anchor,
     });
   }
-  const distributors: (WaslParty & { counterpartyId: string })[] = [];
+  const distributors: WaslDistributor[] = [];
+  const seenSignatories = new Set<string>();
   for (const d of Array.isArray(raw.distributors) ? (raw.distributors as Record<string, unknown>[]) : []) {
     const party = partyOf(d);
     if (typeof d['counterpartyId'] !== 'string' || d['counterpartyId'].length === 0 || party === undefined)
       return bad('A distributor needs the counterparty id its requests carry, a registration number and names');
-    distributors.push({ counterpartyId: d['counterpartyId'], ...party });
+    if (typeof d['legalForm'] !== 'string' || !/^[A-Z_]{2,40}$/.test(d['legalForm']))
+      return bad('A distributor needs its legal form');
+    const signatories: WaslSignatory[] = [];
+    for (const s of Array.isArray(d['signatories']) ? (d['signatories'] as Record<string, unknown>[]) : []) {
+      const partyRef = s['partyRef'];
+      if (
+        typeof partyRef !== 'string' ||
+        !SIGNATORY_REF.test(partyRef) ||
+        typeof s['nameEn'] !== 'string' ||
+        typeof s['nameAr'] !== 'string'
+      )
+        return bad('A signatory needs a party reference and names');
+      // One person signs for one distributor here: the portal's session names the company the person acts for.
+      if (seenSignatories.has(partyRef)) return bad('A signatory is configured for more than one distributor');
+      seenSignatories.add(partyRef);
+      signatories.push({ partyRef, nameEn: s['nameEn'], nameAr: s['nameAr'] });
+    }
+    distributors.push({ counterpartyId: d['counterpartyId'], ...party, legalForm: d['legalForm'], signatories });
   }
   if (programmes.length === 0) return bad('At least one programme is configured');
   return { ok: true, value: { institution, saleOfferValiditySeconds: validity, programmes, distributors } };
+}
+
+/** A party reference: what the national identity service authenticates, never the national identifier itself. */
+const SIGNATORY_REF = /^[a-z0-9][a-z0-9-]{2,63}$/;
+
+/**
+ * The distributor an authorised signatory acts for, across the tenants that run Wasl: the tenant comes from
+ * this configuration, never from what the person typed. Undefined when the reference signs for no one.
+ */
+export function signatoryOf(
+  partyRef: string,
+):
+  | { readonly tenant: TenantCode; readonly distributor: WaslDistributor; readonly signatory: WaslSignatory }
+  | undefined {
+  for (const tenant of Object.keys(WASL_PARTIES) as TenantCode[]) {
+    const parties = loadWaslParties(tenant);
+    if (!parties.ok) continue;
+    for (const distributor of parties.value.distributors) {
+      const signatory = distributor.signatories.find((s) => s.partyRef === partyRef);
+      if (signatory !== undefined) return { tenant, distributor, signatory };
+    }
+  }
+  return undefined;
+}
+
+import bankAMurabahaAccounts from './tenants/bank-a/core-banking/murabaha-accounts.json' with { type: 'json' };
+
+/** How an executed Murabaha is held in the core banking platform: account-shaped, never a loan contract (ADR 0007). */
+export interface MurabahaAccountsConfig {
+  readonly adapter: 'TUUM';
+  readonly policyRef: string;
+  readonly channelCode: string;
+  readonly accountPurposeCodes: Readonly<Record<string, string>>;
+  readonly institutionAccounts: Readonly<Record<string, string>>;
+  readonly transactionTypeCodes: {
+    readonly murabahaReceivableRaise: string;
+    readonly murabahaReceivableSettle: string;
+    readonly goodsInventoryAcquire: string;
+    readonly goodsInventoryRelease: string;
+    readonly charityLiabilityRaise: string;
+  };
+}
+
+const MURABAHA_ACCOUNTS: Readonly<Partial<Record<TenantCode, unknown>>> = { 'bank-a': bankAMurabahaAccounts };
+
+const stringMap = (v: unknown): Readonly<Record<string, string>> | undefined =>
+  v !== null && typeof v === 'object' && Object.values(v).every((x) => typeof x === 'string' && x.length > 0)
+    ? (v as Record<string, string>)
+    : undefined;
+
+export function loadMurabahaAccounts(tenant: TenantCode): Result<MurabahaAccountsConfig> {
+  const raw = MURABAHA_ACCOUNTS[tenant] as Record<string, unknown> | undefined;
+  const bad = () =>
+    reject(
+      'OP-DETERMINACY',
+      'MURABAHA_ACCOUNTS_NOT_CONFIGURED',
+      'How a Murabaha is held in the core is not configured',
+      {
+        tenant,
+      },
+    );
+  if (raw === undefined) return bad();
+  const purposes = stringMap(raw['accountPurposeCodes']);
+  const institution = stringMap(raw['institutionAccounts']);
+  const codes = stringMap(raw['transactionTypeCodes']);
+  const keys = [
+    'murabahaReceivableRaise',
+    'murabahaReceivableSettle',
+    'goodsInventoryAcquire',
+    'goodsInventoryRelease',
+    'charityLiabilityRaise',
+  ] as const;
+  if (
+    raw['adapter'] !== 'TUUM' ||
+    typeof raw['policyRef'] !== 'string' ||
+    typeof raw['channelCode'] !== 'string' ||
+    purposes === undefined ||
+    purposes['COLLECTION'] === undefined ||
+    institution === undefined ||
+    codes === undefined ||
+    !keys.every((k) => codes[k] !== undefined) ||
+    // Late amounts are a charity liability; no code may name revenue (SH-13).
+    Object.keys(codes).some((k) => /revenue|income/i.test(k))
+  )
+    return bad();
+  return ok({
+    adapter: 'TUUM',
+    policyRef: raw['policyRef'],
+    channelCode: raw['channelCode'],
+    accountPurposeCodes: purposes,
+    institutionAccounts: institution,
+    transactionTypeCodes: {
+      murabahaReceivableRaise: codes['murabahaReceivableRaise'] ?? '',
+      murabahaReceivableSettle: codes['murabahaReceivableSettle'] ?? '',
+      goodsInventoryAcquire: codes['goodsInventoryAcquire'] ?? '',
+      goodsInventoryRelease: codes['goodsInventoryRelease'] ?? '',
+      charityLiabilityRaise: codes['charityLiabilityRaise'] ?? '',
+    },
+  });
 }

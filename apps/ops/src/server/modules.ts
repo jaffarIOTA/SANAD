@@ -656,7 +656,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         href: '/transactions',
         readiness: live(),
         reference:
-          'Wasl W2, on each transaction: trade validation (distinctness before purchase, SH-08) and the cost held against the programme’s limit (facility holds come with W5); the wa’d and the purchase as separate, hashed, attested, chained legs from the board-approved templates (SH-07, SH-17; the PDF rendition is not yet produced); gate 1 on the anchor’s invoice to the institution through the e-invoicing port (FIXTURE: the demonstration transport, KSA-RAIL-ZATCA-01); gate 2 on uploaded possession evidence a different person validates; gate 3, the risk-holding interval between attested instants (host-clock stand-in, SR-006); the sale offer, its lapse and an unwind with the goods’ disposition. Every step through the same activities as the Temporal workflow; legs, evidence and instants in core.contract_leg, evidence.evidence and core.transaction. The distributor’s acceptance is W3',
+          'Wasl W2, on each transaction: trade validation (distinctness before purchase, SH-08) and the cost held against the programme’s limit (facility holds come with W5); the wa’d and the purchase as separate, hashed, attested, chained legs from the board-approved templates (SH-07, SH-17; the PDF rendition is not yet produced); gate 1 on the anchor’s invoice to the institution through the e-invoicing port (FIXTURE: the demonstration transport, KSA-RAIL-ZATCA-01); gate 2 on uploaded possession evidence a different person validates; gate 3, the risk-holding interval between attested instants (host-clock stand-in, SR-006); the sale offer, its lapse and an unwind with the goods’ disposition. Every step through the same activities as the Temporal workflow; legs, evidence and instants in core.contract_leg, evidence.evidence and core.transaction. W3: the distributor accepts in the SME portal — an authorised signatory (ILLUSTRATIVE, config/tenants/bank-a/wasl/parties.json) signed in through the national identity service and signing the offer instrument’s hash (FIXTURE: the Nafath demonstration transport), the assertion recorded on the acceptance. The steps and the book are shared by both surfaces (services/origination/src/wasl/)',
       },
       {
         id: 'evidence',
@@ -763,8 +763,10 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         id: 'obligations',
         titleEn: 'Obligations & schedules',
         titleAr: 'الالتزامات والجداول',
-        readiness: soon(),
-        reference: 'SH-02 — domain built',
+        href: '/transactions',
+        readiness: live(),
+        reference:
+          'Wasl W3: an accepted sale is booked — the obligation and its schedule (the product’s own split, dated from the stored maturity, both calendars) in core.obligation and core.instalment, where the total is fixed and the schedule sums to it (SH-02); the receivable in the core banking platform account-shaped, never as a loan contract (ADR 0007), idempotently; FIXTURE: the Tuum demonstration transport until the tenant’s posting codes are read (TUUM-ACCT-01). A booking the core did not take is retried from the transaction. Collections and reschedule on Wasl obligations are W4 and later',
       },
       { id: 'reschedule', titleEn: 'Reschedule', titleAr: 'إعادة الجدولة', readiness: soon(), reference: 'BR-E02' },
       {

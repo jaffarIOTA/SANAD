@@ -23,6 +23,8 @@ import { redirect } from 'next/navigation';
 import type { TenantCode } from '@sanad/config/loader.ts';
 import type { Result } from '@sanad/core/kernel/result.ts';
 
+import { bookExecutedSale } from '@sanad/origination/wasl/booking.ts';
+
 import type { WorkbenchAct } from './authority.ts';
 import {
   acquireOwnership,
@@ -79,6 +81,8 @@ const PLAIN_STEPS = {
   POSSESSION: { act: 'TRADE_OPERATIONS', run: confirmPossession, notice: 'POSSESSION_CONFIRMED' },
   OFFER: { act: 'TRADE_OPERATIONS', run: offerSale, notice: 'SALE_OFFERED' },
   LAPSE: { act: 'TRADE_OPERATIONS', run: lapseSaleOffer, notice: 'OFFER_LAPSED' },
+  // An accepted sale whose booking the core did not take when the distributor accepted: the same receivable, idempotently.
+  BOOK: { act: 'TRADE_OPERATIONS', run: bookExecutedSale, notice: 'OBLIGATION_BOOKED' },
 } as const satisfies Readonly<
   Record<
     string,

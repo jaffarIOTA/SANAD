@@ -16,7 +16,7 @@ import { expectOk } from '@sanad/core/kernel/result.ts';
 import { tenantUuidByCode } from '@sanad/origination/credentials.ts';
 import { inTenant } from '@sanad/origination/tenant-scope.ts';
 
-import { recordStep } from '../../apps/ops/src/server/murabaha-persistence.ts';
+import { recordStep } from '../../services/origination/src/wasl/persistence.ts';
 import {
   acquireOwnership,
   confirmPossession,
@@ -68,10 +68,14 @@ let serial = 0;
 async function opened(): Promise<TransactionView> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const v = await openedOnce();
-    if (v.transaction.state === 'DRAFT' && v.events.length === 1) return v;
+    // Ours only if it finances the invoice just keyed: another worker on this database may hold the same request number.
+    if (v.transaction.core.tradeReference.invoiceUuid === invoiceOf(serial) && v.transaction.state === 'DRAFT')
+      return v;
   }
   throw new Error('no fresh transaction could be opened');
 }
+
+const invoiceOf = (n: number) => `9e100000-0000-4000-8000-${RUN}${String(n).padStart(4, '0')}`;
 
 async function openedOnce(): Promise<TransactionView> {
   serial += 1;
@@ -81,7 +85,7 @@ async function openedOnce(): Promise<TransactionView> {
       programmeId: 'prg-0001',
       counterpartyId: 'Rawabi Industrial Supplies Establishment',
       channel: 'MAKER_CHECKER',
-      invoiceUuid: `9e100000-0000-4000-8000-${RUN}${String(serial).padStart(4, '0')}`,
+      invoiceUuid: invoiceOf(serial),
       invoiceNumber: `W2DB-${RUN}-${String(serial)}`,
       issuerCr: '1010000002',
       recipientCr: '7001000001',
