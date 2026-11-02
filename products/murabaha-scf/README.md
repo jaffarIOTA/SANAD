@@ -13,7 +13,8 @@ directory; see `INVARIANTS.md`.
 | | |
 |---|---|
 | Governing standard | AAOIFI Shariah Standard 8 (Murabaha); the tenant board's structure definition in `config/tenants/<tenant>/structures/` |
-| Regulator | SAMA — Finance Companies Control Law and its implementing regulations for finance companies; the Banking Control Law for banks |
+| Jurisdiction | **Saudi Arabia only** (ADR 0005). SAMA is the Saudi regulator; this module is not offered to UAE tenants. |
+| Regulator | SAMA — the Saudi Finance Companies Control Law and its implementing regulations for finance companies; the Saudi Banking Control Law for banks |
 | Board rulings it needs | risk-holding interval (gate 3), acceptable ownership and possession evidence (gates 1–2), *ibra'* basis on early settlement, charity treatment of late amounts, permissible activities register — all tenant configuration, effective-dated |
 | Open items | OI-22 / OI-23 / OI-24 — answered per tenant by that tenant's board, not by code |
 

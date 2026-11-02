@@ -14,6 +14,7 @@ sweep has no determinate final payment date, which some boards refuse).
 
 | | |
 |---|---|
-| Governing rules | Finance Companies Control Law implementing regulations; SAMA Responsible Lending Principles where the merchant is an individual; partner entitlements in `config/tenants/*/origination/policy.json` |
+| Jurisdiction | **Saudi Arabia only** (ADR 0005). SAMA is the Saudi regulator; this module is not offered to UAE tenants. |
+| Governing rules | The Saudi Finance Companies Control Law (Royal Decree M/51) implementing regulations; SAMA Responsible Lending Principles where the merchant is an individual; partner entitlements in `config/tenants/*/origination/policy.json` |
 | Ports | `payments` (disbursement to the merchant), `credit-bureau` (query and report), `notifications`, partner callbacks through the contract's webhooks |
 | Not built | partner settlement reconciliation (the holdback actually arriving), which needs the partner's settlement feed |

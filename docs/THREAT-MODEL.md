@@ -30,8 +30,8 @@ the API routes they host, the origination service (`services/origination`), the 
 schema (`supabase/migrations/0001..0016`), the gateway definitions (`gateway/ibm/`) and the CI
 workflows (`.github/workflows/`).
 
-Out of scope until they exist: the production identity provider (SAML/OIDC), the in-Kingdom
-PostgreSQL and HSM (ADR 0001), the RFC 3161 timestamping authority, the Temporal cluster
+Out of scope until they exist: the production identity provider (SAML/OIDC), the in-jurisdiction
+PostgreSQL and HSM (ADR 0001, as amended by ADR 0005), the RFC 3161 timestamping authority, the Temporal cluster
 (ADR 0003), and any live rail. Each of these is a trust boundary the platform will depend on.
 None of them is wired today, and §6 shows what stands in for each.
 
@@ -62,7 +62,7 @@ this repository, including its history, should be treated as known to an attacke
    │ TB-02 partner / merchant / upstream → API Connect → API routes and origination service
    ▼
  [Application zone: apps/*, services/origination, services/outbox]
-   │ TB-03 services → PostgreSQL (Supabase now; in-Kingdom later) — tenant scope, RLS, triggers
+   │ TB-03 services → PostgreSQL (Supabase now; in-jurisdiction later) — tenant scope, RLS, triggers
    │ TB-04 services → vault (config.get_integration_credential) — credentials
    │ TB-05 services → rails, via adapters and the outbox — consent, response authenticity
    │ TB-06 services → timestamping authority / signing (Nutrient) — non-repudiation
@@ -436,4 +436,4 @@ consistent with UAT holding real data or with any production go-live. SEC-C01 co
 
 Re-run this model when any of these lands: the ops sign-in (SR-002), the runtime DB role and
 `sanad.tenant_id` (SR-003), a TSA adapter, a live rail, the Temporal worker, an inbound
-callback endpoint, or the move to the in-Kingdom deployment.
+callback endpoint, or the move to the in-jurisdiction deployment.

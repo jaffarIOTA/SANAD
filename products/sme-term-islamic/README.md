@@ -31,9 +31,10 @@ as its conventional entry, **disabled** until its board ruling is recorded.
 | Figure | Where it comes from | Status |
 |---|---|---|
 | The structure, broker, commodity, agency | The tenant's Shariah board ruling (`boardRulingRef`), as configuration | Required before enabling. |
-| Enterprise size | SAMA Rulebook, *Definition of SMEs*, Circular No. 381000064902 (14 March 2017), via `config/regulatory/sme-definition.json` | Cited. |
-| Debt-service cover, revenue share, no-history ceiling | **The institution's credit policy** (`source: TENANT_CREDIT_POLICY`) | Illustrative; no SAMA rule found that sets them (searched 2026-10-08). |
-| Programme guarantee coverage | The institution's agreement with the national SME loan guarantee programme | Placeholder. |
+| Enterprise size, Saudi Arabia | SAMA Rulebook, *Definition of SMEs*, Circular No. 381000064902 (14 March 2017), via `config/regulatory/sa/sme-definition.json` | Cited. |
+| Enterprise size, UAE | UAE Cabinet Resolution No. (22) of 2016, via `config/regulatory/ae/sme-definition.json` | Cited. |
+| Debt-service cover, revenue share, no-history ceiling | **The institution's credit policy** (`source: TENANT_CREDIT_POLICY`) | Illustrative; no SAMA or CBUAE rule found that sets them (searched 2026-10-08). |
+| Programme guarantee coverage | The institution's agreement with the national SME loan guarantee programme (Kafalah in Saudi Arabia; none configured for the UAE) | Placeholder. |
 | Structure | AAOIFI Shari'ah Standard No. 30 (Monetization / Tawarruq), as the board applies it | The board's ruling governs. |
 
 ## The sequence

@@ -13,7 +13,7 @@ be licensed:
 - **Annual licence**: the normal commercial term, renewed yearly.
 - **POC licence**: one month at a time, extended a month at a time on the institution's request.
 
-Many institution installs are in-Kingdom and have no outbound internet, so the licence must work
+Many institution installs are in the institution's own jurisdiction (in the Kingdom or the UAE) and have no outbound internet, so the licence must work
 offline.
 
 ## Decision

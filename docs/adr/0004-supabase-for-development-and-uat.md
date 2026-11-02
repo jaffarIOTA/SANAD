@@ -1,5 +1,7 @@
 # ADR 0004 — Supabase for development and UAT
 
+> **Amended 2026-10-08 by ADR 0005.** Residency follows the deployment's jurisdiction: production data in the Kingdom for a Saudi (SA) deployment, in the UAE for a UAE (AE) deployment. Where this record says "in-Kingdom" or cites SAMA, NCA, NDMO or the Saudi PDPL, read it as the Saudi rule; the UAE has its own.
+
 **Status:** Accepted
 **Date:** 2026-10-05
 **Decided by:** the product owner

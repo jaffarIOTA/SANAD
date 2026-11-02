@@ -61,7 +61,7 @@ upload ─▶ store (object store, unchanged)
   - Findings record which engine and version produced them, so the two can be compared on the same documents
     before switching.
 - **Residency.** Documents are read on the institution's own hosts (the document engine already runs there). An AI
-  adapter may be selected only where the deployment profile declares an approved in-Kingdom model host, or on
+  adapter may be selected only where the deployment profile declares an approved model host in the deployment's jurisdiction, or on
   synthetic data. Anywhere else the configuration refuses it.
 
 ## Milestones

@@ -167,11 +167,12 @@ None has been answered in this repository as of 2026-10-08.
 
 | Ref | Question | Status | Working assumption until answered |
 |---|---|---|---|
-| SEC-Q01 | Is Sanad classified a critical system (NCA CSCC)? | Open | Design to ECC-2:2024. Treat CSCC as likely |
-| SEC-Q02 | Target SAMA CSF maturity level? | Open | Level 3 |
+| SEC-Q01 | (KSA) Is Sanad classified a critical system (NCA CSCC)? | Open | Design to ECC-2:2024. Treat CSCC as likely |
+| SEC-Q02 | (KSA) Target SAMA CSF maturity level? | Open | Level 3 |
 | SEC-Q03 | Does any module touch cardholder data (PCI DSS)? | Open | No. No PAN, card number or CVV field exists in `core/`, `products/`, `api/`, `apps/`, `services/` or `adapters/` (checked 2026-10-08). Card rails stay behind the payments hub |
-| SEC-Q04 | Which NCA-licensed provider performs VAPT, and can the client's panel be used? | Open | None engaged. The provider's licence is to be verified before engagement (SEC-R13) |
+| SEC-Q04 | (KSA) Which NCA-licensed provider performs VAPT, and can the client's panel be used? | Open | None engaged. The provider's licence is to be verified before engagement (SEC-R13) |
 | SEC-Q05 | Does the client SOC monitor the platform, or is monitoring IOTA's responsibility? | Open | IOTA, until told otherwise. No SIEM integration exists (SEC-O03) |
-| SEC-Q06 | Regulatory notification timelines and contacts for SAMA, NCA and SDAIA? | Open | None recorded. The IR runbook (SEC-I02) cannot be completed |
+| SEC-Q06 | (KSA) Regulatory notification timelines and contacts for SAMA, NCA and SDAIA? | Open | None recorded. The IR runbook (SEC-I02) cannot be completed |
 | SEC-Q07 | Is a bug bounty or responsible disclosure programme in scope? | Open | No channel exists (SEC-V09). The repository is public (SR-040), so a disclosure contact is advisable now |
 | SEC-Q08 | Who signs the clean chit, and do they accept the §5 definition? | Open | To be agreed in writing before any testing begins |
+| SEC-Q09 | (UAE) Which CBUAE and UAE incident-notification and information-assurance obligations bind a UAE institution's deployment, given its licence? | Open | None recorded. Saudi answers (Q01, Q02, Q04, Q06) do not carry over |

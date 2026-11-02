@@ -22,7 +22,7 @@ first real customer record:
 
 - **Phase 1 — hosted, synthetic.** Container Apps + Supabase, live at
   `sanad.iotatechnologies.io`, synthetic data only. Demonstrations, POCs, UAT.
-- **Phase 2 — hosted, real data.** The same apps, in an in-Kingdom Azure region, on Azure
+- **Phase 2 — hosted, real data.** The same apps, in an Azure region in the deployment's jurisdiction (in the Kingdom for a Saudi institution; UAE North for a UAE institution), on Azure
   Database for PostgreSQL and Key Vault (managed HSM). Real customer data is admitted only
   after the go-live gate in §7 passes.
 
@@ -148,19 +148,19 @@ It differs from the steps above in three ways:
 5. **Data.** Nothing moves from Supabase. Phase 2 starts empty, and synthetic data never
    enters a real-data environment.
 6. **Disaster recovery.** Agree RPO and RTO per institution. Geo-redundant backups stay in the
-   Kingdom, so the paired region must also be in-Kingdom or backups are zone-redundant only.
+   deployment's jurisdiction, so the paired region must be in the same country (the Kingdom, or the UAE) or backups are zone-redundant only.
 
 ## 7. Go-live gate for real data
 
 Every one of these is true and evidenced in the release record:
 
 - [ ] No open Critical or High in the security register.
-- [ ] Phase 2 region confirmed in-Kingdom; residency test passes against the live profile.
+- [ ] Phase 2 region confirmed in the deployment's jurisdiction (in the Kingdom for SA; in the UAE for AE); residency test passes against the live profile.
 - [ ] RLS enforced at runtime and proven by a contract test in CI (SR-003, SR-024).
 - [ ] No development stand-in reachable under the production profile (SR-004, SR-005).
 - [ ] Production staff sign-in through the institution's SSO (ops module is `BLOCKED` today).
 - [ ] Penetration test of the hosted environment, findings registered.
-- [ ] The institution's SAMA outsourcing notification made; IOTA's NCA cloud obligations met.
+- [ ] Saudi institution: its SAMA outsourcing notification made; IOTA's NCA cloud obligations met. UAE institution: the CBUAE outsourcing requirements that its licence brings into scope, confirmed and met (to be confirmed with counsel). Neither country's requirements stand in for the other's.
 - [ ] A valid production licence installed (ADR 0006).
 
 ## 8. Decisions recorded 2026-10-09
