@@ -29,6 +29,7 @@
   "regulatoryDirectory": "ae",
   "citations": [
     "Dates: the Gregorian calendar governs UAE commercial contracts; Hijri is not required on a facility offer letter (confirm with the institution's counsel).",
-    "Supervision depends on the licence: a CBUAE-licensed bank or finance company is bound by CBUAE rules; a government development fund may sit outside them. Recorded per tenant as licenceType at onboarding."
+    "Supervision depends on the licence: a CBUAE-licensed bank or finance company is bound by CBUAE rules; a government development fund may sit outside them. Recorded per tenant as licenceType at onboarding.",
+    "Residency of customer data in the UAE: production data held in the UAE behind a customer-managed HSM (ADR 0005, constraint deployment_profile_production_residency). The governing UAE requirement is to be confirmed with counsel (ADR 0005, open items). Saudi residency rules do not apply."
   ]
 }

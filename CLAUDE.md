@@ -1,10 +1,12 @@
 # Sanad — Build Instructions
 
 **Sanad** (سند) is IOTA Technologies' Loan Origination Platform for the Kingdom of Saudi
-Arabia. It is built to fit most SAMA-regulated banks, finance companies and fintechs, for
+Arabia and, since ADR 0005, the United Arab Emirates. In Saudi Arabia it is built to fit most
+SAMA-regulated banks, finance companies and fintechs, for
 **BNPL, embedded lending, consumer and SME finance, Islamic and conventional**, as a
 product-agnostic origination engine with pluggable product modules and a complete set of
-Saudi integration rails.
+Saudi integration rails (`adapters/ksa/`). In the UAE, where the CBUAE regulates and SAMA has
+no authority, it offers SME finance today, on UAE rails (`adapters/uae/`).
 
 **Wasl** (وصل), the Shariah-compliant SME supply-chain-finance product, is the first product
 module. It is no longer the platform.
@@ -195,9 +197,11 @@ only a sandbox call can answer).
 
 Rules for every rail:
 
-- **Consent first.** Bureau, GOSI, Yakeen, Open Banking and Tahaqoq calls refuse a request
-  without a `consentId` for that purpose (`core/consent/`). PDPL purpose limitation is a
-  code path, not a policy document.
+- **Consent first.** Bureau, employment, identity-verification, account-information and
+  document-verification calls refuse a request without a `consentId` for that purpose
+  (`core/consent/`), in either jurisdiction: GOSI, Yakeen, SIMAH, Open Banking and Tahaqoq in
+  Saudi Arabia; AECB, ICP, MOHRE and Open Finance in the UAE. Purpose limitation under each
+  country's data-protection law is a code path, not a policy document.
 - **Snapshots, not copies.** Store the decision-relevant result and the provider's reference
   id. Do not mirror a bureau file or a bank statement into our tables.
 - **Unavailability is a typed outcome**, surfaced as `SERVICING_UNAVAILABLE` with the attempt
@@ -218,9 +222,9 @@ Rules for every rail:
 | API gateway | IBM API Connect / DataPower | Integration layer; services stay independent of it. See §8. |
 | Services | Node + TypeScript | One language across the stack. |
 | Cache | Redis | Freshness windows, limit reservations, idempotency keys. |
-| Database | PostgreSQL | Supabase for development and UAT, synthetic data only (ADR 0004, amending ADR 0001); in-Kingdom PostgreSQL for production. **The in-memory stores are to be replaced now**, not later. |
+| Database | PostgreSQL | Supabase for development and UAT, synthetic data only (ADR 0004, amending ADR 0001); PostgreSQL in the deployment's jurisdiction for production (in the Kingdom for SA, in the UAE for AE; ADR 0005). **The in-memory stores are to be replaced now**, not later. |
 | Workflow | Durable workflow engine, **to be selected in the first week** (Temporal or equivalent) | Multi-day origination and Murabaha sequencing both need it. |
-| Secrets | Vault (Supabase Vault in development, in-Kingdom HSM-backed store in production) | See §7. |
+| Secrets | Vault (Supabase Vault in development, an HSM-backed store in the deployment's jurisdiction in production) | See §7. |
 
 ---
 
@@ -234,10 +238,12 @@ Rules for every rail:
 - Credentials are stored via `config.set_integration_credential()` and read server-side
   via `config.get_integration_credential()`; every read is audited. Never commit, log,
   or return a key. See `docs/SAVING-CREDENTIALS.md`.
-- All customer data is processed and stored in-Kingdom (SAMA cloud and outsourcing
-  rules, PDPL, NDMO). Development and UAT run on Supabase outside the Kingdom and
+- Customer data is processed and stored in the deployment's jurisdiction (ADR 0005): in the
+  Kingdom for a Saudi deployment (SAMA cloud and outsourcing rules, the Saudi PDPL, NDMO),
+  in the UAE for a UAE deployment (its requirement to be confirmed with counsel; Saudi rules
+  do not apply there). Development and UAT run on Supabase outside both countries and
   therefore hold **synthetic data only** (ADR 0004); an environment that must hold
-  customer data is an in-Kingdom deployment. Residency is a
+  customer data is an in-jurisdiction deployment. Residency is a
   `config.deployment_profile` property, asserted by a test.
 
 ---
@@ -267,7 +273,8 @@ Rules for every rail:
 - The consumer disclosure screen renders exactly the fields `disclose()` returns, in both
   languages, before acceptance, and the acceptance event records which disclosure version
   was shown.
-- Both calendars wherever a date has contractual effect.
+- The jurisdiction profile's contractual calendars wherever a date has contractual effect:
+  Gregorian and Hijri in Saudi Arabia, Gregorian in the UAE (`contractualCalendars`).
 - Compliance and policy rejections render the control code into a respectful Arabic
   explanation. Never a generic decline.
 - The frontend never infers a decision, a gate result or a price. All originate server-side.
@@ -281,7 +288,7 @@ core/          the engine: application, applicant, decisioning, workflow, docume
                consent, exceptions, pricing (rate + apr), money, ports.
                NO product-specific contract logic. NO vendor names. NO client names.
 products/      one directory per product module (§3). Owns its contract logic and invariants.
-adapters/      kernel/ (shared) · tuum/ · nutrient/ · ksa/<rail>/ (§5)
+adapters/      kernel/ (shared) · tuum/ · nutrient/ · ksa/<rail>/ (§5) · uae/<rail>/ (adapters/uae/README.md)
 config/        tenants/<tenant>/ product catalogue, credit policy, board positions,
                documents, origination policy, rate rules — data, not code, effective-dated.
 apps/          Next.js surfaces: ops (workbench), sme (Wasl portal), consumer, admin
@@ -324,7 +331,8 @@ is deleted; it is relocated and the ban is narrowed.
 - Put a `number` in the financial path. Money and rates are `bigint`.
 - Compute APR anywhere but `core/pricing/apr.ts`.
 - Present a consumer offer without the full disclosure set.
-- Call a bureau, GOSI, Yakeen, Open Banking or Tahaqoq without a consent id.
+- Call a bureau, employment, identity-verification, account-information or document-verification rail
+  (GOSI, Yakeen, Open Banking, Tahaqoq; AECB, ICP, MOHRE, Open Finance) without a consent id.
 - Approve, quote or book when a required rail is unavailable.
 - Store a secret anywhere but the vault; log or return one anywhere.
 - Log, trace or error-message a national identifier, CR-linked datum or personal datum.
@@ -361,8 +369,11 @@ everything as if it worked is worse.
 
 Full requirements: `docs/CYBERSECURITY-REQUIREMENTS.md`. The short version:
 
-**Two regulators, not one.** NCA (ECC-2:2024, and CSCC if the client classifies Sanad a
-critical system) *and* SAMA CSF. Plus PDPL. Design to **OWASP ASVS L2**, and **L3** for
+**In Saudi Arabia, two regulators, not one.** NCA (ECC-2:2024, and CSCC if the client
+classifies Sanad a critical system) *and* SAMA CSF. Plus the Saudi PDPL. **In the UAE** these
+do not apply: the institution's CBUAE obligations as its licence requires, UAE
+information-assurance requirements and UAE federal data-protection law (the mapping is still
+to be written; SEC-Q09). Design to **OWASP ASVS L2**, and **L3** for
 authentication, cryptography, signing, the sequencing engine and the audit chain.
 
 **CI gates block merge** (`.github/workflows/security.yml`): CodeQL, Semgrep with the Sanad

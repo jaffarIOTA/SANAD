@@ -1,5 +1,7 @@
 # ADR 0001 — Data residency and the choice of datastore
 
+> **Amended 2026-10-08 by ADR 0005.** Residency follows the deployment's jurisdiction: production data in the Kingdom for a Saudi (SA) deployment, in the UAE for a UAE (AE) deployment. Where this record says "in-Kingdom" or cites SAMA, NCA, NDMO or the Saudi PDPL, read it as the Saudi rule; the UAE has its own.
+
 **Status:** Accepted
 **Date:** 21 September 2026
 **Supersedes:** the unstated assumption in CLAUDE.md §3 that Supabase is the datastore

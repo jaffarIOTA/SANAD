@@ -187,7 +187,7 @@ SANAD follows a nine-stage pipeline. Each stage has a target the institution set
 | Collections | Instalments due within seven days, or overdue, collected from the confirmed payee account through the partner bank. Each signed result becomes a rail-confirmed receipt. A returned collection is presented again | Integration-ready |
 | Manual receipts | Recorded by finance. A receipt counts once a second person confirms it | Available |
 | Bureau reporting | The month's status reported to AECB once; settled reported once at the end | Integration-ready |
-| Late charges | Once per instalment overdue beyond the grace days. A fee on a conventional loan; **a charity obligation on an Islamic facility, never income**. Subject to the regulator's cap. Waived only by a second person | Available |
+| Late charges | Once per instalment overdue beyond the grace days. A fee on a conventional loan; **a charity obligation on an Islamic facility, never income**. Subject to any cap the CBUAE sets where the institution's licence brings it under CBUAE rules; otherwise the institution's own policy. Waived only by a second person | Available |
 | Hardship hold | Pauses collections and charges. Lifted by a second person | Available |
 | Restructuring | A conventional loan is re-amortised at its signed rate. An Islamic facility is re-spread with its total unchanged. In force only after a second person approves | Available |
 | Loan system reconciliation | The core banking system's report reconciled against SANAD's position. A difference is flagged | Available |

@@ -1,5 +1,7 @@
 # ADR 0002 — Re-charter Sanad as a product-agnostic KSA Loan Origination Platform
 
+> **Amended 2026-10-08 by ADR 0005.** Sanad now serves Saudi Arabia (SAMA) and the United Arab Emirates (CBUAE) as separate jurisdictions. Where this record says "KSA", "Saudi" or "SAMA", it describes the Saudi jurisdiction only; SAMA's rules do not apply in the UAE.
+
 | | |
 |---|---|
 | Status | Accepted |

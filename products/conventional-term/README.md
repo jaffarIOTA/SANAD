@@ -10,6 +10,7 @@ Islamic tenant (the catalogue is per tenant; an Islamic tenant simply does not l
 
 | | |
 |---|---|
-| Governing rules | SAMA Rules Regulating Consumer Finance; Responsible Lending Principles for Individual Customers; Finance Companies Control Law implementing regulations |
+| Jurisdiction | **Saudi Arabia only** (ADR 0005). SAMA is the Saudi regulator; this module is not offered to UAE tenants. |
+| Governing rules | SAMA Rules Regulating Consumer Finance; SAMA Responsible Lending Principles for Individual Customers; the Saudi Finance Companies Control Law (Royal Decree M/51) implementing regulations |
 | Thresholds needing a citation | `terms.affordability` — placeholder value, citation field says which article to confirm |
 | Ports | `credit-bureau`, `employment-verification`, `payments`, `rate-publisher` |

@@ -61,11 +61,11 @@ core banking product type in its catalogue (`coreBankingProductCode`, Admin → 
 
 | Figure | Where it comes from | Status |
 |---|---|---|
-| Enterprise size (micro, small, medium, large) | SAMA Rulebook, *Definition of SMEs*, Circular No. 381000064902, effective 14 March 2017. Revenue decides; full-time employees decide only with no revenue history. Held in `config/regulatory/sme-definition.json` with that citation. | Cited. Confirm the revision in force before go-live. |
-| Minimum debt-service cover | **The institution's credit policy**, `terms.credit.minDebtServiceCoverPerTenThousand`, tagged `source: TENANT_CREDIT_POLICY` with the policy reference. | No SAMA rule found that sets one for SME finance (searched 2026-10-08). The shipped values are illustrative and say so. |
+| Enterprise size, Saudi Arabia (micro, small, medium, large) | SAMA Rulebook, *Definition of SMEs*, Circular No. 381000064902, effective 14 March 2017. Revenue decides; full-time employees decide only with no revenue history. Held in `config/regulatory/sa/sme-definition.json` with that citation. | Cited. Confirm the revision in force before go-live. |
+| Minimum debt-service cover | **The institution's credit policy**, `terms.credit.minDebtServiceCoverPerTenThousand`, tagged `source: TENANT_CREDIT_POLICY` with the policy reference. | No SAMA or CBUAE rule found that sets one for SME finance (searched 2026-10-08). The shipped values are illustrative and say so. |
 | Maximum financing as a share of revenue | Same: the institution's credit policy. | Illustrative. |
 | Ceiling for an enterprise with no revenue history | Same: the institution's credit policy; absent means such enterprises are not served. | Illustrative. |
-| Programme guarantee coverage | The national SME loan guarantee programme's coverage for the initiative, from the institution's agreement with the programme; `terms.guarantee.programmeRef`. Coverage varies by initiative and enterprise size. | Placeholder. |
+| Programme guarantee coverage | The national SME loan guarantee programme's coverage (Kafalah in Saudi Arabia; none configured for the UAE) for the initiative, from the institution's agreement with the programme; `terms.guarantee.programmeRef`. Coverage varies by initiative and enterprise size. | Placeholder. |
 | Variant ceilings, tenors, grace, contribution, years in operation, purposes, collateral | **The institution's product paper.** For the UAE fund: the partner's prototype screens of 2026-10-08, each variant's `note` naming what was shown and what is illustrative. | Illustrative until the fund's product paper is supplied. |
 | Enterprise size, UAE | UAE Cabinet Resolution No. (22) of 2016, via `config/regulatory/ae/sme-definition.json` | Cited. |
 
@@ -76,7 +76,7 @@ rule that does not name `TENANT_CREDIT_POLICY` and a policy reference does not p
 
 `credit-bureau` (commercial report, consent-gated; mandatory reporting on booking),
 `business-registry` (the enterprise, its legal form and signatories), `tax-compliance`
-(Zakat and tax certificate status), `payments`, `rate-publisher`. Financial figures arrive as
+(ZATCA Zakat and tax status in Saudi Arabia; FTA VAT registration in the UAE), `payments`, `rate-publisher`. Financial figures arrive as
 snapshots with a source reference (`BusinessFacts.financialsSourceRef`), never typed in.
 
 ## Verification items before go-live

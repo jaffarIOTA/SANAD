@@ -35,7 +35,7 @@ It takes an application from first contact to a booked, serviced facility. Along
   - A daily compliance review, with incidents and purification.
   - A read-only audit workspace for the Shariah Board.
 - **One APR for the platform.** Every consumer offer carries the full disclosure set in Arabic and English, before acceptance.
-- **Arabic first.** Composed right-to-left, with Hijri and Gregorian dates where a date has contractual effect.
+- **Arabic first.** Composed right-to-left. Wherever a date has contractual effect it is Gregorian, with the Hijri (Umm al-Qura) date beside it in Saudi Arabia.
 - **Your data stays in your jurisdiction.** Residency is enforced by the database, and the platform runs on your own infrastructure.
 - **Exact money.** Every amount is held as an integer in minor units, and every rate in basis points.
 

@@ -52,7 +52,7 @@ so the adapter reads its whole configuration from one place and so it is never c
 The **Document Engine API token** and the **JWT private key** (which signs the short-lived
 tokens the viewer presents to Document Engine) are secrets. Document Engine's own
 **activation key** is not a Sanad credential: it goes to the Document Engine container's
-environment on the in-Kingdom host, nowhere else. See
+environment on the institution's host in its jurisdiction, nowhere else. See
 `adapters/nutrient/verification/README.md` for what to check first.
 
 In development, before the database is reachable, the same four keys go in `.env.local`
@@ -89,4 +89,4 @@ A revoked credential raises on read rather than returning a stale value.
 - **It does not remove the key from Tuum's or Nutrient's side.** Revoking here stops Sanad
   using it; revoke at the provider too if the key is compromised.
 - **Vault's encryption key is managed by Supabase.** For the bank deployment this must move
-  to a customer-managed key in an in-Kingdom HSM. Tracked as an open item.
+  to a customer-managed key in an HSM in the deployment's jurisdiction (the Kingdom or the UAE). Tracked as an open item.

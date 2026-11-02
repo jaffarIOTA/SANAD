@@ -4,9 +4,11 @@ Each is enforced in code and attacked in `test/compliance/sme-products.test.ts`.
 
 - **S-1 Sourced rate.** No quote without a rate the engine resolved from the tenant's
   catalogue rule (`PLAT-03`). The module never invents or defaults a rate.
-- **S-2 Regulator's size definition.** The enterprise is classified by the definition the
-  engine supplies from configuration; revenue decides, employees only without revenue
-  history; an enterprise that cannot be classified is refused, never guessed.
+- **S-2 Regulator's size definition.** The enterprise is classified by the definition of the
+  tenant's jurisdiction, which the engine supplies from `config/regulatory/<code>/`. In Saudi
+  Arabia (SAMA) revenue decides, and employees only without revenue history; in the UAE
+  (Cabinet Resolution 22/2016) the higher class of the two criteria applies. An enterprise
+  that cannot be classified is refused, never guessed.
 - **S-3 Business affordability before any offer.** Size eligibility, debt-service cover and
   the revenue share are checked at quotation. A failure is an `OP-LIMIT` refusal naming the
   policy reference.

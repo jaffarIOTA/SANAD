@@ -1,6 +1,8 @@
 # Cybersecurity Requirements & Assurance Programme
 
-Sanad — KSA Loan Origination Platform.
+Sanad — Loan Origination Platform for Saudi Arabia and the UAE.
+
+> **Scope: this is the Saudi baseline.** The frameworks it cites (NCA ECC and CSCC, SAMA CSF, SDAIA and the Saudi PDPL, in-Kingdom SIEM and HSM) bind a Saudi deployment. They do not apply in the UAE. A UAE deployment's baseline (the institution's CBUAE obligations as its licence requires, UAE information-assurance requirements and UAE federal data-protection law) is still to be written (ADR 0005; UAE pack DP-20). The controls themselves are the same in both.
 Requirements are identified `SEC-*` and are traceable to design, build, test and evidence.
 
 > **Why this document exists.** SDD v0.2 §4.7 described a security *architecture*. It did not

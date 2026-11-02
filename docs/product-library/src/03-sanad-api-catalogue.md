@@ -17,7 +17,7 @@ The source of truth is the OpenAPI 3.1 specification in the product repository (
 |---|---|---|---|---|
 | Origination API | Partner systems, embedded aggregators | `/origination/v1` | mTLS + OAuth 2.0 client credentials | KSA (Wasl requests) |
 | Business applications (part of the Origination API) | The institution's upstream customer-record system | `/origination/v1/business-applications` | mTLS + OAuth 2.0, `business:*` scopes | KSA and UAE |
-| Review API | The institution's internal systems and workbench | `/review/v1` | mTLS + staff OpenID Connect | KSA and UAE |
+| Review API | The institution's internal systems and workbench | `/review/v1` | mTLS + staff OpenID Connect | KSA (Wasl requests) |
 | Merchant checkout API | Merchants offering buy now, pay later | `/checkout/v1` | mTLS + OAuth 2.0, `checkout` scope | KSA |
 | Rail callbacks (webhooks) | SADAD, the payments hub, the partner bank | `/api/wasl/v1/webhooks`, `/api/business/v1/webhooks` | `Sanad-Signature` HMAC | KSA and UAE |
 | Files and exports | Signed-in staff | Workbench paths | Staff session | KSA and UAE |
@@ -29,7 +29,7 @@ The rails SANAD itself calls (Nafath, SIMAH, UAE PASS, Tuum, Nutrient and the re
 Six properties hold across every interface. They are load-bearing, not stylistic.
 
 1. **Closed schemas.** Every request schema is `additionalProperties: false`. An unknown field is refused, not ignored. A field that should not exist cannot be smuggled in by a client that sends it anyway.
-2. **Money is a string of minor units.** `{"minorUnits": "9800000", "currency": "SAR"}`. Never a JSON number, which most parsers read as a floating-point double. A string of digits survives every parser intact.
+2. **Money is a string of minor units.** `{"minorUnits": "9800000", "currency": "SAR"}`, or `"AED"` (in fils) for a UAE institution. Never a JSON number, which most parsers read as a floating-point double. A string of digits survives every parser intact.
 3. **The client never names its tenant, channel or identity.** There is no `tenantId`, `channel` or `partnerId` in any body. All three are derived from the authenticated credential. Supplying one is refused.
 4. **No gateway header carries meaning.** IBM API Connect fronts SANAD today; another institution's gateway may not. The service re-validates identity and tenant itself and trusts no header a gateway injects.
 5. **Every state-changing call carries an `Idempotency-Key`.** The same key with the same body returns the original answer. The same key with a different body is refused with `409`.
@@ -227,13 +227,13 @@ Inbound results from the payment and collection rails. Every one is signed (`San
 | `POST` | `/api/wasl/v1/webhooks/collection-results/{tenant}` | SADAD | A presented Wasl bill paid or returned |
 | `POST` | `/api/wasl/v1/webhooks/payment-results/{tenant}` | Payments hub | A seller payment accepted, settled, rejected or returned |
 | `POST` | `/api/business/v1/webhooks/collection-results/{tenant}` | SADAD (KSA) · partner bank (UAE) | An instalment collection paid or returned |
-| `POST` | `/api/business/v1/webhooks/payment-results/{tenant}` | Partner bank (UAE) · payments hub | A released tranche settled, rejected or returned |
+| `POST` | `/api/business/v1/webhooks/payment-results/{tenant}` | Partner bank (UAE) · payments hub (KSA) | A released tranche settled, rejected or returned |
 
 **Collection result body.** `transactionRef` (Wasl only), `idempotencyKey` (the presentation's own key, for example `wasl:WT-000123:collect:I1`), `status` (`PAID` or `RETURNED`), `reference`, `receivedOn` (yyyy-mm-dd), optional `amountMinorUnits`.
 
 **Payment result body.** `transactionRef` or the application reference, `instructionRef` or `idempotencyKey`, `status` (`ACCEPTED`, `SETTLED`, `REJECTED`, `RETURNED`), optional `reasonCode`.
 
-**How a result is routed.** The key decides where a result goes. An instalment's receipt reduces what is owed. A late amount's receipt goes to the segregated charity liability (KSA, Wasl) and never to the obligation. When an instalment is paid, its share of any income being purified is raised to charity.
+**How a result is routed.** The key decides where a result goes. An instalment's receipt reduces what is owed. A late amount's receipt goes to the segregated charity liability on an Islamic facility, in either jurisdiction, and never to the obligation. When an instalment is paid, its share of any income being purified is raised to charity.
 
 | Response | Meaning |
 |---|---|
@@ -292,7 +292,7 @@ Every refusal names the control that produced it. The Shariah controls apply to 
 
 ## Environments, versioning and onboarding
 
-**Environments.** Sandbox, UAT and production, each with its own base URL (`https://api.{environment}.…/origination/v1`), its own credentials and certificates, and its own webhook secrets. Development and UAT hold synthetic data only. An environment that holds customer data is an in-Kingdom deployment for a Saudi institution.
+**Environments.** Sandbox, UAT and production, each with its own base URL (`https://api.{environment}.…/origination/v1`), its own credentials and certificates, and its own webhook secrets. Development and UAT hold synthetic data only. An environment that holds customer data is deployed in the Kingdom for a Saudi institution and in the UAE for a UAE institution.
 
 **Versioning.** The major version is in the path (`/v1`). Within a version, changes are additive: a new optional response field, a new endpoint, a new enumerated value announced in advance. A breaking change is a new major version, run alongside the old one for an agreed period.
 
@@ -309,4 +309,4 @@ In the current development build, the partner and merchant interfaces are hosted
 
 ---
 
-*This material is general information about IOTA Technologies' services and is not legal, regulatory or compliance advice, nor a compliance opinion on any specific circumstance. References to SAMA, the CBUAE, NDMO, PDPL and NCA are context. Engagements are governed by separate written agreements.*
+*This material is general information about IOTA Technologies' services and is not legal, regulatory or compliance advice, nor a compliance opinion on any specific circumstance. References to SAMA, the NCA, the NDMO and the Saudi PDPL (Saudi Arabia), and to the CBUAE and UAE federal data-protection law (the UAE), are context. Engagements are governed by separate written agreements.*

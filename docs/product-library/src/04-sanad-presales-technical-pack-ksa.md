@@ -488,7 +488,7 @@ Use the left column to find the requirement, the middle for the answer, and the 
 ## Demonstration script (KSA)
 
 Before every demonstration, confirm:
-- the hosted site is set to the Kingdom (Admin → Jurisdiction);
+- **the hosted site is on AE** (since 12 October 2026) and refuses the Saudi demonstration tenants' staff (`TENANT_NOT_ACTIVE`). Run a Saudi demonstration on a local database (the BNPL runbook, blocks A to C, shows how), or agree a four-eyes switch back with the platform operators first, knowing it stops UAE demonstrations;
 - the synthetic data class is on;
 - the development staff tokens for maker, checker, senior, committee, finance and the two Shariah reviewers are at hand;
 - **Shariah approvals are recorded** for the demo tenant. Since W6a nothing Islamic originates without them, so record and confirm them first with the two reviewer identities;

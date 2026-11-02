@@ -14,6 +14,7 @@ the APR beside them. **Enabled per tenant only by that tenant's board ruling.**
 
 | | |
 |---|---|
+| Jurisdiction | **Saudi Arabia only** (ADR 0005). SAMA is the Saudi regulator; this module is not offered to UAE tenants. |
 | Governing rules | SAMA Rules Regulating Consumer Finance (disclosure, APR, cooling-off, fees); SAMA Responsible Lending Principles for Individual Customers (deduction ratios); AAOIFI Shariah Standard 30 (Monetization / Tawarruq); the tenant board's ruling |
 | Thresholds needing a citation before go-live | the deduction-ratio cap in `terms.affordability` — the value shipped here is a placeholder and the `citation` field says so; the tenant sets the current article and figure |
 | Ports | `commodity-broker`, `credit-bureau` (query before decision, report after booking), `employment-verification`, `payments`, `rate-publisher` |

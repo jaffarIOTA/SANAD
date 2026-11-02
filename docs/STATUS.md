@@ -2,6 +2,8 @@
 
 **As at 25 September 2026.**
 
+> **Superseded in part by ADR 0005 (8 October 2026).** Sanad now serves Saudi Arabia and the UAE as separate jurisdictions. Where this record says "KSA platform", "in-Kingdom" or cites only SAMA, it describes the Saudi jurisdiction; the UAE has its own regulator (the CBUAE), residency and SME definition (`config/regulatory/ae/`). The hosted deployment was switched to AE on 12 October 2026.
+
 A record of what exists, what has been decided, and what is waiting. The
 companion to [ClaudeRecommendations.md](../ClaudeRecommendations.md), which
 holds the open items in detail; this is the summary a delivery conversation

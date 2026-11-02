@@ -268,7 +268,13 @@ ${contents}
 
 function build(file) {
   const { meta, body } = frontMatter(readFileSync(join(src, file), 'utf8'));
-  const { html, toc } = render(body);
+  const rendered = render(body);
+  const toc = rendered.toc;
+  // Images a source names under assets/ travel inside both documents, so neither depends on a file beside it.
+  const html = rendered.html.replace(
+    /src="(assets\/[^"]+\.(png|jpe?g))"/g,
+    (_, path, ext) => `src="${dataUri(join(here, path), ext === 'png' ? 'image/png' : 'image/jpeg')}"`,
+  );
   const name = file.replace(/\.md$/, '');
   const htmlPath = join(work, `${name}.html`);
   const wordPath = join(work, `${name}.word.html`);

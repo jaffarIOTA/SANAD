@@ -978,11 +978,11 @@ components:
           type: string
           minLength: 1
           maxLength: 64
-          description: The trade licence reference as the registry rail verified it upstream.
+          description: The trade licence (UAE) or commercial registration (KSA) reference, as the registry rail verified it upstream.
         sector:
           type: string
           pattern: '^[A-Z][A-Z_]{1,31}$'
-          description: The sector code the jurisdiction's SME definition uses (UAE — TRADING, MANUFACTURING, SERVICES).
+          description: The sector code the jurisdiction's SME definition uses (UAE — TRADING, MANUFACTURING, SERVICES; KSA — ALL).
         yearsInOperation: { type: integer, minimum: 0, maximum: 200 }
         owners:
           type: array

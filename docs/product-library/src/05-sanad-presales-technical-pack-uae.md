@@ -148,6 +148,7 @@ Facts are taken from the product repository as at 27 October 2026. The sources a
 | DT-12 | UAE SME end to end first (M1–M6), then KSA | 12 Oct 2026 | PO | PRs #28, #33, #35–#40 |
 | DT-13 | Stages 1–4 in SANAD **and** the upstream hand-over API | 12 Oct 2026 | PO | Institutions choose |
 | DT-14 | Fixture transports on the synthetic hosted site, labelled; refused with real data | 12 Oct 2026 | PO | Full UAE demonstrations |
+| DT-15 | Hosted deployment switched to AE (proposed 9 Oct, formerly DP-42) | 12 Oct 2026 | Two administrators, four eyes | UAE screens on the hosted site; Saudi demonstration tenants are refused there (`TENANT_NOT_ACTIVE`) |
 | DT-27 | BNPL stays riyal-only | 8 Oct 2026 | ADR 0005 | Not offered in AED |
 | DT-33 | Gregorian governs UAE contracts; Hijri not on the letter (to confirm with counsel) | 8 Oct 2026 | Jurisdiction profile | — |
 | DT-50 | UAE booking shaped to Tuum's model only; Tuum vocabulary stays in the adapter; one lending path | 12 / 15 Oct 2026 | PO | Fixture until an AED product exists |
@@ -191,7 +192,6 @@ These are summarised here. The KSA pack holds them in full.
 | DP-36 / DP-37 | SR-040 public repository; **SR-049 exception expired 21 Oct 2026** (High) | Product owner | Release gate |
 | DP-38 | SR-047: deployment-wide Admin authority | Product owner | Jurisdiction and licence administration |
 | DP-40 | SR-003 (High) and the other open security items | Platform engineering | Real-data release |
-| DP-42 | The hosted deployment had an **undecided proposal to switch to AE** (9 Oct 2026) | A second administrator | UAE screens on the hosted site |
 | DP-43 / DP-46 | Licence issuer key at provisioning; production OIDC with the fund's IdP | IOTA; the fund | Go-live |
 | DP-45 | Azure Phase 2 go-live gate | Product owner | Hosted real data |
 | DP-47 | An owned brand mark | Product owner | Print and contracts |
@@ -231,7 +231,7 @@ These are summarised here. The KSA pack holds them in full.
 | Haircuts | Real estate 30%; vehicle, equipment or financed asset 50%; inventory 60%; receivables 40%; cash 0%; valuation ≤ 365 days |
 | Covenants | DSCR ≥ 1.40× annual; current ratio ≥ 1.00×; audited financials within 120 days; quarterly VAT returns; no further borrowing; no ownership change |
 | Offer policy | Disbursement within 60 days (default 14); first due 15–45 days; offer valid 30 days |
-| Servicing | Late charge AED 200 after 5 days' grace (regulator's cap to be applied); AECB reporting day 5; daily cycle 06:00 Gulf time |
+| Servicing | Late charge AED 200 after 5 days' grace (the CBUAE cap, if the fund's licence brings it under CBUAE rules; to be confirmed under DP-20); AECB reporting day 5; daily cycle 06:00 Gulf time |
 | Documents | Six checklists (version `0.1.0-illustrative-2026-10-08`); document-type catalogue `2026-10-19.2` |
 | Rails | All 12 configured rails `enabled: false`, sandbox |
 | Core banking | `sme-term-conventional` → `SME FINANCE AED` (**placeholder; no AED product in the sandbox**) |
@@ -320,7 +320,7 @@ Open checks: V-01 licence and feature set; V-04 validating signature; V-05 promi
 
 | Topic | Answer | Open items to disclose only when asked |
 |---|---|---|
-| Regulatory frame | Designed to SAMA CSF and NCA ECC for KSA. For the UAE we map the same controls to the fund's CBUAE and UAE information assurance obligations | The UAE control mapping is not yet written; the CBUAE applicability depends on licence (DP-20) |
+| Regulatory frame | For the UAE: aligned to the institution's CBUAE obligations as its licence requires and to the UAE Information Assurance Regulation; the mapping is in preparation. (In Saudi Arabia the same controls are designed to the SAMA CSF and the NCA ECC, which do not apply in the UAE.) | The UAE control mapping is not yet written; the CBUAE applicability depends on licence (DP-20) |
 | Residency | Database-enforced UAE residency for production | UAE residency requirements to confirm (DP-20) |
 | Tenant isolation | FORCE RLS; BOLA and cross-tenant tests | SR-003 (High) in remediation |
 | Identity | OIDC with step-up (300 s) before approvals; development tokens refused in production | Live IdP unverified; SAML not built |
@@ -353,7 +353,7 @@ Open checks: V-01 licence and feature set; V-04 validating signature; V-05 promi
 ## Demonstration script (UAE)
 
 Before you start, check the following:
-- the hosted deployment is **switched to AE** (Admin → Jurisdiction). The 9 October proposal still needs a second administrator (DP-42);
+- the hosted deployment is on **AE** (approved under four eyes on 12 October 2026); confirm it in Admin → Jurisdiction;
 - the synthetic data class is on;
 - staff tokens for maker, checker, senior checker, committee and finance are at hand;
 - choose a **seeded or hand-over application** for anything involving an offer. Intake-originated cases cannot be notified (`OFFER_NOTICE_NO_CHANNEL`).

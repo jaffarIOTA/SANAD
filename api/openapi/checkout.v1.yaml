@@ -14,7 +14,7 @@ openapi: 3.1.0
 info:
   title: Sanad merchant checkout API
   version: 1.0.0
-  description: Buy-now-pay-later checkout sessions for onboarded merchants.
+  description: Buy-now-pay-later checkout sessions for onboarded merchants. Saudi Arabia only (SAMA BNPL Rules, riyals); not offered to UAE institutions.
 servers:
   - url: /checkout/v1
 security:
