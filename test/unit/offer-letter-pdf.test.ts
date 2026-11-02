@@ -8,7 +8,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { expectOk } from '@sanad/core/kernel/result.ts';
-import { offerLetterHtml } from '@sanad/core/documents/offer-letter-html.ts';
+import { offerLetterHtml, safeLetterSvg } from '@sanad/core/documents/offer-letter-html.ts';
+import { loadLetterBranding } from '@sanad/config/loader.ts';
 import { EnvironmentCredentialProvider } from '../../adapters/kernel/credentials-environment.ts';
 import { NutrientPdfGeneration } from '../../adapters/nutrient/pdf-generation.ts';
 import { listApplications, resetBusinessStore } from '../../apps/ops/src/server/business.ts';
@@ -120,5 +121,90 @@ describe('rendering through the service', () => {
     expect(read.kind).toBe('BYTES');
     expect((await readOfferPdf('sme-fund-ae', id, 'f'.repeat(64), 'c')).kind).toBe('NOT_HELD');
     expect((await readOfferPdf('bank-a', id, pdf?.sha256Hex ?? '', 'c')).kind).toBe('NOT_HELD');
+  });
+
+  it('prints the interim letterhead where a synthetic demonstration is permitted', async () => {
+    let html = '';
+    vi.stubGlobal('fetch', async (_url: URL | string, init?: RequestInit) => {
+      html = await ((init?.body as FormData).get('page') as Blob).text();
+      return new Response(FAKE_PDF);
+    });
+    const id = (await listApplications('sme-fund-ae')).find((v) => v.latestOffer !== undefined)?.application
+      .applicationId;
+    expectOk(await renderOfferPdf('sme-fund-ae', id ?? '', undefined, 'stf-ae-officer-01', 'c'));
+    expect(html).toContain('<header class="letterhead">');
+    expect(html).toContain('aria-label="Sanad"');
+    expect(html).toContain('aria-label="سند"');
+  });
+
+  it('prints no interim letterhead where a synthetic demonstration is not permitted', async () => {
+    let html = '';
+    vi.stubGlobal('fetch', async (_url: URL | string, init?: RequestInit) => {
+      html = await ((init?.body as FormData).get('page') as Blob).text();
+      return new Response(FAKE_PDF);
+    });
+    // The illustrative book is seeded under development; the render then runs as if deployed.
+    const id = (await listApplications('sme-fund-ae')).find((v) => v.latestOffer !== undefined)?.application
+      .applicationId;
+    vi.stubEnv('SANAD_DEPLOYMENT_PROFILE', 'DEPLOYED');
+    // The render itself may then stop at storage (no development store when deployed); the page sent is what matters.
+    await renderOfferPdf('sme-fund-ae', id ?? '', undefined, 'stf-ae-officer-01', 'c');
+    expect(html).toContain('Facility Offer Letter');
+    expect(html).not.toContain('letterhead">');
+    expect(html).not.toContain('aria-label="Sanad"');
+  });
+});
+
+describe('the letterhead', () => {
+  const letter = async () => {
+    resetBusinessStore();
+    const l = (await listApplications('sme-fund-ae')).find((v) => v.latestOffer !== undefined)?.latestOffer?.letter;
+    if (l === undefined) throw new Error('no seeded letter');
+    return l;
+  };
+
+  it('is configured for every tenant, on the interim mark, and prints both lockups in the brand colours', async () => {
+    for (const t of ['sme-fund-ae', 'bank-a', 'fintech-b'] as const) {
+      const b = expectOk(loadLetterBranding(t));
+      expect(b?.markStatus).toBe('INTERIM_SYNTHETIC_ONLY');
+      expect(safeLetterSvg(b?.branding.logoEnSvg ?? '')).toBeDefined();
+      expect(safeLetterSvg(b?.branding.logoArSvg ?? '')).toBeDefined();
+    }
+    const branding = expectOk(loadLetterBranding('sme-fund-ae'))?.branding;
+    const html = offerLetterHtml(await letter(), branding);
+    expect(html.indexOf('lang="ar"><svg')).toBeLessThan(html.indexOf('lang="en"><svg'));
+    expect(html).toContain('border-bottom: 0.6mm solid #2D60FF');
+    expect(html).toContain('h1, h2 { color: #343C6A; }');
+    expect(html).not.toMatch(/src=|href=|@import|url\(/);
+  });
+
+  it('is left out, whole or in part, when a logo is not plain shapes or a colour is not a colour', async () => {
+    const l = await letter();
+    const ok =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><title>X</title><path fill="#000" d="M0 0H10V10Z"/></svg>';
+    expect(safeLetterSvg(ok)).toBe(ok);
+    for (const bad of [
+      '<svg><script>alert(1)</script></svg>',
+      '<svg onload="alert(1)"><path d="M0 0"/></svg>',
+      '<svg><image href="https://x.example/a.png"/></svg>',
+      '<svg><a href="https://x.example"><path d="M0 0"/></a></svg>',
+      '<svg><style>path{fill:url(https://x.example)}</style></svg>',
+      '<svg><path d="M0 0" style="fill:red"/></svg>',
+      '<svg><!-- --><path d="M0 0"/></svg>',
+      '<svg><path d="&amp;"/></svg>',
+      '<svg>loose text<path d="M0 0"/></svg>',
+      '<div><svg></svg></div>',
+    ])
+      expect(safeLetterSvg(bad), bad).toBeUndefined();
+    const html = offerLetterHtml(l, {
+      logoEnSvg: '<svg onload="x()"></svg>',
+      logoArSvg: '<svg><script/></svg>',
+      accent: 'red; } body { display: none',
+      heading: '#343C6A',
+    });
+    expect(html).not.toContain('<header class="letterhead">');
+    expect(html).not.toContain('display: none');
+    expect(html).toContain('solid #444444');
+    expect(offerLetterHtml(l)).not.toContain('letterhead">');
   });
 });

@@ -20,11 +20,12 @@
  */
 import { createHash } from 'node:crypto';
 
-import type { TenantCode } from '@sanad/config/loader.ts';
-import { offerLetterHtml } from '@sanad/core/documents/offer-letter-html.ts';
+import { type TenantCode, loadLetterBranding } from '@sanad/config/loader.ts';
+import { type LetterBranding, offerLetterHtml } from '@sanad/core/documents/offer-letter-html.ts';
 import { type Result, reject } from '@sanad/core/kernel/result.ts';
 import type { StorableMediaType } from '@sanad/core/ports/object-storage.ts';
 import { credentialProviderFromEnvironment } from '@sanad/origination/credentials.ts';
+import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
 
 import { NutrientDocumentSigning } from '../../../../adapters/nutrient/document-signing.ts';
 import { NutrientPdfGeneration } from '../../../../adapters/nutrient/pdf-generation.ts';
@@ -36,6 +37,24 @@ import {
   sealCandidate,
 } from './business.ts';
 import { objectKeyFor, objectStorageFor } from './business-storage.ts';
+import { persistencePool } from './persistence.ts';
+
+/**
+ * The tenant's letterhead, when it may be printed here. An owned mark always
+ * may; an interim one (the platform's purchased logo pack, licence unconfirmed —
+ * docs/brand/README.md) only where a synthetic demonstration is permitted.
+ * Anywhere else the letter prints without a logo rather than with one it may
+ * not carry.
+ */
+async function letterheadFor(
+  tenant: TenantCode,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): Promise<LetterBranding | undefined> {
+  const configured = loadLetterBranding(tenant);
+  if (!configured.ok || configured.value === undefined) return undefined;
+  if (configured.value.markStatus === 'OWNED') return configured.value.branding;
+  return (await syntheticDemonstrationPermitted(persistencePool(env), env)) ? configured.value.branding : undefined;
+}
 
 const fail = (reason: string, detail: string, context?: Readonly<Record<string, string>>): Result<never> =>
   reject('OP-DETERMINACY', reason, detail, context);
@@ -57,7 +76,11 @@ export async function renderOfferPdf(
     environment: 'sandbox',
     nowEpochSeconds: () => Math.floor(Date.now() / 1000),
   });
-  const r = await engine.fromHtml({ tenantId: tenant, html: offerLetterHtml(offer.letter), correlationId });
+  const r = await engine.fromHtml({
+    tenantId: tenant,
+    html: offerLetterHtml(offer.letter, await letterheadFor(tenant)),
+    correlationId,
+  });
   if (!r.ok) return r;
   if (r.value.kind !== 'ANSWERED')
     return fail('DOCUMENT_ENGINE_UNAVAILABLE', 'The document engine did not render the letter; nothing was stored', {

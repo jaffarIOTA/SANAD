@@ -501,6 +501,61 @@ export function loadStatementReadingPolicy(tenant: TenantCode): Result<Statement
   return parseStatementReadingPolicy(raw);
 }
 
+import sanadInterimBrand from './branding/sanad-interim.json' with { type: 'json' };
+import fundAeLetterBranding from './tenants/sme-fund-ae/documents/letter-branding.json' with { type: 'json' };
+import bankALetterBranding from './tenants/bank-a/documents/letter-branding.json' with { type: 'json' };
+import fintechBLetterBranding from './tenants/fintech-b/documents/letter-branding.json' with { type: 'json' };
+import type { LetterBranding } from '../core/documents/offer-letter-html.ts';
+
+const BRANDS: Readonly<Record<string, unknown>> = { 'sanad-interim': sanadInterimBrand };
+const LETTER_BRANDING: Readonly<Partial<Record<TenantCode, { readonly brand?: unknown }>>> = {
+  'sme-fund-ae': fundAeLetterBranding,
+  'bank-a': bankALetterBranding,
+  'fintech-b': fintechBLetterBranding,
+};
+
+/**
+ * The letterhead a tenant's letters carry, and whether its mark is owned or
+ * interim. An interim mark is printed only where a synthetic demonstration is
+ * permitted (docs/brand/README.md); that decision belongs to the caller.
+ */
+export function loadLetterBranding(
+  tenant: TenantCode,
+): Result<{ readonly branding: LetterBranding; readonly markStatus: 'OWNED' | 'INTERIM_SYNTHETIC_ONLY' } | undefined> {
+  const named = LETTER_BRANDING[tenant]?.brand;
+  if (named === undefined) return { ok: true, value: undefined };
+  const raw = typeof named === 'string' ? BRANDS[named] : undefined;
+  if (typeof raw !== 'object' || raw === null)
+    return reject('OP-DETERMINACY', 'LETTER_BRANDING_INVALID', 'The tenant names a brand that is not configured', {
+      tenant,
+    });
+  const b = raw as Record<string, unknown>;
+  const text = (k: string) => (typeof b[k] === 'string' ? (b[k] as string) : undefined);
+  const [logoEnSvg, logoArSvg, accent, heading, markStatus] = [
+    text('logoEnSvg'),
+    text('logoArSvg'),
+    text('accent'),
+    text('heading'),
+    text('markStatus'),
+  ];
+  if (
+    logoEnSvg === undefined ||
+    logoArSvg === undefined ||
+    accent === undefined ||
+    heading === undefined ||
+    (markStatus !== 'OWNED' && markStatus !== 'INTERIM_SYNTHETIC_ONLY')
+  )
+    return reject(
+      'OP-DETERMINACY',
+      'LETTER_BRANDING_INVALID',
+      'The brand is missing a logo, a colour or its mark status',
+      {
+        tenant,
+      },
+    );
+  return { ok: true, value: { branding: { logoEnSvg, logoArSvg, accent, heading }, markStatus } };
+}
+
 import fundAeLoanProducts from './tenants/sme-fund-ae/core-banking/loan-products.json' with { type: 'json' };
 
 /** Which loan-system product code books each rate-priced Sanad product, for a tenant that books loans in its loan system. */
