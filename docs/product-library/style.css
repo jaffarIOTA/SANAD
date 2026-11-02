@@ -1,0 +1,391 @@
+/* The SANAD product library, in print. The platform's own typeface and colours (packages/design/foundation.css). */
+
+@font-face {
+  font-family: 'Plex';
+  font-weight: 400;
+  src: url('FONTS/plex-sans-arabic-latin-400.woff2');
+  unicode-range: U+0000-05FF, U+2000-206F, U+20AC, U+2122;
+}
+@font-face {
+  font-family: 'Plex';
+  font-weight: 600;
+  src: url('FONTS/plex-sans-arabic-latin-600.woff2');
+  unicode-range: U+0000-05FF, U+2000-206F, U+20AC, U+2122;
+}
+@font-face {
+  font-family: 'Plex';
+  font-weight: 700;
+  src: url('FONTS/plex-sans-arabic-latin-700.woff2');
+  unicode-range: U+0000-05FF, U+2000-206F, U+20AC, U+2122;
+}
+@font-face {
+  font-family: 'Plex';
+  font-weight: 400;
+  src: url('FONTS/plex-sans-arabic-arabic-400.woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFF;
+}
+@font-face {
+  font-family: 'Plex';
+  font-weight: 600;
+  src: url('FONTS/plex-sans-arabic-arabic-600.woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFF;
+}
+
+:root {
+  --brand: #2d60ff;
+  --brand-deep: #1f4ae0;
+  --brand-wash: #e9efff;
+  --heading: #343c6a;
+  --ink: #1d2233;
+  --ink-quiet: #4f6a99;
+  --line: #e5e9f2;
+  --line-strong: #d5dbe8;
+  --sunken: #f5f7fb;
+  --positive: #178f6b;
+  --attention: #b45309;
+  --blocked: #d93a53;
+}
+
+@page {
+  size: A4;
+  margin: 22mm 17mm 20mm 17mm;
+  @top-left {
+    content: 'SANAD';
+    font-family: 'Plex', sans-serif;
+    font-weight: 700;
+    font-size: 8pt;
+    letter-spacing: 0.12em;
+    color: #2d60ff;
+  }
+  @top-right {
+    content: 'IOTA Technologies';
+    font-family: 'Plex', sans-serif;
+    font-size: 8pt;
+    color: #4f6a99;
+  }
+  @bottom-left {
+    content: 'General information, not legal or compliance advice · iotatechnologies.io';
+    font-family: 'Plex', sans-serif;
+    font-size: 7pt;
+    color: #4f6a99;
+  }
+  @bottom-right {
+    content: counter(page) ' / ' counter(pages);
+    font-family: 'Plex', sans-serif;
+    font-size: 8pt;
+    color: #4f6a99;
+  }
+}
+@page internal {
+  @top-right {
+    content: 'INTERNAL — IOTA pre-sales and delivery only';
+    font-family: 'Plex', sans-serif;
+    font-weight: 700;
+    font-size: 8pt;
+    color: #d93a53;
+  }
+}
+@page cover {
+  margin: 0;
+  @top-left {
+    content: none;
+  }
+  @top-right {
+    content: none;
+  }
+  @bottom-left {
+    content: none;
+  }
+  @bottom-right {
+    content: none;
+  }
+}
+
+html {
+  font-family: 'Plex', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 10pt;
+  line-height: 1.5;
+  color: var(--ink);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+body {
+  margin: 0;
+}
+body.internal main,
+body.internal .toc {
+  page: internal;
+}
+header.running {
+  display: none;
+}
+
+/* -- The cover ------------------------------------------------------------------------ */
+.cover {
+  page: cover;
+  height: 297mm;
+  box-sizing: border-box;
+  padding: 22mm 20mm 18mm;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(160deg, #ffffff 0%, #ffffff 58%, var(--brand-wash) 58%, var(--brand-wash) 100%);
+  position: relative;
+}
+.cover::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 6mm;
+  background: linear-gradient(90deg, var(--brand) 0%, var(--heading) 100%);
+}
+.cover-brands {
+  display: flex;
+  align-items: center;
+  gap: 4mm;
+}
+.cover-brands .iota {
+  height: 14mm;
+}
+.cover-brands .iota-name {
+  font-weight: 600;
+  font-size: 11pt;
+  color: var(--heading);
+  letter-spacing: 0.02em;
+}
+.cover-main {
+  margin-top: 46mm;
+}
+.cover-main .sanad {
+  height: 26mm;
+}
+.cover-main .sanad-ar {
+  height: 14mm;
+  margin-inline-start: 6mm;
+  vertical-align: bottom;
+}
+.cover-title {
+  font-size: 30pt;
+  line-height: 1.12;
+  color: var(--heading);
+  margin: 16mm 0 4mm;
+  font-weight: 700;
+  max-width: 150mm;
+}
+.cover-subtitle {
+  font-size: 13pt;
+  color: var(--ink-quiet);
+  max-width: 140mm;
+  margin: 0;
+}
+.cover-edition {
+  display: inline-block;
+  margin-top: 8mm;
+  padding: 2mm 5mm;
+  border-radius: 2mm;
+  background: var(--brand);
+  color: #fff;
+  font-weight: 600;
+  font-size: 11pt;
+}
+.cover-foot {
+  margin-top: auto;
+  font-size: 9pt;
+  color: var(--ink-quiet);
+}
+.cover-foot p {
+  margin: 1mm 0;
+}
+.classification {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--heading);
+}
+.classification.is-internal {
+  color: var(--blocked);
+}
+
+/* -- Contents ------------------------------------------------------------------------- */
+.toc {
+  break-after: page;
+}
+.toc h2 {
+  margin-top: 0;
+  break-before: auto;
+}
+.toc ol {
+  padding-inline-start: 6mm;
+  columns: 1;
+}
+.toc li {
+  margin: 1.5mm 0;
+  font-size: 11pt;
+}
+.toc a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+/* -- Text ----------------------------------------------------------------------------- */
+h1,
+h2,
+h3,
+h4 {
+  color: var(--heading);
+  line-height: 1.25;
+  break-after: avoid;
+}
+main h1 {
+  font-size: 22pt;
+  margin: 0 0 4mm;
+}
+h2 {
+  font-size: 16pt;
+  margin: 10mm 0 3mm;
+  padding-bottom: 1.5mm;
+  border-bottom: 0.6mm solid var(--brand);
+  break-before: page;
+}
+.nw {
+  white-space: nowrap;
+}
+main > h2:first-child,
+.compact h2 {
+  break-before: auto;
+}
+h3 {
+  font-size: 12pt;
+  margin: 6mm 0 2mm;
+  color: var(--brand-deep);
+}
+h4 {
+  font-size: 10.5pt;
+  margin: 4mm 0 1mm;
+}
+p {
+  margin: 0 0 2.5mm;
+  orphans: 3;
+  widows: 3;
+}
+a {
+  color: var(--brand-deep);
+}
+code {
+  font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 8.5pt;
+  background: var(--sunken);
+  padding: 0.2mm 1mm;
+  border-radius: 0.8mm;
+}
+pre {
+  background: var(--sunken);
+  border: 0.3mm solid var(--line-strong);
+  border-radius: 1.5mm;
+  padding: 3mm;
+  font-size: 8pt;
+  white-space: pre-wrap;
+  break-inside: avoid;
+}
+pre code {
+  background: none;
+  padding: 0;
+}
+ul,
+ol {
+  margin: 0 0 2.5mm;
+  padding-inline-start: 6mm;
+}
+li {
+  margin: 0.8mm 0;
+}
+blockquote {
+  margin: 3mm 0;
+  padding: 2mm 4mm;
+  border-inline-start: 1mm solid var(--brand);
+  color: var(--heading);
+  font-size: 11pt;
+}
+hr {
+  border: 0;
+  border-top: 0.3mm solid var(--line-strong);
+  margin: 5mm 0;
+}
+.page-break {
+  break-after: page;
+}
+
+/* -- Tables --------------------------------------------------------------------------- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 2mm 0 4mm;
+  font-size: 8.5pt;
+  break-inside: auto;
+}
+thead {
+  display: table-header-group;
+}
+tr {
+  break-inside: avoid;
+}
+th {
+  background: var(--heading);
+  color: #fff;
+  font-weight: 600;
+  text-align: start;
+  padding: 1.6mm 2mm;
+}
+td {
+  padding: 1.4mm 2mm;
+  border-bottom: 0.25mm solid var(--line);
+  vertical-align: top;
+}
+tbody tr:nth-child(even) td {
+  background: var(--sunken);
+}
+th.right,
+td.right {
+  text-align: end;
+}
+th.center,
+td.center {
+  text-align: center;
+}
+
+/* -- Callouts ------------------------------------------------------------------------- */
+.callout {
+  border-radius: 1.5mm;
+  padding: 3mm 4mm;
+  margin: 3mm 0 4mm;
+  break-inside: avoid;
+  border: 0.3mm solid var(--line-strong);
+  background: var(--sunken);
+}
+.callout p:last-child {
+  margin-bottom: 0;
+}
+.callout-title {
+  font-weight: 700;
+  color: var(--heading);
+}
+.callout-note {
+  background: var(--brand-wash);
+  border-color: #c7d4ff;
+}
+.callout-warn {
+  background: #fdf0dc;
+  border-color: #f5c48a;
+}
+.callout-internal {
+  background: #fde8ec;
+  border-color: #f5a3b1;
+}
+.callout-key {
+  background: #ffffff;
+  border: 0.5mm solid var(--brand);
+}
+
+/* Status chips written as `LIVE`, `FIXTURE`, `NOT BUILT`, `BLOCKED` in tables. */
+.status {
+  font-weight: 700;
+}

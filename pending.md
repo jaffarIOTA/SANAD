@@ -9,7 +9,7 @@ Last updated: 26 October 2026.
   #35–#40 UAE SME M2b–M6 · #41–#44 KSA K1–K4 · #45–#47, #55 servicing S1–S4 ·
   #48–#53 Nutrient documents, letterhead, typeface · #54 Saudi demo books ·
   #56–#58 Wasl W1–W3 · #59 Wasl W4a · #60–#64 document intelligence D1–D5 · #65 UI · #66–#67 Wasl W4b-1, W4b-2 · #68–#69 Wasl W5a, W5b ·
-  #70 Wasl W6a · #71 Wasl W6b-1 · #72 Wasl W6b-2.
+  #70 Wasl W6a · #71 Wasl W6b-1 · #72 Wasl W6b-2 · #73 Wasl W6c.
   Auto mode cannot merge.
 - **Record each institution's Shariah approvals (W6a).** Since W6a nothing Islamic originates until the approval
   its configuration cites is in the register: Bank A `SSB-A-2026-014` (Wasl) and `SSB-A-2026-021` (personal
@@ -187,7 +187,36 @@ The findings go in the adapter README.
       applied from empty and 0035 applied twice; the full suite passed against it.
   - Contract legs are hashed canonical content; the PDF rendition through Document
     Engine and an embedded viewer in the SME portal are not built.
-  - No cross-transaction evidence workspace for the board, and no Board report (**W6c**).
+  - **W6c built**, PR #73 (stacked on #72): the Shariah audit workspace and the Board report (BR-F05, BR-F08, SH-18). W6 is complete.
+    - **Workbench → Shariah governance → Audit workspace** (`/shariah/audit`), for `SHARIAH_AUDITOR` and the reviewers.
+      Search, or draw a sample that the same seed draws again (`core/shariah/sampling.ts`). The replay of any
+      transaction, in plain words, shows:
+      - each contract in order with its time, fingerprint and link to the one before;
+      - each step's evidence as the sale saw it;
+      - the risk period required and held;
+      - the figures disclosed;
+      - the approval as it stood the day it opened;
+      - every Shariah check;
+      - whether the invoice was financed once.
+    - **Audit pack**: a JSON download whose manifest carries the SHA-256 of each part; `verifyAuditPack` names the part
+      changed in a copy. **Raise an observation**: the auditor's only act. It becomes an incident for the reviewers.
+    - **Board report** (`/shariah/report`), for a period:
+      - transactions opened and executed;
+      - the risk period held before each sale (shortest, median, any below the board's);
+      - incidents raised, closed and open by severity and age;
+      - template drift;
+      - late amounts, purified income, charity given and held;
+      - the approvals register at the period's end.
+
+      It is printable, and downloadable as JSON.
+    - Defaults chosen where the solution design is silent (sampling method, pack contents, report format). The
+      institution's Shariah audit methodology and annual-report format (SDD Phase 0) may change them.
+    - Not done:
+      - The pack is JSON, not a signed PDF. A PDF rendition through Document Engine with a seal is the natural
+        next step.
+      - Gate refusals (SH-17, sale stopped) are not events, so the report does not count them.
+      - Signature validation of executed documents waits on the PDF rendition and V-04.
+    - **Not reviewed in a browser** in RTL or LTR.
   - **W4b-1 built**, PR #66 (stacked on #65): SADAD paid-bills reconciliation (`/transactions/reconciliation`), and Wasl in
     the daily servicing cycle (reconciliation first, then collections).
     - FIXTURE until KSA-RAIL-SADAD-01. Each tenant's SADAD **biller id** must be configured before it can go live.

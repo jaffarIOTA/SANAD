@@ -834,8 +834,19 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         id: 'audit',
         titleEn: 'Audit workspace',
         titleAr: 'مساحة التدقيق الشرعي',
-        readiness: soon(),
-        reference: 'BR-F05 · SH-18',
+        href: '/shariah/audit',
+        readiness: live(),
+        reference:
+          'BR-F05 · SH-18 — Wasl W6c: read-only, for the Board’s Shariah auditor and the reviewers. Search, or draw a sample reproducible from its seed; replay any transaction in plain words — each contract in order with its time, fingerprint and link to the one before; each step with its evidence as the sale saw it; the risk period required and held; the figures disclosed; the approval as it stood the day it opened; every Shariah check; the invoice financed once — and export it as an audit pack whose manifest carries the SHA-256 of each part. The one act is raising an observation, which becomes an incident for the reviewers',
+      },
+      {
+        id: 'board-report',
+        titleEn: 'Board report',
+        titleAr: 'تقرير الهيئة',
+        href: '/shariah/report',
+        readiness: live(),
+        reference:
+          'BR-F08 — Wasl W6c: a period’s Shariah compliance for the Board and its annual report — transactions opened and executed, the risk period held before each sale (shortest, median, any below the board’s), incidents by severity and age, template drift, late amounts, purified income, charity given and held, and the approvals register at the period’s end. Printable; downloadable as JSON for the institution’s own format',
       },
       {
         id: 'incidents',
