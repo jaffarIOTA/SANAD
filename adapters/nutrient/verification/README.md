@@ -91,6 +91,15 @@ fragment. The Arabic rendered **joined and right-to-left** with Arabic-Indic dig
 English, in the engine's default font. Open: a licensed font set for both scripts, page
 furniture (headers, page numbers), and whether evaluation mode watermarks build output.
 
+**The offer letter through the adapter, run 2026-10-17:** `NutrientPdfGeneration.fromHtml`
+(`adapters/nutrient/pdf-generation.ts`) rendered a seeded application's Facility Offer Letter
+(`core/documents/offer-letter-html.ts`) through `POST /api/build`: one A4 PDF of about 180 KB,
+with the Arabic column (governing, right to left) beside the English, the same figures the
+screen shows, and the letter version in the footer. No watermark was visible on the build
+output in evaluation mode. Sanad stores the bytes in object storage under their SHA-256 and
+records `OFFER_PDF_RENDERED` against the letter version, so the PDF can always be matched
+back to the content that was signed.
+
 ### V-04 — one digital signature that validates (OI-06)
 Sign the uploaded document through Document Engine with the test certificate, request
 long-term validation material, download, validate with an independent validator (not the

@@ -439,6 +439,10 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
     en: 'Document recorded by reference. It counts once the checker validates it.',
     ar: 'سُجّل المستند بمرجعه، ويُحتسب بعد تحقق المراجِع منه.',
   },
+  OFFER_PDF_RENDERED: {
+    en: 'Letter rendered as a PDF and stored by its fingerprint.',
+    ar: 'أُصدر الخطاب بصيغة PDF وحُفظ ببصمته.',
+  },
   LATE_CHARGES_ASSESSED: { en: 'Late charges assessed.', ar: 'احتُسبت رسوم التأخير.' },
   LATE_CHARGE_WAIVED: { en: 'Late charge waived.', ar: 'تم التنازل عن رسوم التأخير.' },
   HARDSHIP_SET: { en: 'Hardship recorded: collections and late charges paused.', ar: 'سُجّلت حالة التعثر: أوقف التحصيل ورسوم التأخير.' },
@@ -937,6 +941,11 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
   TRN_NOT_RECORDED: {
     en: 'Record the business’s tax registration number before checking it.',
     ar: 'سجّل رقم التسجيل الضريبي للمنشأة قبل التحقق منه.',
+  },
+  // Offer letter PDF. A refusal here stored nothing.
+  DOCUMENT_ENGINE_UNAVAILABLE: {
+    en: 'The document engine did not render the letter, so nothing was stored. The preview below is the letter.',
+    ar: 'لم يُصدر محرك المستندات الخطاب، فلم يُحفظ شيء. المعاينة أدناه هي الخطاب.',
   },
   // Servicing (S3). A refusal here charged, waived and restructured nothing.
   SERVICING_REASON_REQUIRED: { en: 'State the reason in 10 to 500 characters.', ar: 'اذكر السبب في عشرة أحرف إلى خمسمئة حرف.' },

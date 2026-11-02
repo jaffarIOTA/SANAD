@@ -535,6 +535,8 @@ export interface BusinessApplicationView {
   readonly booking?: LoanBookingRecord;
   /** Servicing (S1): repayments received and the position against the signed schedule, once disbursed. */
   readonly servicing?: ServicingView;
+  /** The offer letters rendered as PDF, by letter version (the PDF is a rendition; the version is the letter). */
+  readonly letterPdfs: readonly LetterPdf[];
   readonly assessments: readonly AssessmentRun[];
   readonly latestAssessment?: AssessmentRun;
   readonly offers: readonly OfferRun[];
@@ -718,6 +720,17 @@ export interface ServicingView {
   readonly reconciliation?: { readonly loanSystemDaysPastDue: number; readonly sanadDaysPastDue: number; readonly matches: boolean };
 }
 
+export interface LetterPdf {
+  /** The letter's version: the SHA-256 of its content, which is what the customer signs. */
+  readonly letterVersion: string;
+  /** The PDF's own SHA-256, under which its bytes are stored. */
+  readonly sha256Hex: string;
+  readonly byteLength: number;
+  readonly storage: 'LIVE' | 'FIXTURE';
+  readonly renderedBy: string;
+  readonly renderedAtEpochSeconds: bigint;
+}
+
 export interface LoanBookingRecord {
   /** The loan system's account number for the loan, as staff and statements show it. */
   readonly loanAccountNumber: string;
@@ -805,6 +818,7 @@ interface BusinessRecord {
     tawarruq?: TawarruqRecord;
   };
   booking?: LoanBookingRecord;
+  letterPdfs: LetterPdf[];
   servicing: {
     repayments: RepaymentRecord[];
     collections: CollectionRecord[];
@@ -1240,6 +1254,7 @@ function view(record: BusinessRecord, currency: CurrencyCode): BusinessApplicati
     },
     ...(record.booking === undefined ? {} : { booking: record.booking }),
     ...(servicing === undefined ? {} : { servicing }),
+    letterPdfs: [...record.letterPdfs],
     assessments: [...record.assessments],
     ...(latestAssessment === undefined ? {} : { latestAssessment }),
     offers: [...record.offers],
@@ -1301,6 +1316,7 @@ function restoreBook(book: TenantBook, persisted: Awaited<ReturnType<typeof load
       pack: { conditions: [], covenants: [], justifications: {} },
       closing: { cps: {} },
       servicing: { repayments: [], collections: [], bureauReports: [], lateCharges: [], restructures: [] },
+      letterPdfs: [],
       assessments: [],
       offers: [],
       events: [],
@@ -1792,6 +1808,16 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
       if (i >= 0) r.servicing.repayments[i] = { ...(r.servicing.repayments[i] as RepaymentRecord), confirmedBy: e.actor };
       return;
     }
+    case 'OFFER_PDF_RENDERED':
+      r.letterPdfs.push({
+        letterVersion: d['letterVersion'] ?? '',
+        sha256Hex: d['sha256'] ?? '',
+        byteLength: Number.parseInt(d['byteLength'] ?? '0', 10),
+        storage: d['storage'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+        renderedBy: e.actor,
+        renderedAtEpochSeconds: e.atEpochSeconds,
+      });
+      return;
     case 'LOAN_BOOKED':
       r.booking = {
         loanAccountNumber: d['loanAccountNumber'] ?? '',
@@ -2247,6 +2273,7 @@ async function handOverAt(
     pack: { conditions: [], covenants: [], justifications: {} },
     closing: { cps: {} },
     servicing: { repayments: [], collections: [], bureauReports: [], lateCharges: [], restructures: [] },
+    letterPdfs: [],
     assessments: [],
     offers: [],
     events: [],
@@ -5562,6 +5589,37 @@ export async function approveRestructure(
     if (approver === rs.proposedBy) return reject('OP-DETERMINACY', 'FOUR_EYES_SELF_APPROVAL', 'Whoever proposed a restructuring does not approve it');
     r.servicing.restructures[i] = { ...rs, approvedBy: approver };
     recordEvent(book, r, { eventType: 'RESTRUCTURE_APPROVED', fromStage: null, toStage: null, actor: approver, atEpochSeconds: at, detail: { restructureId } });
+    return ok(true);
+  });
+}
+
+// -- offer letter PDFs ------------------------------------------------------------
+
+/**
+ * Record a rendered PDF of one of the application's letter versions. The same
+ * PDF twice is one record. It may be rendered at any stage once the letter
+ * exists: the record is an event, the application row is untouched.
+ */
+export async function recordOfferPdf(
+  tenant: TenantCode,
+  applicationId: string,
+  pdf: { readonly letterVersion: string; readonly sha256Hex: string; readonly byteLength: number; readonly storage: 'LIVE' | 'FIXTURE' },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    if (!r.offers.some((o) => o.letter.version === pdf.letterVersion))
+      return fail('OFFER_NOT_GENERATED', 'No such letter version on the application');
+    if (!/^[0-9a-f]{64}$/.test(pdf.sha256Hex)) return fail('DOCUMENT_CONTENT_INVALID', 'A PDF is recorded by the hash of its bytes');
+    if (r.letterPdfs.some((x) => x.sha256Hex === pdf.sha256Hex)) return ok(true);
+    r.letterPdfs.push({ ...pdf, renderedBy: actor, renderedAtEpochSeconds: at });
+    recordEvent(book, r, {
+      eventType: 'OFFER_PDF_RENDERED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { letterVersion: pdf.letterVersion, sha256: pdf.sha256Hex, byteLength: String(pdf.byteLength), storage: pdf.storage },
+    });
     return ok(true);
   });
 }

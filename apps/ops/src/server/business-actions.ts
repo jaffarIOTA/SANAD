@@ -43,6 +43,7 @@ import { uploadBusinessDocument } from './business-storage.ts';
 import { confirmSigning, startSigning } from './business-signing.ts';
 import { recordFixtureCollectionResult, recordFixturePaymentResult } from './business-payments.ts';
 import { bookInLoanSystem } from './business-booking.ts';
+import { renderOfferPdf } from './business-letter-pdf.ts';
 import { buyCommodity, sellCommodityOnBehalf, sellCommodityToCustomer, transferCommodityTitle } from './business-tawarruq.ts';
 import {
   approveStraightThrough,
@@ -839,4 +840,17 @@ export async function proposeRestructureAction(form: FormData): Promise<void> {
 export async function approveRestructureAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_APPROVE');
   return finish(ctx, () => approveRestructure(ctx.tenant, ctx.applicationId, field(form, 'restructureId'), ctx.actor), 'RESTRUCTURE_APPROVED');
+}
+
+// -- Offer letter PDF ------------------------------------------------------------------------
+
+/** The officer renders the letter version shown as a PDF through the document engine. */
+export async function renderOfferPdfAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  const version = field(form, 'letterVersion');
+  return finish(
+    ctx,
+    () => renderOfferPdf(ctx.tenant, ctx.applicationId, /^[0-9a-f]{64}$/.test(version) ? version : undefined, ctx.actor, randomUUID()),
+    'OFFER_PDF_RENDERED',
+  );
 }

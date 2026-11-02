@@ -21,6 +21,7 @@ import { Rate } from '@sanad/design/Rate.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 
 import {
+  renderOfferPdfAction,
   bookLoanAction,
   generateOfferAction,
   recordDisbursedAction,
@@ -508,6 +509,47 @@ export default async function OfferPage({
             </div>
           )}
         </details>
+
+        {/* The letter as a real PDF, rendered by the document engine, stored by its fingerprint. */}
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-tile border border-line px-4 py-3" data-offer-pdf>
+          {(() => {
+            const pdf = [...view.letterPdfs].reverse().find((x) => x.letterVersion === offer.letter.version);
+            return pdf === undefined ? (
+              <span className="text-[13px] text-ink-quiet">{t('No PDF of this letter version yet.', 'لا يوجد ملف PDF لإصدار الخطاب هذا بعد.')}</span>
+            ) : (
+              <>
+                <a
+                  href={`/api/business/v1/applications/${encodeURIComponent(a.applicationId)}/letters/${pdf.sha256Hex}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[13px] font-medium text-brand hover:underline"
+                >
+                  {t('Download the letter (PDF)', 'تنزيل الخطاب (PDF)')}
+                </a>
+                <SourceBadge source={pdf.storage} f={f} />
+                <span className="text-[11px] text-ink-quiet">
+                  {t(`${f.n(Math.max(1, Math.ceil(pdf.byteLength / 1024)))} KB`, `${f.n(Math.max(1, Math.ceil(pdf.byteLength / 1024)))} ك.ب`)} ·{' '}
+                  <Id>{pdf.sha256Hex.slice(0, 12)}</Id>
+                </span>
+              </>
+            );
+          })()}
+          <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+            <form action={renderOfferPdfAction}>
+              <FormContext segment={segment} applicationId={a.applicationId} screen="offer" />
+              <input type="hidden" name="letterVersion" value={offer.letter.version} />
+              <button type="submit" className={BTN_SECONDARY}>
+                {t('Render as PDF', 'إصدار بصيغة PDF')}
+              </button>
+            </form>
+          </Gate>
+          <span className="w-full text-[11px] text-ink-quiet">
+            {t(
+              'Printed by the institution’s document engine; the footer carries the letter version the customer signs. An engine on an evaluation licence watermarks what it prints.',
+              'يطبعه محرك المستندات لدى المؤسسة، ويحمل التذييل إصدار الخطاب الذي يوقّعه العميل. ويضع المحرك العامل بترخيص تجريبي علامة مائية على ما يطبعه.',
+            )}
+          </span>
+        </div>
 
         <details className="mt-3 rounded-tile border border-line px-4 py-3">
           <summary className="cursor-pointer text-[13px] font-semibold text-brand">

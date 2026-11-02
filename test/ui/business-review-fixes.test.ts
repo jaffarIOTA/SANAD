@@ -197,6 +197,7 @@ const SOURCES = [
   'apps/ops/src/server/business-payments.ts',
   'apps/ops/src/server/business-booking.ts',
   'apps/ops/src/server/business-tawarruq.ts',
+  'apps/ops/src/server/business-letter-pdf.ts',
   'core/servicing/restructure.ts',
   'core/servicing/late-charges.ts',
   'core/origination/business-application.ts',
