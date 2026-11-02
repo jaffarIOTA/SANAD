@@ -507,3 +507,22 @@ export function loadLoanBookingConfig(tenant: TenantCode): Result<LoanBookingCon
     products: products as Record<string, { readonly loanTypeCode: string }>,
   });
 }
+
+import fundAeServicingPolicy from './tenants/sme-fund-ae/credit-policy/servicing.json' with { type: 'json' };
+import bankAServicingPolicy from './tenants/bank-a/credit-policy/servicing.json' with { type: 'json' };
+import fintechBServicingPolicy from './tenants/fintech-b/credit-policy/servicing.json' with { type: 'json' };
+import { type ServicingPolicy, parseServicingPolicy } from '../core/servicing/late-charges.ts';
+
+const SERVICING_POLICIES: Readonly<Partial<Record<TenantCode, unknown>>> = {
+  'sme-fund-ae': fundAeServicingPolicy,
+  'bank-a': bankAServicingPolicy,
+  'fintech-b': fintechBServicingPolicy,
+};
+
+/** Late charges and restructuring limits, for a tenant that services its facilities. */
+export function loadServicingPolicy(tenant: TenantCode): Result<ServicingPolicy> {
+  const raw = SERVICING_POLICIES[tenant];
+  if (raw === undefined)
+    return reject('OP-DETERMINACY', 'SERVICING_POLICY_NOT_FOUND', 'No servicing policy is configured for this tenant', { tenant });
+  return parseServicingPolicy(raw);
+}

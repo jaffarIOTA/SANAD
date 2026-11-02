@@ -53,6 +53,12 @@ import {
   planTranches,
   presentCollections,
   reportToBureau,
+  approveRestructure,
+  assessLateCharges,
+  liftHardship,
+  proposeRestructure,
+  setHardship,
+  waiveLateCharge,
   recordRepayment,
   recordPayee,
   satisfyCondition,
@@ -793,4 +799,44 @@ export async function recordFixtureCollectionResultAction(form: FormData): Promi
 export async function reportToBureauAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
   return finish(ctx, () => reportToBureau(ctx.tenant, ctx.applicationId, ctx.actor), 'BUREAU_STATUS_REPORTED');
+}
+
+// -- Servicing (S3): late charges, hardship, restructuring ---------------------------------
+
+export async function assessLateChargesAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  return finish(ctx, () => assessLateCharges(ctx.tenant, ctx.applicationId, ctx.actor), 'LATE_CHARGES_ASSESSED');
+}
+
+export async function waiveLateChargeAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_VERIFY');
+  const n = /^\d{1,4}$/.test(field(form, 'instalment')) ? Number(field(form, 'instalment')) : -1;
+  return finish(ctx, () => waiveLateCharge(ctx.tenant, ctx.applicationId, n, field(form, 'reason'), ctx.actor), 'LATE_CHARGE_WAIVED');
+}
+
+export async function setHardshipAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(ctx, () => setHardship(ctx.tenant, ctx.applicationId, field(form, 'reason'), ctx.actor), 'HARDSHIP_SET');
+}
+
+export async function liftHardshipAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_VERIFY');
+  return finish(ctx, () => liftHardship(ctx.tenant, ctx.applicationId, ctx.actor), 'HARDSHIP_LIFTED');
+}
+
+/** The officer proposes a restructuring from today: the number of new instalments and the first due date. */
+export async function proposeRestructureAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  const n = /^\d{1,3}$/.test(field(form, 'numberOfPayments')) ? Number(field(form, 'numberOfPayments')) : -1;
+  return finish(
+    ctx,
+    () => proposeRestructure(ctx.tenant, ctx.applicationId, { firstDueDate: field(form, 'firstDueDate'), numberOfPayments: n, reason: field(form, 'reason') }, ctx.actor),
+    'RESTRUCTURE_PROPOSED',
+  );
+}
+
+/** A checker (not the proposer) approves a restructuring. */
+export async function approveRestructureAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_APPROVE');
+  return finish(ctx, () => approveRestructure(ctx.tenant, ctx.applicationId, field(form, 'restructureId'), ctx.actor), 'RESTRUCTURE_APPROVED');
 }

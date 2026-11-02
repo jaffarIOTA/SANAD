@@ -42,6 +42,7 @@ import {
   handOver,
   ingestReadFigures,
   planTranches,
+  proposeRestructure,
   presentDocument,
   proposeFigures,
   queuedBusinessNotifications,
@@ -221,5 +222,12 @@ describe('an SME Tawarruq on Bank A', () => {
 
     const booked = expectOk(await bookInLoanSystem(TENANT, ID, finance));
     expect(booked.booking).toMatchObject({ productCode: 'TAWRROUQ', source: 'FIXTURE' });
+
+    // Servicing S3: a Tawarruq is restructured without changing what is owed.
+    const proposed = expectOk(
+      await proposeRestructure(TENANT, ID, { firstDueDate: isoAfter(45), numberOfPayments: 48, reason: 'Longer term at the customer’s request' }, officer),
+    );
+    const rs = proposed.servicing?.restructures.at(-1);
+    expect(rs?.totalAfter.minorUnits).toBe(rs?.outstandingBefore.minorUnits);
   });
 });
