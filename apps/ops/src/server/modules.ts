@@ -415,7 +415,8 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
           kind: 'BLOCKED',
           on: 'fixture rails: Wathq, Yakeen, ZATCA (zakat certificate by CR), SIMAH and Open Banking run over the Saudi demonstration transport, labelled Fixture, only where a synthetic demonstration is permitted; elsewhere RAIL_UNAVAILABLE until each adapter in adapters/ksa has made a verified sandbox call',
         },
-        reference: 'Chosen by the tenant’s jurisdiction (intake-rails.ts); each check under the subject’s recorded consent; outcome and provider reference only',
+        reference:
+          'Chosen by the tenant’s jurisdiction (intake-rails.ts); each check under the subject’s recorded consent; outcome and provider reference only',
       },
       {
         id: 'ksa-business-pipeline',
@@ -451,7 +452,8 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         titleAr: 'خدمة التمويل: السداد والمتأخرات',
         href: '/business',
         readiness: live(),
-        reference: 'Servicing S1–S2: the same position, receipts and reconciliation as the UAE journey, in SAR; instalments presented as SADAD bills, the result a rail-confirmed receipt; the month’s status to SIMAH',
+        reference:
+          'Servicing S1–S2: the same position, receipts and reconciliation as the UAE journey, in SAR; instalments presented as SADAD bills, the result a rail-confirmed receipt; the month’s status to SIMAH',
       },
       {
         id: 'ksa-business-islamic',
@@ -706,7 +708,10 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         id: 'signature',
         titleEn: 'Signature & seal',
         titleAr: 'التوقيع والختم',
-        readiness: { kind: 'BLOCKED', on: 'OI-06 — no validated long-term-validation signed document exists yet.' },
+        readiness: {
+          kind: 'BLOCKED',
+          on: 'OI-06 — no validated long-term-validation signed document exists yet. The path works: the signed offer letter is sealed through Document Engine and the development signing service, and validates at PAdES B-B (V-04 plumbing, 2026-10-17); the licensed provider’s certificate, timestamp and revocation services are still to come.',
+        },
         reference: 'OI-06 · BR-G04',
       },
       { id: 'drift', titleEn: 'Template drift', titleAr: 'انحراف القوالب', readiness: soon(), reference: 'BR-F07' },

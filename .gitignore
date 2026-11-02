@@ -57,3 +57,6 @@ adapters/*/verification/findings/
 
 # scripts/gitleaks-selftest.sh scratch repository
 .gitleaks-selftest/
+
+# Throwaway development signing material, written by scripts/nutrient-dev-signing-cert.sh
+adapters/nutrient/compose/.signing/

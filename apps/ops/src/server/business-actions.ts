@@ -43,8 +43,13 @@ import { uploadBusinessDocument } from './business-storage.ts';
 import { confirmSigning, startSigning } from './business-signing.ts';
 import { recordFixtureCollectionResult, recordFixturePaymentResult } from './business-payments.ts';
 import { bookInLoanSystem } from './business-booking.ts';
-import { renderOfferPdf } from './business-letter-pdf.ts';
-import { buyCommodity, sellCommodityOnBehalf, sellCommodityToCustomer, transferCommodityTitle } from './business-tawarruq.ts';
+import { renderOfferPdf, sealSignedLetter } from './business-letter-pdf.ts';
+import {
+  buyCommodity,
+  sellCommodityOnBehalf,
+  sellCommodityToCustomer,
+  transferCommodityTitle,
+} from './business-tawarruq.ts';
 import {
   approveStraightThrough,
   confirmBankStatementFacts,
@@ -606,12 +611,20 @@ export async function addConditionAction(form: FormData): Promise<void> {
 /** Credit attaches a covenant from the institution's templates; no threshold is typed. */
 export async function addCovenantAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_CREDIT_NOTES');
-  return finish(ctx, () => addCovenant(ctx.tenant, ctx.applicationId, field(form, 'templateCode'), ctx.actor), 'COVENANT_ADDED');
+  return finish(
+    ctx,
+    () => addCovenant(ctx.tenant, ctx.applicationId, field(form, 'templateCode'), ctx.actor),
+    'COVENANT_ADDED',
+  );
 }
 
 export async function withdrawPackItemAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_CREDIT_NOTES');
-  return finish(ctx, () => withdrawPackItem(ctx.tenant, ctx.applicationId, field(form, 'itemId'), ctx.actor), 'PACK_ITEM_WITHDRAWN');
+  return finish(
+    ctx,
+    () => withdrawPackItem(ctx.tenant, ctx.applicationId, field(form, 'itemId'), ctx.actor),
+    'PACK_ITEM_WITHDRAWN',
+  );
 }
 
 /** Credit states the mitigant for a deviation the assessment recorded. */
@@ -643,7 +656,14 @@ export async function satisfyConditionAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_OFFICER');
   return finish(
     ctx,
-    () => satisfyCondition(ctx.tenant, ctx.applicationId, field(form, 'conditionId'), field(form, 'evidenceRef'), ctx.actor),
+    () =>
+      satisfyCondition(
+        ctx.tenant,
+        ctx.applicationId,
+        field(form, 'conditionId'),
+        field(form, 'evidenceRef'),
+        ctx.actor,
+      ),
     'CP_SATISFIED',
   );
 }
@@ -651,7 +671,11 @@ export async function satisfyConditionAction(form: FormData): Promise<void> {
 /** A second person verifies a condition precedent's evidence. */
 export async function verifyConditionAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_VERIFY');
-  return finish(ctx, () => verifyCondition(ctx.tenant, ctx.applicationId, field(form, 'conditionId'), ctx.actor), 'CP_VERIFIED');
+  return finish(
+    ctx,
+    () => verifyCondition(ctx.tenant, ctx.applicationId, field(form, 'conditionId'), ctx.actor),
+    'CP_VERIFIED',
+  );
 }
 
 /** The officer records the payee account, proven by a document on the application. */
@@ -740,7 +764,11 @@ export async function sellCommodityToCustomerAction(form: FormData): Promise<voi
 
 export async function transferCommodityTitleAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
-  return finish(ctx, () => transferCommodityTitle(ctx.tenant, ctx.applicationId, ctx.actor), 'TAWARRUQ_TITLE_TRANSFERRED');
+  return finish(
+    ctx,
+    () => transferCommodityTitle(ctx.tenant, ctx.applicationId, ctx.actor),
+    'TAWARRUQ_TITLE_TRANSFERRED',
+  );
 }
 
 /** The commodity is sold on for cash — as the customer's agent where the board permits, naming the appointment. */
@@ -767,7 +795,13 @@ export async function recordRepaymentAction(form: FormData): Promise<void> {
       recordRepayment(
         ctx.tenant,
         ctx.applicationId,
-        { amountMinorUnits: amount, receivedOn: field(form, 'receivedOn'), reference: field(form, 'reference'), channel: 'MANUAL', source: 'LIVE' },
+        {
+          amountMinorUnits: amount,
+          receivedOn: field(form, 'receivedOn'),
+          reference: field(form, 'reference'),
+          channel: 'MANUAL',
+          source: 'LIVE',
+        },
         ctx.actor,
       ),
     'REPAYMENT_RECORDED',
@@ -776,7 +810,11 @@ export async function recordRepaymentAction(form: FormData): Promise<void> {
 
 export async function confirmRepaymentAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_VERIFY');
-  return finish(ctx, () => confirmRepayment(ctx.tenant, ctx.applicationId, field(form, 'repaymentId'), ctx.actor), 'REPAYMENT_CONFIRMED');
+  return finish(
+    ctx,
+    () => confirmRepayment(ctx.tenant, ctx.applicationId, field(form, 'repaymentId'), ctx.actor),
+    'REPAYMENT_CONFIRMED',
+  );
 }
 
 // -- Servicing (S2): collections and the bureau --------------------------------------------
@@ -793,7 +831,11 @@ export async function recordFixtureCollectionResultAction(form: FormData): Promi
   const status = field(form, 'status');
   if (status !== 'PAID' && status !== 'RETURNED')
     return finish(ctx, refused('PAYMENT_STATUS_INVALID', 'A fixture result is paid or returned'), '');
-  return finish(ctx, () => recordFixtureCollectionResult(ctx.tenant, ctx.applicationId, status, ctx.actor), 'COLLECTION_RESULT_RECORDED');
+  return finish(
+    ctx,
+    () => recordFixtureCollectionResult(ctx.tenant, ctx.applicationId, status, ctx.actor),
+    'COLLECTION_RESULT_RECORDED',
+  );
 }
 
 /** Finance reports this month's status to the credit bureau. */
@@ -812,12 +854,20 @@ export async function assessLateChargesAction(form: FormData): Promise<void> {
 export async function waiveLateChargeAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_VERIFY');
   const n = /^\d{1,4}$/.test(field(form, 'instalment')) ? Number(field(form, 'instalment')) : -1;
-  return finish(ctx, () => waiveLateCharge(ctx.tenant, ctx.applicationId, n, field(form, 'reason'), ctx.actor), 'LATE_CHARGE_WAIVED');
+  return finish(
+    ctx,
+    () => waiveLateCharge(ctx.tenant, ctx.applicationId, n, field(form, 'reason'), ctx.actor),
+    'LATE_CHARGE_WAIVED',
+  );
 }
 
 export async function setHardshipAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_OFFICER');
-  return finish(ctx, () => setHardship(ctx.tenant, ctx.applicationId, field(form, 'reason'), ctx.actor), 'HARDSHIP_SET');
+  return finish(
+    ctx,
+    () => setHardship(ctx.tenant, ctx.applicationId, field(form, 'reason'), ctx.actor),
+    'HARDSHIP_SET',
+  );
 }
 
 export async function liftHardshipAction(form: FormData): Promise<void> {
@@ -831,7 +881,13 @@ export async function proposeRestructureAction(form: FormData): Promise<void> {
   const n = /^\d{1,3}$/.test(field(form, 'numberOfPayments')) ? Number(field(form, 'numberOfPayments')) : -1;
   return finish(
     ctx,
-    () => proposeRestructure(ctx.tenant, ctx.applicationId, { firstDueDate: field(form, 'firstDueDate'), numberOfPayments: n, reason: field(form, 'reason') }, ctx.actor),
+    () =>
+      proposeRestructure(
+        ctx.tenant,
+        ctx.applicationId,
+        { firstDueDate: field(form, 'firstDueDate'), numberOfPayments: n, reason: field(form, 'reason') },
+        ctx.actor,
+      ),
     'RESTRUCTURE_PROPOSED',
   );
 }
@@ -839,7 +895,11 @@ export async function proposeRestructureAction(form: FormData): Promise<void> {
 /** A checker (not the proposer) approves a restructuring. */
 export async function approveRestructureAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_APPROVE');
-  return finish(ctx, () => approveRestructure(ctx.tenant, ctx.applicationId, field(form, 'restructureId'), ctx.actor), 'RESTRUCTURE_APPROVED');
+  return finish(
+    ctx,
+    () => approveRestructure(ctx.tenant, ctx.applicationId, field(form, 'restructureId'), ctx.actor),
+    'RESTRUCTURE_APPROVED',
+  );
 }
 
 // -- Offer letter PDF ------------------------------------------------------------------------
@@ -850,7 +910,20 @@ export async function renderOfferPdfAction(form: FormData): Promise<void> {
   const version = field(form, 'letterVersion');
   return finish(
     ctx,
-    () => renderOfferPdf(ctx.tenant, ctx.applicationId, /^[0-9a-f]{64}$/.test(version) ? version : undefined, ctx.actor, randomUUID()),
+    () =>
+      renderOfferPdf(
+        ctx.tenant,
+        ctx.applicationId,
+        /^[0-9a-f]{64}$/.test(version) ? version : undefined,
+        ctx.actor,
+        randomUUID(),
+      ),
     'OFFER_PDF_RENDERED',
   );
+}
+
+/** The officer seals the signed letter's PDF with the institution's digital signature. */
+export async function sealSignedLetterAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(ctx, () => sealSignedLetter(ctx.tenant, ctx.applicationId, ctx.actor, randomUUID()), 'LETTER_SEALED');
 }

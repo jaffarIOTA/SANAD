@@ -114,6 +114,40 @@ in-Kingdom HSM behind the licensed CSP's certificate. That is the right shape fo
 needs that service: for plumbing, a small development signing service with a self-signed
 certificate (recorded as self-signed); for the finding, the CSP's test certificate.
 
+**Plumbing run 2026-10-17, development certificate:** the development signing service
+(`adapters/nutrient/signing-service/server.mjs`, started by
+`compose/docker-compose.signing.yml`, material from `scripts/nutrient-dev-signing-cert.sh`)
+answered the engine's RAW protocol. The engine called `get_certificates`, then `sign` for a
+384-byte RSASSA-PKCS1-v1_5 signature over SHA-256, built the CAdES container itself, and
+embedded it in the rendered offer letter.
+
+- **Certificate.** Issued by "Sanad Development Signing CA - NOT TRUSTED", which is
+  self-signed and valid for 30 days. The engine trusts it only through `/certificate-stores`.
+- **The engine's report.** PAdES `b-b`; signature `valid`; chain `ok`; integrity `ok`;
+  `ltv: false`.
+- **Independent validator.** poppler `pdfsig` (Alpine `poppler-utils`), with the
+  development CA added to its NSS store. It reported *ETSI.CAdES.detached, SHA-256,
+  "Signature is Valid", "Certificate is Trusted"*, and with no "not total document signed"
+  warning once the file was cut to the signed revision.
+- **Findings for the adapter:**
+  1. `GET …/pdf?source=true` returns the *upload*, not the signed file. The signed file is
+     the rendition, `GET …/pdf`.
+  2. In evaluation mode the rendition appends an incremental update after the signature
+     (the watermark, written at export). poppler then reports "Not total document signed".
+     The signature covers its own revision, so `adapters/nutrient/document-signing.ts`
+     returns exactly the bytes up to the end of the newest `/ByteRange` and refuses a file
+     it cannot cut cleanly.
+- **Through Sanad.** `NutrientDocumentSigning.sealPdf` produced the same result, and the
+  engine's copy was deleted afterwards.
+
+**What stays open for OI-06:**
+- B-T, B-LT and B-LTA need the provider's timestamp authority and revocation services.
+- The certificate must be the licensed CSP's test certificate, then its production one,
+  behind the in-Kingdom HSM.
+- A validator independent of both the vendor and Sanad must check the result against the
+  national trust list.
+- The development certificate proves the path, not a signature anyone should rely on.
+
 ### V-05 — the promissory note as a form
 Render the promissory-note template as a PDF form: payee, amount in figures and in words
 (Arabic governing, English accompanying), both calendar dates, place of payment,

@@ -15,7 +15,11 @@ import { reamortise, respreadPrice } from '../../core/servicing/restructure.ts';
 const sar = (v: bigint) => money(v, 'SAR');
 const terms = { effectiveDate: '2027-04-01', firstDueDate: '2027-05-10', numberOfPayments: 12, paymentDay: 10 };
 const policy = expectOk(
-  parseServicingPolicy({ policyRef: 'ILLUSTRATIVE test', lateCharge: { graceDays: 5, amountMinorUnits: '20000' }, restructuring: { maxPayments: 60 } }),
+  parseServicingPolicy({
+    policyRef: 'ILLUSTRATIVE test',
+    lateCharge: { graceDays: 5, amountMinorUnits: '20000' },
+    restructuring: { maxPayments: 60 },
+  }),
 );
 
 describe('restructuring', () => {
@@ -44,11 +48,20 @@ describe('restructuring', () => {
 });
 
 describe('late charges', () => {
-  const schedule = [1, 2].map((n) => ({ number: n, dueDate: `2027-0${String(n)}-10`, principal: sar(90_000n), charge: sar(10_000n) }));
+  const schedule = [1, 2].map((n) => ({
+    number: n,
+    dueDate: `2027-0${String(n)}-10`,
+    principal: sar(90_000n),
+    charge: sar(10_000n),
+  }));
   it('one per instalment overdue beyond the grace days, never twice; charity when Islamic', () => {
     const pos = facilityPosition(schedule, [], '2027-01-16', 'SAR');
-    expect(lateChargesDue(pos, policy, new Set(), false, 'SAR').map((c) => [c.instalmentNumber, c.treatment])).toEqual([[1, 'INCOME']]);
-    expect(lateChargesDue(facilityPosition(schedule, [], '2027-01-15', 'SAR'), policy, new Set(), false, 'SAR')).toHaveLength(0);
+    expect(lateChargesDue(pos, policy, new Set(), false, 'SAR').map((c) => [c.scheduleNumber, c.treatment])).toEqual([
+      [1, 'INCOME'],
+    ]);
+    expect(
+      lateChargesDue(facilityPosition(schedule, [], '2027-01-15', 'SAR'), policy, new Set(), false, 'SAR'),
+    ).toHaveLength(0);
     expect(lateChargesDue(pos, policy, new Set([1]), false, 'SAR')).toHaveLength(0);
     expect(lateChargesDue(pos, policy, new Set(), true, 'SAR')[0]?.treatment).toBe('CHARITY');
   });

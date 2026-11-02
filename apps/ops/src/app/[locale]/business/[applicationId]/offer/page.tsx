@@ -22,6 +22,7 @@ import { localeFromSegment } from '@sanad/i18n/strings.ts';
 
 import {
   renderOfferPdfAction,
+  sealSignedLetterAction,
   bookLoanAction,
   generateOfferAction,
   recordDisbursedAction,
@@ -368,10 +369,10 @@ export default async function OfferPage({
                 </bdi>
                 ) — مرجع تجريبي إلى أن يُتحقق من الربط.
               </>
+            ) : saudi ? (
+              'Signed through Nafath — demonstration answers, labelled Fixture, until the Nafath rail is verified.'
             ) : (
-              saudi
-                ? 'Signed through Nafath — demonstration answers, labelled Fixture, until the Nafath rail is verified.'
-                : 'Signed through UAE Pass — a fixture reference until the UAE Pass rail is verified.'
+              'Signed through UAE Pass — a fixture reference until the UAE Pass rail is verified.'
             )
           }
         >
@@ -511,11 +512,16 @@ export default async function OfferPage({
         </details>
 
         {/* The letter as a real PDF, rendered by the document engine, stored by its fingerprint. */}
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-tile border border-line px-4 py-3" data-offer-pdf>
+        <div
+          className="mt-3 flex flex-wrap items-center gap-3 rounded-tile border border-line px-4 py-3"
+          data-offer-pdf
+        >
           {(() => {
             const pdf = [...view.letterPdfs].reverse().find((x) => x.letterVersion === offer.letter.version);
             return pdf === undefined ? (
-              <span className="text-[13px] text-ink-quiet">{t('No PDF of this letter version yet.', 'لا يوجد ملف PDF لإصدار الخطاب هذا بعد.')}</span>
+              <span className="text-[13px] text-ink-quiet">
+                {t('No PDF of this letter version yet.', 'لا يوجد ملف PDF لإصدار الخطاب هذا بعد.')}
+              </span>
             ) : (
               <>
                 <a
@@ -528,8 +534,11 @@ export default async function OfferPage({
                 </a>
                 <SourceBadge source={pdf.storage} f={f} />
                 <span className="text-[11px] text-ink-quiet">
-                  {t(`${f.n(Math.max(1, Math.ceil(pdf.byteLength / 1024)))} KB`, `${f.n(Math.max(1, Math.ceil(pdf.byteLength / 1024)))} ك.ب`)} ·{' '}
-                  <Id>{pdf.sha256Hex.slice(0, 12)}</Id>
+                  {t(
+                    `${f.n(Math.max(1, Math.ceil(pdf.byteLength / 1024)))} KB`,
+                    `${f.n(Math.max(1, Math.ceil(pdf.byteLength / 1024)))} ك.ب`,
+                  )}{' '}
+                  · <Id>{pdf.sha256Hex.slice(0, 12)}</Id>
                 </span>
               </>
             );
@@ -550,6 +559,66 @@ export default async function OfferPage({
             )}
           </span>
         </div>
+
+        {/* The signed letter sealed with the institution's digital signature (PAdES), once the customer has signed. */}
+        {(() => {
+          const signedVersion = a.signature === undefined ? undefined : a.offer?.letterVersion;
+          if (signedVersion !== offer.letter.version) return null;
+          const seal = view.sealedLetters.find((x) => x.letterVersion === signedVersion);
+          return (
+            <div
+              className="mt-3 flex flex-wrap items-center gap-3 rounded-tile border border-line px-4 py-3"
+              data-sealed-letter
+            >
+              {seal === undefined ? (
+                <>
+                  <span className="text-[13px] text-ink-quiet">
+                    {t('The signed letter is not sealed yet.', 'لم يُختم الخطاب الموقّع بعد.')}
+                  </span>
+                  <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+                    <form action={sealSignedLetterAction}>
+                      <FormContext segment={segment} applicationId={a.applicationId} screen="offer" />
+                      <button type="submit" className={BTN_SECONDARY}>
+                        {t('Seal the signed letter', 'ختم الخطاب الموقّع')}
+                      </button>
+                    </form>
+                  </Gate>
+                </>
+              ) : (
+                <>
+                  <a
+                    href={`/api/business/v1/applications/${encodeURIComponent(a.applicationId)}/letters/${seal.sha256Hex}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[13px] font-medium text-brand hover:underline"
+                  >
+                    {t('Download the sealed letter (PDF)', 'تنزيل الخطاب المختوم (PDF)')}
+                  </a>
+                  <SourceBadge source={seal.storage} f={f} />
+                  <span className="text-[11px] text-ink-quiet">
+                    {t(`PAdES ${seal.padesLevel.toUpperCase()}`, `PAdES ${seal.padesLevel.toUpperCase()}`)} ·{' '}
+                    {seal.longTermValidation
+                      ? t('long-term validation embedded', 'بيانات التحقق طويل الأمد مضمّنة')
+                      : t('no long-term validation', 'دون بيانات التحقق طويل الأمد')}{' '}
+                    · <Id>{seal.sha256Hex.slice(0, 12)}</Id>
+                  </span>
+                  <span className="w-full text-[11px] text-ink-quiet">
+                    {t('Certificate', 'الشهادة')}: <bdi>{seal.signerCommonName}</bdi> · {t('issued by', 'صادرة عن')}{' '}
+                    <bdi>{seal.issuerCommonName}</bdi> · <Id>{seal.certificateSerialHex}</Id>
+                  </span>
+                  {seal.environment === 'production' ? null : (
+                    <span className="w-full text-[12px] font-medium text-blocked">
+                      {t(
+                        'Sealed with a development certificate: this proves the path, not a signature anyone should rely on.',
+                        'خُتم بشهادة تطوير: يُثبت هذا سلامة المسار، ولا يُعدّ توقيعًا يُعتمد عليه.',
+                      )}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })()}
 
         <details className="mt-3 rounded-tile border border-line px-4 py-3">
           <summary className="cursor-pointer text-[13px] font-semibold text-brand">
@@ -868,7 +937,11 @@ function NextStep({
         <div className="flex flex-col gap-4">
           <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
             {view.closing.signing === undefined ? (
-              <form action={startSigningAction} className="flex flex-wrap items-center justify-between gap-3" data-start-signing>
+              <form
+                action={startSigningAction}
+                className="flex flex-wrap items-center justify-between gap-3"
+                data-start-signing
+              >
                 {ctx}
                 <p className="text-[13px] text-ink-quiet">
                   {t(
@@ -881,7 +954,11 @@ function NextStep({
                 </button>
               </form>
             ) : (
-              <form action={confirmSigningAction} className="flex flex-wrap items-center justify-between gap-3" data-confirm-signing>
+              <form
+                action={confirmSigningAction}
+                className="flex flex-wrap items-center justify-between gap-3"
+                data-confirm-signing
+              >
                 {ctx}
                 <p className="text-[13px] text-ink-quiet">
                   {t(
@@ -997,7 +1074,11 @@ function NextStep({
         <div className="flex flex-col gap-3">
           {nextTranche === undefined ? null : (
             <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic} ownWork={a.submittedBy === staff.principalId}>
-              <form action={recordDisbursedAction} className="flex flex-wrap items-center justify-between gap-3" data-release-tranche>
+              <form
+                action={recordDisbursedAction}
+                className="flex flex-wrap items-center justify-between gap-3"
+                data-release-tranche
+              >
                 {ctx}
                 <p className="text-[13px] text-ink-quiet">
                   {nextTranche.status === 'FAILED'
@@ -1042,7 +1123,11 @@ function NextStep({
             </p>
           ) : (
             <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic}>
-              <form action={bookLoanAction} className="flex flex-wrap items-center justify-between gap-3" data-book-loan>
+              <form
+                action={bookLoanAction}
+                className="flex flex-wrap items-center justify-between gap-3"
+                data-book-loan
+              >
                 {ctx}
                 <p className="text-[13px] text-ink-quiet">
                   {t(
