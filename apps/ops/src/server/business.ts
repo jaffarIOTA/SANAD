@@ -4213,6 +4213,8 @@ export async function recordSignatureConfirmed(
   applicationId: string,
   signer: SignerRecord,
   actor: string,
+  /** The identity service's prefix on the signature reference: uaepass, nafath. */
+  railPrefix: 'uaepass' | 'nafath' = 'uaepass',
 ): Promise<Result<BusinessApplicationView>> {
   return withTenantLock(tenant, async () => {
     const book = await hydrate(tenant);
@@ -4230,7 +4232,7 @@ export async function recordSignatureConfirmed(
     const signed = await signAt(
       tenant,
       applicationId,
-      { letterVersion: signing.letterVersion, signatureRef: `uaepass:${signer.assertionId}` },
+      { letterVersion: signing.letterVersion, signatureRef: `${railPrefix}:${signer.assertionId}` },
       actor,
       at,
     );
@@ -4702,7 +4704,8 @@ async function disburseAt(
       kind: 'PAYMENT_DISBURSE',
       idempotencyKey: trancheKey,
       payload: {
-        rail: 'PARTNER_BANK',
+        // The jurisdiction's money-movement rail: the institution's payments hub in Saudi Arabia, the partner bank in the UAE.
+        rail: ctx.value.profile.code === 'SA' ? 'PAYMENTS_HUB' : 'PARTNER_BANK',
         beneficiaryRef: applicationId,
         beneficiaryIban: payee.iban,
         paymentRef: reference,

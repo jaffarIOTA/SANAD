@@ -438,8 +438,12 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         id: 'ksa-business-closing',
         titleEn: 'Signing, disbursement and booking',
         titleAr: 'التوقيع والصرف والتسجيل',
-        readiness: soon(),
-        reference: 'K3: Nafath signing bound to the letter, payment through the payments hub, SIMAH reporting, booking in the loan system',
+        readiness: {
+          kind: 'BLOCKED',
+          on: 'fixture rails: signing runs the Nafath adapter (the signing intent carries the letter’s SHA-256) over the Saudi demonstration transport, labelled Fixture; each tranche is queued for the payments hub with the payee’s Saudi IBAN and the first with the SIMAH facility-opened report; booking runs the Tuum lending adapter on the demonstration transport — until adapters/ksa/nafath, adapters/ksa/payments-hub, adapters/ksa/simah and TUUM-LEND-01 are verified',
+        },
+        reference:
+          'K3: the same closing as the UAE journey — conditions precedent, a payee IBAN (SA, 24 characters, mod 97) confirmed by a second person, tranches, the bank’s signed status report — with the Saudi rails; booked under the tenant’s mapping (SME FINANCE SAR RAG, ILLUSTRATIVE)',
       },
       {
         id: 'ksa-business-islamic',
