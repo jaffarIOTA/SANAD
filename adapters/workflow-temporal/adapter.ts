@@ -143,7 +143,7 @@ export class TemporalWorkflowAdapter implements WorkflowPort {
       args: [{ tenantId: params.tenantId, retry: params.retry }],
       memo: { tenantId: params.tenantId },
     };
-    const policies = { overlap: ScheduleOverlapPolicy.SKIP, catchupWindow: '1 day' };
+    const policies = { overlap: ScheduleOverlapPolicy.SKIP, catchupWindow: '1 day' } as const;
     try {
       await this.client.schedule.create({ scheduleId, spec, action, policies });
       return ok({ scheduleId });
