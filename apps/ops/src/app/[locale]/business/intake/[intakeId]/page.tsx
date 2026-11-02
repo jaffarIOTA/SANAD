@@ -41,6 +41,7 @@ import {
   SectionCard,
   formatters,
 } from '../../ui.tsx';
+import { PendingButton } from '../../PendingButton.tsx';
 import { ResultBanners, SourceBadge, gapWords } from '../IntakeUi.tsx';
 
 function Hidden({ segment, intakeId }: { readonly segment: string; readonly intakeId: string }): ReactElement {
@@ -74,6 +75,8 @@ function ConsentCell({
   subject,
   type,
   open,
+  justRecorded,
+  compact,
   f,
 }: {
   readonly segment: string;
@@ -81,38 +84,105 @@ function ConsentCell({
   readonly subject: string;
   readonly type: IntakeConsentType;
   readonly open: boolean;
+  readonly justRecorded: boolean;
+  /** In a narrow column: the name over the action, on two lines, rather than side by side. */
+  readonly compact: boolean;
   readonly f: Formatters;
 }): ReactElement {
   const words = f.t(CONSENT_WORDS[type].en, CONSENT_WORDS[type].ar);
-  if (hasConsent(intake, subject, type))
-    return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] text-positive">
-        <span aria-hidden className="size-1.5 rounded-full bg-positive-mark" />
-        {words}
-      </span>
-    );
-  if (!open) return <span className="text-[12px] text-ink-quiet">{words} —</span>;
+  const given = intake.consents.find((c) => c.subject === subject && c.type === type);
+  // One row per consent, always the same height, its action pinned to the end in a slot of fixed width: recording
+  // a consent swaps what is in the slot and nothing around it moves (the list pattern of Klaviyo's review checklist
+  // and Airwallex's verification rows, Mobbin).
   return (
-    <form action={intakeConsentAction} className="flex items-center gap-1.5">
-      <Hidden segment={segment} intakeId={intake.intakeId} />
-      <input type="hidden" name="type" value={type} />
-      <input type="hidden" name="subject" value={subject} />
-      <input
-        name="evidenceRef"
-        required
-        dir="ltr"
-        autoComplete="off"
-        placeholder={f.t('Consent form ref', 'مرجع نموذج الموافقة')}
-        aria-label={f.t(
-          `${CONSENT_WORDS[type].en} consent — evidence reference`,
-          `موافقة ${CONSENT_WORDS[type].ar} — مرجع الإثبات`,
+    <li
+      className={`grid grid-cols-1 content-center items-center gap-x-3 gap-y-1.5 px-3 py-2 ${
+        // Pinned heights: a row is exactly as tall recorded as it was with its form, so the list never changes size.
+        compact ? 'h-[4.75rem]' : 'min-h-[4.75rem] sm:h-14 sm:min-h-0 sm:grid-cols-[minmax(0,1fr)_19rem]'
+      } ${justRecorded ? 'settle' : ''}`}
+      data-consent={type}
+      data-given={given === undefined ? 'no' : 'yes'}
+    >
+      <span className="flex min-w-0 items-center gap-2 text-[13px]">
+        <span
+          aria-hidden
+          className={`size-2 flex-none rounded-full ${given === undefined ? 'border border-line-strong' : 'bg-positive-mark'}`}
+        />
+        <span className={given === undefined ? 'text-heading' : 'text-ink'}>{words}</span>
+      </span>
+      <span className={`flex h-9 min-w-0 items-center gap-2 ${compact ? '' : 'sm:justify-end'}`}>
+        {given !== undefined ? (
+          <>
+            <Chip tone="good">{f.t('Recorded', 'مسجّلة')}</Chip>
+            <Id className="truncate text-[12px] text-ink-quiet">{given.evidenceRef}</Id>
+          </>
+        ) : !open ? (
+          <span className="text-[12px] text-ink-quiet">{f.t('Not given', 'لم تُمنح')}</span>
+        ) : (
+          <form
+            action={intakeConsentAction}
+            className={`flex w-full items-center gap-1.5 ${compact ? '' : 'sm:justify-end'}`}
+          >
+            <Hidden segment={segment} intakeId={intake.intakeId} />
+            <input type="hidden" name="type" value={type} />
+            <input type="hidden" name="subject" value={subject} />
+            <input
+              name="evidenceRef"
+              required
+              dir="ltr"
+              autoComplete="off"
+              placeholder={f.t('Consent form ref', 'مرجع نموذج الموافقة')}
+              aria-label={f.t(
+                `${CONSENT_WORDS[type].en} consent — evidence reference`,
+                `موافقة ${CONSENT_WORDS[type].ar} — مرجع الإثبات`,
+              )}
+              className={`${INPUT} identifier flex-1 text-[12px] ${compact ? '' : 'sm:w-44 sm:flex-none'}`}
+            />
+            <PendingButton className={`${BTN_SMALL} gap-1.5`}>{f.t('Record', 'تسجيل')}</PendingButton>
+          </form>
         )}
-        className={`${INPUT} identifier h-8 w-36 text-[12px]`}
-      />
-      <button type="submit" className={BTN_SMALL}>
-        {words}
-      </button>
-    </form>
+      </span>
+    </li>
+  );
+}
+
+/** The consents a subject gives, as one bordered list. */
+function ConsentList({
+  segment,
+  intake,
+  subject,
+  types,
+  open,
+  lastRecorded,
+  compact = false,
+  f,
+}: {
+  readonly segment: string;
+  readonly intake: BusinessIntake;
+  readonly subject: string;
+  readonly types: readonly IntakeConsentType[];
+  readonly open: boolean;
+  /** The consent the latest event recorded, so its row can settle in: `subject|type`. */
+  readonly lastRecorded: string | undefined;
+  readonly compact?: boolean;
+  readonly f: Formatters;
+}): ReactElement {
+  return (
+    <ul className="w-full divide-y divide-line overflow-hidden rounded-tile border border-line" data-consent-list>
+      {types.map((type) => (
+        <ConsentCell
+          key={type}
+          segment={segment}
+          intake={intake}
+          subject={subject}
+          type={type}
+          open={open}
+          justRecorded={lastRecorded === `${subject}|${type}`}
+          compact={compact}
+          f={f}
+        />
+      ))}
+    </ul>
   );
 }
 
@@ -151,9 +221,9 @@ function ScreeningCell({
     <form action={screeningAction}>
       <Hidden segment={segment} intakeId={intake.intakeId} />
       <input type="hidden" name="subject" value={subject} />
-      <button type="submit" className={BTN_SMALL} disabled={!hasConsent(intake, subject, 'SCREENING')}>
+      <PendingButton className={BTN_SMALL} disabled={!hasConsent(intake, subject, 'SCREENING')}>
         {result === undefined ? f.t('Screen', 'إجراء الفحص') : f.t('Screen again', 'إعادة الفحص')}
-      </button>
+      </PendingButton>
     </form>
   ) : null;
   if (result === undefined) return run ?? <span className="text-[12px] text-ink-quiet">—</span>;
@@ -183,9 +253,7 @@ function ScreeningCell({
               aria-label={f.t('Clearance reason', 'سبب معالجة الإحالة')}
               className={`${INPUT} h-8 w-56 text-[12px]`}
             />
-            <button type="submit" className={BTN_SMALL}>
-              {f.t('Clear referral', 'معالجة الإحالة')}
-            </button>
+            <PendingButton className={BTN_SMALL}>{f.t('Clear referral', 'معالجة الإحالة')}</PendingButton>
           </form>
         </Gate>
       ) : null}
@@ -242,11 +310,11 @@ function TaxCell({
       {open ? (
         <form action={taxCheckAction}>
           <Hidden segment={segment} intakeId={intake.intakeId} />
-          <button type="submit" className={BTN_SMALL}>
+          <PendingButton className={BTN_SMALL}>
             {c === undefined
               ? f.t('Check VAT registration', 'التحقق من التسجيل الضريبي')
               : f.t('Check again', 'إعادة التحقق')}
-          </button>
+          </PendingButton>
         </form>
       ) : null}
     </>
@@ -281,6 +349,12 @@ export default async function IntakePage({
   const f = formatters(locale === 'ar-SA', j.currency);
   const { t } = f;
   const i = view.intake;
+  // The consent the latest event recorded, if that is what just happened: its row settles in.
+  const latest = view.events.at(-1);
+  const lastRecorded =
+    latest?.eventType === 'CONSENT_RECORDED'
+      ? `${latest.detail['subject'] ?? ''}|${latest.detail['type'] ?? ''}`
+      : undefined;
   const open = i.status === 'DRAFT';
   const nameOf = (ref: string) => i.parties.find((p) => p.partyRef === ref)?.displayName ?? ref;
   const rule = loadBeneficialOwnership(j.tenant);
@@ -346,29 +420,30 @@ export default async function IntakePage({
             {open ? (
               <form action={registryCheckAction}>
                 <Hidden segment={segment} intakeId={i.intakeId} />
-                <button type="submit" className={BTN_SMALL}>
+                <PendingButton className={BTN_SMALL}>
                   {i.registry === undefined
                     ? t('Check the licence', 'التحقق من الرخصة')
                     : t('Check again', 'إعادة التحقق')}
-                </button>
+                </PendingButton>
               </form>
             ) : null}
           </Row>
           <Row label={t('Consents given for the business', 'موافقات المنشأة')}>
-            <ConsentCell segment={segment} intake={i} subject="ENTITY" type="SCREENING" open={open} f={f} />
-            <ConsentCell segment={segment} intake={i} subject="ENTITY" type="CREDIT_BUREAU" open={open} f={f} />
-            <ConsentCell segment={segment} intake={i} subject="ENTITY" type="ACCOUNT_INFORMATION" open={open} f={f} />
-            {/* The national-document authenticity rail is Saudi (Tahaqoq); the UAE has none configured. */}
-            {j.code === 'SA' ? (
-              <ConsentCell
-                segment={segment}
-                intake={i}
-                subject="ENTITY"
-                type="DOCUMENT_VERIFICATION"
-                open={open}
-                f={f}
-              />
-            ) : null}
+            <ConsentList
+              segment={segment}
+              intake={i}
+              subject="ENTITY"
+              // The national-document authenticity rail is Saudi (Tahaqoq); the UAE has none configured.
+              types={[
+                'SCREENING',
+                'CREDIT_BUREAU',
+                'ACCOUNT_INFORMATION',
+                ...(j.code === 'SA' ? (['DOCUMENT_VERIFICATION'] as const) : []),
+              ]}
+              open={open}
+              lastRecorded={lastRecorded}
+              f={f}
+            />
           </Row>
           <Row label={t('Screening', 'الفحص الأمني')}>
             <ScreeningCell
@@ -419,15 +494,16 @@ export default async function IntakePage({
                 <div className="flex flex-col gap-1.5">
                   <dt className="text-[12px] text-ink-quiet">{t('Consents', 'الموافقات')}</dt>
                   <dd className="flex flex-col items-start gap-1.5">
-                    <ConsentCell
+                    <ConsentList
                       segment={segment}
                       intake={i}
                       subject={p.partyRef}
-                      type="IDENTITY_VERIFICATION"
+                      types={['IDENTITY_VERIFICATION', 'SCREENING']}
                       open={open}
+                      lastRecorded={lastRecorded}
+                      compact
                       f={f}
                     />
-                    <ConsentCell segment={segment} intake={i} subject={p.partyRef} type="SCREENING" open={open} f={f} />
                   </dd>
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -445,13 +521,12 @@ export default async function IntakePage({
                       <form action={identityCheckAction}>
                         <Hidden segment={segment} intakeId={i.intakeId} />
                         <input type="hidden" name="partyRef" value={p.partyRef} />
-                        <button
-                          type="submit"
+                        <PendingButton
                           className={BTN_SMALL}
                           disabled={!hasConsent(i, p.partyRef, 'IDENTITY_VERIFICATION')}
                         >
                           {t('Verify identity', 'التحقق من الهوية')}
-                        </button>
+                        </PendingButton>
                       </form>
                     ) : null}
                   </dd>
@@ -534,9 +609,7 @@ export default async function IntakePage({
                     {t('Declaration form reference', 'مرجع نموذج التصريح')}
                     <input name="evidenceRef" required dir="ltr" autoComplete="off" className={`${INPUT} identifier`} />
                   </label>
-                  <button type="submit" className={BTN_SECONDARY}>
-                    {t('Record declaration', 'تسجيل التصريح')}
-                  </button>
+                  <PendingButton className={BTN_SECONDARY}>{t('Record declaration', 'تسجيل التصريح')}</PendingButton>
                 </div>
               </form>
             </Gate>
@@ -562,9 +635,9 @@ export default async function IntakePage({
               <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
                 <form action={handOverIntakeAction}>
                   <Hidden segment={segment} intakeId={i.intakeId} />
-                  <button type="submit" className={BTN_PRIMARY} disabled={view.gaps.length > 0}>
+                  <PendingButton className={BTN_PRIMARY} disabled={view.gaps.length > 0}>
                     {t('Hand over to credit assessment', 'الإحالة إلى التقييم الائتماني')}
-                  </button>
+                  </PendingButton>
                 </form>
               </Gate>
               <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
@@ -578,9 +651,7 @@ export default async function IntakePage({
                     aria-label={t('Reason for withdrawal', 'سبب السحب')}
                     className={`${INPUT} w-60`}
                   />
-                  <button type="submit" className={BTN_SECONDARY}>
-                    {t('Withdraw', 'سحب الطلب')}
-                  </button>
+                  <PendingButton className={BTN_SECONDARY}>{t('Withdraw', 'سحب الطلب')}</PendingButton>
                 </form>
               </Gate>
             </div>
