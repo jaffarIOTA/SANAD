@@ -439,6 +439,10 @@ export const NOTICES: Readonly<Record<string, { readonly en: string; readonly ar
     en: 'Document recorded by reference. It counts once the checker validates it.',
     ar: 'سُجّل المستند بمرجعه، ويُحتسب بعد تحقق المراجِع منه.',
   },
+  DOCUMENT_UPLOADED: {
+    en: 'File uploaded and recorded by its fingerprint. It counts once the checker validates it.',
+    ar: 'رُفع الملف وسُجّل ببصمته، ويُحتسب بعد تحقق المراجِع منه.',
+  },
   DOCUMENT_VALIDATED: { en: 'Document validated.', ar: 'تم التحقق من المستند واعتماده.' },
   DOCUMENT_REJECTED: {
     en: 'Document marked invalid. Present a valid one to complete the checklist.',
@@ -870,6 +874,32 @@ export const REFUSALS: Readonly<Record<string, { readonly en: string; readonly a
   TRN_NOT_RECORDED: {
     en: 'Record the business’s tax registration number before checking it.',
     ar: 'سجّل رقم التسجيل الضريبي للمنشأة قبل التحقق منه.',
+  },
+  // Document upload. A refusal here stored and presented nothing.
+  UPLOAD_EMPTY: { en: 'Choose a file to upload.', ar: 'اختر ملفاً لرفعه.' },
+  UPLOAD_TOO_LARGE: {
+    en: 'The file is larger than 10 MB. Nothing was stored.',
+    ar: 'حجم الملف يتجاوز ١٠ ميغابايت. لم يُحفظ شيء.',
+  },
+  UPLOAD_TYPE_NOT_ACCEPTED: {
+    en: 'Only PDF, PNG and JPEG files are accepted, judged by the file’s content rather than its name. Nothing was stored.',
+    ar: 'تُقبل ملفات PDF وPNG وJPEG فقط، ويُحكم على نوعها من محتواها لا من اسمها. لم يُحفظ شيء.',
+  },
+  STORAGE_UNAVAILABLE: {
+    en: 'The document store is not available, so nothing was stored or recorded. Try again, or attach the document by reference.',
+    ar: 'مخزن المستندات غير متاح، فلم يُحفظ أو يُسجَّل شيء. أعد المحاولة، أو أرفق المستند بمرجعه.',
+  },
+  OBJECT_HASH_MISMATCH: {
+    en: 'The file changed while it was being stored. Nothing was recorded; upload it again.',
+    ar: 'تغيّر الملف أثناء حفظه. لم يُسجَّل شيء؛ ارفعه مرة أخرى.',
+  },
+  OBJECT_KEY_INVALID: {
+    en: 'The file could not be filed against this application. Nothing was stored.',
+    ar: 'تعذّر حفظ الملف على هذا الطلب. لم يُحفظ شيء.',
+  },
+  DOCUMENT_CONTENT_INVALID: {
+    en: 'The file’s fingerprint was not usable. Nothing was recorded.',
+    ar: 'بصمة الملف غير صالحة. لم يُسجَّل شيء.',
   },
   // The credit-assessment rails. A refusal here fetched and recorded nothing.
   BUREAU_CONSENT_NOT_IN_SANAD: {

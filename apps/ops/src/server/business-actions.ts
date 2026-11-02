@@ -28,6 +28,8 @@
  * Currency never comes from a form.
  */
 
+import { randomUUID } from 'node:crypto';
+
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -37,6 +39,7 @@ import type { Result } from '@sanad/core/kernel/result.ts';
 
 import type { WorkbenchAct } from './authority.ts';
 import { fetchBankStatements, fetchBureauReport } from './business-rails.ts';
+import { uploadBusinessDocument } from './business-storage.ts';
 import {
   approveStraightThrough,
   confirmBankStatementFacts,
@@ -197,6 +200,33 @@ export async function presentDocumentAction(form: FormData): Promise<void> {
         ctx.actor,
       ),
     'DOCUMENT_PRESENTED',
+  );
+}
+
+/**
+ * The officer uploads a document's file. The bytes go to the tenant's object
+ * store, the application records their hash, and the document is PENDING
+ * until a checker — another person — validates it, as a referenced one is.
+ * The file's name and the browser's declared type are not read.
+ */
+export async function uploadDocumentAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  const file = form.get('file');
+  if (!(file instanceof Blob) || file.size === 0)
+    return finish(ctx, refused('UPLOAD_EMPTY', 'Choose a file to upload'), '');
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return finish(
+    ctx,
+    () =>
+      uploadBusinessDocument(
+        ctx.tenant,
+        ctx.applicationId,
+        field(form, 'documentType'),
+        bytes,
+        ctx.actor,
+        randomUUID(),
+      ),
+    'DOCUMENT_UPLOADED',
   );
 }
 

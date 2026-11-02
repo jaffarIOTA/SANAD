@@ -25,19 +25,21 @@ signing or tenant isolation (SEC-V10).
 
 ---
 
-## Summary at 2026-10-10
+## Summary at 2026-10-14
 
 | | Open | In remediation | Closed | Total |
 |---|---|---|---|---|
 | Critical | 0 | 0 | 0 | 0 |
-| High | 0 | 1 | 0 | 1 |
+| High | 0 | 2 | 0 | 2 |
 | Medium | 3 | 4 | 0 | 7 |
 | Low | 0 | 2 | 0 | 2 |
 | Closed (Critical 1, High 7, Medium 19, Low 11) | | | 38 | 38 |
-| **Total** | **3** | **7** | **38** | **48** |
+| **Total** | **3** | **8** | **38** | **49** |
 
 **Release status: conditional.** No Critical is open (SR-001 rotated 2026-10-10). One High (SR-003) is in
 remediation: its code is released, and it closes when the applications connect as `sanad_runtime`.
+A second High (SR-049, a vendor advisory in the Nutrient viewer's browser bundle) is released under a
+time-boxed exception the product owner accepted on 2026-10-14, expiring 2026-10-21.
 
 ---
 
@@ -60,6 +62,7 @@ required, and the test that proves the item closed.
 | ID | Title | Threat ref | Status | Raised | Due | Owner | Control or fix required | Test that proves it closed |
 |---|---|---|---|---|---|---|---|---|
 | SR-003 | RLS is not enforced at runtime. No code sets `sanad.tenant_id`. Apps and services connect with the session-pooler `postgres` (owner) login. `FORCE ROW LEVEL SECURITY` is applied only to the `0003` and `0004` tables. The runtime tables (`0006`, `0008`, `0009`, `0011`, `0012`, `0014`, `0016`) are `ENABLE` only. The owner can also read `vault.decrypted_secrets` and disable triggers | SEC-TM08, SEC-TM02, SEC-TM07, SEC-TM10 | In remediation | 2026-10-08 | 2026-10-15 | Platform engineering | Run as a `NOBYPASSRLS` non-owner role (`sanad_app` exists in `0003`). Set `set_config('sanad.tenant_id', …, true)` per transaction from the principal. `FORCE` RLS on every tenant table. Migrations run as a separate owner role. **Done 2026-10-09 (code and schema):** every tenant statement runs through `inTenant` (`services/origination/src/tenant-scope.ts`): one transaction, `set local role sanad_app`, tenant set transaction-locally; the outbox dispatcher alone reads across tenants, as `sanad_outbox`, which reaches `core.outbox_event` only. Migration 0018 forces RLS on every tenant table with a policy, grants `sanad_app` exactly what the runtime does (no UPDATE on evidence or acceptances), revokes its stray grant on the vault access log, and creates the `sanad_runtime` LOGIN (NOBYPASSRLS, NOINHERIT, owns nothing). Every app path passes run as `sanad_runtime` locally. **Remaining (operator):** apply 0018 to the hosted database, set the `sanad_runtime` password and switch `sanad-database-url` to it (`deploy/azure/README.md`, "Runtime database role"); until then the login is still the owner outside a scope | `test/contract/runtime-rls.test.ts` in the new CI job "Database controls (RLS at runtime)" (Supabase's PostgreSQL image, every migration applied from empty): tenant A cannot read, name, update, delete, insert for, or move a row into tenant B; no tenant set sees nothing; the setting does not outlive its transaction; every tenant table with a policy is forced; the runtime roles bypass nothing and own nothing; the dispatcher reaches only the outbox. `test/architecture/tenant-scope.test.ts`: no pool query names a tenant table and only the scope takes connections |
+| SR-049 | CVE-2026-84008 (High, .NET denial of service) in `System.Security.Cryptography.Pkcs` 10.0.5, compiled into the Nutrient Web SDK's WebAssembly bundle (`apps/ops/public/nutrient/nutrient-viewer-lib/gdpicture-*`). Found by Trivy's image scan on PR #35, 2026-10-14; present on `main` and `prod` since the SDK was vendored, the advisory being newer than the last release | Vendor advisory (SCA, image scan) | High | In remediation | 2026-10-14 | 2026-10-21 | Product owner (exception); Platform engineering (upgrade) | The library runs only in the browser of the person viewing a document, never on the server, so the worst case is that viewer's own tab. No fixed bundle exists: Nutrient 1.23.0, the latest stable, still ships 10.0.5 (its SBOM). **Exception accepted by the product owner 2026-10-14**, time-boxed to the High SLA: `.trivyignore` with `exp:2026-10-21`, registered in `.security/suppressions.json`. Closes when the SDK is upgraded to a bundle with Pkcs ≥ 10.0.13, or the viewer is removed from the image | Trivy image scan (`security.yml`, Image scan and DAST (ops)) passes with the `.trivyignore` entry removed; `scripts/suppressions-check.mjs` fails the build if the exception outlives 2026-10-21 |
 
 ### Medium
 

@@ -562,6 +562,18 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
           'Web SDK on synthetic samples; evaluation mode until a licence key is saved — check V-01 in adapters/nutrient/verification/README.md',
       },
       {
+        id: 'upload',
+        titleEn: 'Document upload',
+        titleAr: 'رفع المستندات',
+        readiness: {
+          kind: 'BLOCKED',
+          on: 'the S3-compatible store (adapters/storage/s3) has not yet made a verified call; until the tenant’s OBJECT_STORAGE credentials are saved and STORAGE-01 is recorded, uploads go to the in-memory fixture store, labelled Fixture, only where a synthetic demonstration is permitted, and are refused elsewhere',
+        },
+        reference:
+          'Business application checklist (UAE M2b): type read from the bytes (PDF, PNG, JPEG, 10 MB), stored by SHA-256 under tenant/application/hash, presented PENDING until a different person validates it, served back only to the tenant’s staff after the hash is checked',
+        jurisdictions: AE,
+      },
+      {
         id: 'templates',
         titleEn: 'Templates & versions',
         titleAr: 'القوالب والإصدارات',
