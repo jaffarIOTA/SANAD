@@ -60,3 +60,6 @@ adapters/*/verification/findings/
 
 # Throwaway development signing material, written by scripts/nutrient-dev-signing-cert.sh
 adapters/nutrient/compose/.signing/
+
+# Generated synthetic sample documents (scripts/document-intelligence-samples.mjs).
+samples/

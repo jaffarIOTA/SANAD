@@ -216,16 +216,42 @@ export async function findingsFor(
   subject: { readonly kind: FindingSubject; readonly ref: string },
   env: Env = process.env,
 ): Promise<ReadonlyMap<string, StoredFindings>> {
-  const latest = new Map<string, StoredFindings>();
+  return (await readFindings(tenant, subject.kind, subject.ref, env)).get(subject.ref) ?? new Map();
+}
+
+/**
+ * The latest findings for every subject of a kind (document intelligence D5,
+ * the throughput view): by subject, then by the document's hash. One read.
+ */
+export async function findingsForKind(
+  tenant: TenantCode,
+  kind: FindingSubject,
+  env: Env = process.env,
+): Promise<ReadonlyMap<string, ReadonlyMap<string, StoredFindings>>> {
+  return readFindings(tenant, kind, undefined, env);
+}
+
+async function readFindings(
+  tenant: TenantCode,
+  kind: FindingSubject,
+  ref: string | undefined,
+  env: Env,
+): Promise<Map<string, Map<string, StoredFindings>>> {
+  const bySubject = new Map<string, Map<string, StoredFindings>>();
+  const put = (f: StoredFindings) => {
+    const m = bySubject.get(f.subjectRef) ?? new Map<string, StoredFindings>();
+    m.set(f.contentSha256, f);
+    bySubject.set(f.subjectRef, m);
+  };
   const pool = poolOf(env);
   if (pool === undefined) {
-    for (const f of memory())
-      if (f.subjectKind === subject.kind && f.subjectRef === subject.ref) latest.set(f.contentSha256, f);
-    return latest;
+    for (const f of memory()) if (f.subjectKind === kind && (ref === undefined || f.subjectRef === ref)) put(f);
+    return bySubject;
   }
   const tenantUuid = await tenantUuidByCode(pool, tenant);
   const { rows } = await inTenant(pool, tenantUuid, (db) =>
     db.query<{
+      subject_ref: string;
       document_ref: string;
       content_sha256: string;
       declared_type: string;
@@ -237,18 +263,18 @@ export async function findingsFor(
       source: 'LIVE' | 'FIXTURE';
       at: string;
     }>(
-      `select document_ref, content_sha256, declared_type, classification, facts, checks, engine, catalogue_version, source,
-              extract(epoch from created_at)::bigint::text at
+      `select subject_ref, document_ref, content_sha256, declared_type, classification, facts, checks, engine,
+              catalogue_version, source, extract(epoch from created_at)::bigint::text at
          from evidence.document_finding
-        where tenant_id = $1 and subject_kind = $2 and subject_ref = $3
+        where tenant_id = $1 and subject_kind = $2 and ($3::text is null or subject_ref = $3)
         order by created_at`,
-      [tenantUuid, subject.kind, subject.ref],
+      [tenantUuid, kind, ref ?? null],
     ),
   );
   for (const r of rows)
-    latest.set(r.content_sha256, {
-      subjectKind: subject.kind,
-      subjectRef: subject.ref,
+    put({
+      subjectKind: kind,
+      subjectRef: r.subject_ref,
       documentRef: r.document_ref,
       contentSha256: r.content_sha256,
       declaredType: r.declared_type,
@@ -261,5 +287,5 @@ export async function findingsFor(
       pagesRead: 0,
       recordedAtEpochSeconds: BigInt(r.at),
     });
-  return latest;
+  return bySubject;
 }
