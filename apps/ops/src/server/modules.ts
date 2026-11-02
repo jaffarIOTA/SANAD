@@ -424,7 +424,8 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         titleAr: 'طلبات المنشآت',
         href: '/business',
         readiness: live(),
-        reference: 'The same pipeline and application screens as the UAE journey, in SAR',
+        reference:
+          'The same pipeline and application screens as the UAE journey, in SAR. Bank A and Fintech B each open with an ILLUSTRATIVE development book of eight synthetic cases at every stage (spreading to disbursed, one in arrears), seeded only where a synthetic demonstration is permitted',
       },
       {
         id: 'ksa-business-policies',
