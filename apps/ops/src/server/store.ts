@@ -12,6 +12,7 @@
 
 import {
   type AwaitingReview,
+  type Approved,
   type AwaitingServicingResponse,
   type Keying,
   type OriginationRequest,
@@ -646,6 +647,12 @@ export function listPartnerRequests(
 export function findRequest(requestId: string): RequestRow | undefined {
   const request = REQUESTS.get(requestId);
   return request === undefined ? undefined : toRow(requestId, request);
+}
+
+/** The approved request itself, which is what opens a Murabaha transaction; anything not approved reads nothing. */
+export function findApproved(requestId: string): Approved | undefined {
+  const request = REQUESTS.get(requestId);
+  return request?.state === 'APPROVED' ? request : undefined;
 }
 
 function notInState(requestId: string, expected: string): Result<RequestRow> {

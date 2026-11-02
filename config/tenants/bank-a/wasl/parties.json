@@ -1,0 +1,63 @@
+{
+  "version": "2026-10-17.1",
+  "source": "TENANT_CONFIGURATION",
+  "note": "ILLUSTRATIVE — Bank A's Wasl programmes (each with its anchor, the supplier whose cleared invoices it finances) and the distributors that draw under them, written 2026-10-17 from the development book's invoices so a transaction can open against real reference rows. Invented companies and registration numbers; none is a real entity. The institution's own programme and onboarding records replace this file before any real use.",
+  "programmes": [
+    {
+      "programmeId": "prg-0001",
+      "nameEn": "Al-Ufuq materials distributor programme",
+      "nameAr": "برنامج موزعي الأفق للمواد",
+      "structureCode": "MURABAHA",
+      "programmeLimitMinorUnits": "5000000000",
+      "anchor": {
+        "registrationNo": "1010000002",
+        "nameEn": "Al-Ufuq Materials Company Limited",
+        "nameAr": "شركة الأفق للمواد المحدودة"
+      }
+    },
+    {
+      "programmeId": "prg-0002",
+      "nameEn": "Najd logistics distributor programme",
+      "nameAr": "برنامج موزعي نجد للخدمات اللوجستية",
+      "structureCode": "MURABAHA",
+      "programmeLimitMinorUnits": "2500000000",
+      "anchor": {
+        "registrationNo": "1010000044",
+        "nameEn": "Najd Logistics Company",
+        "nameAr": "شركة نجد للخدمات اللوجستية"
+      }
+    }
+  ],
+  "distributors": [
+    {
+      "counterpartyId": "Rawabi Industrial Supplies Establishment",
+      "registrationNo": "4030000003",
+      "nameEn": "Rawabi Industrial Supplies Establishment",
+      "nameAr": "مؤسسة روابي للتوريدات الصناعية"
+    },
+    {
+      "counterpartyId": "Tamam Foodstuff Trading Company",
+      "registrationNo": "7001000019",
+      "nameEn": "Tamam Foodstuff Trading Company",
+      "nameAr": "شركة تمام لتجارة المواد الغذائية"
+    },
+    {
+      "counterpartyId": "Bahr Al-Khaleej Shipping Establishment",
+      "registrationNo": "1010000077",
+      "nameEn": "Bahr Al-Khaleej Shipping Establishment",
+      "nameAr": "مؤسسة بحر الخليج للشحن"
+    },
+    {
+      "counterpartyId": "Najd Logistics Company",
+      "registrationNo": "1010000044",
+      "nameEn": "Najd Logistics Company",
+      "nameAr": "شركة نجد للخدمات اللوجستية"
+    },
+    {
+      "counterpartyId": "Al-Ufuq Materials Company Limited",
+      "registrationNo": "1010000002",
+      "nameEn": "Al-Ufuq Materials Company Limited",
+      "nameAr": "شركة الأفق للمواد المحدودة"
+    }
+  ]
+}

@@ -639,6 +639,15 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
     titleEn: 'Transactions',
     titleAr: 'المعاملات',
     items: [
+      {
+        id: 'transaction-book',
+        titleEn: 'Transaction book',
+        titleAr: 'سجل المعاملات',
+        href: '/transactions',
+        readiness: live(),
+        reference:
+          'Wasl W1: approving a request opens its Murabaha transaction in DRAFT through the product module (board structure and positions, goods screened against the board’s register, profit amount from the catalogue), one per request, stored in core.transaction with its append-only event log; each transaction’s figures, structure, trade, gates and legs. Programmes, anchors and distributors ILLUSTRATIVE (config/tenants/bank-a/wasl/parties.json)',
+      },
       { id: 'drawdowns', titleEn: 'Drawdowns', titleAr: 'عمليات السحب', readiness: soon(), reference: 'SDD §5.5.1' },
       {
         id: 'sequencing',
