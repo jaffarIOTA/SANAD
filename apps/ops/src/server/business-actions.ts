@@ -49,7 +49,9 @@ import {
   confirmBankStatementFacts,
   confirmSecurityItem,
   confirmPayee,
+  confirmRepayment,
   planTranches,
+  recordRepayment,
   recordPayee,
   satisfyCondition,
   verifyCondition,
@@ -741,4 +743,29 @@ export async function sellCommodityOnBehalfAction(form: FormData): Promise<void>
     () => sellCommodityOnBehalf(ctx.tenant, ctx.applicationId, agencyRef === '' ? undefined : agencyRef, ctx.actor),
     'TAWARRUQ_PROCEEDS_REALISED',
   );
+}
+
+// -- Servicing (S1) ------------------------------------------------------------------------
+
+/** Finance records a receipt it can see on the bank statement; a second person confirms it before it counts. */
+export async function recordRepaymentAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  const amount = minorUnits(field(form, 'amount'));
+  if (amount === undefined) return finish(ctx, refused('AMOUNT_MALFORMED', 'The repayment is an amount'), '');
+  return finish(
+    ctx,
+    () =>
+      recordRepayment(
+        ctx.tenant,
+        ctx.applicationId,
+        { amountMinorUnits: amount, receivedOn: field(form, 'receivedOn'), reference: field(form, 'reference'), channel: 'MANUAL', source: 'LIVE' },
+        ctx.actor,
+      ),
+    'REPAYMENT_RECORDED',
+  );
+}
+
+export async function confirmRepaymentAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_VERIFY');
+  return finish(ctx, () => confirmRepayment(ctx.tenant, ctx.applicationId, field(form, 'repaymentId'), ctx.actor), 'REPAYMENT_CONFIRMED');
 }

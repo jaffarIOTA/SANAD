@@ -37,6 +37,7 @@ import {
   syncBusiness,
 } from '../../../../../server/business.ts';
 import { ClosingCard } from './ClosingCard.tsx';
+import { ServicingCard } from './ServicingCard.tsx';
 import { SourceBadge } from '../../intake/IntakeUi.tsx';
 import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
 import { persistencePool } from '../../../../../server/persistence.ts';
@@ -348,6 +349,9 @@ export default async function OfferPage({
       </SectionCard>
 
       {/* -- Closing: signature, conditions precedent, payee ------------------------------------------ */}
+      {/* -- Servicing (S1): the position against the signed schedule, once disbursed ------------------- */}
+      <ServicingCard segment={segment} view={view} staff={staff} f={f} />
+
       <ClosingCard segment={segment} view={view} staff={staff} f={f} fixtureResults={fixtureResults} />
 
       {/* -- Signing and disbursement --------------------------------------------------------------- */}

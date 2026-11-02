@@ -168,6 +168,7 @@ import {
 } from '@sanad/products/sme-term-islamic/execution.ts';
 import type { SmeIslamicQuote } from '@sanad/products/sme-term-islamic/pricing.ts';
 import type { CommodityLot } from '@sanad/core/ports/commodity-broker.ts';
+import { type FacilityPosition, civilDay, facilityPosition } from '@sanad/core/servicing/instalment-position.ts';
 import type { SmeVariant } from '@sanad/products/sme-term-conventional/variants.ts';
 
 import { postgresOutboxStore } from '../../../../services/outbox/src/postgres-store.ts';
@@ -530,6 +531,8 @@ export interface BusinessApplicationView {
   readonly closing: ClosingRecord;
   /** The loan as booked in the institution's loan system (UAE M6), once it is. */
   readonly booking?: LoanBookingRecord;
+  /** Servicing (S1): repayments received and the position against the signed schedule, once disbursed. */
+  readonly servicing?: ServicingView;
   readonly assessments: readonly AssessmentRun[];
   readonly latestAssessment?: AssessmentRun;
   readonly offers: readonly OfferRun[];
@@ -641,6 +644,30 @@ export interface Payee {
   readonly confirmedBy?: string;
 }
 
+export type RepaymentChannel = 'MANUAL' | 'SADAD' | 'PARTNER_BANK' | 'PAYMENTS_HUB';
+
+/** A receipt against the facility. A manual one counts once a second person confirms it; a rail's is confirmed by the rail. */
+export interface RepaymentRecord {
+  readonly repaymentId: string;
+  /** yyyy-mm-dd: the value date. */
+  readonly receivedOn: string;
+  readonly amount: Money;
+  /** The channel's reference (the bank's, SADAD's), unique per facility. */
+  readonly reference: string;
+  readonly channel: RepaymentChannel;
+  readonly recordedBy: string;
+  readonly confirmedBy?: string;
+  readonly source: 'LIVE' | 'FIXTURE';
+}
+
+export interface ServicingView {
+  readonly repayments: readonly RepaymentRecord[];
+  /** Against the signed schedule, confirmed repayments only, as of today in the tenant's time zone. */
+  readonly position: FacilityPosition;
+  /** The loan system's last reported status, set against Sanad's own: a difference is flagged, never overwritten. */
+  readonly reconciliation?: { readonly loanSystemDaysPastDue: number; readonly sanadDaysPastDue: number; readonly matches: boolean };
+}
+
 export interface LoanBookingRecord {
   /** The loan system's account number for the loan, as staff and statements show it. */
   readonly loanAccountNumber: string;
@@ -728,6 +755,7 @@ interface BusinessRecord {
     tawarruq?: TawarruqRecord;
   };
   booking?: LoanBookingRecord;
+  servicing: { repayments: RepaymentRecord[] };
   assessments: AssessmentRun[];
   offers: OfferRun[];
   events: ApplicationEvent[];
@@ -1117,8 +1145,10 @@ function addFigureRow(book: TenantBook, record: BusinessRecord, row: FigureRow):
 function view(record: BusinessRecord, currency: CurrencyCode): BusinessApplicationView {
   const latestAssessment = record.assessments[record.assessments.length - 1];
   const latestOffer = record.offers[record.offers.length - 1];
+  const servicing = servicingOf(record);
   const inCollections =
-    record.application.status === 'DISBURSED' && record.portfolio !== undefined && record.portfolio.daysPastDue > 0;
+    record.application.status === 'DISBURSED' &&
+    ((record.portfolio !== undefined && record.portfolio.daysPastDue > 0) || (servicing?.position.daysPastDue ?? 0) > 0);
   const approvedTerms = approvedTermsOf(record.application);
   return {
     application: record.application,
@@ -1151,6 +1181,7 @@ function view(record: BusinessRecord, currency: CurrencyCode): BusinessApplicati
       ...(record.closing.tawarruq === undefined ? {} : { tawarruq: record.closing.tawarruq }),
     },
     ...(record.booking === undefined ? {} : { booking: record.booking }),
+    ...(servicing === undefined ? {} : { servicing }),
     assessments: [...record.assessments],
     ...(latestAssessment === undefined ? {} : { latestAssessment }),
     offers: [...record.offers],
@@ -1211,6 +1242,7 @@ function restoreBook(book: TenantBook, persisted: Awaited<ReturnType<typeof load
       security: { collateral: [], guarantees: [] },
       pack: { conditions: [], covenants: [], justifications: {} },
       closing: { cps: {} },
+      servicing: { repayments: [] },
       assessments: [],
       offers: [],
       events: [],
@@ -1617,6 +1649,23 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
           ...(d['agencyRef'] === undefined ? {} : { agencyRef: d['agencyRef'] }),
           realisedAt: at,
         };
+      return;
+    }
+    case 'REPAYMENT_RECORDED':
+      r.servicing.repayments.push({
+        repaymentId: d['repaymentId'] ?? '',
+        receivedOn: d['receivedOn'] ?? '',
+        amount: money(BigInt(d['amountMinorUnits'] ?? '0'), r.application.requested.currency),
+        reference: d['reference'] ?? '',
+        channel: (d['channel'] ?? 'MANUAL') as RepaymentChannel,
+        recordedBy: e.actor,
+        ...(d['confirmedBy'] === undefined ? {} : { confirmedBy: d['confirmedBy'] }),
+        source: d['source'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+      });
+      return;
+    case 'REPAYMENT_CONFIRMED': {
+      const i = r.servicing.repayments.findIndex((x) => x.repaymentId === d['repaymentId']);
+      if (i >= 0) r.servicing.repayments[i] = { ...(r.servicing.repayments[i] as RepaymentRecord), confirmedBy: e.actor };
       return;
     }
     case 'LOAN_BOOKED':
@@ -2073,6 +2122,7 @@ async function handOverAt(
     security: { collateral: [], guarantees: [] },
     pack: { conditions: [], covenants: [], justifications: {} },
     closing: { cps: {} },
+    servicing: { repayments: [] },
     assessments: [],
     offers: [],
     events: [],
@@ -4833,6 +4883,147 @@ export async function recordTawarruqStep(
       detail: { step: step.step, atEpoch: at.epochSeconds.toString(), tokenDigest: at.tokenDigest, authority: at.authorityId, ...detail },
     });
     return ok(view(r, ctx.value.currency));
+  });
+}
+
+// -- servicing (S1): repayments and the position ---------------------------------
+
+/** The signed schedule as instalments: interest (term loan) or profit (Tawarruq) is the charge. */
+function scheduleOf(r: BusinessRecord) {
+  const signed = r.offers.find((o) => o.letter.version === r.application.offer?.letterVersion);
+  return signed?.schedule.rows.map((row) => ({ number: row.number, dueDate: row.dueDate, principal: row.principal, charge: row.interest }));
+}
+
+/** The position as of today in the tenant's time zone, from confirmed repayments only; undefined before disbursement. */
+function servicingOf(r: BusinessRecord): ServicingView | undefined {
+  if (r.application.status !== 'DISBURSED') return undefined;
+  const schedule = scheduleOf(r);
+  const ctx = tenantContext(r.application.tenantId as TenantCode);
+  if (schedule === undefined || !ctx.ok) return undefined;
+  const today = localDate(developmentAttestation().epochSeconds, ctx.value.profile);
+  const position = facilityPosition(
+    schedule,
+    r.servicing.repayments.filter((x) => x.confirmedBy !== undefined),
+    today,
+    ctx.value.currency,
+  );
+  return {
+    repayments: [...r.servicing.repayments],
+    position,
+    ...(r.portfolio === undefined
+      ? {}
+      : {
+          reconciliation: {
+            loanSystemDaysPastDue: r.portfolio.daysPastDue,
+            sanadDaysPastDue: position.daysPastDue,
+            matches: r.portfolio.daysPastDue === position.daysPastDue,
+          },
+        }),
+  };
+}
+
+async function recordRepaymentAt(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: {
+    readonly amountMinorUnits: bigint;
+    readonly receivedOn: string;
+    readonly reference: string;
+    readonly channel: RepaymentChannel;
+    readonly source: 'LIVE' | 'FIXTURE';
+  },
+  actor: string,
+  at: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChangeAt(tenant, applicationId, at, (r, book, ctx) => {
+    if (r.application.status !== 'DISBURSED')
+      return fail('TRANSITION_NOT_ALLOWED', 'Repayments are recorded against a disbursed facility', { status: r.application.status });
+    if (entry.amountMinorUnits <= 0n) return fail('REPAYMENT_AMOUNT_INVALID', 'A repayment is a positive amount');
+    const received = civilDay(entry.receivedOn);
+    const today = civilDay(localDate(at, ctx.profile)) ?? 0;
+    const disbursedOn = r.application.disbursement === undefined ? undefined : civilDay(localDate(r.application.disbursement.atEpochSeconds, ctx.profile));
+    if (received === undefined || received > today || (disbursedOn !== undefined && received < disbursedOn))
+      return fail('REPAYMENT_DATE_INVALID', 'A repayment is dated between disbursement and today');
+    if (!REF_SHAPE.test(entry.reference)) return fail('REPAYMENT_REF_INVALID', 'A repayment is recorded by the channel’s reference');
+    const identity = identityNumberIn({ reference: entry.reference });
+    if (identity !== undefined) return identity;
+    // The channel's reference is the receipt's identity: the same receipt twice is one receipt.
+    if (r.servicing.repayments.some((x) => x.reference === entry.reference && x.channel === entry.channel))
+      return fail('REPAYMENT_DUPLICATE', 'This receipt is already recorded');
+    const repaymentId = `RP-${String(r.servicing.repayments.length + 1).padStart(4, '0')}`;
+    // A rail's receipt is confirmed by the rail; a manual one waits for a second person.
+    const confirmedBy = entry.channel === 'MANUAL' ? undefined : `rail:${entry.channel.toLowerCase()}`;
+    const amount = money(entry.amountMinorUnits, ctx.currency);
+    r.servicing.repayments.push({
+      repaymentId,
+      receivedOn: entry.receivedOn,
+      amount,
+      reference: entry.reference,
+      channel: entry.channel,
+      recordedBy: actor,
+      ...(confirmedBy === undefined ? {} : { confirmedBy }),
+      source: entry.source,
+    });
+    recordEvent(book, r, {
+      eventType: 'REPAYMENT_RECORDED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: {
+        repaymentId,
+        receivedOn: entry.receivedOn,
+        amountMinorUnits: amount.minorUnits.toString(),
+        reference: entry.reference,
+        channel: entry.channel,
+        source: entry.source,
+        ...(confirmedBy === undefined ? {} : { confirmedBy }),
+      },
+    });
+    return ok(true);
+  });
+}
+
+/** Record a receipt: a manual one by finance (confirmed by a second person before it counts), or a rail's. */
+export async function recordRepayment(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: {
+    readonly amountMinorUnits: bigint;
+    readonly receivedOn: string;
+    readonly reference: string;
+    readonly channel: RepaymentChannel;
+    readonly source: 'LIVE' | 'FIXTURE';
+  },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () => recordRepaymentAt(tenant, applicationId, entry, actor, developmentAttestation().epochSeconds));
+}
+
+/** A second person confirms a manual receipt against the bank statement before it counts. */
+export async function confirmRepayment(
+  tenant: TenantCode,
+  applicationId: string,
+  repaymentId: string,
+  confirmer: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    const i = r.servicing.repayments.findIndex((x) => x.repaymentId === repaymentId);
+    const rp = r.servicing.repayments[i];
+    if (rp === undefined) return fail('REPAYMENT_NOT_FOUND', 'No such repayment on the facility', { repaymentId });
+    if (rp.confirmedBy !== undefined) return fail('REPAYMENT_ALREADY_CONFIRMED', 'This repayment is already confirmed');
+    if (confirmer === rp.recordedBy)
+      return reject('OP-DETERMINACY', 'FOUR_EYES_SELF_CONFIRMATION', 'Whoever recorded a receipt does not confirm it');
+    r.servicing.repayments[i] = { ...rp, confirmedBy: confirmer };
+    recordEvent(book, r, {
+      eventType: 'REPAYMENT_CONFIRMED',
+      fromStage: null,
+      toStage: null,
+      actor: confirmer,
+      atEpochSeconds: at,
+      detail: { repaymentId },
+    });
+    return ok(true);
   });
 }
 
