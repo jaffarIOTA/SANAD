@@ -21,13 +21,28 @@ import { Rate } from '@sanad/design/Rate.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 
 import {
+  renderOfferPdfAction,
+  sealSignedLetterAction,
+  bookLoanAction,
   generateOfferAction,
   recordDisbursedAction,
   recordPortfolioStatusAction,
-  recordSignedAction,
+  confirmSigningAction,
   sendOfferAction,
+  startSigningAction,
 } from '../../../../../server/business-actions.ts';
-import { getApplication, previewNotifications, productVariants, syncBusiness } from '../../../../../server/business.ts';
+import {
+  getApplication,
+  outstandingConditionsPrecedent,
+  previewNotifications,
+  productVariants,
+  syncBusiness,
+} from '../../../../../server/business.ts';
+import { ClosingCard } from './ClosingCard.tsx';
+import { ServicingCard } from './ServicingCard.tsx';
+import { SourceBadge } from '../../intake/IntakeUi.tsx';
+import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
+import { persistencePool } from '../../../../../server/persistence.ts';
 import { formatPercent, scheduleExcerpt } from '../../../../../server/business-dashboard.ts';
 import { staffJurisdiction } from '../../../../../server/jurisdiction.ts';
 import { pageStaff } from '../../../../../server/session.ts';
@@ -80,6 +95,9 @@ export default async function OfferPage({
   await syncBusiness(j.tenant);
   const view = await getApplication(j.tenant, applicationId);
   if (view === undefined) notFound();
+  // A bank result may be recorded on screen (marked Fixture) only where a synthetic demonstration is permitted.
+  const saudi = j.code === 'SA';
+  const fixtureResults = await syntheticDemonstrationPermitted(persistencePool(process.env), process.env);
   const f = formatters(locale === 'ar-SA', view.currency);
   const { t } = f;
   const a = view.application;
@@ -332,6 +350,12 @@ export default async function OfferPage({
         </p>
       </SectionCard>
 
+      {/* -- Closing: signature, conditions precedent, payee ------------------------------------------ */}
+      {/* -- Servicing (S1): the position against the signed schedule, once disbursed ------------------- */}
+      <ServicingCard segment={segment} view={view} staff={staff} f={f} fixtureResults={fixtureResults} />
+
+      <ClosingCard segment={segment} view={view} staff={staff} f={f} fixtureResults={fixtureResults} />
+
       {/* -- Signing and disbursement --------------------------------------------------------------- */}
       <div className="grid gap-5 lg:grid-cols-2">
         <SectionCard
@@ -339,12 +363,14 @@ export default async function OfferPage({
           note={
             f.arabic ? (
               <>
-                التوقيع عبر الهوية الرقمية (
+                التوقيع عبر {saudi ? 'نفاذ' : 'الهوية الرقمية'} (
                 <bdi dir="ltr" className="whitespace-nowrap">
-                  UAE Pass
+                  {saudi ? 'Nafath' : 'UAE Pass'}
                 </bdi>
                 ) — مرجع تجريبي إلى أن يُتحقق من الربط.
               </>
+            ) : saudi ? (
+              'Signed through Nafath — demonstration answers, labelled Fixture, until the Nafath rail is verified.'
             ) : (
               'Signed through UAE Pass — a fixture reference until the UAE Pass rail is verified.'
             )
@@ -375,13 +401,22 @@ export default async function OfferPage({
         </SectionCard>
         <SectionCard
           title={t('Disbursement', 'الصرف')}
-          note={t(
-            'Partner bank — a fixture reference until the partner-bank rail is verified.',
-            'البنك الشريك — مرجع تجريبي إلى أن يُتحقق من الربط.',
-          )}
+          note={
+            saudi
+              ? t(
+                  'The institution’s payments hub — a fixture reference until the payments-hub rail is verified.',
+                  'منصة المدفوعات لدى المؤسسة — مرجع تجريبي إلى أن يُتحقق من الربط.',
+                )
+              : t(
+                  'Partner bank — a fixture reference until the partner-bank rail is verified.',
+                  'البنك الشريك — مرجع تجريبي إلى أن يُتحقق من الربط.',
+                )
+          }
         >
           <dl className="grid gap-4 sm:grid-cols-2">
-            <Field label={t('Paying bank', 'البنك الدافع')}>{t('Partner bank', 'البنك الشريك')}</Field>
+            <Field label={t('Paying bank', 'البنك الدافع')}>
+              {saudi ? t('Payments hub', 'منصة المدفوعات') : t('Partner bank', 'البنك الشريك')}
+            </Field>
             <Field label={t('Disbursement', 'طريقة الصرف')}>{t('Single disbursement', 'دفعة واحدة')}</Field>
             <Field label={t('Amount', 'المبلغ')}>
               <bdi className="tabular-nums">{f.money(terms.facilityAmount.minorUnits)}</bdi>{' '}
@@ -475,6 +510,115 @@ export default async function OfferPage({
             </div>
           )}
         </details>
+
+        {/* The letter as a real PDF, rendered by the document engine, stored by its fingerprint. */}
+        <div
+          className="mt-3 flex flex-wrap items-center gap-3 rounded-tile border border-line px-4 py-3"
+          data-offer-pdf
+        >
+          {(() => {
+            const pdf = [...view.letterPdfs].reverse().find((x) => x.letterVersion === offer.letter.version);
+            return pdf === undefined ? (
+              <span className="text-[13px] text-ink-quiet">
+                {t('No PDF of this letter version yet.', 'لا يوجد ملف PDF لإصدار الخطاب هذا بعد.')}
+              </span>
+            ) : (
+              <>
+                <a
+                  href={`/api/business/v1/applications/${encodeURIComponent(a.applicationId)}/letters/${pdf.sha256Hex}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[13px] font-medium text-brand hover:underline"
+                >
+                  {t('Download the letter (PDF)', 'تنزيل الخطاب (PDF)')}
+                </a>
+                <SourceBadge source={pdf.storage} f={f} />
+                <span className="text-[11px] text-ink-quiet">
+                  {t(
+                    `${f.n(Math.max(1, Math.ceil(pdf.byteLength / 1024)))} KB`,
+                    `${f.n(Math.max(1, Math.ceil(pdf.byteLength / 1024)))} ك.ب`,
+                  )}{' '}
+                  · <Id>{pdf.sha256Hex.slice(0, 12)}</Id>
+                </span>
+              </>
+            );
+          })()}
+          <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+            <form action={renderOfferPdfAction}>
+              <FormContext segment={segment} applicationId={a.applicationId} screen="offer" />
+              <input type="hidden" name="letterVersion" value={offer.letter.version} />
+              <button type="submit" className={BTN_SECONDARY}>
+                {t('Render as PDF', 'إصدار بصيغة PDF')}
+              </button>
+            </form>
+          </Gate>
+          <span className="w-full text-[11px] text-ink-quiet">
+            {t(
+              'Printed by the institution’s document engine; the footer carries the letter version the customer signs. An engine on an evaluation licence watermarks what it prints.',
+              'يطبعه محرك المستندات لدى المؤسسة، ويحمل التذييل إصدار الخطاب الذي يوقّعه العميل. ويضع المحرك العامل بترخيص تجريبي علامة مائية على ما يطبعه.',
+            )}
+          </span>
+        </div>
+
+        {/* The signed letter sealed with the institution's digital signature (PAdES), once the customer has signed. */}
+        {(() => {
+          const signedVersion = a.signature === undefined ? undefined : a.offer?.letterVersion;
+          if (signedVersion !== offer.letter.version) return null;
+          const seal = view.sealedLetters.find((x) => x.letterVersion === signedVersion);
+          return (
+            <div
+              className="mt-3 flex flex-wrap items-center gap-3 rounded-tile border border-line px-4 py-3"
+              data-sealed-letter
+            >
+              {seal === undefined ? (
+                <>
+                  <span className="text-[13px] text-ink-quiet">
+                    {t('The signed letter is not sealed yet.', 'لم يُختم الخطاب الموقّع بعد.')}
+                  </span>
+                  <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+                    <form action={sealSignedLetterAction}>
+                      <FormContext segment={segment} applicationId={a.applicationId} screen="offer" />
+                      <button type="submit" className={BTN_SECONDARY}>
+                        {t('Seal the signed letter', 'ختم الخطاب الموقّع')}
+                      </button>
+                    </form>
+                  </Gate>
+                </>
+              ) : (
+                <>
+                  <a
+                    href={`/api/business/v1/applications/${encodeURIComponent(a.applicationId)}/letters/${seal.sha256Hex}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[13px] font-medium text-brand hover:underline"
+                  >
+                    {t('Download the sealed letter (PDF)', 'تنزيل الخطاب المختوم (PDF)')}
+                  </a>
+                  <SourceBadge source={seal.storage} f={f} />
+                  <span className="text-[11px] text-ink-quiet">
+                    {t(`PAdES ${seal.padesLevel.toUpperCase()}`, `PAdES ${seal.padesLevel.toUpperCase()}`)} ·{' '}
+                    {seal.longTermValidation
+                      ? t('long-term validation embedded', 'بيانات التحقق طويل الأمد مضمّنة')
+                      : t('no long-term validation', 'دون بيانات التحقق طويل الأمد')}{' '}
+                    · <Id>{seal.sha256Hex.slice(0, 12)}</Id>
+                  </span>
+                  <span className="w-full text-[11px] text-ink-quiet">
+                    {t('Certificate', 'الشهادة')}: <bdi>{seal.signerCommonName}</bdi> · {t('issued by', 'صادرة عن')}{' '}
+                    <bdi>{seal.issuerCommonName}</bdi> · <Id>{seal.certificateSerialHex}</Id>
+                  </span>
+                  {seal.environment === 'production' ? null : (
+                    <span className="w-full text-[12px] font-medium text-blocked">
+                      {t(
+                        'Sealed with a development certificate: this proves the path, not a signature anyone should rely on.',
+                        'خُتم بشهادة تطوير: يُثبت هذا سلامة المسار، ولا يُعدّ توقيعًا يُعتمد عليه.',
+                      )}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })()}
 
         <details className="mt-3 rounded-tile border border-line px-4 py-3">
           <summary className="cursor-pointer text-[13px] font-semibold text-brand">
@@ -776,8 +920,8 @@ function NextStep({
               {t('Sent by the officer who is signed in', 'يرسله الموظف الذي سجّل الدخول')} (<Id>{staff.principalId}</Id>
               ).{' '}
               {t(
-                'The applicant receives the letter to sign through UAE Pass. The letter goes by reference; the PDF arrives when the document platform is licensed.',
-                'يستلم العميل الخطاب للتوقيع عبر الهوية الرقمية. يُرسل الخطاب بمرجعه؛ ويصل ملف PDF عند ترخيص منصة المستندات.',
+                'The applicant receives the letter to sign through the national digital identity (UAE Pass, or Nafath in Saudi Arabia). The letter goes by reference; the PDF arrives when the document platform is licensed.',
+                'يستلم العميل الخطاب للتوقيع عبر الهوية الرقمية الوطنية (الهوية الرقمية الإماراتية، أو نفاذ في السعودية). يُرسل الخطاب بمرجعه؛ ويصل ملف PDF عند ترخيص منصة المستندات.',
               )}
             </p>
             <button type="submit" className={BTN_PRIMARY}>
@@ -792,19 +936,41 @@ function NextStep({
       return (
         <div className="flex flex-col gap-4">
           <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
-            <form action={recordSignedAction} className="flex flex-wrap items-center justify-between gap-3">
-              {ctx}
-              <input type="hidden" name="letterVersion" value={letterVersion ?? ''} />
-              <p className="text-[13px] text-ink-quiet">
-                {t(
-                  'Waiting for the applicant’s signature. This records the UAE Pass signing callback (fixture) on the letter version that was sent — and no other.',
-                  'بانتظار توقيع العميل. يسجّل هذا إشعار التوقيع من الهوية الرقمية (تجريبي) على إصدار الخطاب المرسل — ولا غيره.',
-                )}
-              </p>
-              <button type="submit" className={BTN_PRIMARY}>
-                {t('Record signature', 'تسجيل التوقيع')}
-              </button>
-            </form>
+            {view.closing.signing === undefined ? (
+              <form
+                action={startSigningAction}
+                className="flex flex-wrap items-center justify-between gap-3"
+                data-start-signing
+              >
+                {ctx}
+                <p className="text-[13px] text-ink-quiet">
+                  {t(
+                    'Opens the signing at the identity service for the signatory, bound to the fingerprint of the letter version that was sent — and no other.',
+                    'يبدأ التوقيع لدى خدمة الهوية للمفوّض بالتوقيع، مرتبطاً ببصمة إصدار الخطاب المرسل — ولا غيره.',
+                  )}
+                </p>
+                <button type="submit" className={BTN_PRIMARY}>
+                  {t('Send for signing', 'إرسال للتوقيع')}
+                </button>
+              </form>
+            ) : (
+              <form
+                action={confirmSigningAction}
+                className="flex flex-wrap items-center justify-between gap-3"
+                data-confirm-signing
+              >
+                {ctx}
+                <p className="text-[13px] text-ink-quiet">
+                  {t(
+                    'Waiting for the signatory. Check once they have signed; the signature is recorded only if the identity service confirms it.',
+                    'بانتظار المفوّض بالتوقيع. تحقّق بعد توقيعه؛ ولا يُسجَّل التوقيع إلا إن أكدته خدمة الهوية.',
+                  )}
+                </p>
+                <button type="submit" className={BTN_PRIMARY}>
+                  {t('Check for signature', 'التحقق من التوقيع')}
+                </button>
+              </form>
+            )}
           </Gate>
           {unsent ? (
             <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
@@ -856,7 +1022,29 @@ function NextStep({
         </div>
       );
     }
-    case 'SIGNED':
+    case 'SIGNED': {
+      // Closing outstanding: the service refuses disbursement, so the screen says why instead of offering it.
+      const cpsOutstanding = outstandingConditionsPrecedent(view);
+      const payeeConfirmed = view.closing.payee?.confirmedBy !== undefined;
+      if (cpsOutstanding.length > 0 || !payeeConfirmed)
+        return (
+          <DisabledAction
+            label={t('Release disbursement as finance', 'إطلاق الصرف بصفة المالية')}
+            reason={[
+              cpsOutstanding.length > 0
+                ? t(
+                    `Conditions precedent still to evidence and verify: ${cpsOutstanding.map((c) => c.textEn).join('; ')}.`,
+                    `شروط مسبقة لم يُقدَّم دليلها أو يُتحقق منه بعد: ${cpsOutstanding.map((c) => c.textAr).join('؛ ')}.`,
+                  )
+                : '',
+              payeeConfirmed
+                ? ''
+                : t('The payee account is not yet recorded and confirmed.', 'لم يُسجَّل حساب المستفيد ويُؤكَّد بعد.'),
+            ]
+              .filter((x) => x !== '')
+              .join(' ')}
+          />
+        );
       return (
         <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic} ownWork={a.submittedBy === staff.principalId}>
           <form action={recordDisbursedAction} className="flex flex-wrap items-center justify-between gap-3">
@@ -878,9 +1066,37 @@ function NextStep({
           </form>
         </Gate>
       );
-    case 'DISBURSED':
+    }
+    case 'DISBURSED': {
+      // A later tranche, or a failed one once the payee is corrected, is released here; the service checks the rest.
+      const nextTranche = (view.closing.tranches ?? []).find((x) => x.status === 'PLANNED' || x.status === 'FAILED');
       return (
         <div className="flex flex-col gap-3">
+          {nextTranche === undefined ? null : (
+            <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic} ownWork={a.submittedBy === staff.principalId}>
+              <form
+                action={recordDisbursedAction}
+                className="flex flex-wrap items-center justify-between gap-3"
+                data-release-tranche
+              >
+                {ctx}
+                <p className="text-[13px] text-ink-quiet">
+                  {nextTranche.status === 'FAILED'
+                    ? t(
+                        `${nextTranche.trancheId}’s payment failed, which withdrew the payee confirmation. Once the account is corrected if needed and confirmed again, release it once more.`,
+                        `فشل دفع ${nextTranche.trancheId}، فسُحب تأكيد حساب المستفيد. بعد تصحيح الحساب إن لزم وتأكيده من جديد، أعد صرفه.`,
+                      )
+                    : t(
+                        `Next: ${nextTranche.trancheId}${nextTranche.plannedDate === undefined ? '' : `, from ${f.isoDate(nextTranche.plannedDate)}`}.`,
+                        `التالي: ${nextTranche.trancheId}${nextTranche.plannedDate === undefined ? '' : `، اعتباراً من ${f.isoDate(nextTranche.plannedDate)}`}.`,
+                      )}
+                </p>
+                <button type="submit" className={BTN_PRIMARY}>
+                  {t(`Release ${nextTranche.trancheId} as finance`, `صرف ${nextTranche.trancheId} بصفة المالية`)}
+                </button>
+              </form>
+            </Gate>
+          )}
           <p className="text-[13px] text-ink">
             {t(
               `Disbursed${a.disbursement === undefined ? '' : ` on ${f.epochDate(a.disbursement.atEpochSeconds)}`} — handed to the loan system (stage 8).`,
@@ -890,6 +1106,41 @@ function NextStep({
               <Id className="ms-2 text-[12px] text-ink-quiet">{a.disbursement.paymentRef}</Id>
             )}
           </p>
+          {/* The loan as booked in the loan system (UAE M6). */}
+          {view.booking !== undefined ? (
+            <p className="flex flex-wrap items-center gap-2 text-[13px] text-ink" data-loan-booked>
+              <Chip tone="good">{t('Booked in the loan system', 'مُسجَّل في نظام القروض')}</Chip>
+              <SourceBadge source={view.booking.source} f={f} />
+              <span>
+                {t('Loan account', 'حساب التمويل')}{' '}
+                <bdi dir="ltr" className="identifier font-semibold">
+                  {view.booking.loanAccountNumber}
+                </bdi>
+              </span>
+              <span className="text-[11px] text-ink-quiet">
+                {t('Product', 'المنتج')} <Id>{view.booking.productCode}</Id> · <Id>{view.booking.bookedBy}</Id>
+              </span>
+            </p>
+          ) : (
+            <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic}>
+              <form
+                action={bookLoanAction}
+                className="flex flex-wrap items-center justify-between gap-3"
+                data-book-loan
+              >
+                {ctx}
+                <p className="text-[13px] text-ink-quiet">
+                  {t(
+                    'Book the loan in the loan system on the signed terms — Sanad’s rate and APR, the number of payments and the first payment date. The loan account number it returns is recorded here.',
+                    'سجّل التمويل في نظام القروض بالشروط الموقّعة — معدل سند ومعدل النسبة السنوية وعدد الأقساط وتاريخ أول قسط. ويُحفظ هنا رقم حساب التمويل الذي يُرجعه.',
+                  )}
+                </p>
+                <button type="submit" className={BTN_PRIMARY}>
+                  {t('Book in the loan system', 'التسجيل في نظام القروض')}
+                </button>
+              </form>
+            </Gate>
+          )}
           {view.portfolio === undefined ? null : (
             <p className="text-[13px] text-ink">
               {view.portfolio.daysPastDue > 0 ? (
@@ -928,6 +1179,7 @@ function NextStep({
           </Gate>
         </div>
       );
+    }
     default:
       return (
         <DisabledAction

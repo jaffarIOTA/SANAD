@@ -72,12 +72,81 @@ Upload one synthetic PDF, read back its metadata, fetch the rendition, hash it. 
 does the hash of what came back equal the hash of what went up? That equality is what
 `RenderedDocument.contentHash` and "what is signed is what was seen" (BR-G06) rest on.
 
+**Run 2026-10-17** (Document Engine 1.19.0 in evaluation mode — Nutrient's trial, no key,
+`adapters/nutrient/compose/` on a developer laptop): `GET /healthcheck` 200; an authenticated
+`GET /api/documents` with `Authorization: Token token=…` 200. **V-02 passes.** The engine is
+bound to 127.0.0.1 only. The log states *"licensed for evaluation use … an evaluation
+watermark is displayed on every document"*.
+
+**V-03, run 2026-10-17:** the synthetic commercial invoice uploaded (`POST /api/documents`,
+multipart `file`) and came back **byte-identical from the stored source**
+(`GET /api/documents/{id}/pdf?source=true`, SHA-256 equal). The default rendition
+(`GET …/pdf`) is re-written on export (annotations applied; in evaluation mode the watermark)
+and differs, as expected. So `RenderedDocument.contentHash` and BR-G06 rest on the stored
+source, and the adapter must fetch with `source=true` when it hashes what was seen.
+
+**Generation (OI-05's rendering question), run 2026-10-17:** `POST /api/build` with an HTML
+part (`instructions={"parts":[{"html":"letter"}]}`) produced a PDF from a bilingual offer-letter
+fragment. The Arabic rendered **joined and right-to-left** with Arabic-Indic digits beside the
+English, in the engine's default font. Open: a licensed font set for both scripts, page
+furniture (headers, page numbers), and whether evaluation mode watermarks build output.
+
+**The offer letter through the adapter, run 2026-10-17:** `NutrientPdfGeneration.fromHtml`
+(`adapters/nutrient/pdf-generation.ts`) rendered a seeded application's Facility Offer Letter
+(`core/documents/offer-letter-html.ts`) through `POST /api/build`: one A4 PDF of about 180 KB,
+with the Arabic column (governing, right to left) beside the English, the same figures the
+screen shows, and the letter version in the footer. No watermark was visible on the build
+output in evaluation mode. Sanad stores the bytes in object storage under their SHA-256 and
+records `OFFER_PDF_RENDERED` against the letter version, so the PDF can always be matched
+back to the content that was signed.
+
 ### V-04 — one digital signature that validates (OI-06)
 Sign the uploaded document through Document Engine with the test certificate, request
 long-term validation material, download, validate with an independent validator (not the
 vendor's own). **Question:** is the result PAdES with LTV, with the chain and the timestamp
 both valid? Until one such file exists the signature design is a hypothesis (README).
 Record: certificate issuer, profile reported, validator used, result.
+
+**Run 2026-10-17:** `POST /api/documents/{id}/sign` answered **500 "Signing service not
+available"**. Document Engine does not hold the certificate: it calls out to a signing
+service the institution runs (`SIGNING_SERVICE_URL`), which holds the key — in production the
+in-Kingdom HSM behind the licensed CSP's certificate. That is the right shape for OI-06. V-04
+needs that service: for plumbing, a small development signing service with a self-signed
+certificate (recorded as self-signed); for the finding, the CSP's test certificate.
+
+**Plumbing run 2026-10-17, development certificate:** the development signing service
+(`adapters/nutrient/signing-service/server.mjs`, started by
+`compose/docker-compose.signing.yml`, material from `scripts/nutrient-dev-signing-cert.sh`)
+answered the engine's RAW protocol. The engine called `get_certificates`, then `sign` for a
+384-byte RSASSA-PKCS1-v1_5 signature over SHA-256, built the CAdES container itself, and
+embedded it in the rendered offer letter.
+
+- **Certificate.** Issued by "Sanad Development Signing CA - NOT TRUSTED", which is
+  self-signed and valid for 30 days. The engine trusts it only through `/certificate-stores`.
+- **The engine's report.** PAdES `b-b`; signature `valid`; chain `ok`; integrity `ok`;
+  `ltv: false`.
+- **Independent validator.** poppler `pdfsig` (Alpine `poppler-utils`), with the
+  development CA added to its NSS store. It reported *ETSI.CAdES.detached, SHA-256,
+  "Signature is Valid", "Certificate is Trusted"*, and with no "not total document signed"
+  warning once the file was cut to the signed revision.
+- **Findings for the adapter:**
+  1. `GET …/pdf?source=true` returns the *upload*, not the signed file. The signed file is
+     the rendition, `GET …/pdf`.
+  2. In evaluation mode the rendition appends an incremental update after the signature
+     (the watermark, written at export). poppler then reports "Not total document signed".
+     The signature covers its own revision, so `adapters/nutrient/document-signing.ts`
+     returns exactly the bytes up to the end of the newest `/ByteRange` and refuses a file
+     it cannot cut cleanly.
+- **Through Sanad.** `NutrientDocumentSigning.sealPdf` produced the same result, and the
+  engine's copy was deleted afterwards.
+
+**What stays open for OI-06:**
+- B-T, B-LT and B-LTA need the provider's timestamp authority and revocation services.
+- The certificate must be the licensed CSP's test certificate, then its production one,
+  behind the in-Kingdom HSM.
+- A validator independent of both the vendor and Sanad must check the result against the
+  national trust list.
+- The development certificate proves the path, not a signature anyone should rely on.
 
 ### V-05 — the promissory note as a form
 Render the promissory-note template as a PDF form: payee, amount in figures and in words
@@ -96,6 +165,33 @@ The adapter floors confidence to an integer per ten thousand, rounding down
 (`NUTR-DEV-001`); confirm the vendor's scale (0–1 or 0–100) before the conversion is
 trusted. Record which fields it found on the Arabic sample; Arabic extraction fidelity is
 OI-05's question for intelligence as well as rendering.
+
+**Run 2026-10-17, tables on a synthetic statement:** the engine reads documents itself, on
+the local engine with no cloud service. `POST /api/build` with the PDF as a file part and
+`output: {type: "json-content", plainText, tables, keyValuePairs}` returned, per page,
+`plainText`, `tables[]` (`confidence`, then `cells[]` of `rowIndex`, `columnIndex`, `text`,
+`isHeader`) and `keyValuePairs[]` (`key.content`, `value.content`, `value.dataType`,
+`confidence`).
+
+- **Confidence scale.** 0–100 with decimals, for example `99.38857`. That settles the scale
+  question for `NUTR-DEV-001`.
+- **What came back from a two-year statement** (`2025 | 2024` columns, profit-or-loss above
+  financial position):
+  - the two tables came back as one grid;
+  - the first table's year header was dropped, and the second's appeared mid-grid;
+  - bracketed losses came through as printed;
+  - two totals were also offered as key-value pairs.
+- **Arabic.** Plain-text extraction of the Arabic column of the rendered offer letter came
+  back garbled, while English and digits were clean. Arabic statements need a sample of
+  their own, still open.
+- **How Sanad uses it.**
+  1. `adapters/nutrient/document-extraction.ts` reads tables and text only.
+  2. `core/documents/statement-figures.ts` turns the grid into figures under the tenant's
+     exact row labels and a year row the table states. It refuses scaled statements, low
+     confidence, conflicts and a negative revenue.
+  3. The figures are proposed through `ingestReadFigures` as OCR, for a person to verify.
+  - Through Sanad, all five figures were read correctly from the synthetic statement:
+    revenue for both years, net profit, and current assets and liabilities.
 
 ### V-07 — the browser never holds a secret
 With the viewer open, inspect what reached the browser: the licence key (expected) and a

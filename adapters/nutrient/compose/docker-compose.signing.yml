@@ -1,0 +1,30 @@
+# The development signing service beside Document Engine (check V-04).
+#
+#   scripts/nutrient-dev-signing-cert.sh
+#   docker compose -f docker-compose.yml -f docker-compose.signing.yml up -d
+#
+# The signing service has no host port: only the engine reaches it, on the
+# compose network. The engine trusts the development CA for validation through
+# /certificate-stores. Everything under .signing/ is throwaway, self-signed and
+# gitignored; production replaces this file with the institution's signing
+# service in front of its HSM.
+services:
+  document-engine:
+    environment:
+      SIGNING_SERVICE_URL: http://signing-service:6000/sign
+    volumes:
+      - ./.signing/trust:/certificate-stores:ro
+    depends_on:
+      signing-service:
+        condition: service_started
+  signing-service:
+    image: node:22.12.0-alpine
+    command: ['node', '/service/server.mjs']
+    user: node
+    read_only: true
+    environment:
+      SIGNING_MATERIAL_DIR: /signing
+      PORT: '6000'
+    volumes:
+      - ../signing-service:/service:ro
+      - ./.signing:/signing:ro

@@ -306,7 +306,7 @@ export const BTN_PRIMARY =
 export const BTN_SECONDARY =
   'press inline-flex h-10 items-center justify-center gap-2 rounded-tile border border-line-strong bg-surface px-4 text-[14px] font-semibold text-heading hover:bg-sunken disabled:cursor-not-allowed disabled:text-ink-faint';
 export const BTN_SMALL =
-  'press inline-flex h-8 items-center justify-center gap-1 rounded-tile border border-line-strong bg-surface px-3 text-[13px] font-semibold text-heading hover:bg-sunken';
+  'press inline-flex h-8 items-center justify-center gap-1.5 rounded-tile border border-line-strong bg-surface px-3 text-[13px] font-semibold text-heading hover:bg-sunken disabled:cursor-not-allowed disabled:text-ink-faint aria-busy:cursor-wait';
 export const INPUT =
   'h-9 w-full min-w-0 rounded-tile border border-line-strong bg-surface px-3 text-[13px] text-ink outline-none placeholder:text-ink-faint focus:border-brand focus:ring-2 focus:ring-brand/20';
 const TH_BASE = 'py-3 pe-3 text-[12px] font-medium text-ink-quiet';
@@ -346,7 +346,7 @@ export function FormContext({
 }: {
   readonly segment: string;
   readonly applicationId: string;
-  readonly screen?: 'assessment' | 'offer';
+  readonly screen?: 'assessment' | 'offer' | 'decision';
 }): ReactElement {
   return (
     <>
@@ -445,7 +445,7 @@ export function ApplicationShell({
 }: {
   readonly segment: string;
   readonly view: BusinessApplicationView;
-  readonly screen: 'application' | 'assessment' | 'offer';
+  readonly screen: 'application' | 'assessment' | 'decision' | 'offer';
   readonly query: ShellQuery;
   readonly f: Formatters;
   readonly title: string;
@@ -456,6 +456,7 @@ export function ApplicationShell({
   const tabs = [
     { id: 'application', href: base, label: f.t('Loan application', 'طلب التمويل'), stage: 5 },
     { id: 'assessment', href: `${base}/assessment`, label: f.t('Credit assessment', 'التقييم الائتماني'), stage: 6 },
+    { id: 'decision', href: `${base}/decision`, label: f.t('Decision pack', 'حزمة القرار'), stage: 6 },
     { id: 'offer', href: `${base}/offer`, label: f.t('Offer & contract', 'العرض والعقد'), stage: 7 },
   ] as const;
   const notice = query.notice === undefined ? undefined : NOTICES[query.notice];

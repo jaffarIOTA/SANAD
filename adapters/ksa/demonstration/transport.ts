@@ -332,57 +332,76 @@ const PASS_INFO = {
   status: 'PASS',
 };
 
-const einvoiceLookup: Rule = (e, now) => {
-  const uuid = tail(e);
-  const hash = url(e).searchParams.get('hash') ?? '';
-  if (has(hash, 'unknown')) return notFound('einvoice.lookup', 'no such invoice');
-  const seller = CAST_COMPANIES[0] as CastCompany;
-  const buyer = CAST_COMPANIES[2] as CastCompany;
-  const invoice = {
-    id: `INV-DEMO-${digest(uuid).slice(0, 8)}`,
-    uuid,
-    issueDate: isoDay(now - 30 * DAY),
-    seller: { crNumber: seller.crNumber, name: seller.nameAr },
-    buyer: { crNumber: buyer.crNumber, name: buyer.nameAr },
-    taxExclusiveAmount: '100000.00',
-    taxAmount: '15000.00',
-    taxInclusiveAmount: '115000.00',
-    invoiceLines: [
-      {
-        id: 1,
-        itemName: 'Demonstration goods',
-        itemNameAr: 'بضائع تجريبية',
-        itemClassificationCode: '469000',
-        invoicedQuantity: '100',
-        unitCode: 'PCE',
-        lineExtensionAmount: '100000.00',
-      },
-    ],
-  };
-  if (has(hash, 'reject'))
-    return {
-      validationResults: {
-        infoMessages: [],
-        warningMessages: [],
-        errorMessages: [
-          {
-            type: 'ERROR',
-            code: 'BR-KSA-F-06',
-            category: 'KSA',
-            message: 'Field does not meet the allowed length (demonstration)',
-            status: 'ERROR',
-          },
-        ],
-        status: 'ERROR',
-      },
-      clearanceStatus: 'NOT_CLEARED',
-      invoice,
+/**
+ * An invoice the wiring tells the demonstration about: who issued it, to whom, for how much. Used where a
+ * demonstration needs an invoice between particular parties (Wasl's ownership invoice from the anchor to the
+ * institution); every other lookup answers about the cast. The steering markers in the hash still apply.
+ */
+export interface DemonstrationInvoice {
+  readonly sellerCr: string;
+  readonly buyerCr: string;
+  /** Tax-inclusive total, in minor units. */
+  readonly totalMinor: bigint;
+}
+
+const einvoiceLookupWith =
+  (book: (invoiceUuid: string) => DemonstrationInvoice | undefined): Rule =>
+  (e, now) => {
+    const uuid = tail(e);
+    const hash = url(e).searchParams.get('hash') ?? '';
+    if (has(hash, 'unknown')) return notFound('einvoice.lookup', 'no such invoice');
+    const known = book(uuid);
+    const seller = CAST_COMPANIES[0] as CastCompany;
+    const buyer = CAST_COMPANIES[2] as CastCompany;
+    const total = known === undefined ? '115000.00' : minorToDecimal(known.totalMinor);
+    const net = known === undefined ? '100000.00' : total;
+    const invoice = {
+      id: `INV-DEMO-${digest(uuid).slice(0, 8)}`,
+      uuid,
+      issueDate: isoDay(now - (known === undefined ? 30 : 0) * DAY),
+      seller: { crNumber: known?.sellerCr ?? seller.crNumber, name: seller.nameAr },
+      buyer: { crNumber: known?.buyerCr ?? buyer.crNumber, name: buyer.nameAr },
+      taxExclusiveAmount: net,
+      taxAmount: known === undefined ? '15000.00' : '0.00',
+      taxInclusiveAmount: total,
+      invoiceLines: [
+        {
+          id: 1,
+          itemName: 'Demonstration goods',
+          itemNameAr: 'بضائع تجريبية',
+          itemClassificationCode: '469000',
+          invoicedQuantity: '100',
+          unitCode: 'PCE',
+          lineExtensionAmount: net,
+        },
+      ],
     };
-  const validationResults = { infoMessages: [PASS_INFO], warningMessages: [], errorMessages: [], status: 'PASS' };
-  return has(hash, 'simplified')
-    ? { validationResults, reportingStatus: 'REPORTED', invoice }
-    : { validationResults, clearanceStatus: 'CLEARED', invoice };
-};
+    if (has(hash, 'reject'))
+      return {
+        validationResults: {
+          infoMessages: [],
+          warningMessages: [],
+          errorMessages: [
+            {
+              type: 'ERROR',
+              code: 'BR-KSA-F-06',
+              category: 'KSA',
+              message: 'Field does not meet the allowed length (demonstration)',
+              status: 'ERROR',
+            },
+          ],
+          status: 'ERROR',
+        },
+        clearanceStatus: 'NOT_CLEARED',
+        invoice,
+      };
+    const validationResults = { infoMessages: [PASS_INFO], warningMessages: [], errorMessages: [], status: 'PASS' };
+    return has(hash, 'simplified')
+      ? { validationResults, reportingStatus: 'REPORTED', invoice }
+      : { validationResults, clearanceStatus: 'CLEARED', invoice };
+  };
+
+const einvoiceLookup: Rule = einvoiceLookupWith(() => undefined);
 
 const einvoiceHistory: Rule = (e) => {
   const seller = body(e, 'sellerCr');
@@ -594,6 +613,39 @@ const billPresent: Rule = (e, now) => {
   };
 };
 
+/**
+ * Payments the demonstration's SADAD has received against bills the platform
+ * presented (Wasl W4b): a person marks a presented bill paid at SADAD, and the
+ * next paid-bills file carries it, so reconciliation runs through the real
+ * adapter and matching. Synthetic and labelled FIXTURE wherever it shows; one
+ * list per process, kept across module reloads.
+ */
+interface DemonstrationPayment {
+  readonly billNumber: string;
+  readonly amount: string;
+  readonly currency: string;
+  readonly paidAtEpochSeconds: number;
+}
+const PAID_KEY = Symbol.for('sanad.demonstration.sadadPaid');
+const demonstrationPaid = (): DemonstrationPayment[] => {
+  const g = globalThis as { [PAID_KEY]?: DemonstrationPayment[] };
+  g[PAID_KEY] ??= [];
+  return g[PAID_KEY];
+};
+
+/** Record a payment at the demonstration's SADAD against a presented bill (FIXTURE). The amount is SADAD's decimal. */
+export function recordDemonstrationSadadPayment(p: DemonstrationPayment): void {
+  if (!/^\d+\.\d{2}$/.test(p.amount) || !/^[A-Za-z0-9-]{1,40}$/.test(p.billNumber)) return;
+  if (demonstrationPaid().some((x) => x.billNumber === p.billNumber && x.paidAtEpochSeconds === p.paidAtEpochSeconds))
+    return;
+  demonstrationPaid().push(p);
+}
+
+/** Tests only: forget the demonstration's payments. */
+export function resetDemonstrationSadadPayments(): void {
+  demonstrationPaid().length = 0;
+}
+
 const billReconciliation: Rule = (e, now) => {
   const from = Date.parse(url(e).searchParams.get('fromDateTime') ?? '');
   const bill = (n: string, status: string, paidDaysAgo: number, value: string, settled: boolean) => ({
@@ -604,10 +656,18 @@ const billReconciliation: Rule = (e, now) => {
     SadadPaymentId: `SADAD-DEMO-${n}`,
     ...(settled ? { SettlementReference: `SETTLE-DEMO-${n}` } : {}),
   });
+  const recorded = demonstrationPaid().map((p) => ({
+    BillDetails: { BillerID: DEMO_SADAD_BILLER_ID, BillNumber: p.billNumber },
+    Status: 'PAID',
+    PaidAmount: { Amount: p.amount, Currency: p.currency },
+    PaymentDateTime: isoTime(p.paidAtEpochSeconds),
+    SadadPaymentId: `SADAD-DEMO-${digest(`${p.billNumber}|${String(p.paidAtEpochSeconds)}`)}`,
+  }));
   const bills = [
     bill('0001', 'SETTLED', 2, '3100.00', true),
     bill('0002', 'PAID', 0, '2325.00', false),
     { ...bill('0003', 'PRESENTED', 0, '4650.00', false), PaidAmount: undefined, PaymentDateTime: undefined },
+    ...recorded,
   ].filter((b) => b.PaymentDateTime === undefined || Number.isNaN(from) || Date.parse(b.PaymentDateTime) >= from);
   return { Data: { Bill: bills }, Links: { Self: e.url }, Meta: { TotalPages: 1 } };
 };
@@ -720,11 +780,24 @@ export const KSA_DEMONSTRATION_RULES: Readonly<Record<string, Rule>> = {
 };
 
 export class KsaDemonstrationTransport implements RailTransport {
-  /** `now` is the clock the relative dates hang from; the hosted demonstration passes the server's. */
-  constructor(private readonly now: () => number = () => Math.floor(Date.now() / 1000)) {}
+  readonly #einvoiceLookup: Rule | undefined;
+
+  /**
+   * `now` is the clock the relative dates hang from; the hosted demonstration passes the server's.
+   * `invoices`, where given, names the parties and total of particular invoices by UUID.
+   */
+  constructor(
+    private readonly now: () => number = () => Math.floor(Date.now() / 1000),
+    invoices?: (invoiceUuid: string) => DemonstrationInvoice | undefined,
+  ) {
+    this.#einvoiceLookup = invoices === undefined ? undefined : einvoiceLookupWith(invoices);
+  }
 
   async call(operation: string, e: RailEnvelope): Promise<Readonly<Record<string, unknown>>> {
-    const rule = own(KSA_DEMONSTRATION_RULES, operation);
+    const rule =
+      operation === 'einvoice.lookup' && this.#einvoiceLookup !== undefined
+        ? this.#einvoiceLookup
+        : own(KSA_DEMONSTRATION_RULES, operation);
     // An operation without a rule is a gap in the demonstration, said plainly rather than answered.
     if (rule === undefined) throw new TransportError(operation, 501, `no demonstration rule for ${operation}`);
     return Promise.resolve(rule(e, this.now()));

@@ -1,0 +1,105 @@
+{
+  "catalogueVersion": "2026-10-19.2",
+  "note": "ILLUSTRATIVE — how UAE SME documents are recognised from their text (document intelligence D1, docs/DOCUMENT-INTELLIGENCE-PLAN.md). English labels carry most weight (the document engine reads English labels and digits reliably; rendered Arabic text not yet, V-06). To be tuned against real samples before relying on the classifications.",
+  "engine": "RULES",
+  "ambiguityMargin": 2,
+  "types": [
+    {
+      "kind": "TRADE_LICENCE",
+      "satisfies": ["TRADE_LICENCE"],
+      "markers": [
+        { "text": "Trade License", "weight": 3 },
+        { "text": "Trade Licence", "weight": 3 },
+        { "text": "Department of Economy", "weight": 2 },
+        { "text": "License No", "weight": 2 },
+        { "text": "رخصة تجارية", "weight": 2 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 7,
+      "facts": [
+        { "fact": "ISSUE_DATE", "labels": ["Issue Date", "تاريخ الإصدار"] },
+        { "fact": "EXPIRY_DATE", "labels": ["Expiry Date", "تاريخ الانتهاء"] },
+        { "fact": "REGISTRATION_NUMBER", "labels": ["License No", "Licence No", "رقم الرخصة"] }
+      ]
+    },
+    {
+      "kind": "EMIRATES_ID",
+      "satisfies": ["OWNER_EMIRATES_ID"],
+      "markers": [
+        { "text": "Emirates ID", "weight": 3 },
+        { "text": "Federal Authority for Identity", "weight": 2 },
+        { "text": "Identity Card", "weight": 1 },
+        { "text": "بطاقة الهوية", "weight": 1 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 6,
+      "facts": [{ "fact": "EXPIRY_DATE", "labels": ["Expiry Date", "Date of Expiry", "تاريخ الانتهاء"] }]
+    },
+    {
+      "kind": "BANK_STATEMENT",
+      "satisfies": ["COMPANY_BANK_STATEMENT_12M", "PERSONAL_BANK_STATEMENT_12M"],
+      "markers": [
+        { "text": "Account Statement", "weight": 3 },
+        { "text": "Bank Statement", "weight": 3 },
+        { "text": "Opening Balance", "weight": 2 },
+        { "text": "Closing Balance", "weight": 2 },
+        { "text": "IBAN", "weight": 1 },
+        { "text": "كشف حساب", "weight": 2 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 7,
+      "facts": [{ "fact": "STATEMENT_PERIOD", "labels": ["Statement Period", "Period", "الفترة"] }]
+    },
+    {
+      "kind": "SALARY_CERTIFICATE",
+      "satisfies": ["SALARY_CERTIFICATE"],
+      "markers": [
+        { "text": "Salary Certificate", "weight": 3 },
+        { "text": "Basic Salary", "weight": 2 },
+        { "text": "To Whom It May Concern", "weight": 1 },
+        { "text": "شهادة راتب", "weight": 2 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 6,
+      "facts": [{ "fact": "ISSUE_DATE", "labels": ["Issue Date", "Date", "التاريخ"] }]
+    },
+    {
+      "kind": "WPS_SALARY_REPORT",
+      "satisfies": ["WPS_SALARY_REPORT"],
+      "markers": [
+        { "text": "Wage Protection System", "weight": 3 },
+        { "text": "WPS", "weight": 2 },
+        { "text": "Salary Information File", "weight": 2 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 5,
+      "facts": [{ "fact": "STATEMENT_PERIOD", "labels": ["Period", "Salary Month"] }]
+    },
+    {
+      "kind": "AUDITED_FINANCIALS",
+      "satisfies": ["AUDITED_FINANCIALS_2Y"],
+      "markers": [
+        { "text": "Independent Auditor's Report", "weight": 3 },
+        { "text": "Statement of Financial Position", "weight": 2 },
+        { "text": "Statement of Profit or Loss", "weight": 1 },
+        { "text": "Balance Sheet", "weight": 1 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 6,
+      "facts": []
+    },
+    {
+      "kind": "TENANCY_CONTRACT",
+      "satisfies": ["RENTAL_CONTRACT"],
+      "markers": [
+        { "text": "Tenancy Contract", "weight": 3 },
+        { "text": "Ejari", "weight": 2 },
+        { "text": "Lease Agreement", "weight": 2 },
+        { "text": "Landlord", "weight": 1 }
+      ],
+      "minimumScore": 3,
+      "confidentScore": 6,
+      "facts": []
+    }
+  ]
+}

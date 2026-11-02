@@ -27,6 +27,11 @@ const AUTHORITIES: readonly { readonly code: string; readonly en: string; readon
   { code: 'FREE_ZONE', en: 'A free-zone authority', ar: 'سلطة منطقة حرة' },
 ];
 
+/** Saudi Arabia: the commercial register is the Ministry of Commerce's. */
+const SA_AUTHORITIES: readonly { readonly code: string; readonly en: string; readonly ar: string }[] = [
+  { code: 'MOC', en: 'Ministry of Commerce — commercial register', ar: 'وزارة التجارة — السجل التجاري' },
+];
+
 export default async function NewIntakePage({
   params,
   searchParams,
@@ -44,6 +49,9 @@ export default async function NewIntakePage({
   const { t } = f;
   if (j.tenant === undefined) notFound();
   const variants = [...(await productVariants(j.tenant)).values()];
+  // The registration and tax fields follow the jurisdiction: a trade licence and TRN in the UAE, a CR in Saudi Arabia.
+  const saudi = j.code === 'SA';
+  const authorities = saudi ? SA_AUTHORITIES : AUTHORITIES;
 
   const labelCls = 'flex flex-col gap-1.5 text-[13px] font-medium text-ink';
   return (
@@ -71,13 +79,15 @@ export default async function NewIntakePage({
           <SectionCard title={t('The business', 'المنشأة')}>
             <div className="grid gap-5 px-5 py-5 sm:grid-cols-2">
               <label className={labelCls}>
-                {t('Trade licence number', 'رقم الرخصة التجارية')}
+                {saudi
+                  ? t('Commercial registration (CR) number', 'رقم السجل التجاري')
+                  : t('Trade licence number', 'رقم الرخصة التجارية')}
                 <input name="tradeLicence" required dir="ltr" autoComplete="off" className={`${INPUT} identifier`} />
               </label>
               <label className={labelCls}>
                 {t('Issuing authority', 'جهة الإصدار')}
                 <select name="issuingAuthority" required className={INPUT}>
-                  {AUTHORITIES.map((a) => (
+                  {authorities.map((a) => (
                     <option key={a.code} value={a.code}>
                       {t(a.en, a.ar)}
                     </option>
@@ -112,17 +122,26 @@ export default async function NewIntakePage({
                   className={`${INPUT} tabular-nums`}
                 />
               </label>
+              {saudi ? (
+                <p className="self-end text-[12px] text-ink-quiet" data-zakat-by-cr>
+                  {t(
+                    'The zakat certificate is checked with ZATCA by the CR on the next screen; no tax number is keyed.',
+                    'تُتحقق شهادة الزكاة لدى هيئة الزكاة والضريبة والجمارك برقم السجل التجاري في الشاشة التالية؛ ولا يُدخل رقم ضريبي.',
+                  )}
+                </p>
+              ) : (
               <label className={labelCls}>
-                {t('Tax registration number (TRN), if registered', 'رقم التسجيل الضريبي، إن وُجد')}
-                <input
-                  name="taxRegistrationNumber"
-                  inputMode="numeric"
-                  dir="ltr"
-                  autoComplete="off"
-                  placeholder="100XXXXXXXXXXXX"
-                  className={`${INPUT} identifier`}
-                />
-              </label>
+                  {t('Tax registration number (TRN), if registered', 'رقم التسجيل الضريبي، إن وُجد')}
+                  <input
+                    name="taxRegistrationNumber"
+                    inputMode="numeric"
+                    dir="ltr"
+                    autoComplete="off"
+                    placeholder="100XXXXXXXXXXXX"
+                    className={`${INPUT} identifier`}
+                  />
+                </label>
+              )}
             </div>
           </SectionCard>
 
@@ -193,7 +212,9 @@ export default async function NewIntakePage({
           <SectionCard
             title={t('Owners and signatories', 'الملاك والمفوّضون بالتوقيع')}
             note={t(
-              'By reference and display name only — never an Emirates ID or passport number. At least one party signs; shares add up to at most 100%.',
+              saudi
+                ? 'By reference and display name only — never a national ID, iqama or passport number. At least one party signs; shares add up to at most 100%.'
+                : 'By reference and display name only — never an Emirates ID or passport number. At least one party signs; shares add up to at most 100%.',
               'بالمرجع والاسم المعروض فقط — دون رقم الهوية أو جواز السفر. يوقّع طرف واحد على الأقل، ولا يتجاوز مجموع الحصص ١٠٠٪.',
             )}
           >

@@ -221,7 +221,9 @@ const bad = (reason: string, detail: string, context?: Readonly<Record<string, s
 // A UAE national identity number always begins 784 (the UAE's ISO 3166 numeric code). Any fifteen digits would also
 // match a UAE tax registration number (fifteen digits beginning 100), which is not personal data.
 const AE_IDENTITY_NUMBER = /(?<!\d)784[- ]?\d{4}[- ]?\d{7}[- ]?\d(?!\d)/;
-const SA_IDENTITY_NUMBER = /(?<!\d)[12]\d{9}(?!\d)/;
+// Standing alone, not inside an alphanumeric token: a provider's hexadecimal reference (a UUID, a transaction id) can
+// hold ten digits in a row, and that is not a person's id. Spaces, punctuation and line ends still delimit one.
+const SA_IDENTITY_NUMBER = /(?<![0-9A-Za-z])[12]\d{9}(?![0-9A-Za-z])/;
 const IDENTITY_NUMBERS: readonly RegExp[] = [AE_IDENTITY_NUMBER, SA_IDENTITY_NUMBER];
 
 /**
@@ -236,12 +238,33 @@ const IDENTITY_NUMBERS: readonly RegExp[] = [AE_IDENTITY_NUMBER, SA_IDENTITY_NUM
  * only the hand-over: reasons, document references, figure source references,
  * bureau references, signature and payment references.
  */
-export function containsIdentityNumber(value: unknown, skipKeys: ReadonlySet<string> = new Set()): boolean {
-  if (typeof value === 'string') return IDENTITY_NUMBERS.some((p) => p.test(value));
-  if (Array.isArray(value)) return value.some((v) => containsIdentityNumber(v, skipKeys));
+/**
+ * The fields that hold a business's registration number. A Saudi commercial
+ * registration is ten digits beginning 1, 2, 4, 5 or 7 — the same shape as a
+ * national id or iqama — so these named fields, and only these, are not read
+ * as an identity number. A person's id typed into one is caught by the
+ * registry check instead: the register finds no such business.
+ */
+export const REGISTRATION_FIELDS: ReadonlySet<string> = new Set(['tradeLicence', 'registrationRef', 'crNumber']);
+
+export function containsIdentityNumber(
+  value: unknown,
+  skipKeys: ReadonlySet<string> = new Set(),
+  /**
+   * The business's own registration number. A provider's reference may embed
+   * it (a zakat certificate "ZC-…-<CR>"), and it is not a person's id; every
+   * other identity-shaped run is still found.
+   */
+  ownRegistration?: string,
+): boolean {
+  if (typeof value === 'string') {
+    const text = ownRegistration !== undefined && ownRegistration.length >= 6 ? value.split(ownRegistration).join(' ') : value;
+    return IDENTITY_NUMBERS.some((p) => p.test(text));
+  }
+  if (Array.isArray(value)) return value.some((v) => containsIdentityNumber(v, skipKeys, ownRegistration));
   if (value !== null && typeof value === 'object') {
     return Object.entries(value as Record<string, unknown>).some(
-      ([k, v]) => !skipKeys.has(k) && containsIdentityNumber(v, skipKeys),
+      ([k, v]) => !skipKeys.has(k) && containsIdentityNumber(v, skipKeys, ownRegistration),
     );
   }
   return false;
@@ -322,7 +345,7 @@ export function receiveHandover(
   if (input.applicant.upstreamVerificationRefs.length === 0)
     return bad('UPSTREAM_VERIFICATION_MISSING', 'Stage 4 verification references are required before stage 5');
   // The whole hand-over, not only the applicant: an identity number in the upstream reference or a product field is refused too.
-  if (containsIdentityNumber(input))
+  if (containsIdentityNumber(input, REGISTRATION_FIELDS, input.applicant.registrationRef))
     return bad(
       'IDENTITY_NUMBER_IN_PAYLOAD',
       'An identity number does not belong in the application record; send a reference',

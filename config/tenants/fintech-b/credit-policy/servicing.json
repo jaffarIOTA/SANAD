@@ -1,0 +1,12 @@
+{
+  "policyId": "sme-servicing",
+  "version": "0.1.0",
+  "policyRef": "ILLUSTRATIVE — a SAR 200 late charge per instalment overdue more than 5 days, and restructured schedules of at most 60 instalments, chosen 2026-10-16 as placeholders. Not an approved policy of any institution; the institution's policy and its regulator's cap on late charges replace these before any real use. For an Islamic facility the late charge is a charity obligation, never income",
+  "lateCharge": { "graceDays": 5, "amountMinorUnits": "20000" },
+  "restructuring": { "maxPayments": 60 },
+  "schedule": {
+    "runAtLocal": "06:00",
+    "bureauReportingDay": 5,
+    "note": "ILLUSTRATIVE — the daily servicing cycle at 06:00 Riyadh time and the month's SIMAH status from the 5th, chosen 2026-10-17 as placeholders. SIMAH's actual submission calendar and the company's operations window replace these before any real use"
+  }
+}

@@ -29,7 +29,16 @@ import {
 } from '@sanad/design/primitives.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 
-import { approveAction, rejectAction, returnAction, servicingRespondAction } from '../../../../server/actions.ts';
+import type { TenantCode } from '@sanad/config/loader.ts';
+
+import {
+  approveAction,
+  openTransactionAction,
+  rejectAction,
+  returnAction,
+  servicingRespondAction,
+} from '../../../../server/actions.ts';
+import { transactionForRequest } from '../../../../server/murabaha-transactions.ts';
 import { canReview, pageStaff } from '../../../../server/session.ts';
 import { requestPrincipal } from '../../../../server/staff.ts';
 import { Gate, authorityRefusal } from '../../Gate.tsx';
@@ -78,6 +87,11 @@ export default async function ReviewPage({
   const arabic = locale === 'ar-SA';
   const t = (en: string, ar: string): string => (arabic ? ar : en);
   const numerals = defaultNumerals(locale);
+  // The transaction this approval opened, if it did.
+  const opened =
+    request.state === 'APPROVED' && signedIn.tenantId !== undefined
+      ? await transactionForRequest(signedIn.tenantId as TenantCode, requestId)
+      : undefined;
   const policy = CHANNEL_POLICIES[request.channel];
   const awaitingServicing = request.state === 'AWAITING_SERVICING_RESPONSE';
   const awaitingReview = request.state === 'AWAITING_REVIEW';
@@ -237,9 +251,39 @@ export default async function ReviewPage({
             {request.state === 'APPROVED' ? (
               <div className="grid gap-6 md:grid-cols-2">
                 <Field label={t('Outcome', 'النتيجة')}>
-                  {t(
-                    'Approved — a transaction opens in DRAFT with all three gates ahead of it.',
-                    'اعتُمد — تنشأ معاملة في حالة المسودة وأمامها البوابات الثلاث.',
+                  {opened === undefined ? (
+                    <span className="flex flex-col gap-2" data-transaction-missing>
+                      {t(
+                        'Approved. No transaction is open yet: opening was refused when the request was approved (see the reason above, if shown).',
+                        'اعتُمد. لا توجد معاملة مفتوحة بعد: رُفض فتحها عند الاعتماد (انظر السبب أعلاه إن ظهر).',
+                      )}
+                      <Gate staff={signedIn} act="REVIEW" arabic={arabic}>
+                        <form action={openTransactionAction}>
+                          <input type="hidden" name="locale" value={segment} />
+                          <input type="hidden" name="requestId" value={requestId} />
+                          <button
+                            type="submit"
+                            className="press inline-flex h-9 items-center rounded-tile border border-line-strong bg-surface px-3 text-[13px] font-semibold text-heading hover:bg-sunken"
+                          >
+                            {t('Open the transaction', 'فتح المعاملة')}
+                          </button>
+                        </form>
+                      </Gate>
+                    </span>
+                  ) : (
+                    <span data-transaction-open>
+                      {t('Approved — transaction ', 'اعتُمد — المعاملة ')}
+                      <a
+                        href={`/${segment}/transactions/${opened.transactionRef}`}
+                        className="identifier font-semibold text-brand hover:underline"
+                      >
+                        {opened.transactionRef}
+                      </a>
+                      {t(
+                        ' opened in DRAFT, with all three gates ahead of it.',
+                        ' فُتحت في حالة المسودة، وأمامها البوابات الثلاث.',
+                      )}
+                    </span>
                   )}
                 </Field>
                 {request.contraryJustification !== undefined ? (

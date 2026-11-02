@@ -74,6 +74,42 @@ export const DEVELOPMENT_STAFF: readonly DevelopmentStaff[] = [
     groups: ['sanad.bank-a.senior-checkers'],
   },
   {
+    environmentName: 'STAFF_DEV_TOKEN_SA_COMMITTEE',
+    principalId: 'stf-committee-01',
+    tenantId: 'bank-a',
+    groups: ['sanad.bank-a.credit-committee'],
+  },
+  {
+    environmentName: 'STAFF_DEV_TOKEN_SA_FINANCE',
+    principalId: 'stf-finance-01',
+    tenantId: 'bank-a',
+    groups: ['sanad.bank-a.finance'],
+  },
+  {
+    environmentName: 'STAFF_DEV_TOKEN_FB_OFFICER',
+    principalId: 'stf-fb-officer-01',
+    tenantId: 'fintech-b',
+    groups: ['sanad.fintech-b.makers'],
+  },
+  {
+    environmentName: 'STAFF_DEV_TOKEN_FB_CHECKER',
+    principalId: 'stf-fb-checker-01',
+    tenantId: 'fintech-b',
+    groups: ['sanad.fintech-b.checkers'],
+  },
+  {
+    environmentName: 'STAFF_DEV_TOKEN_FB_COMMITTEE',
+    principalId: 'stf-fb-committee-01',
+    tenantId: 'fintech-b',
+    groups: ['sanad.fintech-b.credit-committee'],
+  },
+  {
+    environmentName: 'STAFF_DEV_TOKEN_FB_FINANCE',
+    principalId: 'stf-fb-finance-01',
+    tenantId: 'fintech-b',
+    groups: ['sanad.fintech-b.finance'],
+  },
+  {
     environmentName: 'STAFF_DEV_TOKEN_AE_OFFICER',
     principalId: 'stf-ae-officer-01',
     tenantId: 'sme-fund-ae',

@@ -128,6 +128,8 @@ export const STEP_UP_ACTS: ReadonlySet<WorkbenchAct> = new Set<WorkbenchAct>([
   'BUSINESS_APPROVE',
   'BUSINESS_COMMITTEE',
   'BUSINESS_DISBURSE',
+  'TRADE_UNWIND',
+  'TRADE_SETTLEMENT',
 ]);
 
 /** The step-up window in force for a tenant; a configuration that does not resolve fails closed (a zero window). */

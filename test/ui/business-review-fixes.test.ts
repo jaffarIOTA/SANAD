@@ -117,7 +117,9 @@ describe('the assessment inputs', () => {
 
   it('are required on screen before Submit, since they lock at submission', () => {
     expect(APPLICATION).toContain('const inputsMissing = view.assessmentInputs === undefined;');
-    expect(APPLICATION).toMatch(/const ready = [^\n]*&& !inputsMissing;/);
+    expect(APPLICATION).toMatch(/const ready =[^;]*&& !inputsMissing &&\s*securityReady;/);
+    // UAE M3: the required security, recorded and confirmed, is a submit precondition too.
+    expect(APPLICATION).toContain('const securityReady = security.ok && security.value.position.complete;');
   });
 });
 
@@ -157,11 +159,13 @@ describe('after a letter is sent', () => {
     expect(sent).toContain('name="disbursementDate"');
   });
 
-  it('offers to send a newer, unsent version, and keeps recording the signature on the sent one', () => {
+  it('offers to send a newer, unsent version, and keeps the signature on the sent one', () => {
     expect(sent).toContain('const unsent = latestVersion !== undefined && latestVersion !== letterVersion;');
     expect(sent).toContain('<form action={sendOfferAction}');
-    expect(sent).toContain('<form action={recordSignedAction}');
-    expect(sent).toContain('name="letterVersion" value={letterVersion ?? \'\'}');
+    // UAE M5a: signing opens and is confirmed at the identity service; the letter version is the server's, never the form's.
+    expect(sent).toContain('action={startSigningAction}');
+    expect(sent).toContain('action={confirmSigningAction}');
+    expect(repo('apps/ops/src/server/business-signing.ts')).toContain('documentHash: letterVersion');
   });
 });
 
@@ -184,6 +188,18 @@ const SOURCES = [
   'apps/ops/src/server/business.ts',
   'apps/ops/src/server/business-actions.ts',
   'apps/ops/src/server/business-rails.ts',
+  'apps/ops/src/server/business-storage.ts',
+  'core/documents/upload.ts',
+  'core/origination/security-register.ts',
+  'core/origination/decision-pack.ts',
+  'core/kernel/iban.ts',
+  'apps/ops/src/server/business-signing.ts',
+  'apps/ops/src/server/business-payments.ts',
+  'apps/ops/src/server/business-booking.ts',
+  'apps/ops/src/server/business-tawarruq.ts',
+  'apps/ops/src/server/business-letter-pdf.ts',
+  'core/servicing/restructure.ts',
+  'core/servicing/late-charges.ts',
   'core/origination/business-application.ts',
   'core/applicant/financials.ts',
   'core/origination/business-intake.ts',

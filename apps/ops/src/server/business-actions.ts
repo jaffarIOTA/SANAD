@@ -28,6 +28,8 @@
  * Currency never comes from a form.
  */
 
+import { randomUUID } from 'node:crypto';
+
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -37,9 +39,46 @@ import type { Result } from '@sanad/core/kernel/result.ts';
 
 import type { WorkbenchAct } from './authority.ts';
 import { fetchBankStatements, fetchBureauReport } from './business-rails.ts';
+import { uploadBusinessDocument } from './business-storage.ts';
+import { confirmSigning, startSigning } from './business-signing.ts';
+import { recordFixtureCollectionResult, recordFixturePaymentResult } from './business-payments.ts';
+import { bookInLoanSystem } from './business-booking.ts';
+import { requestMissingDocuments, validateDocumentAndResume } from './business-gaps.ts';
+import { renderOfferPdf, sealSignedLetter } from './business-letter-pdf.ts';
+import { readFiguresFromStatement } from './business-statement-reading.ts';
+import { runServicingCycleNow } from './servicing-scheduler.ts';
+import {
+  buyCommodity,
+  sellCommodityOnBehalf,
+  sellCommodityToCustomer,
+  transferCommodityTitle,
+} from './business-tawarruq.ts';
 import {
   approveStraightThrough,
   confirmBankStatementFacts,
+  confirmSecurityItem,
+  confirmPayee,
+  confirmRepayment,
+  planTranches,
+  presentCollections,
+  reportToBureau,
+  approveRestructure,
+  assessLateCharges,
+  liftHardship,
+  proposeRestructure,
+  setHardship,
+  waiveLateCharge,
+  recordRepayment,
+  recordPayee,
+  satisfyCondition,
+  verifyCondition,
+  addCondition,
+  addCovenant,
+  justifyDeviation,
+  withdrawPackItem,
+  recordCollateral,
+  recordGuarantee,
+  withdrawSecurityItem,
   decideInCommittee,
   recordCreditNotes,
   generateOffer,
@@ -53,7 +92,6 @@ import {
   runAssessment,
   sendOffer,
   submitForAssessment,
-  validateDocument,
   verifyFigure,
   withdrawApplication,
 } from './business.ts';
@@ -81,7 +119,7 @@ async function contextOf(form: FormData, act: WorkbenchAct): Promise<Context> {
   const applicationId = field(form, 'applicationId');
   // The screen to return to: one of the application's own sub-screens, from a fixed list — never a path from the form.
   const screen = field(form, 'screen');
-  const suffix = screen === 'assessment' || screen === 'offer' ? `/${screen}` : '';
+  const suffix = screen === 'assessment' || screen === 'offer' || screen === 'decision' ? `/${screen}` : '';
   const path =
     applicationId === '' ? `/${locale}/business` : `/${locale}/business/${encodeURIComponent(applicationId)}${suffix}`;
   // No session: to sign in. No authority for this act: back with AUTHORITY_REQUIRED. Tenant not active: to sign in.
@@ -200,6 +238,48 @@ export async function presentDocumentAction(form: FormData): Promise<void> {
   );
 }
 
+/**
+ * The officer uploads a document's file. The bytes go to the tenant's object
+ * store, the application records their hash, and the document is PENDING
+ * until a checker — another person — validates it, as a referenced one is.
+ * The file's name and the browser's declared type are not read.
+ */
+export async function uploadDocumentAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  const file = form.get('file');
+  if (!(file instanceof Blob) || file.size === 0)
+    return finish(ctx, refused('UPLOAD_EMPTY', 'Choose a file to upload'), '');
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return finish(
+    ctx,
+    () =>
+      uploadBusinessDocument(
+        ctx.tenant,
+        ctx.applicationId,
+        field(form, 'documentType'),
+        bytes,
+        ctx.actor,
+        randomUUID(),
+      ),
+    'DOCUMENT_UPLOADED',
+  );
+}
+
+/**
+ * The officer asks the document engine to read an uploaded statement. The form
+ * carries the document reference only: every value proposed comes from the
+ * document as read, through the system's ingestion principal, and is verified
+ * by a person before it is used.
+ */
+export async function readStatementAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(
+    ctx,
+    () => readFiguresFromStatement(ctx.tenant, ctx.applicationId, field(form, 'documentRef'), randomUUID()),
+    'STATEMENT_READ',
+  );
+}
+
 /** The checker validates a presented document: decision VALID or INVALID. */
 export async function validateDocumentAction(form: FormData): Promise<void> {
   const ctx = await contextOf(form, 'BUSINESS_VERIFY');
@@ -208,9 +288,25 @@ export async function validateDocumentAction(form: FormData): Promise<void> {
     return finish(ctx, refused('DOCUMENT_DECISION_INVALID', 'A document is validated as VALID or INVALID'), '');
   return finish(
     ctx,
-    () => validateDocument(ctx.tenant, ctx.applicationId, field(form, 'documentRef'), decision, ctx.actor),
+    () =>
+      // D4: accepting the last failing document closes an open request for documents.
+      validateDocumentAndResume(
+        ctx.tenant,
+        ctx.applicationId,
+        field(form, 'documentRef'),
+        decision,
+        ctx.actor,
+        // Only asked for where the issuer did not confirm the document (D3); the service ignores it otherwise.
+        field(form, 'resolution'),
+      ),
     decision === 'VALID' ? 'DOCUMENT_VALIDATED' : 'DOCUMENT_REJECTED',
   );
+}
+
+/** The officer asks the applicant for every document gap, by one notification on the outbox (D4). */
+export async function requestDocumentsAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(ctx, () => requestMissingDocuments(ctx.tenant, ctx.applicationId, ctx.actor), 'DOCUMENTS_REQUESTED');
 }
 
 export async function recordAssessmentInputsAction(form: FormData): Promise<void> {
@@ -425,4 +521,453 @@ export async function withdrawApplicationAction(form: FormData): Promise<void> {
     () => withdrawApplication(ctx.tenant, ctx.applicationId, field(form, 'reason'), ctx.actor),
     'WITHDRAWN',
   );
+}
+
+// -- The security register (UAE M3) -------------------------------------------------------
+
+/** A civil date (YYYY-MM-DD) as epoch seconds at 00:00 UTC; undefined if it is not a real date. */
+function civilDateSeconds(raw: string): bigint | undefined {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (m === null) return undefined;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const ms = Date.UTC(y, mo - 1, d);
+  const back = new Date(ms);
+  if (back.getUTCFullYear() !== y || back.getUTCMonth() !== mo - 1 || back.getUTCDate() !== d) return undefined;
+  return BigInt(ms / 1000);
+}
+
+/** The officer records a collateral item: kind, description, market value, valuation date and valuer, charge. */
+export async function recordCollateralAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  const value = minorUnits(field(form, 'marketValue'));
+  if (value === undefined) return finish(ctx, refused('AMOUNT_MALFORMED', 'The market value is an amount'), '');
+  const valuedAt = civilDateSeconds(field(form, 'valuedOn'));
+  if (valuedAt === undefined) return finish(ctx, refused('DATE_MALFORMED', 'The valuation date is a date'), '');
+  const evidenceRef = field(form, 'evidenceRef');
+  const chargeRef = field(form, 'chargeRef');
+  return finish(
+    ctx,
+    () =>
+      recordCollateral(
+        ctx.tenant,
+        ctx.applicationId,
+        {
+          kind: field(form, 'kind'),
+          description: field(form, 'description'),
+          marketValueMinorUnits: value,
+          valuedAtEpochSeconds: valuedAt,
+          valuerRef: field(form, 'valuerRef'),
+          ...(evidenceRef === '' ? {} : { evidenceRef }),
+          charge: field(form, 'charge'),
+          ...(chargeRef === '' ? {} : { chargeRef }),
+        },
+        ctx.actor,
+      ),
+    'COLLATERAL_RECORDED',
+  );
+}
+
+/** The officer records a guarantee: an owner's personal guarantee, or a company's. Limited when a limit is given. */
+export async function recordGuaranteeAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  const kind = field(form, 'guarantorKind');
+  const rawLimit = field(form, 'limit');
+  const limit = rawLimit === '' ? undefined : minorUnits(rawLimit);
+  if (rawLimit !== '' && limit === undefined)
+    return finish(ctx, refused('AMOUNT_MALFORMED', 'The guarantee limit is an amount'), '');
+  const deedRef = field(form, 'deedRef');
+  return finish(
+    ctx,
+    () =>
+      recordGuarantee(
+        ctx.tenant,
+        ctx.applicationId,
+        {
+          guarantorKind: kind,
+          guarantorRef: field(form, kind === 'PERSONAL' ? 'ownerRef' : 'companyRef'),
+          guarantorName: field(form, 'companyName'),
+          ...(limit === undefined ? {} : { limitMinorUnits: limit }),
+          ...(deedRef === '' ? {} : { deedRef }),
+        },
+        ctx.actor,
+      ),
+    'GUARANTEE_RECORDED',
+  );
+}
+
+/** A checker — not whoever recorded it — confirms a collateral item or guarantee. */
+export async function confirmSecurityAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_VERIFY');
+  return finish(
+    ctx,
+    () => confirmSecurityItem(ctx.tenant, ctx.applicationId, field(form, 'itemId'), ctx.actor),
+    'SECURITY_CONFIRMED',
+  );
+}
+
+/** The officer withdraws an item before submission; it stays on record, counted nowhere. */
+export async function withdrawSecurityAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(
+    ctx,
+    () => withdrawSecurityItem(ctx.tenant, ctx.applicationId, field(form, 'itemId'), ctx.actor),
+    'SECURITY_WITHDRAWN',
+  );
+}
+
+// -- The decision pack (UAE M4) -----------------------------------------------------------
+
+/** Credit attaches a condition precedent or subsequent, in both languages. */
+export async function addConditionAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_CREDIT_NOTES');
+  const kind = field(form, 'kind');
+  const rawDue = field(form, 'dueDays');
+  const due = rawDue === '' ? undefined : /^\d{1,4}$/.test(rawDue) ? Number(rawDue) : -1;
+  return finish(
+    ctx,
+    () =>
+      addCondition(
+        ctx.tenant,
+        ctx.applicationId,
+        {
+          kind,
+          textEn: field(form, 'textEn'),
+          textAr: field(form, 'textAr'),
+          ...(due === undefined ? {} : { dueDaysAfterDisbursement: due }),
+        },
+        ctx.actor,
+      ),
+    'CONDITION_ADDED',
+  );
+}
+
+/** Credit attaches a covenant from the institution's templates; no threshold is typed. */
+export async function addCovenantAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_CREDIT_NOTES');
+  return finish(
+    ctx,
+    () => addCovenant(ctx.tenant, ctx.applicationId, field(form, 'templateCode'), ctx.actor),
+    'COVENANT_ADDED',
+  );
+}
+
+export async function withdrawPackItemAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_CREDIT_NOTES');
+  return finish(
+    ctx,
+    () => withdrawPackItem(ctx.tenant, ctx.applicationId, field(form, 'itemId'), ctx.actor),
+    'PACK_ITEM_WITHDRAWN',
+  );
+}
+
+/** Credit states the mitigant for a deviation the assessment recorded. */
+export async function justifyDeviationAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_CREDIT_NOTES');
+  return finish(
+    ctx,
+    () => justifyDeviation(ctx.tenant, ctx.applicationId, field(form, 'code'), field(form, 'justification'), ctx.actor),
+    'DEVIATION_JUSTIFIED',
+  );
+}
+
+// -- Closing (UAE M5a): signing, conditions precedent, payee ------------------------------
+
+/** Open the signing intent at the identity service on the letter version that was sent. */
+export async function startSigningAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(ctx, () => startSigning(ctx.tenant, ctx.applicationId, ctx.actor), 'SIGNING_STARTED');
+}
+
+/** Ask the identity service whether the signatory has signed; records the signature if so. */
+export async function confirmSigningAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(ctx, () => confirmSigning(ctx.tenant, ctx.applicationId, ctx.actor), 'SIGNED_THROUGH_IDENTITY');
+}
+
+/** The officer evidences a condition precedent with a document on the application. */
+export async function satisfyConditionAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(
+    ctx,
+    () =>
+      satisfyCondition(
+        ctx.tenant,
+        ctx.applicationId,
+        field(form, 'conditionId'),
+        field(form, 'evidenceRef'),
+        ctx.actor,
+      ),
+    'CP_SATISFIED',
+  );
+}
+
+/** A second person verifies a condition precedent's evidence. */
+export async function verifyConditionAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_VERIFY');
+  return finish(
+    ctx,
+    () => verifyCondition(ctx.tenant, ctx.applicationId, field(form, 'conditionId'), ctx.actor),
+    'CP_VERIFIED',
+  );
+}
+
+/** The officer records the payee account, proven by a document on the application. */
+export async function recordPayeeAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(
+    ctx,
+    () =>
+      recordPayee(
+        ctx.tenant,
+        ctx.applicationId,
+        { iban: field(form, 'iban'), accountName: field(form, 'accountName'), evidenceRef: field(form, 'evidenceRef') },
+        ctx.actor,
+      ),
+    'PAYEE_RECORDED',
+  );
+}
+
+/** A second person confirms the payee account against its evidence. */
+export async function confirmPayeeAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_VERIFY');
+  return finish(ctx, () => confirmPayee(ctx.tenant, ctx.applicationId, ctx.actor), 'PAYEE_CONFIRMED');
+}
+
+// -- Tranches and payment results (UAE M5b) -----------------------------------------------
+
+/**
+ * The officer plans the drawdowns: one tranche per line, "amount" or
+ * "amount, yyyy-mm-dd". Amounts in major units with up to two decimals; the
+ * service checks they add up to the facility.
+ */
+export async function planTranchesAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  const lines = field(form, 'plan')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l !== '');
+  const plan: { amountMinorUnits: bigint; plannedDate?: string }[] = [];
+  for (const line of lines) {
+    const [amount = '', date = ''] = line.split(',').map((x) => x.trim());
+    const minor = minorUnits(amount);
+    if (minor === undefined) return finish(ctx, refused('AMOUNT_MALFORMED', 'Each tranche starts with an amount'), '');
+    plan.push({ amountMinorUnits: minor, ...(date === '' ? {} : { plannedDate: date }) });
+  }
+  return finish(ctx, () => planTranches(ctx.tenant, ctx.applicationId, plan, ctx.actor), 'TRANCHES_PLANNED');
+}
+
+/** On the synthetic site only: finance records the bank's result for the latest released tranche, marked Fixture. */
+export async function recordFixturePaymentResultAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  const status = field(form, 'status');
+  if (status !== 'SETTLED' && status !== 'REJECTED')
+    return finish(ctx, refused('PAYMENT_STATUS_INVALID', 'A fixture result is settled or rejected'), '');
+  return finish(
+    ctx,
+    () => recordFixturePaymentResult(ctx.tenant, ctx.applicationId, status, ctx.actor),
+    'PAYMENT_RESULT_RECORDED',
+  );
+}
+
+// -- Booking in the loan system (UAE M6) --------------------------------------------------
+
+/** Finance books the disbursed loan in the loan system; the loan account number it returns is recorded. */
+export async function bookLoanAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  return finish(ctx, () => bookInLoanSystem(ctx.tenant, ctx.applicationId, ctx.actor), 'LOAN_BOOKED');
+}
+
+// -- Tawarruq execution (KSA K4) ----------------------------------------------------------
+
+/** Finance (treasury) buys the commodity from the board-approved broker at the quoted cost. */
+export async function buyCommodityAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  return finish(ctx, () => buyCommodity(ctx.tenant, ctx.applicationId, ctx.actor), 'TAWARRUQ_COMMODITY_PURCHASED');
+}
+
+/** The institution sells the commodity to the customer on the signed deferred-sale instrument. */
+export async function sellCommodityToCustomerAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  return finish(
+    ctx,
+    () => sellCommodityToCustomer(ctx.tenant, ctx.applicationId, field(form, 'saleDocumentRef'), ctx.actor),
+    'TAWARRUQ_SOLD_TO_CUSTOMER',
+  );
+}
+
+export async function transferCommodityTitleAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  return finish(
+    ctx,
+    () => transferCommodityTitle(ctx.tenant, ctx.applicationId, ctx.actor),
+    'TAWARRUQ_TITLE_TRANSFERRED',
+  );
+}
+
+/** The commodity is sold on for cash — as the customer's agent where the board permits, naming the appointment. */
+export async function sellCommodityOnBehalfAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  const agencyRef = field(form, 'agencyRef');
+  return finish(
+    ctx,
+    () => sellCommodityOnBehalf(ctx.tenant, ctx.applicationId, agencyRef === '' ? undefined : agencyRef, ctx.actor),
+    'TAWARRUQ_PROCEEDS_REALISED',
+  );
+}
+
+// -- Servicing (S1) ------------------------------------------------------------------------
+
+/** Finance records a receipt it can see on the bank statement; a second person confirms it before it counts. */
+export async function recordRepaymentAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  const amount = minorUnits(field(form, 'amount'));
+  if (amount === undefined) return finish(ctx, refused('AMOUNT_MALFORMED', 'The repayment is an amount'), '');
+  return finish(
+    ctx,
+    () =>
+      recordRepayment(
+        ctx.tenant,
+        ctx.applicationId,
+        {
+          amountMinorUnits: amount,
+          receivedOn: field(form, 'receivedOn'),
+          reference: field(form, 'reference'),
+          channel: 'MANUAL',
+          source: 'LIVE',
+        },
+        ctx.actor,
+      ),
+    'REPAYMENT_RECORDED',
+  );
+}
+
+export async function confirmRepaymentAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_VERIFY');
+  return finish(
+    ctx,
+    () => confirmRepayment(ctx.tenant, ctx.applicationId, field(form, 'repaymentId'), ctx.actor),
+    'REPAYMENT_CONFIRMED',
+  );
+}
+
+// -- Servicing (S2): collections and the bureau --------------------------------------------
+
+/** Finance presents the instalments due now (and any overdue) for collection through the jurisdiction's channel. */
+export async function presentCollectionsAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  return finish(ctx, () => presentCollections(ctx.tenant, ctx.applicationId, ctx.actor), 'COLLECTIONS_PRESENTED');
+}
+
+/** On the synthetic site only: finance records the channel's result for the oldest presented instalment, marked Fixture. */
+export async function recordFixtureCollectionResultAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  const status = field(form, 'status');
+  if (status !== 'PAID' && status !== 'RETURNED')
+    return finish(ctx, refused('PAYMENT_STATUS_INVALID', 'A fixture result is paid or returned'), '');
+  return finish(
+    ctx,
+    () => recordFixtureCollectionResult(ctx.tenant, ctx.applicationId, status, ctx.actor),
+    'COLLECTION_RESULT_RECORDED',
+  );
+}
+
+/** Finance reports this month's status to the credit bureau. */
+export async function reportToBureauAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  return finish(ctx, () => reportToBureau(ctx.tenant, ctx.applicationId, ctx.actor), 'BUREAU_STATUS_REPORTED');
+}
+
+/**
+ * Finance runs today's servicing cycle for the institution now: late charges,
+ * collections and (from the reporting day) the bureau, for every disbursed
+ * facility — what the scheduled cycle does each morning. Idempotent: a second
+ * run the same day changes nothing.
+ */
+export async function runServicingCycleAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  return finish(ctx, () => runServicingCycleNow(ctx.tenant), 'SERVICING_CYCLE_RUN');
+}
+
+// -- Servicing (S3): late charges, hardship, restructuring ---------------------------------
+
+export async function assessLateChargesAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  return finish(ctx, () => assessLateCharges(ctx.tenant, ctx.applicationId, ctx.actor), 'LATE_CHARGES_ASSESSED');
+}
+
+export async function waiveLateChargeAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_VERIFY');
+  const n = /^\d{1,4}$/.test(field(form, 'instalment')) ? Number(field(form, 'instalment')) : -1;
+  return finish(
+    ctx,
+    () => waiveLateCharge(ctx.tenant, ctx.applicationId, n, field(form, 'reason'), ctx.actor),
+    'LATE_CHARGE_WAIVED',
+  );
+}
+
+export async function setHardshipAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(
+    ctx,
+    () => setHardship(ctx.tenant, ctx.applicationId, field(form, 'reason'), ctx.actor),
+    'HARDSHIP_SET',
+  );
+}
+
+export async function liftHardshipAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_VERIFY');
+  return finish(ctx, () => liftHardship(ctx.tenant, ctx.applicationId, ctx.actor), 'HARDSHIP_LIFTED');
+}
+
+/** The officer proposes a restructuring from today: the number of new instalments and the first due date. */
+export async function proposeRestructureAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  const n = /^\d{1,3}$/.test(field(form, 'numberOfPayments')) ? Number(field(form, 'numberOfPayments')) : -1;
+  return finish(
+    ctx,
+    () =>
+      proposeRestructure(
+        ctx.tenant,
+        ctx.applicationId,
+        { firstDueDate: field(form, 'firstDueDate'), numberOfPayments: n, reason: field(form, 'reason') },
+        ctx.actor,
+      ),
+    'RESTRUCTURE_PROPOSED',
+  );
+}
+
+/** A checker (not the proposer) approves a restructuring. */
+export async function approveRestructureAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_APPROVE');
+  return finish(
+    ctx,
+    () => approveRestructure(ctx.tenant, ctx.applicationId, field(form, 'restructureId'), ctx.actor),
+    'RESTRUCTURE_APPROVED',
+  );
+}
+
+// -- Offer letter PDF ------------------------------------------------------------------------
+
+/** The officer renders the letter version shown as a PDF through the document engine. */
+export async function renderOfferPdfAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  const version = field(form, 'letterVersion');
+  return finish(
+    ctx,
+    () =>
+      renderOfferPdf(
+        ctx.tenant,
+        ctx.applicationId,
+        /^[0-9a-f]{64}$/.test(version) ? version : undefined,
+        ctx.actor,
+        randomUUID(),
+      ),
+    'OFFER_PDF_RENDERED',
+  );
+}
+
+/** The officer seals the signed letter's PDF with the institution's digital signature. */
+export async function sealSignedLetterAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_OFFICER');
+  return finish(ctx, () => sealSignedLetter(ctx.tenant, ctx.applicationId, ctx.actor, randomUUID()), 'LETTER_SEALED');
 }

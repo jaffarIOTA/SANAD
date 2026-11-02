@@ -1,7 +1,7 @@
 # Saving the Tuum and Nutrient API keys
 
 > **The usual route is the administration app.** Start it with `npm run dev:admin`, open
-> http://localhost:3004, sign in with the platform operations token from your `.env.local`,
+> http://localhost:3004, sign in with `ADMIN_DEV_TOKEN_01` (or `_02`, the second administrator for four eyes) from your `.env.local`,
 > and use **Credentials → Save or rotate**. The screen calls the same
 > `config.set_integration_credential` function described below, shows names and dates only,
 > and never displays a value. The SQL route remains for environments without the app.

@@ -130,6 +130,23 @@ export function applyPayment(obligation: Obligation, payment: Money): Result<Obl
   return ok(updated);
 }
 
+/**
+ * A payment that came back (a returned collection) is taken off what was
+ * paid. The total does not move — it never does — and nothing can be
+ * reversed that was not received.
+ */
+export function reversePayment(obligation: Obligation, returned: Money): Result<Obligation> {
+  if (isNegative(returned)) {
+    return reject('OP-DETERMINACY', 'REVERSAL_NEGATIVE', 'A returned payment cannot be negative');
+  }
+  if (compare(returned, obligation.paidAmount) > 0) {
+    return reject('OP-DETERMINACY', 'REVERSAL_EXCEEDS_PAID', 'More cannot come back than was received', {
+      obligationId: obligation.obligationId,
+    });
+  }
+  return ok({ ...obligation, paidAmount: subtract(obligation.paidAmount, returned) });
+}
+
 /** Total, less anything waived. What the schedule must sum to. */
 export function amountPayable(o: Obligation): Money {
   return subtract(o.totalAmount, o.waivedAmount);

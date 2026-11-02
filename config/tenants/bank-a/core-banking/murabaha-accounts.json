@@ -1,0 +1,19 @@
+{
+  "configId": "bank-a-murabaha-accounts",
+  "version": "0.1.0",
+  "adapter": "TUUM",
+  "policyRef": "ILLUSTRATIVE — how an executed Murabaha is held in the core banking platform (ADR 0007: account-shaped, a fixed total and its parts, never a loan contract): the account type the distributor's collection account is opened under, the institution's own internal accounts, and the posting codes. The codes are tenant-defined in the platform and discovered from its transaction-types endpoint at onboarding; these are placeholders until Bank A's are read (verification item TUUM-ACCT-01).",
+  "channelCode": "system",
+  "accountPurposeCodes": { "COLLECTION": "CURRENCY", "SETTLEMENT": "CURRENCY" },
+  "institutionAccounts": {
+    "CHARITY_LIABILITY": "acct-bank-a-charity-liability",
+    "GOODS_INVENTORY": "acct-bank-a-goods-inventory"
+  },
+  "transactionTypeCodes": {
+    "murabahaReceivableRaise": "MRB_RECV_RAISE",
+    "murabahaReceivableSettle": "MRB_RECV_SETTLE",
+    "goodsInventoryAcquire": "GOODS_IN",
+    "goodsInventoryRelease": "GOODS_OUT",
+    "charityLiabilityRaise": "CHARITY_RAISE"
+  }
+}

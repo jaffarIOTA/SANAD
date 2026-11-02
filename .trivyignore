@@ -1,0 +1,2 @@
+# Every entry is registered in .security/suppressions.json with an owner, a reason
+# and an expiry; scripts/suppressions-check.mjs fails the build otherwise.

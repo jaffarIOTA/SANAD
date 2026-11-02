@@ -1,0 +1,41 @@
+{
+  "policyId": "statement-reading",
+  "version": "0.1.0",
+  "source": "TENANT_CREDIT_POLICY",
+  "policyRef": "ILLUSTRATIVE — row labels and the confidence floor chosen 2026-10-17 from common IFRS and SOCPA statement captions, for reading synthetic statements in development. Not a policy of any institution. The Credit function replaces the labels with those of the statements it actually receives before any real use",
+  "documentTypes": ["AUDITED_FINANCIALS_2Y", "MANAGEMENT_ACCOUNTS"],
+  "minimumConfidencePerTenThousand": 9000,
+  "labels": {
+    "ANNUAL_REVENUE": [
+      "Revenue",
+      "Revenues",
+      "Total revenue",
+      "Sales",
+      "Turnover",
+      "الإيرادات",
+      "إجمالي الإيرادات",
+      "المبيعات"
+    ],
+    "NET_PROFIT": [
+      "Net profit",
+      "Net profit for the year",
+      "Profit for the year",
+      "Net income",
+      "صافي الربح",
+      "صافي ربح السنة",
+      "ربح السنة"
+    ],
+    "CURRENT_ASSETS": [
+      "Total current assets",
+      "مجموع الموجودات المتداولة",
+      "إجمالي الموجودات المتداولة",
+      "إجمالي الأصول المتداولة"
+    ],
+    "CURRENT_LIABILITIES": [
+      "Total current liabilities",
+      "مجموع المطلوبات المتداولة",
+      "إجمالي المطلوبات المتداولة",
+      "إجمالي الخصوم المتداولة"
+    ]
+  }
+}

@@ -37,6 +37,38 @@ history shows the durable timer and the post-timer gate evaluation as separate
 events. Then the institution's OpenShift deployment with PostgreSQL persistence and
 mTLS from the vault.
 
+**Servicing cycle, run 2026-10-17** (Temporal dev server `temporalio/temporal`
+`server start-dev`, in-memory persistence, on a developer laptop; the worker ran in a
+Vitest process so the ops host's aliases resolve):
+
+- `ensureServicingSchedule` created `bank-a/servicing`. Temporal reported the next
+  actions at 03:00Z on each of the following days, which is 06:00 Asia/Riyadh as
+  configured.
+- Triggering the schedule started `bank-a/servicing-day-<timestamp>`. Through the real
+  worker it planned 17 Oct from an attested instant and serviced both seeded facilities:
+  4 tasks done, 2 nothing due, 0 failed, in 47 history events.
+- A second `servicingDay` the same day did nothing: 0 done, 6 nothing due.
+
+So the servicing workflow, its activities and the Schedule work against a server. Still
+open: `murabahaSequence` and `tawarruqSequence` on a server, a standalone worker
+process (today the host's `@sanad/*` aliases resolve only under a bundler or Vitest),
+and the institution's cluster with PostgreSQL and mTLS.
+
+## The servicing cycle (Servicing S4)
+
+`programs/servicing.ts`, `activities-servicing.ts` and `servicingDay` in
+`workflows/index.ts` form one tenant's day: plan it (the attested date in the tenant's
+time zone, the tasks its schedule runs, the disbursed facilities), then run late
+charges, collections and, from the reporting day, the bureau report for each facility.
+
+- A facility's failure is reported and the cycle carries on.
+- Every task is idempotent in the application service.
+- `TemporalWorkflowAdapter.ensureServicingSchedule` registers the tenant's daily
+  Schedule (local time and time zone from configuration; overlap skipped; one day of
+  catch-up).
+- The host is `apps/ops/src/server/servicing-scheduler.ts`. Its `runServicingCycleNow`
+  runs the same program in process for the workbench's "Run today's cycle".
+
 ## Running locally
 
 ```

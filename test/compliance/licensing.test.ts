@@ -14,6 +14,12 @@ import type { AddressInfo } from 'node:net';
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { preparePayee } from '../support/business-closing.ts';
+
+import { justifyDeviations } from '../support/business-decision-pack.ts';
+
+import { meetSecurityRequirements } from '../support/business-security.ts';
+
 import { fixtureLicenceCheckIn } from '../../adapters/licensing/check-in/fixture.ts';
 import { civilOf, formatDate } from '../../core/licensing/dates.ts';
 import { assertNewBusinessPermitted } from '../../core/licensing/gate.ts';
@@ -629,8 +635,10 @@ describe('a customer who accepted before grace ended is never let down', () => {
         officer,
       ),
     );
+    await meetSecurityRequirements(T, ID, officer, checker, 100_000_000n, BigInt(Math.floor(Date.now() / 1000)) - 86_400n);
     ok(await submitForAssessment(T, ID, officer));
     ok(await runAssessment(T, ID, checker));
+    await justifyDeviations(T, ID, checker);
     ok(await decideInCommittee(T, ID, { decidedBy: committee, approved: true, reason: 'Within risk-aligned terms' }));
     const dubaiToday = new Date(Math.floor((Date.now() + 4 * 3_600_000) / 86_400_000) * 86_400_000);
     const iso = (d: number): string => new Date(dubaiToday.getTime() + d * 86_400_000).toISOString().slice(0, 10);
@@ -645,6 +653,7 @@ describe('a customer who accepted before grace ended is never let down', () => {
     const fresh = await generateOffer(T, ID, officer, {});
     expect(fresh.ok ? undefined : fresh.error.control).toBe('OP-LICENCE');
     // …but the facility the borrower already signed for is disbursed.
+    await preparePayee(T, ID, officer, checker);
     const disbursed = await recordDisbursed(T, ID, finance);
     expect(disbursed.ok && disbursed.value.application.status).toBe('DISBURSED');
   });

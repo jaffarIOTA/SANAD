@@ -1,0 +1,53 @@
+{
+  "policyId": "sme-direct-lending-decision-pack",
+  "version": "0.1.0",
+  "source": "TENANT_CREDIT_POLICY",
+  "policyRef": "ILLUSTRATIVE — covenant templates and the longest condition subsequent are plausible placeholders chosen 2026-10-15; the debt-service cover follows the catalogue's DSCR_MIN note (1.40×). Not an approved policy of any fund and not a CBUAE requirement. The fund's Credit function replaces them before any real use",
+  "maxSubsequentDueDays": 180,
+  "covenantTemplates": [
+    {
+      "code": "DSCR_MIN",
+      "kind": "FINANCIAL",
+      "metric": "DEBT_SERVICE_COVER",
+      "minimumPerTenThousand": 14000,
+      "frequency": "ANNUAL",
+      "labelEn": "Debt-service cover of at least 1.40×, tested on each year's audited financial statements",
+      "labelAr": "ألا تقل تغطية خدمة الدين عن ١٫٤٠ مرة، وتُختبر على القوائم المالية المدققة لكل سنة"
+    },
+    {
+      "code": "CURRENT_RATIO_MIN",
+      "kind": "FINANCIAL",
+      "metric": "CURRENT_RATIO",
+      "minimumPerTenThousand": 10000,
+      "frequency": "ANNUAL",
+      "labelEn": "Current ratio of at least 1.00×, tested on each year's audited financial statements",
+      "labelAr": "ألا تقل نسبة التداول عن ١٫٠٠ مرة، وتُختبر على القوائم المالية المدققة لكل سنة"
+    },
+    {
+      "code": "AUDITED_FINANCIALS",
+      "kind": "INFORMATION",
+      "frequency": "ANNUAL",
+      "labelEn": "Audited financial statements delivered within 120 days of each financial year end",
+      "labelAr": "تقديم القوائم المالية المدققة خلال ١٢٠ يوماً من نهاية كل سنة مالية"
+    },
+    {
+      "code": "VAT_RETURNS",
+      "kind": "INFORMATION",
+      "frequency": "QUARTERLY",
+      "labelEn": "Copies of filed VAT returns delivered each quarter",
+      "labelAr": "تقديم نسخ من الإقرارات الضريبية للقيمة المضافة المقدّمة كل ربع سنة"
+    },
+    {
+      "code": "NO_FURTHER_BORROWING",
+      "kind": "NEGATIVE",
+      "labelEn": "No further borrowing or security granted to others without the lender's written consent",
+      "labelAr": "عدم الاقتراض أو منح ضمانات للغير دون موافقة كتابية من المموّل"
+    },
+    {
+      "code": "NO_OWNERSHIP_CHANGE",
+      "kind": "NEGATIVE",
+      "labelEn": "No change in ownership or control without the lender's written consent",
+      "labelAr": "عدم تغيير الملكية أو السيطرة دون موافقة كتابية من المموّل"
+    }
+  ]
+}

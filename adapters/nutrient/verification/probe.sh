@@ -26,8 +26,13 @@ UP_HASH="$(shasum -a 256 "${PDF}" | cut -d' ' -f1)"
 DOC_ID="$(curl -sS -H "${AUTH}" -F "file=@${PDF}" "${BASE}/api/documents" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["document_id"])')"
 echo "  document_id ${DOC_ID}"
 
-echo "V-03 fetch rendition and compare"
+echo "V-03 fetch the stored source and compare (the bytes that were uploaded)"
+curl -sS -H "${AUTH}" -o "${OUT}/source.pdf" "${BASE}/api/documents/${DOC_ID}/pdf?source=true"
+SRC_HASH="$(shasum -a 256 "${OUT}/source.pdf" | cut -d' ' -f1)"
+if [ "${UP_HASH}" = "${SRC_HASH}" ]; then echo "  source identical: yes"; else echo "  source identical: NO — record this; the engine re-wrote the stored file"; fi
+
+echo "V-03 fetch the rendition (re-written on export: annotations, and the watermark in evaluation mode)"
 curl -sS -H "${AUTH}" -o "${OUT}/back.pdf" "${BASE}/api/documents/${DOC_ID}/pdf"
 BACK_HASH="$(shasum -a 256 "${OUT}/back.pdf" | cut -d' ' -f1)"
-if [ "${UP_HASH}" = "${BACK_HASH}" ]; then echo "  identical: yes"; else echo "  identical: NO — record this; the engine re-wrote the file"; fi
+if [ "${UP_HASH}" = "${BACK_HASH}" ]; then echo "  rendition identical: yes"; else echo "  rendition identical: no (expected)"; fi
 rm -rf "${OUT}"

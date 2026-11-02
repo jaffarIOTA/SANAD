@@ -13,34 +13,101 @@
  * (SDD §7.6).
  */
 
-/* -- Typefaces -----------------------------------------------------------------
- * Inter for Latin, Noto Sans Arabic for Arabic: both variable (100–900), both
- * SIL OFL 1.1 (licences beside the files), both with every digit the same
- * width, so amounts align in columns in either script. Noto Sans Arabic replaced
- * Noto Kufi, a display face, because body text and figures are read here, not
- * admired. Self-hosted: no browser and no build calls a font service.
- * The unicode ranges route each script to its face within one stack, so an
- * Arabic page sets Latin identifiers in Inter and an English page sets an
- * Arabic name in Noto Sans Arabic without either asking.
+/* -- Typeface ------------------------------------------------------------------
+ * One family for both scripts: IBM Plex Sans Arabic, whose Arabic was drawn
+ * together with its Latin (IBM Plex Sans), so a bilingual line keeps one
+ * weight, one rhythm and one x-height/tooth height instead of two faces
+ * meeting. SIL OFL 1.1 (licence beside the files). Tabular figures, so amounts
+ * align in columns; Arabic-Indic digits for Arabic numerals. Four weights,
+ * 400–700. Chosen 2026-10-17, replacing Inter + Noto Sans Arabic.
+ * Self-hosted: no browser and no build calls a font service. Each weight is
+ * split by script (unicode-range), so a page downloads only what it sets.
+ * Inter stays for one thing only: the wordmark's lettering (the logo).
  */
 @font-face {
-  font-family: 'Inter';
+  font-family: 'IBM Plex Sans Arabic';
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 400;
   font-display: swap;
-  src: url('./fonts/inter-latin.woff2') format('woff2');
+  src: url('./fonts/plex-sans-arabic-latin-400.woff2') format('woff2');
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
     U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'Noto Sans Arabic';
+  font-family: 'IBM Plex Sans Arabic';
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 400;
   font-display: swap;
-  src: url('./fonts/noto-sans-arabic.woff2') format('woff2');
+  src: url('./fonts/plex-sans-arabic-arabic-400.woff2') format('woff2');
   unicode-range:
     U+0600-06FF, U+0750-077F, U+0870-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FEFC;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/plex-sans-arabic-latin-500.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/plex-sans-arabic-arabic-500.woff2') format('woff2');
+  unicode-range:
+    U+0600-06FF, U+0750-077F, U+0870-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FEFC;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fonts/plex-sans-arabic-latin-600.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fonts/plex-sans-arabic-arabic-600.woff2') format('woff2');
+  unicode-range:
+    U+0600-06FF, U+0750-077F, U+0870-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FEFC;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/plex-sans-arabic-latin-700.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/plex-sans-arabic-arabic-700.woff2') format('woff2');
+  unicode-range:
+    U+0600-06FF, U+0750-077F, U+0870-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FEFC;
+}
+/* The wordmark's lettering only (Wordmark in primitives.tsx): the logo, not text. */
+@font-face {
+  font-family: 'Sanad Wordmark';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('./fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0020-007E;
 }
 
 @theme static {
@@ -98,7 +165,7 @@
   --color-disc-teal: #dcfaf8;
 
   /* -- Type ------------------------------------------------------------------- */
-  --font-sans: 'Inter', 'Noto Sans Arabic', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans: 'IBM Plex Sans Arabic', system-ui, -apple-system, 'Segoe UI', sans-serif;
   /* Kept for the code that names a script; both are the one stack above. */
   --font-latin: var(--font-sans);
   --font-arabic: var(--font-sans);
@@ -208,9 +275,14 @@ html {
  */
 .identifier {
   font-variant-numeric: tabular-nums;
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: var(--font-sans);
   direction: ltr;
   unicode-bidi: isolate;
+}
+
+/* The logo's lettering, not text: see the 'Sanad Wordmark' face above. */
+.wordmark {
+  font-family: 'Sanad Wordmark', var(--font-sans);
 }
 
 /* Visible focus that follows reading direction, in both themes. */
@@ -299,7 +371,47 @@ html {
   transform-origin: center;
   animation: slice-in 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
+/* A submit in flight (PendingButton): a small ring, in the button's own colour. */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spinner {
+  display: inline-block;
+  inline-size: 0.85em;
+  block-size: 0.85em;
+  flex: none;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 9999px;
+  animation: spin 700ms linear infinite;
+}
+/*
+ * The row that just changed (a consent recorded, a check answered): a brief wash
+ * of the positive colour that fades to nothing, so the eye finds what moved
+ * without anything around it moving.
+ */
+@keyframes settle {
+  from {
+    background-color: var(--color-positive-wash, rgb(16 185 129 / 0.12));
+  }
+  to {
+    background-color: transparent;
+  }
+}
+.settle {
+  animation: settle 1400ms ease-out both;
+}
 @media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-inline-end-color: currentColor;
+    opacity: 0.6;
+  }
+  .settle {
+    animation: none;
+  }
   .nav-indicator,
   .card-lift,
   .press {

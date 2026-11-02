@@ -1,0 +1,14 @@
+{
+  "configId": "bank-a-loan-booking",
+  "version": "0.1.0",
+  "adapter": "TUUM",
+  "policyRef": "ILLUSTRATIVE — 'SME FINANCE SAR RAG' and 'TAWRROUQ' are riyal products in Tuum's partners sandbox (adapters/tuum/README.md, 2026-10-08) that belong to another partner's test set; the institution's own products replace them. A Murabaha product is never listed here. The Tawarruq product is booked as a loan contract under ADR 0007 (the deferred price stays the contract's figure)",
+  "products": {
+    "sme-term-conventional": {
+      "loanTypeCode": "SME FINANCE SAR RAG"
+    },
+    "sme-term-islamic": {
+      "loanTypeCode": "TAWRROUQ"
+    }
+  }
+}

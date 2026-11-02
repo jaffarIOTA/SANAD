@@ -25,18 +25,21 @@
 import { notFound } from 'next/navigation';
 import type { ReactElement } from 'react';
 
-import { loadSmeAssessmentPolicy } from '@sanad/config/loader.ts';
+import { loadSmeAssessmentPolicy, loadStatementReadingPolicy } from '@sanad/config/loader.ts';
 import type { FinancialRatio, FinancialRatioCode } from '@sanad/core/applicant/financials.ts';
 import type { SmeAssessmentPolicy } from '@sanad/core/decisioning/sme-assessment.ts';
 import type { Result } from '@sanad/core/kernel/result.ts';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
+import { findingsFor } from '@sanad/origination/documents/findings.ts';
 
 import {
   confirmBankStatementsAction,
   fetchBankStatementsAction,
   proposeFigureAction,
   presentDocumentAction,
+  readStatementAction,
   submitForAssessmentAction,
+  uploadDocumentAction,
   validateDocumentAction,
   verifyFigureAction,
   withdrawApplicationAction,
@@ -48,6 +51,7 @@ import {
   getApplication,
   intakeConsentFor,
   productVariants,
+  securityStatus,
   syncBusiness,
 } from '../../../../server/business.ts';
 import { type DocumentGroup, documentGroup, formatFact, formatPercent } from '../../../../server/business-dashboard.ts';
@@ -56,6 +60,10 @@ import { pageStaff } from '../../../../server/session.ts';
 import type { StaffPrincipal } from '../../../../server/staff.ts';
 import { Gate } from '../../Gate.tsx';
 import { SourceBadge } from '../intake/IntakeUi.tsx';
+import { DocumentFindings } from '../DocumentFindings.tsx';
+import { documentGaps } from '../../../../server/business-gaps.ts';
+import { DocumentGaps } from './DocumentGaps.tsx';
+import { SecurityCard } from './SecurityCard.tsx';
 import {
   ApplicationShell,
   BTN_PRIMARY,
@@ -155,6 +163,12 @@ function DocumentProvenance({
 
 const OPEN = new Set(['RECEIVED', 'SPREADING']);
 
+const MEDIA_LABEL: Readonly<Record<string, string>> = {
+  'application/pdf': 'PDF',
+  'image/png': 'PNG',
+  'image/jpeg': 'JPEG',
+};
+
 /** The knock-out on a fact in the fund's policy: the minimum (or maximum) a ratio tile is held against. */
 function knockoutOn(policy: SmeAssessmentPolicy | undefined, fact: string | undefined) {
   return fact === undefined ? undefined : policy?.knockouts.find((k) => k.fact === fact);
@@ -182,13 +196,18 @@ export default async function LoanApplicationPage({
   const f = formatters(locale === 'ar-SA', view.currency);
   const { t } = f;
 
-  const [readiness, checklist, variants] = await Promise.all([
+  const [readiness, checklist, variants, security, findings, gaps] = await Promise.all([
     figureReadiness(j.tenant, applicationId),
     checklistStatus(j.tenant, applicationId),
     productVariants(j.tenant),
+    securityStatus(j.tenant, applicationId),
+    findingsFor(j.tenant, { kind: 'BUSINESS_APPLICATION', ref: applicationId }),
+    documentGaps(j.tenant, applicationId),
   ]);
   const policyResult = loadSmeAssessmentPolicy(j.tenant);
   const policy = policyResult.ok ? policyResult.value : undefined;
+  const reading = loadStatementReadingPolicy(j.tenant);
+  const readableTypes: ReadonlySet<string> = new Set(reading.ok ? reading.value.documentTypes : []);
   const a = view.application;
   const variant = variants.get(a.variantCode);
   const open = OPEN.has(a.status);
@@ -202,8 +221,16 @@ export default async function LoanApplicationPage({
     : [];
   // The inputs lock at submission, so the screen does not offer Submit before they are recorded (the scoring cannot run without them).
   const inputsMissing = view.assessmentInputs === undefined;
+  // Every security the variant requires, recorded and confirmed by a second person (the service refuses otherwise).
+  const securityOutstanding = security.ok ? security.value.position.requirements.filter((r) => !r.met) : [];
+  const securityReady = security.ok && security.value.position.complete;
   const ready =
-    readiness.ok && readiness.value.spreadComplete && checklist.ok && checklist.value.complete && !inputsMissing;
+    readiness.ok &&
+    readiness.value.spreadComplete &&
+    checklist.ok &&
+    checklist.value.complete &&
+    !inputsMissing &&
+    securityReady;
 
   return (
     <ApplicationShell
@@ -599,13 +626,13 @@ export default async function LoanApplicationPage({
         note={
           !checklist.ok ? undefined : f.arabic ? (
             <>
-              قائمة فئة {variant?.nameAr ?? a.variantCode} (الإصدار <Id>{checklist.value.checklist.version}</Id>).
-              تُسجَّل المستندات بمرجعها لا بمحتواها.
+              قائمة فئة {variant?.nameAr ?? a.variantCode} (الإصدار <Id>{checklist.value.checklist.version}</Id>). يُحفظ
+              الملف المرفوع في مخزن المستندات ويُسجَّل هنا ببصمته.
             </>
           ) : (
             <>
               The {variant?.nameEn ?? a.variantCode} checklist (version <Id>{checklist.value.checklist.version}</Id>).
-              Documents are recorded by reference, never by content.
+              An uploaded file is kept in the document store and recorded here by its fingerprint.
             </>
           )
         }
@@ -623,6 +650,15 @@ export default async function LoanApplicationPage({
           <p className="text-[13px] text-blocked">{checklist.error.detail}</p>
         ) : (
           <div className="flex flex-col gap-5">
+            <DocumentGaps
+              segment={segment}
+              applicationId={a.applicationId}
+              gaps={gaps.ok ? gaps.value : []}
+              request={view.documentRequest}
+              open={open}
+              staff={staff}
+              f={f}
+            />
             {GROUPS.map((group) => {
               const items = checklist.value.report.filter((r) => documentGroup(r.item.documentType) === group.id);
               if (items.length === 0) return null;
@@ -650,7 +686,7 @@ export default async function LoanApplicationPage({
                                 </span>
                               )}
                             </span>
-                            {held === undefined ? null : (
+                            {held === undefined ? null : held.content === undefined ? (
                               <bdi
                                 dir="ltr"
                                 className="identifier block truncate text-start text-[11px] text-ink-quiet"
@@ -658,6 +694,55 @@ export default async function LoanApplicationPage({
                               >
                                 {held.documentRef}
                               </bdi>
+                            ) : (
+                              <span className="flex flex-wrap items-center gap-2 text-[12px]" data-document-file>
+                                <a
+                                  href={`/api/business/v1/applications/${encodeURIComponent(a.applicationId)}/documents/${held.content.sha256Hex}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-medium text-brand hover:underline"
+                                >
+                                  {t('View file', 'عرض الملف')}
+                                </a>
+                                <span className="text-ink-quiet">
+                                  {MEDIA_LABEL[held.content.mediaType]} ·{' '}
+                                  {t(
+                                    `${f.n(Math.max(1, Math.ceil(held.content.byteLength / 1024)))} KB`,
+                                    `${f.n(Math.max(1, Math.ceil(held.content.byteLength / 1024)))} ك.ب`,
+                                  )}
+                                </span>
+                                <SourceBadge source={held.content.storage} f={f} />
+                                <bdi
+                                  dir="ltr"
+                                  className="identifier text-[11px] text-ink-quiet"
+                                  title={t('SHA-256 fingerprint of the file', 'البصمة الرقمية للملف')}
+                                >
+                                  {held.content.sha256Hex.slice(0, 12)}
+                                </bdi>
+                                {open &&
+                                held.content.mediaType === 'application/pdf' &&
+                                readableTypes.has(held.documentType) ? (
+                                  <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
+                                    <form action={readStatementAction} data-statement-read>
+                                      <FormContext segment={segment} applicationId={a.applicationId} />
+                                      <input type="hidden" name="documentRef" value={held.documentRef} />
+                                      <button
+                                        type="submit"
+                                        className={BTN_SMALL}
+                                        title={t(
+                                          'The document engine reads the statement’s tables; each figure is then verified by a person.',
+                                          'يقرأ محرك المستندات جداول القوائم المالية، ثم يتحقق شخص من كل رقم.',
+                                        )}
+                                      >
+                                        {t('Read figures', 'قراءة الأرقام')}
+                                      </button>
+                                    </form>
+                                  </Gate>
+                                ) : null}
+                              </span>
+                            )}
+                            {held?.content === undefined ? null : (
+                              <DocumentFindings findings={findings.get(held.content.sha256Hex)} f={f} />
                             )}
                           </span>
                           <span className="flex flex-col items-start gap-0.5">
@@ -681,6 +766,29 @@ export default async function LoanApplicationPage({
                                 <span className="text-[11px] text-ink-quiet">
                                   {t('As the checker', 'بصفة المراجِع')} <Id>{staff.principalId}</Id>
                                 </span>
+                                {held.content !== undefined &&
+                                findings
+                                  .get(held.content.sha256Hex)
+                                  ?.checks.some((c) => c.check === 'AUTHENTIC' && c.outcome === 'FAIL') === true ? (
+                                  // D3: the issuer did not confirm it. Accepting it anyway takes a written resolution.
+                                  <label
+                                    className="flex w-full flex-col gap-1 text-[12px]"
+                                    data-authenticity-resolution
+                                  >
+                                    <span className="text-blocked">
+                                      {t(
+                                        'The issuer did not confirm this document. To accept it, say how you resolved that.',
+                                        'لم تؤكد الجهة المصدرة هذا المستند. لقبوله، اذكر كيف عالجت ذلك.',
+                                      )}
+                                    </span>
+                                    <textarea
+                                      name="resolution"
+                                      rows={2}
+                                      maxLength={500}
+                                      className="w-full rounded-tile border border-line bg-surface px-2 py-1"
+                                    />
+                                  </label>
+                                ) : null}
                                 <button type="submit" name="decision" value="VALID" className={BTN_SMALL}>
                                   {t('Valid', 'صالح')}
                                 </button>
@@ -697,25 +805,55 @@ export default async function LoanApplicationPage({
                           ) : null}
                           {open && r.status !== 'PRESENT' && r.status !== 'PENDING' ? (
                             <Gate staff={staff} act="BUSINESS_OFFICER" arabic={f.arabic}>
-                              <form
-                                action={presentDocumentAction}
-                                className="flex w-full flex-wrap items-center gap-2 sm:w-auto"
-                              >
-                                <FormContext segment={segment} applicationId={a.applicationId} />
-                                <input type="hidden" name="documentType" value={r.item.documentType} />
-                                <label className="min-w-0 flex-1 sm:w-[220px] sm:flex-none">
-                                  <span className="sr-only">{t('Document reference', 'مرجع المستند')}</span>
-                                  <input
-                                    name="documentRef"
-                                    required
-                                    placeholder={t('Document reference', 'مرجع المستند')}
-                                    className={INPUT}
-                                  />
-                                </label>
-                                <button type="submit" className={BTN_SMALL}>
-                                  {t('Attach', 'إرفاق')}
-                                </button>
-                              </form>
+                              <div className="flex w-full flex-col gap-2 sm:w-auto">
+                                <form
+                                  action={uploadDocumentAction}
+                                  className="flex w-full flex-wrap items-center gap-2 sm:w-auto"
+                                  data-document-upload
+                                >
+                                  <FormContext segment={segment} applicationId={a.applicationId} />
+                                  <input type="hidden" name="documentType" value={r.item.documentType} />
+                                  <label className="min-w-0 flex-1 sm:w-[240px] sm:flex-none">
+                                    <span className="sr-only">
+                                      {t(`File for ${r.item.titleEn}`, `ملف ${r.item.titleAr}`)}
+                                    </span>
+                                    <input
+                                      type="file"
+                                      name="file"
+                                      required
+                                      accept="application/pdf,image/png,image/jpeg"
+                                      className="block w-full text-[12px] text-ink file:me-2 file:rounded-tile file:border file:border-line-strong file:bg-surface file:px-2 file:py-1 file:text-[12px] file:font-semibold file:text-heading"
+                                    />
+                                  </label>
+                                  <button type="submit" className={BTN_SMALL}>
+                                    {t('Upload', 'رفع')}
+                                  </button>
+                                </form>
+                                <details className="text-[12px] text-ink-quiet">
+                                  <summary className="cursor-pointer select-none">
+                                    {t('Held elsewhere? Attach by reference', 'محفوظ في نظام آخر؟ أرفقه بمرجعه')}
+                                  </summary>
+                                  <form
+                                    action={presentDocumentAction}
+                                    className="mt-2 flex w-full flex-wrap items-center gap-2 sm:w-auto"
+                                  >
+                                    <FormContext segment={segment} applicationId={a.applicationId} />
+                                    <input type="hidden" name="documentType" value={r.item.documentType} />
+                                    <label className="min-w-0 flex-1 sm:w-[220px] sm:flex-none">
+                                      <span className="sr-only">{t('Document reference', 'مرجع المستند')}</span>
+                                      <input
+                                        name="documentRef"
+                                        required
+                                        placeholder={t('Document reference', 'مرجع المستند')}
+                                        className={INPUT}
+                                      />
+                                    </label>
+                                    <button type="submit" className={BTN_SMALL}>
+                                      {t('Attach', 'إرفاق')}
+                                    </button>
+                                  </form>
+                                </details>
+                              </div>
                             </Gate>
                           ) : null}
                         </li>
@@ -728,6 +866,9 @@ export default async function LoanApplicationPage({
           </div>
         )}
       </SectionCard>
+
+      {/* -- Security -------------------------------------------------------------------------------- */}
+      <SecurityCard segment={segment} view={view} status={security} editable={open} staff={staff} f={f} />
 
       {/* -- Submit ---------------------------------------------------------------------------------- */}
       <section className="flex flex-col gap-4 rounded-card border border-line bg-surface p-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
@@ -795,6 +936,12 @@ export default async function LoanApplicationPage({
                   ? t(
                       'Record the bureau result and the assessment inputs on the Credit assessment screen; they lock at submission.',
                       'سجّل نتيجة المكتب الائتماني ومدخلات التقييم في شاشة التقييم الائتماني؛ فهي تُقفل عند الإحالة.',
+                    )
+                  : '',
+                !securityReady
+                  ? t(
+                      `Security still to be recorded and confirmed: ${securityOutstanding.map((r) => (security.ok ? security.value.labels[r.code]?.en : undefined) ?? r.code).join(', ')}.`,
+                      `ضمانات لم تُسجَّل أو تُؤكَّد بعد: ${securityOutstanding.map((r) => (security.ok ? security.value.labels[r.code]?.ar : undefined) ?? r.code).join('، ')}.`,
                     )
                   : '',
               ]

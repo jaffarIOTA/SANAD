@@ -1,0 +1,110 @@
+{
+  "tenantId": "fintech-b",
+  "programmeId": "sme-sa-term",
+  "version": "0.1.0-illustrative-2026-10-15",
+  "items": [
+    {
+      "documentType": "COMMERCIAL_REGISTRATION",
+      "titleEn": "Commercial registration certificate (Wathq)",
+      "titleAr": "شهادة السجل التجاري (واثق)",
+      "required": true,
+      "validForSeconds": 31536000,
+      "checks": [
+        { "check": "NOT_EXPIRED" },
+        { "check": "REGISTRATION_MATCHES" },
+        { "check": "NAME_FOUND" },
+        { "check": "AUTHENTIC" }
+      ]
+    },
+    {
+      "documentType": "ARTICLES_OF_ASSOCIATION",
+      "titleEn": "Articles of association and amendments",
+      "titleAr": "عقد التأسيس وتعديلاته",
+      "required": true
+    },
+    {
+      "documentType": "OWNER_NATIONAL_ID",
+      "titleEn": "National ID or iqama of every owner and signatory",
+      "titleAr": "الهوية الوطنية أو الإقامة لجميع الملاك والمفوّضين",
+      "required": true,
+      "checks": [{ "check": "NOT_EXPIRED" }]
+    },
+    {
+      "documentType": "NATIONAL_ADDRESS",
+      "titleEn": "National address (Saudi Post)",
+      "titleAr": "العنوان الوطني (سبل)",
+      "required": true,
+      "validForSeconds": 31536000,
+      "checks": [{ "check": "ISSUED_WITHIN", "days": 365 }, { "check": "AUTHENTIC" }]
+    },
+    {
+      "documentType": "SIMAH_COMMERCIAL_REPORT",
+      "titleEn": "SIMAH commercial credit report",
+      "titleAr": "التقرير الائتماني التجاري من سمة",
+      "required": true,
+      "validForSeconds": 2592000,
+      "checks": [{ "check": "ISSUED_WITHIN", "days": 30 }]
+    },
+    {
+      "documentType": "COMPANY_BANK_STATEMENT_12M",
+      "titleEn": "Company bank statements, 12 months",
+      "titleAr": "كشوف حساب المنشأة لاثني عشر شهرًا",
+      "required": true,
+      "validForSeconds": 7776000,
+      "checks": [
+        { "check": "PERIOD_COVERS", "months": 12 },
+        { "check": "PERIOD_ENDS_WITHIN", "days": 45 },
+        { "check": "NAME_FOUND" }
+      ]
+    },
+    {
+      "documentType": "AUDITED_FINANCIALS_2Y",
+      "titleEn": "Audited financial statements, 2 years",
+      "titleAr": "القوائم المالية المدققة لسنتين",
+      "required": false
+    },
+    {
+      "documentType": "MANAGEMENT_ACCOUNTS",
+      "titleEn": "Latest management accounts",
+      "titleAr": "أحدث الحسابات الإدارية",
+      "required": true,
+      "validForSeconds": 7776000
+    },
+    {
+      "documentType": "ZAKAT_CERTIFICATE",
+      "titleEn": "Zakat certificate (ZATCA)",
+      "titleAr": "شهادة الزكاة (هيئة الزكاة والضريبة والجمارك)",
+      "required": true,
+      "validForSeconds": 31536000,
+      "checks": [{ "check": "NOT_EXPIRED" }, { "check": "AUTHENTIC" }]
+    },
+    {
+      "documentType": "VAT_CERTIFICATE",
+      "titleEn": "VAT registration certificate, where registered",
+      "titleAr": "شهادة التسجيل في ضريبة القيمة المضافة، إن وُجدت",
+      "required": false
+    },
+    {
+      "documentType": "GOSI_CERTIFICATE",
+      "titleEn": "GOSI compliance certificate",
+      "titleAr": "شهادة الالتزام من المؤسسة العامة للتأمينات الاجتماعية",
+      "required": true,
+      "validForSeconds": 7776000,
+      "checks": [{ "check": "NOT_EXPIRED" }]
+    },
+    {
+      "documentType": "CHAMBER_MEMBERSHIP",
+      "titleEn": "Chamber of Commerce membership",
+      "titleAr": "شهادة عضوية الغرفة التجارية",
+      "required": false,
+      "validForSeconds": 31536000,
+      "checks": [{ "check": "NOT_EXPIRED" }]
+    },
+    {
+      "documentType": "ASSET_VALUATION_REPORT",
+      "titleEn": "Asset / collateral valuation report",
+      "titleAr": "تقرير تقييم الأصل / الضمان",
+      "required": false
+    }
+  ]
+}

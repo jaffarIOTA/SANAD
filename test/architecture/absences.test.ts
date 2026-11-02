@@ -275,32 +275,44 @@ describe('AP-04 — vendor concepts stop at the adapter', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('the core banking adapter carries no lending path', () => {
+  it('the lending module is reached from one file only, for rate-priced products', () => {
     // OI-02 Finding 1: the vendor's lending module derives and persists a
-    // periodic proportion. The obligation, its schedule and its profit amount
-    // live here instead. A lending URL appearing in this adapter would be the
-    // first step back onto it, so it fails the build.
-    const LENDING_PATHS = [/\/api\/v\d+\/(loans|contracts|offers)\b/, /loan-api/];
+    // periodic proportion, so a Murabaha obligation is never booked there —
+    // it stays account-shaped in core-banking-adapter.ts. The product owner's
+    // decision of 2026-10-08 (adapters/tuum/README.md, "Lending module") opens
+    // the lending module for rate-priced products only, through one file:
+    // lending-adapter.ts. Any lending path anywhere else under adapters/tuum
+    // fails the build.
+    const LENDING_PATHS = [/\/api\/v\d+\/(loans|contracts|offers)\b/, /\/contracts\b/, /loanTypeCode/, /loan-api/];
+    // The lending adapter, and the demonstration transport that answers it on the synthetic site.
+    const LENDING_FILES = new Set(['adapters/tuum/lending-adapter.ts', 'adapters/tuum/demonstration.ts']);
+    const READ_ONLY_CATALOGUE = 'adapters/tuum/product-catalogue.ts';
     const offenders: string[] = [];
 
     for (const file of filesUnder('adapters/tuum')) {
-      if (!file.endsWith('.ts')) continue;
+      if (!file.endsWith('.ts') || LENDING_FILES.has(rel(file))) continue;
       for (const line of codeOnly(read(file)).split('\n')) {
         for (const pattern of LENDING_PATHS) {
-          // The guard regex that rejects such a host is itself allowed.
-          if (pattern.test(line) && !line.includes('LENDING_HOST')) {
-            offenders.push(`${rel(file)}: ${line.trim()}`);
-          }
+          // The guard regex that rejects such a host is itself allowed; the read-only catalogue may name product types.
+          if (line.includes('LENDING_HOST')) continue;
+          if (rel(file) === READ_ONLY_CATALOGUE && pattern.source === 'loanTypeCode') continue;
+          if (pattern.test(line)) offenders.push(`${rel(file)}: ${line.trim()}`);
         }
       }
     }
     expect(offenders).toEqual([]);
 
-    // The read-only product catalogue (product-catalogue.ts) may list the
-    // lending module's product types; the booking adapter may not even do
-    // that. The two stay in separate files so this line can be asserted.
+    // The booking adapter for account-shaped (Murabaha) obligations may not even list lending products.
     const booking = codeOnly(read(join(ROOT, 'adapters/tuum/core-banking-adapter.ts')));
     expect(booking).not.toMatch(/loan-products/);
+    expect(booking).not.toMatch(/from\s+'[^']*lending-adapter/);
+
+    // Nothing in the Murabaha module, or the engine, reaches the lending adapter.
+    const reach: string[] = [];
+    for (const dir of ['products/murabaha-scf', 'core'])
+      for (const file of filesUnder(dir))
+        if (file.endsWith('.ts') && /from\s+'[^']*lending-adapter/.test(read(file))) reach.push(rel(file));
+    expect(reach).toEqual([]);
   });
 
   it('each adapter declares its deviations and names its verification item', async () => {
