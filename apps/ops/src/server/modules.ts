@@ -436,6 +436,15 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
           'Verified figures under four eyes (read figures enter only through the system path; keyed figures and corrections are verified by a second principal), documents validated by the checker, variant checklists, SME assessment run by the checker (knock-outs, 40/60 scorecard, risk, STP vs committee) — every threshold ILLUSTRATIVE until the fund supplies its policy. The bureau result is fetched through the AECB rail under the intake consent (FIXTURE until that adapter is verified; nothing typed overrides it); a partner hand-over keys it from the upstream report, labelled keyed; bank-statement facts from Open Finance sit beside the spread, confirmed under four eyes; inputs lock at submission',
       },
       {
+        id: 'business-security',
+        titleEn: 'Collateral & guarantor register',
+        titleAr: 'سجل الضمانات والكفلاء',
+        href: '/business',
+        readiness: live(),
+        reference:
+          'UAE M3 (core/origination/security-register.ts): collateral by kind, market value, valuation date and valuer, charge status with the registry reference; personal guarantees from the applicant’s owners and corporate guarantees, limited or unlimited; evidence named only if on the application. Recorded by the officer, confirmed by a different person; only confirmed, current items count. Lending value after the tenant’s haircut, cover rounded down, loan-to-value rounded up. The variant’s collateral codes map to requirements in config (credit-policy/security.json, ILLUSTRATIVE); submission refused while any is outstanding; scoring’s collateral cover comes from the register where it holds valued collateral. No charge-registry rail yet: references are keyed',
+      },
+      {
         id: 'business-offer',
         titleEn: 'Offer letter & sending',
         titleAr: 'خطاب العرض وإرساله',
@@ -565,12 +574,9 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         id: 'upload',
         titleEn: 'Document upload',
         titleAr: 'رفع المستندات',
-        readiness: {
-          kind: 'BLOCKED',
-          on: 'the S3-compatible store (adapters/storage/s3) has not yet made a verified call; until the tenant’s OBJECT_STORAGE credentials are saved and STORAGE-01 is recorded, uploads go to the in-memory fixture store, labelled Fixture, only where a synthetic demonstration is permitted, and are refused elsewhere',
-        },
+        readiness: live(),
         reference:
-          'Business application checklist (UAE M2b): type read from the bytes (PDF, PNG, JPEG, 10 MB), stored by SHA-256 under tenant/application/hash, presented PENDING until a different person validates it, served back only to the tenant’s staff after the hash is checked',
+          'Verified against Supabase Storage 2026-10-15 (STORAGE-01, adapters/storage/README.md); uses the tenant’s store once its S3_STORAGE credentials are saved, else the fixture store labelled Fixture where a synthetic demonstration is permitted, else refused. Business application checklist (UAE M2b): type read from the bytes (PDF, PNG, JPEG, 10 MB), stored by SHA-256 under tenant/application/hash, presented PENDING until a different person validates it, served back only to the tenant’s staff after the hash is checked',
         jurisdictions: AE,
       },
       {

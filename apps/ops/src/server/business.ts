@@ -45,8 +45,7 @@ import {
   loadProductCatalogue,
   loadSmeAssessmentPolicy,
   loadSmeDefinition,
-  loadTenantOnboarding,
-} from '@sanad/config/loader.ts';
+  loadTenantOnboarding, loadSecurityPolicy } from '@sanad/config/loader.ts';
 import {
   type FigureSourceKind,
   type FinancialFigure,
@@ -81,6 +80,19 @@ import {
 import { type OfferLetter, buildOfferLetter } from '@sanad/core/documents/offer-letter.ts';
 import type { JurisdictionProfile } from '@sanad/core/jurisdiction/profile.ts';
 import type { StorableMediaType } from '@sanad/core/ports/object-storage.ts';
+import {
+  type CollateralEntry,
+  type CollateralItem,
+  type Guarantee,
+  type GuaranteeEntry,
+  type SecurityPosition,
+  type SecurityRegister,
+  lendingValue,
+  securityPosition,
+  validateCollateralEntry,
+  validateGuaranteeEntry,
+  valuationCurrent,
+} from '@sanad/core/origination/security-register.ts';
 import { type CurrencyCode, type Money, money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import {
@@ -477,6 +489,8 @@ export interface BusinessApplicationView {
   readonly assessmentInputs?: AssessmentInputs;
   readonly bureauFetch?: BureauFetch;
   readonly bankFacts?: BankStatementFacts;
+  /** The collateral offered and the guarantees given, withdrawn items included. */
+  readonly security: SecurityRegister;
   readonly assessments: readonly AssessmentRun[];
   readonly latestAssessment?: AssessmentRun;
   readonly offers: readonly OfferRun[];
@@ -554,6 +568,7 @@ interface BusinessRecord {
   inputs?: AssessmentInputs;
   bureauFetch?: BureauFetch;
   bankFacts?: BankStatementFacts;
+  security: { collateral: CollateralItem[]; guarantees: Guarantee[] };
   assessments: AssessmentRun[];
   offers: OfferRun[];
   events: ApplicationEvent[];
@@ -946,6 +961,7 @@ function view(record: BusinessRecord, currency: CurrencyCode): BusinessApplicati
     ...(record.inputs === undefined ? {} : { assessmentInputs: record.inputs }),
     ...(record.bureauFetch === undefined ? {} : { bureauFetch: record.bureauFetch }),
     ...(record.bankFacts === undefined ? {} : { bankFacts: record.bankFacts }),
+    security: { collateral: [...record.security.collateral], guarantees: [...record.security.guarantees] },
     assessments: [...record.assessments],
     ...(latestAssessment === undefined ? {} : { latestAssessment }),
     offers: [...record.offers],
@@ -1003,6 +1019,7 @@ function restoreBook(book: TenantBook, persisted: Awaited<ReturnType<typeof load
       contact: { partyRef: firstOwner },
       figures: [],
       documents: [],
+      security: { collateral: [], guarantees: [] },
       assessments: [],
       offers: [],
       events: [],
@@ -1079,6 +1096,53 @@ function contentOf(d: Readonly<Record<string, string>>): DocumentContent {
     storage: d['contentStorage'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
   };
 }
+
+// -- the security register (UAE M3) -------------------------------------------
+
+function collateralFromDetail(d: Readonly<Record<string, string>>, currency: CurrencyCode, e: ApplicationEvent): CollateralItem {
+  const charge = d['charge'];
+  return {
+    itemId: d['itemId'] ?? '',
+    kind: (d['kind'] ?? 'OTHER') as CollateralItem['kind'],
+    description: d['description'] ?? '',
+    marketValue: money(BigInt(d['marketValueMinorUnits'] ?? '0'), currency),
+    valuedAtEpochSeconds: BigInt(d['valuedAtEpoch'] ?? '0'),
+    valuerRef: d['valuerRef'] ?? '',
+    ...(d['evidenceRef'] === undefined ? {} : { evidenceRef: d['evidenceRef'] }),
+    charge: charge === 'REGISTERED' || charge === 'PENDING' ? charge : 'NOT_APPLICABLE',
+    ...(d['chargeRef'] === undefined ? {} : { chargeRef: d['chargeRef'] }),
+    recordedBy: e.actor,
+    recordedAtEpochSeconds: e.atEpochSeconds,
+  };
+}
+
+function guaranteeFromDetail(d: Readonly<Record<string, string>>, currency: CurrencyCode, e: ApplicationEvent): Guarantee {
+  const limit = d['limitMinorUnits'];
+  return {
+    guaranteeId: d['itemId'] ?? '',
+    guarantorKind: d['guarantorKind'] === 'CORPORATE' ? 'CORPORATE' : 'PERSONAL',
+    guarantorRef: d['guarantorRef'] ?? '',
+    guarantorName: d['guarantorName'] ?? '',
+    limit: limit === undefined ? { kind: 'UNLIMITED' } : { kind: 'LIMITED', amount: money(BigInt(limit), currency) },
+    ...(d['deedRef'] === undefined ? {} : { deedRef: d['deedRef'] }),
+    recordedBy: e.actor,
+    recordedAtEpochSeconds: e.atEpochSeconds,
+  };
+}
+
+type SecurityMark = { readonly confirmedBy: string; readonly confirmedAtEpochSeconds: bigint } | { readonly withdrawnBy: string };
+
+function updateSecurityItem(r: BusinessRecord, itemId: string, mark: SecurityMark): void {
+  const c = r.security.collateral.findIndex((i) => i.itemId === itemId);
+  if (c >= 0) {
+    r.security.collateral[c] = { ...(r.security.collateral[c] as CollateralItem), ...mark };
+    return;
+  }
+  const g = r.security.guarantees.findIndex((i) => i.guaranteeId === itemId);
+  if (g >= 0) r.security.guarantees[g] = { ...(r.security.guarantees[g] as Guarantee), ...mark };
+}
+
+const nextSecurityId = (prefix: 'COL' | 'GUA', taken: number): string => `${prefix}-${String(taken + 1).padStart(3, '0')}`;
 
 function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
   const d = e.detail;
@@ -1169,6 +1233,18 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
     case 'BANK_STATEMENTS_CONFIRMED':
       if (r.bankFacts !== undefined)
         r.bankFacts = { ...r.bankFacts, confirmedBy: e.actor, confirmedAtEpochSeconds: e.atEpochSeconds };
+      return;
+    case 'COLLATERAL_RECORDED':
+      r.security.collateral.push(collateralFromDetail(d, r.application.requested.currency, e));
+      return;
+    case 'GUARANTEE_RECORDED':
+      r.security.guarantees.push(guaranteeFromDetail(d, r.application.requested.currency, e));
+      return;
+    case 'SECURITY_CONFIRMED':
+      updateSecurityItem(r, d['itemId'] ?? '', { confirmedBy: e.actor, confirmedAtEpochSeconds: e.atEpochSeconds });
+      return;
+    case 'SECURITY_WITHDRAWN':
+      updateSecurityItem(r, d['itemId'] ?? '', { withdrawnBy: e.actor });
       return;
     case 'PORTFOLIO_STATUS_RECORDED':
       r.portfolio = {
@@ -1580,6 +1656,7 @@ async function handOverAt(
     contact,
     figures: [],
     documents: [],
+    security: { collateral: [], guarantees: [] },
     assessments: [],
     offers: [],
     events: [],
@@ -2317,6 +2394,281 @@ export async function confirmBankStatementFacts(
   });
 }
 
+/** Where the register may change: before submission, while the case is being prepared. */
+function securityOpen(r: BusinessRecord): Result<true> {
+  return SPREAD_OPEN.has(r.application.status)
+    ? ok(true)
+    : fail('SECURITY_LOCKED', 'The security register changes only before the application is submitted', {
+        status: r.application.status,
+      });
+}
+
+/** Evidence named on a security item is a document already on the application, uploaded or referenced. */
+function evidenceOnFile(r: BusinessRecord, ref: string | undefined): Result<true> {
+  if (ref === undefined || r.documents.some((d) => d.documentRef === ref)) return ok(true);
+  return fail('SECURITY_EVIDENCE_NOT_ON_FILE', 'Attach the valuation or deed to the application first, then name it here');
+}
+
+/** The officer records a collateral item. It counts once a different person confirms it. */
+export async function recordCollateral(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: CollateralEntry,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    recordCollateralAt(tenant, applicationId, entry, actor, developmentAttestation().epochSeconds),
+  );
+}
+
+async function recordCollateralAt(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: CollateralEntry,
+  actor: string,
+  at: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  const book = await hydrate(tenant);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  const open = securityOpen(r);
+  if (!open.ok) return open;
+  const item = validateCollateralEntry(entry, ctx.value.currency, at);
+  if (!item.ok) return item;
+  const evidence = evidenceOnFile(r, item.value.evidenceRef);
+  if (!evidence.ok) return evidence;
+  const itemId = nextSecurityId('COL', r.security.collateral.length);
+  r.security.collateral.push({ ...item.value, itemId, recordedBy: actor, recordedAtEpochSeconds: at });
+  recordEvent(book, r, {
+    eventType: 'COLLATERAL_RECORDED',
+    fromStage: null,
+    toStage: null,
+    actor,
+    atEpochSeconds: at,
+    detail: {
+      itemId,
+      kind: item.value.kind,
+      description: item.value.description,
+      marketValueMinorUnits: item.value.marketValue.minorUnits.toString(),
+      valuedAtEpoch: item.value.valuedAtEpochSeconds.toString(),
+      valuerRef: item.value.valuerRef,
+      ...(item.value.evidenceRef === undefined ? {} : { evidenceRef: item.value.evidenceRef }),
+      charge: item.value.charge,
+      ...(item.value.chargeRef === undefined ? {} : { chargeRef: item.value.chargeRef }),
+    },
+  });
+  return ok(view(r, ctx.value.currency));
+}
+
+/** The officer records a guarantee: a personal one from an owner, or a corporate one. It counts once confirmed by another person. */
+export async function recordGuarantee(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: GuaranteeEntry,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    recordGuaranteeAt(tenant, applicationId, entry, actor, developmentAttestation().epochSeconds),
+  );
+}
+
+async function recordGuaranteeAt(
+  tenant: TenantCode,
+  applicationId: string,
+  entry: GuaranteeEntry,
+  actor: string,
+  at: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  const book = await hydrate(tenant);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  const open = securityOpen(r);
+  if (!open.ok) return open;
+  const g = validateGuaranteeEntry(entry, r.application.applicant.owners, ctx.value.currency);
+  if (!g.ok) return g;
+  if (
+    r.security.guarantees.some(
+      (x) => x.withdrawnBy === undefined && x.guarantorKind === g.value.guarantorKind && x.guarantorRef === g.value.guarantorRef,
+    )
+  )
+    return fail('GUARANTEE_DUPLICATE', 'This guarantor already has a guarantee on the application; withdraw it to replace it');
+  const evidence = evidenceOnFile(r, g.value.deedRef);
+  if (!evidence.ok) return evidence;
+  const guaranteeId = nextSecurityId('GUA', r.security.guarantees.length);
+  r.security.guarantees.push({ ...g.value, guaranteeId, recordedBy: actor, recordedAtEpochSeconds: at });
+  recordEvent(book, r, {
+    eventType: 'GUARANTEE_RECORDED',
+    fromStage: null,
+    toStage: null,
+    actor,
+    atEpochSeconds: at,
+    detail: {
+      itemId: guaranteeId,
+      guarantorKind: g.value.guarantorKind,
+      guarantorRef: g.value.guarantorRef,
+      guarantorName: g.value.guarantorName,
+      ...(g.value.limit.kind === 'LIMITED' ? { limitMinorUnits: g.value.limit.amount.minorUnits.toString() } : {}),
+      ...(g.value.deedRef === undefined ? {} : { deedRef: g.value.deedRef }),
+    },
+  });
+  return ok(view(r, ctx.value.currency));
+}
+
+/** A second person confirms a recorded collateral item or guarantee. A stale valuation is not confirmed. */
+export async function confirmSecurityItem(
+  tenant: TenantCode,
+  applicationId: string,
+  itemId: string,
+  confirmer: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, () =>
+    confirmSecurityItemAt(tenant, applicationId, itemId, confirmer, developmentAttestation().epochSeconds),
+  );
+}
+
+async function confirmSecurityItemAt(
+  tenant: TenantCode,
+  applicationId: string,
+  itemId: string,
+  confirmer: string,
+  at: bigint,
+): Promise<Result<BusinessApplicationView>> {
+  const book = await hydrate(tenant);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  const open = securityOpen(r);
+  if (!open.ok) return open;
+  const collateral = r.security.collateral.find((i) => i.itemId === itemId);
+  const item = collateral ?? r.security.guarantees.find((i) => i.guaranteeId === itemId);
+  if (item === undefined) return fail('SECURITY_ITEM_NOT_FOUND', 'No such item in the security register', { itemId });
+  if (item.withdrawnBy !== undefined)
+    return fail('SECURITY_ITEM_WITHDRAWN', 'A withdrawn item is not confirmed; record it again');
+  if (item.confirmedBy !== undefined)
+    return fail('SECURITY_ALREADY_CONFIRMED', 'This item is already confirmed');
+  if (confirmer === item.recordedBy)
+    return reject('OP-DETERMINACY', 'FOUR_EYES_SELF_CONFIRMATION', 'Whoever recorded a security item does not confirm it');
+  if (collateral !== undefined) {
+    const policy = loadSecurityPolicy(tenant);
+    if (!policy.ok) return policy;
+    if (!valuationCurrent(collateral, policy.value, at))
+      return fail('VALUATION_STALE', 'The valuation is older than the policy allows; record a current one', {
+        maxValuationAgeDays: String(policy.value.maxValuationAgeDays),
+      });
+  }
+  updateSecurityItem(r, itemId, { confirmedBy: confirmer, confirmedAtEpochSeconds: at });
+  recordEvent(book, r, {
+    eventType: 'SECURITY_CONFIRMED',
+    fromStage: null,
+    toStage: null,
+    actor: confirmer,
+    atEpochSeconds: at,
+    detail: { itemId },
+  });
+  return ok(view(r, ctx.value.currency));
+}
+
+/** Withdraw an item before submission. It stays in the record, counted nowhere. Withdrawing only ever reduces cover, so one person may do it. */
+export async function withdrawSecurityItem(
+  tenant: TenantCode,
+  applicationId: string,
+  itemId: string,
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return withTenantLock(tenant, async () => {
+    const book = await hydrate(tenant);
+    const ctx = tenantContext(tenant);
+    if (!ctx.ok) return ctx;
+    const r = book.records.get(applicationId);
+    if (r === undefined) return notFound(applicationId);
+    const open = securityOpen(r);
+    if (!open.ok) return open;
+    const item =
+      r.security.collateral.find((i) => i.itemId === itemId) ??
+      r.security.guarantees.find((i) => i.guaranteeId === itemId);
+    if (item === undefined) return fail('SECURITY_ITEM_NOT_FOUND', 'No such item in the security register', { itemId });
+    if (item.withdrawnBy !== undefined) return fail('SECURITY_ITEM_WITHDRAWN', 'This item is already withdrawn');
+    const at = developmentAttestation().epochSeconds;
+    updateSecurityItem(r, itemId, { withdrawnBy: actor });
+    recordEvent(book, r, {
+      eventType: 'SECURITY_WITHDRAWN',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { itemId },
+    });
+    return ok(view(r, ctx.value.currency));
+  });
+}
+
+export interface SecurityStatus {
+  readonly position: SecurityPosition;
+  /** The variant's collateral requirements as the catalogue labels them. */
+  readonly labels: Readonly<Record<string, { readonly en: string; readonly ar: string }>>;
+  readonly haircutsPerTenThousand: Readonly<Record<string, number>>;
+  readonly maxValuationAgeDays: number;
+  readonly policyRef: string;
+}
+
+async function securityOf(tenant: TenantCode, r: BusinessRecord, at: bigint): Promise<Result<SecurityStatus>> {
+  const policy = loadSecurityPolicy(tenant);
+  if (!policy.ok) return policy;
+  const product = await productFor(tenant, r.application.productCode, r.application.variantCode, developmentAttestation());
+  if (!product.ok) return product;
+  const required = product.value.variant.collateral;
+  return ok({
+    position: securityPosition(
+      r.security,
+      r.application.requested,
+      required.map((c) => c.code),
+      r.application.applicant.owners,
+      policy.value,
+      at,
+    ),
+    labels: Object.fromEntries(required.map((c) => [c.code, { en: c.labelEn, ar: c.labelAr }])),
+    haircutsPerTenThousand: policy.value.haircutsPerTenThousand,
+    maxValuationAgeDays: policy.value.maxValuationAgeDays,
+    policyRef: policy.value.policyRef,
+  });
+}
+
+/** The register against the variant's requirements and the tenant's haircuts, at the current attested instant. */
+export async function securityStatus(tenant: TenantCode, applicationId: string): Promise<Result<SecurityStatus>> {
+  const book = await hydrate(tenant);
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  return securityOf(tenant, r, developmentAttestation().epochSeconds);
+}
+
+/**
+ * Collateral cover for scoring. Where the confirmed register holds valued
+ * collateral (a kind the policy lends against at all), the register decides,
+ * and a stale valuation counts for nothing. Otherwise — a partner hand-over,
+ * or only instruments such as a promissory note — the officer's keyed value.
+ */
+function collateralCoverageOf(tenant: TenantCode, record: BusinessRecord, at: bigint, keyed: Money): bigint {
+  const requested = record.application.requested.minorUnits;
+  const policy = loadSecurityPolicy(tenant);
+  const confirmed = record.security.collateral.filter(
+    (c) =>
+      c.confirmedBy !== undefined &&
+      c.withdrawnBy === undefined &&
+      policy.ok &&
+      policy.value.haircutsPerTenThousand[c.kind] < 10_000,
+  );
+  if (!policy.ok || confirmed.length === 0) return floorDiv(keyed.minorUnits * 10_000n, requested);
+  const total = confirmed
+    .filter((c) => valuationCurrent(c, policy.value, at))
+    .reduce((sum, c) => sum + lendingValue(c, policy.value).minorUnits, 0n);
+  return floorDiv(total * 10_000n, requested);
+}
+
 async function submitAt(
   tenant: TenantCode,
   applicationId: string,
@@ -2350,6 +2702,16 @@ async function submitAt(
       'ASSESSMENT_INPUTS_MISSING',
       'Record the bureau result and the officer’s assessment inputs before submitting',
     );
+  // The securities the variant requires, each recorded and confirmed by a second person.
+  const security = await securityOf(tenant, r, at.epochSeconds);
+  if (!security.ok) return security;
+  if (!security.value.position.complete)
+    return fail('SECURITY_INCOMPLETE', 'Every security the product requires is recorded and confirmed before submitting', {
+      missing: security.value.position.requirements
+        .filter((q) => !q.met)
+        .map((q) => q.code)
+        .join(','),
+    });
   apply(book, r, t.value);
   return ok(view(r, ctx.value.currency));
 }
@@ -2401,12 +2763,15 @@ export const FACT_SOURCES: Readonly<Record<string, string>> = {
   riskAnalysisScorePerTenThousand: 'Officer assessment',
   portfolioRepaymentPerTenThousand: 'Officer assessment',
   failedFilesRatePerTenThousand: 'Officer assessment',
-  collateralCoveragePerTenThousand: 'Collateral value ÷ requested amount, rounded down',
+  collateralCoveragePerTenThousand:
+    'Confirmed security register lending value (else the keyed collateral value) ÷ requested amount, rounded down',
 };
 
 function factsFor(
+  tenant: TenantCode,
   record: BusinessRecord,
   currency: CurrencyCode,
+  at: bigint,
 ): Result<{ readonly facts: SmeAssessmentFacts; readonly ratios: readonly FinancialRatio[] }> {
   const inputs = record.inputs;
   if (inputs === undefined)
@@ -2435,7 +2800,6 @@ function factsFor(
     return fail('RATIO_DENOMINATOR_ZERO', 'The debt burden before this facility needs a positive annual revenue', {
       ratio: 'DBR_BEFORE_LOAN',
     });
-  const requested = record.application.requested.minorUnits;
   const facts: SmeAssessmentFacts = {
     bureauScore: inputs.bureau.score,
     dscrPerTenThousand: ratio('DEBT_SERVICE_COVER'),
@@ -2453,7 +2817,7 @@ function factsFor(
     riskAnalysisScorePerTenThousand: inputs.riskAnalysisScorePerTenThousand,
     portfolioRepaymentPerTenThousand: inputs.portfolioRepaymentPerTenThousand,
     failedFilesRatePerTenThousand: inputs.failedFilesRatePerTenThousand,
-    collateralCoveragePerTenThousand: floorDiv(inputs.collateralValue.minorUnits * 10_000n, requested),
+    collateralCoveragePerTenThousand: collateralCoverageOf(tenant, record, at, inputs.collateralValue),
   };
   return ok({ facts, ratios });
 }
@@ -2483,7 +2847,7 @@ async function runAssessmentAt(
     );
   const policy = loadSmeAssessmentPolicy(tenant);
   if (!policy.ok) return policy;
-  const derived = factsFor(r, ctx.value.currency);
+  const derived = factsFor(tenant, r, ctx.value.currency, at.epochSeconds);
   if (!derived.ok) return derived;
   // Exactly the facts the policy reads: nothing it does not declare enters the trace.
   const facts: Record<string, SmeAssessmentFacts[string]> = {};
@@ -3644,6 +4008,59 @@ const SEEDS: readonly SeedSpec[] = [
 // The illustrative seed's instants are the host clock's, written only where the seed itself is permitted.
 const seedInstant = (epochSeconds: bigint): TsaInstant => hostClockInstant(epochSeconds);
 
+/**
+ * The seed's securities: whatever the variant requires, recorded by the
+ * officer and confirmed by the checker, plus a cash deposit topping the
+ * register's lending value up to the seed's collateral amount — so the
+ * register reproduces the cover each illustrative case was designed with.
+ */
+async function seedSecurity(
+  tenant: TenantCode,
+  id: string,
+  officer: string,
+  checker: string,
+  at: bigint,
+  collateralMinor: bigint,
+): Promise<void> {
+  const r = bookOf(tenant).records.get(id);
+  const policy = loadSecurityPolicy(tenant);
+  if (r === undefined || !policy.ok) return;
+  const status = await securityOf(tenant, r, at);
+  if (!status.ok) return;
+  const valuedAt = at - DAY;
+  let lent = 0n;
+  const collateral = async (kind: CollateralEntry['kind'], description: string, value: bigint) => {
+    const v = await recordCollateralAt(
+      tenant,
+      id,
+      { kind, description, marketValueMinorUnits: value, valuedAtEpochSeconds: valuedAt, valuerRef: `valuer-ILLUS-${id.slice(-4)}`, charge: 'NOT_APPLICABLE' },
+      officer,
+      at,
+    );
+    if (v.ok) {
+      const item = v.value.security.collateral.at(-1);
+      if (item !== undefined) {
+        lent += lendingValue(item, policy.value).minorUnits;
+        await confirmSecurityItemAt(tenant, id, item.itemId, checker, at);
+      }
+    }
+  };
+  for (const req of status.value.position.requirements) {
+    const rule = policy.value.requirements[req.code];
+    if (rule?.kind === 'GUARANTEE_FROM_EACH_OWNER') {
+      for (const ref of req.missingOwners) {
+        const g = await recordGuaranteeAt(tenant, id, { guarantorKind: 'PERSONAL', guarantorRef: ref, guarantorName: '' }, officer, at);
+        const made = g.ok ? g.value.security.guarantees.at(-1) : undefined;
+        if (made !== undefined) await confirmSecurityItemAt(tenant, id, made.guaranteeId, checker, at);
+      }
+    } else if (rule?.kind === 'COLLATERAL') {
+      const value = rule.collateralKind === 'FINANCED_ASSET' ? collateralMinor : r.application.requested.minorUnits;
+      await collateral(rule.collateralKind, `ILLUSTRATIVE ${rule.collateralKind.toLowerCase().replace(/_/g, ' ')}`, value);
+    }
+  }
+  if (collateralMinor > lent) await collateral('CASH_DEPOSIT', 'ILLUSTRATIVE cash deposit under lien', collateralMinor - lent);
+}
+
 async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
   const now = developmentAttestation().epochSeconds;
   const officer = SEED_PRINCIPALS.officer;
@@ -3827,6 +4244,7 @@ async function seedIllustrativeBook(tenant: TenantCode): Promise<void> {
       officer,
       step(3n),
     );
+    await seedSecurity(tenant, id, officer, checker, step(3n).epochSeconds, s.collateralAed * 100n);
     const submitted = await submitAt(tenant, id, officer, step(4n));
     if (!submitted.ok || s.reach === 'SUBMITTED') continue;
 

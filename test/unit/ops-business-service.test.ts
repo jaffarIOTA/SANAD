@@ -11,6 +11,8 @@
 import type { Pool } from 'pg';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { meetSecurityRequirements } from '../support/business-security.ts';
+
 import { loadOfferDatePolicy } from '@sanad/config/loader.ts';
 import offerPolicyJson from '@sanad/config/tenants/sme-fund-ae/credit-policy/offer-policy.json' with { type: 'json' };
 import type { FinancialMetric } from '@sanad/core/applicant/financials.ts';
@@ -165,11 +167,17 @@ async function presentAndValidateDocuments(): Promise<void> {
   }
 }
 
+/** The security the variant requires, recorded by the officer and confirmed by the checker (UAE M3), at the keyed collateral value. */
+async function meetSecurity(): Promise<void> {
+  await meetSecurityRequirements(TENANT, ID, officer, checker, INPUTS.collateralValueMinorUnits, BigInt(Math.floor(Date.now() / 1000)) - 86_400n);
+}
+
 /** Hand-over to a committee approval, through the real functions. */
 async function driveToApproved(): Promise<void> {
   expect((await handOver(TENANT, handover(), 'upstream-record-dev-01')).ok).toBe(true);
   await spreadAndVerify();
   await presentAndValidateDocuments();
+  await meetSecurity();
   expect((await recordAssessmentInputs(TENANT, ID, INPUTS, officer)).ok).toBe(true);
   expect((await submitForAssessment(TENANT, ID, officer)).ok).toBe(true);
   expect((await runAssessment(TENANT, ID, checker)).ok).toBe(true);
@@ -234,6 +242,7 @@ describe('the business-application service — full journey in memory', () => {
 
     expectRefused(await submitForAssessment(TENANT, ID, officer), 'DOCUMENTS_MISSING');
     await presentAndValidateDocuments();
+    await meetSecurity();
     const complete = await checklistStatus(TENANT, ID);
     expect(complete.ok && complete.value.complete).toBe(true);
     if (complete.ok) expect(complete.value.checklist.programmeId).toBe('sme-ae-small-loan');
@@ -557,6 +566,7 @@ describe('#7 assessment inputs: consent-bound, locked at submission, scored by s
     await handOver(TENANT, handover(), 'upstream');
     await spreadAndVerify();
     await presentAndValidateDocuments();
+    await meetSecurity();
     await recordAssessmentInputs(TENANT, ID, INPUTS, officer);
     expect((await submitForAssessment(TENANT, ID, officer)).ok).toBe(true);
     expectRefused(
@@ -569,6 +579,7 @@ describe('#7 assessment inputs: consent-bound, locked at submission, scored by s
     await handOver(TENANT, handover(), 'upstream');
     await spreadAndVerify();
     await presentAndValidateDocuments();
+    await meetSecurity();
     expectRefused(await submitForAssessment(TENANT, ID, officer), 'ASSESSMENT_INPUTS_MISSING');
     expect((await recordAssessmentInputs(TENANT, ID, INPUTS, officer)).ok).toBe(true);
     expect((await submitForAssessment(TENANT, ID, officer)).ok).toBe(true);

@@ -14,6 +14,8 @@ import type { AddressInfo } from 'node:net';
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { meetSecurityRequirements } from '../support/business-security.ts';
+
 import { fixtureLicenceCheckIn } from '../../adapters/licensing/check-in/fixture.ts';
 import { civilOf, formatDate } from '../../core/licensing/dates.ts';
 import { assertNewBusinessPermitted } from '../../core/licensing/gate.ts';
@@ -629,6 +631,7 @@ describe('a customer who accepted before grace ended is never let down', () => {
         officer,
       ),
     );
+    await meetSecurityRequirements(T, ID, officer, checker, 100_000_000n, BigInt(Math.floor(Date.now() / 1000)) - 86_400n);
     ok(await submitForAssessment(T, ID, officer));
     ok(await runAssessment(T, ID, checker));
     ok(await decideInCommittee(T, ID, { decidedBy: committee, approved: true, reason: 'Within risk-aligned terms' }));
