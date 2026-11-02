@@ -19,5 +19,18 @@
     { "document": "purchase_contract", "templateVersionId": "purchase_contract@1" },
     { "document": "murabaha_offer", "templateVersionId": "murabaha_offer@1" },
     { "document": "murabaha_acceptance", "templateVersionId": "murabaha_acceptance@1" }
-  ]
+  ],
+  "purification": {
+    "$comment": "ILLUSTRATIVE until the board rules (Wasl W6b-2, 2026-10-26; OI-12). This board rules an assessed amount rather than bank-a's whole profit: two boards may differ (SDD 3.11). The recipient is invented, with an invented IBAN in the Saudi format.",
+    "method": "ASSESSED_AMOUNT",
+    "computationBasisKey": "SSB-B-2026-007/purification/assessed",
+    "approvedRecipients": [
+      {
+        "recipientId": "chr-b-01",
+        "nameAr": "جمعية خيرية توضيحية (ج)",
+        "nameEn": "Illustrative charitable association C",
+        "iban": "SA4480000000000000000303"
+      }
+    ]
+  }
 }

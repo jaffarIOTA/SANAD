@@ -354,6 +354,7 @@ function encodeCharity(c: CharityWrite): Record<string, string> {
     ? {
         kind: c.kind,
         entryId: c.entryId,
+        reason: c.reason ?? 'LATE_PAYMENT',
         amountMinor: c.amount.minorUnits.toString(),
         currency: c.amount.currency,
         sourceRef: c.sourceRef,

@@ -82,6 +82,18 @@ export const NOTICE: Readonly<Record<string, Words>> = {
     ar: 'هذه الملاحظة مقيّدة بالفعل على هذه المعاملة.',
   },
   INCIDENT_STEP_RECORDED: { en: 'Recorded.', ar: 'سُجّل.' },
+  PURIFICATION_PROPOSED: {
+    en: 'Purification proposed. A second Shariah reviewer confirms it before anything is raised.',
+    ar: 'اقتُرح التطهير، ويؤكده مراجع شرعي ثانٍ قبل قيد أي مبلغ.',
+  },
+  PURIFICATION_CONFIRMED: {
+    en: 'Confirmed. The shares of instalments already paid are raised to the charity liability; the rest as each is paid.',
+    ar: 'تم التأكيد. قُيّدت حصص الأقساط المسددة في التزام التبرع، والباقي عند سداد كل قسط.',
+  },
+  PURIFICATION_REJECTED: {
+    en: 'Rejected. A purification can be proposed again.',
+    ar: 'رُفض. يمكن اقتراح التطهير مرة أخرى.',
+  },
   APPROVAL_CHANGE_PROPOSED: {
     en: 'Proposed. It takes effect in the register only when a second Shariah reviewer confirms it.',
     ar: 'اقتُرح التغيير، ولا يسري في السجل إلا بعد أن يؤكده مراجع شرعي ثانٍ.',
@@ -373,6 +385,48 @@ const SHARIAH_APPROVAL_REFUSAL: Readonly<Record<string, Words>> = Object.fromEnt
 
 export const REFUSAL: Readonly<Record<string, Words>> = {
   ...SHARIAH_APPROVAL_REFUSAL,
+  INCIDENT_NOT_AWAITING_PURIFICATION: {
+    en: 'Purification follows an incident remediated as having affected income.',
+    ar: 'يأتي التطهير بعد معالجة مخالفة ثبت أنها أثّرت في الدخل.',
+  },
+  PURIFICATION_ALREADY_PROPOSED: {
+    en: 'This incident’s purification is already proposed or confirmed.',
+    ar: 'تطهير هذه المخالفة مقترح أو مؤكد بالفعل.',
+  },
+  PURIFICATION_NOT_RULED: {
+    en: 'The board has ruled no purification method, so none can be proposed.',
+    ar: 'لم تحدد الهيئة طريقة للتطهير، فلا يمكن اقتراحه.',
+  },
+  PURIFICATION_REASON_REQUIRED: {
+    en: 'Say why, and how the amount was reached.',
+    ar: 'اذكر السبب وكيف حُدّد المبلغ.',
+  },
+  PURIFICATION_AMOUNT_REQUIRED: {
+    en: 'The board rules an assessed amount: state it in riyals.',
+    ar: 'تحدد الهيئة مبلغاً مقدّراً: اذكره بالريال.',
+  },
+  PURIFICATION_ABOVE_PROFIT: {
+    en: 'A Murabaha’s income is its profit; no more than the profit is purified.',
+    ar: 'دخل المرابحة ربحها، فلا يُطهَّر أكثر من الربح.',
+  },
+  NO_INCOME_TO_PURIFY: {
+    en: 'This transaction earns no profit, so there is no income to purify.',
+    ar: 'لا تحقق هذه المعاملة ربحاً، فلا دخل يُطهَّر.',
+  },
+  PURIFICATION_NOT_PROPOSED: { en: 'No purification awaits a decision.', ar: 'لا يوجد تطهير بانتظار القرار.' },
+  PURIFICATION_BEFORE_BOOKING: {
+    en: 'The obligation is not booked yet, so there is no income to purify yet.',
+    ar: 'لم يُقيَّد الالتزام بعد، فلا دخل يُطهَّر حتى الآن.',
+  },
+  PURIFICATION_SHARE_NOT_RAISED: {
+    en: 'Nothing is held for charity for this share yet: its instalment is not paid.',
+    ar: 'لا شيء محتجز للتبرع عن هذه الحصة بعد، فقسطها لم يُسدَّد.',
+  },
+  DISBURSEMENT_ALREADY_PROPOSED: {
+    en: 'A recipient is already proposed for this share.',
+    ar: 'اقتُرحت جهة لهذه الحصة بالفعل.',
+  },
+  DISBURSEMENT_NOT_PROPOSED: { en: 'No recipient is proposed for this share.', ar: 'لم تُقترح جهة لهذه الحصة.' },
   SHARIAH_INCIDENT_OPEN: {
     en: 'A material Shariah incident is open on this transaction. It does not proceed to its sale until the Shariah reviewers close the incident; it may still be unwound.',
     ar: 'توجد مخالفة شرعية جوهرية مفتوحة على هذه المعاملة، فلا تمضي إلى البيع حتى يغلقها المراجعون الشرعيون؛ ويبقى فكّها ممكناً.',

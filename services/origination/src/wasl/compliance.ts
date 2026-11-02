@@ -24,6 +24,7 @@ import { shariahRegister } from '../shariah/approvals.ts';
 import { raiseIncident } from '../shariah/incidents.ts';
 import { type TransactionRecord, WASL_PRODUCT, hydrate, structureOf } from './book.ts';
 import { resolveBoard, resolveWaslParties } from './configuration.ts';
+import { purifications, raisePurificationsDue } from './purification.ts';
 import { instrumentHash, termsAtOpening } from './steps.ts';
 
 export interface ShariahReview {
@@ -95,6 +96,14 @@ export async function runShariahReview(tenant: TenantCode, actor: string): Promi
   );
   let findings = 0;
   const raised: string[] = [];
+  // W6b-2: purified shares whose instalments are paid but were not raised then (the core was unavailable). A share
+  // that still cannot be raised does not stop the checks; the cycle reports it once they have run.
+  let unswept: Result<never> | undefined;
+  for (const record of live)
+    if (purifications(record).some((p) => p.state === 'CONFIRMED')) {
+      const swept = await raisePurificationsDue(tenant, record.transactionRef, actor);
+      if (!swept.ok) unswept ??= swept;
+    }
   for (const record of live) {
     const found = await findingsFor(tenant, record);
     if (!found.ok) return found;
@@ -113,5 +122,5 @@ export async function runShariahReview(tenant: TenantCode, actor: string): Promi
       if (r.value !== undefined) raised.push(r.value.incidentRef);
     }
   }
-  return ok({ checked: live.length, findings, raised });
+  return unswept ?? ok({ checked: live.length, findings, raised });
 }

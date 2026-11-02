@@ -22,6 +22,13 @@ import { decideApprovalChange, proposeApprovalChange } from '@sanad/origination/
 import { actOnIncident, raiseObservation } from '@sanad/origination/shariah/incidents.ts';
 import { WASL_PRODUCT, getTransaction } from '@sanad/origination/wasl/book.ts';
 import { runShariahReview } from '@sanad/origination/wasl/compliance.ts';
+import {
+  approvePurificationDisbursement,
+  decidePurification,
+  declinePurificationDisbursement,
+  proposePurification,
+  proposePurificationDisbursement,
+} from '@sanad/origination/wasl/purification.ts';
 
 import { authorise, localeSegmentOf } from './session.ts';
 
@@ -197,5 +204,87 @@ export async function actOnIncidentAction(form: FormData): Promise<void> {
     () =>
       actOnIncident(staff.tenantId as TenantCode, staff.principalId, field(form, 'incidentRef').slice(0, 20), action),
     () => 'INCIDENT_STEP_RECORDED',
+  );
+}
+
+// -- Purification (W6b-2) --------------------------------------------------------------
+
+/** The incident and its transaction, as the purification forms carry them. */
+const purificationOf = (form: FormData) => ({
+  transactionRef: field(form, 'transactionRef').slice(0, 40),
+  incidentRef: field(form, 'incidentRef').slice(0, 20),
+});
+const shareOf = (form: FormData): number => {
+  const n = Number(field(form, 'sequenceNumber'));
+  return Number.isInteger(n) && n > 0 && n < 1000 ? n : 0;
+};
+
+/** A Shariah reviewer proposes purifying an incident's income; under an assessed method, in whole riyals. */
+export async function proposePurificationAction(form: FormData): Promise<void> {
+  const locale = localeSegmentOf(field(form, 'locale') || 'en');
+  const staff = await authorise(locale, 'SHARIAH_PURIFY', INCIDENTS(locale));
+  const p = purificationOf(form);
+  const riyals = field(form, 'assessedRiyals').replace(/[^\d]/g, '');
+  return incidentFinish(
+    locale,
+    () =>
+      proposePurification(staff.tenantId as TenantCode, p.transactionRef, staff.principalId, {
+        incidentRef: p.incidentRef,
+        ...(/^\d{1,13}$/.test(riyals) ? { assessedMinorUnits: BigInt(riyals) * 100n } : {}),
+        note: field(form, 'note').slice(0, 1000),
+      }),
+    () => 'PURIFICATION_PROPOSED',
+  );
+}
+
+/** A different Shariah reviewer confirms the purification, or rejects it with a reason. */
+export async function decidePurificationAction(form: FormData): Promise<void> {
+  const locale = localeSegmentOf(field(form, 'locale') || 'en');
+  const staff = await authorise(locale, 'SHARIAH_PURIFY', INCIDENTS(locale));
+  const p = purificationOf(form);
+  const confirm = field(form, 'decision') === 'CONFIRM';
+  return incidentFinish(
+    locale,
+    () =>
+      decidePurification(staff.tenantId as TenantCode, p.transactionRef, staff.principalId, {
+        incidentRef: p.incidentRef,
+        confirm,
+        note: field(form, 'note').slice(0, 1000),
+      }),
+    () => (confirm ? 'PURIFICATION_CONFIRMED' : 'PURIFICATION_REJECTED'),
+  );
+}
+
+/** Finance proposes which board-approved recipient a raised share goes to. */
+export async function proposePurificationDisbursementAction(form: FormData): Promise<void> {
+  const locale = localeSegmentOf(field(form, 'locale') || 'en');
+  const staff = await authorise(locale, 'CHARITY_DISBURSE_PROPOSE', INCIDENTS(locale));
+  const p = purificationOf(form);
+  return incidentFinish(
+    locale,
+    () =>
+      proposePurificationDisbursement(staff.tenantId as TenantCode, p.transactionRef, staff.principalId, {
+        incidentRef: p.incidentRef,
+        sequenceNumber: shareOf(form),
+        recipientId: field(form, 'recipientId').slice(0, 64),
+      }),
+    () => 'CHARITY_DISBURSEMENT_PROPOSED',
+  );
+}
+
+/** A different person approves the disbursement, which instructs the payment, or declines it. */
+export async function decidePurificationDisbursementAction(form: FormData): Promise<void> {
+  const locale = localeSegmentOf(field(form, 'locale') || 'en');
+  const staff = await authorise(locale, 'CHARITY_DISBURSE_APPROVE', INCIDENTS(locale));
+  const p = purificationOf(form);
+  const approve = field(form, 'decision') === 'APPROVE';
+  const input = { incidentRef: p.incidentRef, sequenceNumber: shareOf(form) };
+  return incidentFinish(
+    locale,
+    () =>
+      approve
+        ? approvePurificationDisbursement(staff.tenantId as TenantCode, p.transactionRef, staff.principalId, input)
+        : declinePurificationDisbursement(staff.tenantId as TenantCode, p.transactionRef, staff.principalId, input),
+    () => (approve ? 'CHARITY_DISBURSED' : 'CHARITY_DISBURSEMENT_DECLINED'),
   );
 }

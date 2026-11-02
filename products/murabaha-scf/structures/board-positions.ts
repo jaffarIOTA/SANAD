@@ -57,6 +57,20 @@ export interface LateAmountPositions {
   readonly approvedRecipients: readonly ApprovedRecipient[];
 }
 
+/**
+ * The board's ruling on purifying income from a defective transaction (BR-F06,
+ * Wasl W6b-2): how the amount is fixed — the transaction's whole profit, or an
+ * amount the Shariah reviewer assesses with a reason — and the recipients it
+ * may be given to. Either way a second reviewer confirms it, and it is raised
+ * to the charity liability as the profit it purifies is collected.
+ */
+export interface PurificationPositions {
+  readonly method: 'WHOLE_PROFIT' | 'ASSESSED_AMOUNT';
+  /** Names the ruling an amount was fixed under; recorded on every charity entry. */
+  readonly computationBasisKey: string;
+  readonly approvedRecipients: readonly ApprovedRecipient[];
+}
+
 export interface BoardPositions {
   readonly shariahApprovalRef: string;
   /** The shortest risk-holding interval the board accepts, in seconds. A structure may require longer, never shorter. */
@@ -66,6 +80,8 @@ export interface BoardPositions {
   readonly approvedTemplates: readonly ApprovedTemplate[];
   /** Absent where the board has ruled no late amounts: none is ever proposed. */
   readonly lateAmounts?: LateAmountPositions;
+  /** Absent where the board has ruled no purification method: none can be proposed. */
+  readonly purification?: PurificationPositions;
 }
 
 export interface InvoiceLineGoods {
@@ -79,7 +95,8 @@ const text = (v: unknown): v is string => typeof v === 'string' && v.trim().leng
 export function parseBoardPositions(input: unknown): Result<BoardPositions> {
   const bad = (reason: string) => reject('OP-DETERMINACY', reason, 'The board positions do not load', { reason });
   if (!isRecord(input)) return bad('BOARD_POSITIONS_MALFORMED');
-  const { shariahApprovalRef, minimumRiskPeriodSeconds, excludedGoods, approvedTemplates, lateAmounts } = input;
+  const { shariahApprovalRef, minimumRiskPeriodSeconds, excludedGoods, approvedTemplates, lateAmounts, purification } =
+    input;
   if (!text(shariahApprovalRef)) return bad('BOARD_APPROVAL_REF_REQUIRED');
   if (
     typeof minimumRiskPeriodSeconds !== 'number' ||
@@ -99,6 +116,8 @@ export function parseBoardPositions(input: unknown): Result<BoardPositions> {
     return bad('BOARD_TEMPLATES_INVALID');
   const late = lateAmounts === undefined ? undefined : parseLateAmounts(lateAmounts);
   if (late === null) return bad('BOARD_LATE_AMOUNTS_INVALID');
+  const purify = purification === undefined ? undefined : parsePurification(purification);
+  if (purify === null) return bad('BOARD_PURIFICATION_INVALID');
   return ok({
     shariahApprovalRef,
     minimumRiskPeriodSeconds,
@@ -111,6 +130,7 @@ export function parseBoardPositions(input: unknown): Result<BoardPositions> {
       templateVersionId: String(t['templateVersionId']),
     })),
     ...(late === undefined ? {} : { lateAmounts: late }),
+    ...(purify === undefined ? {} : { purification: purify }),
   });
 }
 
@@ -134,7 +154,54 @@ export function boardPositionsToJson(b: BoardPositions): Record<string, unknown>
             approvedRecipients: b.lateAmounts.approvedRecipients.map((r) => ({ ...r })),
           },
         }),
+    ...(b.purification === undefined
+      ? {}
+      : {
+          purification: {
+            method: b.purification.method,
+            computationBasisKey: b.purification.computationBasisKey,
+            approvedRecipients: b.purification.approvedRecipients.map((r) => ({ ...r })),
+          },
+        }),
   };
+}
+
+/** The purification ruling, or null where any part of it is malformed. */
+function parsePurification(input: unknown): PurificationPositions | null {
+  if (!isRecord(input)) return null;
+  const { method, computationBasisKey, approvedRecipients } = input;
+  if (method !== 'WHOLE_PROFIT' && method !== 'ASSESSED_AMOUNT') return null;
+  if (!text(computationBasisKey)) return null;
+  const recipients = parseRecipients(approvedRecipients);
+  return recipients === null ? null : { method, computationBasisKey, approvedRecipients: recipients };
+}
+
+/** Board-approved charities, each with a Saudi IBAN, none twice; null where any is malformed. */
+function parseRecipients(input: unknown): readonly ApprovedRecipient[] | null {
+  if (
+    !Array.isArray(input) ||
+    !input.every(
+      (r) =>
+        isRecord(r) &&
+        text(r['recipientId']) &&
+        text(r['nameAr']) &&
+        text(r['nameEn']) &&
+        typeof r['iban'] === 'string' &&
+        SAUDI_IBAN.test(r['iban']),
+    )
+  )
+    return null;
+  const ids = input.map((r) => String((r as Record<string, unknown>)['recipientId']));
+  if (new Set(ids).size !== ids.length) return null;
+  return input.map((r) => {
+    const x = r as Record<string, unknown>;
+    return {
+      recipientId: String(x['recipientId']),
+      nameAr: String(x['nameAr']),
+      nameEn: String(x['nameEn']),
+      iban: String(x['iban']),
+    };
+  });
 }
 
 const SAUDI_IBAN = /^SA\d{22}$/;
@@ -147,34 +214,13 @@ function parseLateAmounts(input: unknown): LateAmountPositions | null {
   if (typeof graceDays !== 'number' || !Number.isInteger(graceDays) || graceDays < 0 || graceDays > 90) return null;
   if (typeof amountPerInstalmentMinorUnits !== 'string' || !/^[1-9]\d{0,11}$/.test(amountPerInstalmentMinorUnits))
     return null;
-  if (
-    !Array.isArray(approvedRecipients) ||
-    !approvedRecipients.every(
-      (r) =>
-        isRecord(r) &&
-        text(r['recipientId']) &&
-        text(r['nameAr']) &&
-        text(r['nameEn']) &&
-        typeof r['iban'] === 'string' &&
-        SAUDI_IBAN.test(r['iban']),
-    )
-  )
-    return null;
-  const ids = approvedRecipients.map((r) => String((r as Record<string, unknown>)['recipientId']));
-  if (new Set(ids).size !== ids.length) return null;
+  const recipients = parseRecipients(approvedRecipients);
+  if (recipients === null) return null;
   return {
     computationBasisKey,
     graceDays,
     amountPerInstalmentMinorUnits: BigInt(amountPerInstalmentMinorUnits),
-    approvedRecipients: approvedRecipients.map((r) => {
-      const x = r as Record<string, unknown>;
-      return {
-        recipientId: String(x['recipientId']),
-        nameAr: String(x['nameAr']),
-        nameEn: String(x['nameEn']),
-        iban: String(x['iban']),
-      };
-    }),
+    approvedRecipients: recipients,
   };
 }
 

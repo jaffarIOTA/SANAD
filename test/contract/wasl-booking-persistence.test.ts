@@ -47,6 +47,8 @@ import {
 } from '../../services/origination/src/wasl/late-amounts.ts';
 import { presentDueInstalments, recordCollectionResult } from '../../services/origination/src/wasl/settlement.ts';
 import { acceptSaleOffer } from '../../services/origination/src/wasl/steps.ts';
+import { actOnIncident, raiseObservation } from '../../services/origination/src/shariah/incidents.ts';
+import { decidePurification, proposePurification } from '../../services/origination/src/wasl/purification.ts';
 
 const url = process.env['SANAD_TEST_DATABASE_URL'];
 const RUN = String(Date.now()).slice(-8);
@@ -483,6 +485,106 @@ describe.skipIf(url === undefined)('booking an accepted Murabaha on PostgreSQL (
       ),
     );
     expect(await utilised(facility)).toBe(before - BigInt(cost));
+  });
+
+  it('W6b-2: purified income is raised as collected, as NON_COMPLIANT_INCOME, and the incident closes only then', async () => {
+    const v = await accepted();
+    const ref = v.transactionRef;
+    advance(1);
+    expectOk(await bookExecutedSale(T, ref, MAKER));
+    const observed = expectOk(
+      await raiseObservation(T, 'stf-shariah-01', {
+        subjectRef: ref,
+        productCode: 'murabaha-scf',
+        severity: 'HIGH',
+        observation: `Sold before delivery (${RUN})`,
+      }),
+    );
+    const si = observed?.incidentRef ?? '';
+    for (const action of [
+      { kind: 'TRIAGE', severity: 'HIGH', owner: 'stf-shariah-01', note: '' },
+      { kind: 'PLAN', plan: 'Purify the profit' },
+      { kind: 'REMEDIATE', note: 'The sale was void', purificationRequired: true },
+    ] as const) {
+      advance(1);
+      expectOk(await actOnIncident(T, 'stf-shariah-01', si, action));
+    }
+    advance(1);
+    expectOk(await proposePurification(T, ref, 'stf-shariah-01', { incidentRef: si, note: 'Void sale' }));
+    advance(1);
+    expectOk(await decidePurification(T, ref, 'stf-shariah-02', { incidentRef: si, confirm: true, note: '' }));
+
+    // Confirmed but not collected: the table refuses the closure, even inserted directly by someone else.
+    const incidentId = (
+      await pool.query<{ id: string }>('select id::text from core.shariah_incident where incident_ref = $1', [si])
+    ).rows[0]?.id;
+    const tenantUuid = await tenantUuidByCode(pool, T);
+    const closeDirect = () =>
+      pool
+        .query(
+          `insert into core.shariah_incident_event (tenant_id, incident_id, seq, kind, detail, actor, occurred_at,
+             correlation_id)
+           values ($1, $2::uuid, 4, 'CLOSE', '{"closureEvidence":"DOC-9"}'::jsonb, 'stf-shariah-03', now(),
+                   gen_random_uuid())`,
+          [tenantUuid, incidentId],
+        )
+        .then(
+          () => undefined,
+          (x: unknown) => x as { code?: string },
+        );
+    expect((await closeDirect())?.code).toBe('23001');
+
+    advance(54 * 86_400);
+    expectOk(await presentDueInstalments(T, ref, MAKER));
+    advance(1);
+    expectOk(
+      await recordBillResult(
+        T,
+        ref,
+        {
+          idempotencyKey: `wasl:${ref}:collect:I1`,
+          status: 'PAID',
+          reference: 'SADAD-W6B2',
+          receivedOn: '2026-12-20',
+          source: 'FIXTURE',
+        },
+        'sadad',
+      ),
+    );
+    const profit = v.transaction.core.pricing.profitAmount.minorUnits.toString();
+    const entries = await pool.query<{ reason: string; amount: string; source_ref: string; basis: string }>(
+      `select l.reason, l.amount_minor::text amount, l.source_ref, l.computation_basis_config_key basis
+         from core.charity_ledger l join core.transaction t on t.id = l.transaction_id
+        where t.transaction_ref = $1 and l.reason = 'NON_COMPLIANT_INCOME'`,
+      [ref],
+    );
+    expect(entries.rows).toEqual([
+      {
+        reason: 'NON_COMPLIANT_INCOME',
+        amount: profit,
+        source_ref: `wasl:${ref}:purify:${si}:I1`,
+        basis: 'SSB-A-2026-014/purification/whole-profit',
+      },
+    ]);
+    // The same share raised again, directly: refused by the ledger's unique source.
+    const twice = await pool
+      .query(
+        `insert into core.charity_ledger (tenant_id, transaction_id, amount_minor, reason, computation_basis_config_key,
+           shariah_approval_id, recorded_at, source_ref, correlation_id)
+         select tenant_id, transaction_id, amount_minor, reason, computation_basis_config_key, shariah_approval_id,
+                recorded_at, source_ref, correlation_id from core.charity_ledger where source_ref = $1`,
+        [`wasl:${ref}:purify:${si}:I1`],
+      )
+      .then(
+        () => undefined,
+        (x: unknown) => x as { code?: string },
+      );
+    expect(twice?.code).toBe('23505');
+    // Purified in full: a different reviewer closes it.
+    advance(1);
+    expect(
+      expectOk(await actOnIncident(T, 'stf-shariah-02', si, { kind: 'CLOSE', closureEvidence: 'DOC-9' })).status,
+    ).toBe('CLOSED');
   });
 
   it('the portal’s identity assertions are accepted once per tenant, by tenant code (SR-007)', async () => {

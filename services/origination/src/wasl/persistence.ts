@@ -407,6 +407,8 @@ export type CharityWrite =
       readonly kind: 'RAISE';
       readonly entryId: string;
       readonly amount: Money;
+      /** A collected late amount (W4b-2), or purified income (W6b-2). Never anything income could be. */
+      readonly reason?: 'LATE_PAYMENT' | 'NON_COMPLIANT_INCOME';
       readonly sourceRef: string;
       readonly computationBasisKey: string;
       readonly recordedAt: TsaInstant;
@@ -724,7 +726,7 @@ async function writeCharity(
     await db.query(
       `insert into core.charity_ledger (id, tenant_id, transaction_id, currency, amount_minor, reason,
          computation_basis_config_key, shariah_approval_id, recorded_at, source_ref, correlation_id)
-       select $1, $2, t.id, $3, $4, 'LATE_PAYMENT', $5, t.shariah_approval_id, to_timestamp($6), $7, $8
+       select $1, $2, t.id, $3, $4, $10, $5, t.shariah_approval_id, to_timestamp($6), $7, $8
          from core.transaction t where t.tenant_id = $2 and t.id = $9`,
       [
         charity.entryId,
@@ -736,6 +738,7 @@ async function writeCharity(
         charity.sourceRef,
         correlation,
         transactionId,
+        charity.reason ?? 'LATE_PAYMENT',
       ],
     );
     return ok(true);

@@ -9,7 +9,8 @@
  * says what was; closing needs evidence, and a different Shariah reviewer
  * from the one who recorded the remediation. Where income was affected the
  * remediation says so, and the incident does not close until the income is
- * purified (the purification branch, W6b-2).
+ * purified in full (the purification branch, W6b-2: proposed, confirmed by a
+ * second reviewer, and raised to charity as the profit is collected).
  *
  * Severity is the institution's four-level scale, decided with the product
  * owner on 26 October 2026: LOW, MEDIUM, HIGH, MATERIAL. An open MATERIAL
@@ -128,8 +129,17 @@ const fail = (reason: string, detail: string, context?: Readonly<Record<string, 
   reject('OP-DETERMINACY', reason, detail, context);
 const said = (s: string, min = 3): boolean => s.trim().length >= min && s.trim().length <= 2000;
 
-/** Whether `actor` may take `action` on the incident as it stands. */
-export function checkIncidentAction(incident: ShariahIncident, action: IncidentAction, actor: string): Result<void> {
+/**
+ * Whether `actor` may take `action` on the incident as it stands. `purified`
+ * is the product's answer to whether the income the incident affected is
+ * purified in full (W6b-2); closing waits for it.
+ */
+export function checkIncidentAction(
+  incident: ShariahIncident,
+  action: IncidentAction,
+  actor: string,
+  purified = false,
+): Result<void> {
   const expected = INCIDENT_STEPS[incident.history.length];
   if (expected !== action.kind)
     return fail('INCIDENT_STEP_OUT_OF_ORDER', 'Incidents are triaged, planned, remediated and closed, in that order', {
@@ -150,7 +160,7 @@ export function checkIncidentAction(incident: ShariahIncident, action: IncidentA
         return fail('FOUR_EYES_SELF_APPROVAL', 'A different reviewer from the one who remediated closes an incident');
       if (!said(action.closureEvidence))
         return fail('INCIDENT_CLOSURE_EVIDENCE_REQUIRED', 'Closing an incident needs its evidence');
-      if (incident.purificationRequired)
+      if (incident.purificationRequired && !purified)
         return reject(
           'SH-13',
           'INCIDENT_PURIFICATION_PENDING',

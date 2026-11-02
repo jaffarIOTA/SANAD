@@ -34,9 +34,18 @@ import {
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 import { shariahIncidents } from '@sanad/origination/shariah/incidents.ts';
 
+import type { Money } from '@sanad/core/kernel/money.ts';
+import { defaultNumerals, formatMinorUnits } from '@sanad/design/Money.tsx';
+import { resolveBoard } from '@sanad/origination/wasl/configuration.ts';
+import { purificationsOf } from '@sanad/origination/wasl/purification.ts';
+
 import { pageStaff } from '../../../../server/session.ts';
 import {
   actOnIncidentAction,
+  decidePurificationAction,
+  decidePurificationDisbursementAction,
+  proposePurificationAction,
+  proposePurificationDisbursementAction,
   raiseObservationAction,
   runShariahReviewAction,
 } from '../../../../server/shariah-actions.ts';
@@ -216,6 +225,193 @@ export default async function IncidentsPage({
   const refused =
     reason === undefined ? undefined : (INCIDENT_REFUSAL[reason] ?? REFUSAL[reason] ?? { en: reason, ar: reason });
 
+  // W6b-2: each incident's purification, as its transaction's event log holds it, and the board's ruling.
+  const held = await purificationsOf(tenant);
+  const board = (await resolveBoard(tenant)).value;
+  const ruling = board.ok ? board.value.purification : undefined;
+  const numerals = defaultNumerals(locale);
+  const amount = (m: Money) => (
+    <bdi className="tabular-nums">
+      {formatMinorUnits(m, numerals)} {m.currency}
+    </bdi>
+  );
+  const recipientName = (id: string) => {
+    const r = ruling?.approvedRecipients.find((x) => x.recipientId === id);
+    return r === undefined ? id : t(r.nameEn, r.nameAr);
+  };
+  const hidden = (i: ShariahIncident) => (
+    <>
+      <input type="hidden" name="locale" value={segment} />
+      <input type="hidden" name="transactionRef" value={i.subjectRef} />
+      <input type="hidden" name="incidentRef" value={i.incidentRef} />
+    </>
+  );
+
+  const purificationPanel = (i: ShariahIncident) => {
+    const p = held.find((h) => h.purification.incidentRef === i.incidentRef)?.purification;
+    const method =
+      ruling === undefined
+        ? t('The board has ruled no purification method.', 'لم تحدد الهيئة طريقة للتطهير.')
+        : ruling.method === 'WHOLE_PROFIT'
+          ? t('Board’s method: the transaction’s whole profit.', 'طريقة الهيئة: كامل ربح المعاملة.')
+          : t(
+              'Board’s method: an amount the reviewer assesses, within the profit.',
+              'طريقة الهيئة: مبلغ يقدّره المراجع في حدود الربح.',
+            );
+    return (
+      <section
+        className="mt-3 rounded-card border border-line bg-sunken px-4 py-3 text-[13px]"
+        data-purification={i.incidentRef}
+      >
+        <h4 className="font-semibold text-heading">{t('Purification', 'التطهير')}</h4>
+        <p className="text-ink-quiet">{method}</p>
+        {p === undefined || p.state === 'REJECTED' ? (
+          <>
+            {p === undefined ? null : (
+              <p className="mt-1 text-blocked">
+                {t('Rejected by', 'رفضه')} {p.decidedBy}: “{p.decisionNote}”
+              </p>
+            )}
+            {i.status === 'REMEDIATED' && ruling !== undefined ? (
+              <Gate staff={staff} act="SHARIAH_PURIFY" arabic={arabic}>
+                <form action={proposePurificationAction} className="mt-2 grid gap-2 sm:max-w-xl">
+                  {hidden(i)}
+                  {ruling.method === 'ASSESSED_AMOUNT' ? (
+                    <label className="grid gap-1">
+                      {t('Amount to purify (riyals)', 'المبلغ المراد تطهيره (بالريال)')}
+                      <input name="assessedRiyals" inputMode="numeric" required className={FIELD_INPUT} dir="ltr" />
+                    </label>
+                  ) : null}
+                  <label className="grid gap-1">
+                    {t('Why, and how the amount was reached', 'السبب وكيف حُدّد المبلغ')}
+                    <textarea name="note" required minLength={3} maxLength={1000} rows={2} className={FIELD_TEXTAREA} />
+                  </label>
+                  <button type="submit" className={BUTTON_SECONDARY} data-purification-propose>
+                    {t('Propose purification', 'اقتراح التطهير')}
+                  </button>
+                </form>
+              </Gate>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <p className="mt-1">
+              {amount(p.amount)} · {t('proposed by', 'اقترحه')} {p.proposedBy}
+              {p.decidedBy === undefined ? null : (
+                <>
+                  {' '}
+                  · {t('confirmed by', 'أكده')} {p.decidedBy}
+                </>
+              )}
+            </p>
+            <p className="text-ink">“{p.note}”</p>
+            {p.state === 'PROPOSED' ? (
+              <Gate staff={staff} act="SHARIAH_PURIFY" arabic={arabic} ownWork={p.proposedBy === staff.principalId}>
+                <div className="mt-2 flex flex-wrap items-start gap-3">
+                  <form action={decidePurificationAction}>
+                    {hidden(i)}
+                    <input type="hidden" name="decision" value="CONFIRM" />
+                    <button type="submit" className={BUTTON_PRIMARY} data-purification-confirm>
+                      {t('Confirm', 'تأكيد')}
+                    </button>
+                  </form>
+                  <form action={decidePurificationAction} className="flex flex-wrap items-start gap-2">
+                    {hidden(i)}
+                    <input type="hidden" name="decision" value="REJECT" />
+                    <input
+                      name="note"
+                      required
+                      minLength={3}
+                      maxLength={1000}
+                      className={FIELD_INPUT}
+                      placeholder={t('Why it is rejected', 'سبب الرفض')}
+                    />
+                    <button type="submit" className={BUTTON_SECONDARY}>
+                      {t('Reject', 'رفض')}
+                    </button>
+                  </form>
+                </div>
+              </Gate>
+            ) : (
+              <table className="mt-2 w-full">
+                <thead>
+                  <tr className="text-ink-quiet">
+                    <th className="py-1 text-start font-normal">{t('Instalment', 'القسط')}</th>
+                    <th className="py-1 text-end font-normal">{t('Share', 'الحصة')}</th>
+                    <th className="py-1 text-start font-normal ps-4">{t('Where it stands', 'الوضع')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {p.shares.map((s) => (
+                    <tr key={s.sequenceNumber} className="border-t border-line align-top">
+                      <td className="py-2">{s.sequenceNumber}</td>
+                      <td className="py-2 text-end">{amount(s.amount)}</td>
+                      <td className="py-2 ps-4">
+                        {s.disbursed !== undefined ? (
+                          <span className="text-positive">
+                            {t('Given to', 'صُرف إلى')} {recipientName(s.disbursed.recipientId)}
+                          </span>
+                        ) : s.raised === undefined ? (
+                          <span className="text-ink-quiet">
+                            {t('Raised when the instalment is paid', 'يُقيَّد عند سداد القسط')}
+                          </span>
+                        ) : s.disbursement !== undefined ? (
+                          <Gate
+                            staff={staff}
+                            act="CHARITY_DISBURSE_APPROVE"
+                            arabic={arabic}
+                            ownWork={s.disbursement.proposedBy === staff.principalId}
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span>
+                                {t('Proposed for', 'مقترح لـ')} {recipientName(s.disbursement.recipientId)}
+                              </span>
+                              {(['APPROVE', 'DECLINE'] as const).map((d) => (
+                                <form key={d} action={decidePurificationDisbursementAction}>
+                                  {hidden(i)}
+                                  <input type="hidden" name="sequenceNumber" value={s.sequenceNumber} />
+                                  <input type="hidden" name="decision" value={d} />
+                                  <button type="submit" className={d === 'APPROVE' ? BUTTON_PRIMARY : BUTTON_SECONDARY}>
+                                    {d === 'APPROVE' ? t('Approve payment', 'اعتماد الصرف') : t('Decline', 'رفض')}
+                                  </button>
+                                </form>
+                              ))}
+                            </div>
+                          </Gate>
+                        ) : (
+                          <Gate staff={staff} act="CHARITY_DISBURSE_PROPOSE" arabic={arabic}>
+                            <form
+                              action={proposePurificationDisbursementAction}
+                              className="flex flex-wrap items-center gap-2"
+                            >
+                              {hidden(i)}
+                              <input type="hidden" name="sequenceNumber" value={s.sequenceNumber} />
+                              <span>{t('Held for charity.', 'محتجز للتبرع.')}</span>
+                              <select name="recipientId" className={FIELD_INPUT} required>
+                                {(ruling?.approvedRecipients ?? []).map((r) => (
+                                  <option key={r.recipientId} value={r.recipientId}>
+                                    {t(r.nameEn, r.nameAr)}
+                                  </option>
+                                ))}
+                              </select>
+                              <button type="submit" className={BUTTON_SECONDARY}>
+                                {t('Propose recipient', 'اقتراح الجهة')}
+                              </button>
+                            </form>
+                          </Gate>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
+        )}
+      </section>
+    );
+  };
+
   const card = (i: ShariahIncident) => {
     const severity = SEVERITY[i.currentSeverity];
     const next = INCIDENT_STEPS[i.history.length];
@@ -297,6 +493,7 @@ export default async function IncidentsPage({
             </div>
           )}
         </dl>
+        {i.purificationRequired ? purificationPanel(i) : null}
         {next === undefined ? null : (
           <Gate
             staff={staff}
