@@ -26,6 +26,7 @@ import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
 import { InMemoryObjectStorage } from '../../../../adapters/storage/memory.ts';
 import { S3ObjectStorage } from '../../../../adapters/storage/s3/adapter.ts';
 import { type BusinessApplicationView, checklistStatus, getApplication, presentDocument } from './business.ts';
+import { documentAuthenticity } from './business-rails.ts';
 import { persistencePool } from './persistence.ts';
 
 const fail = (reason: string, detail: string, context?: Readonly<Record<string, string>>): Result<never> =>
@@ -115,12 +116,18 @@ export async function uploadBusinessDocument(
     ? checklist.value.checklist.items.find((i) => i.documentType === documentType)?.checks
     : undefined;
   const applicant = presented.value.application.applicant;
+  // D3: where the item declares an AUTHENTIC check, ask the issuer, under the business's consent. Its answer is a
+  // finding like the rest: a document the issuer does not confirm is accepted only with the checker's resolution.
+  const authenticity = rules?.some((r) => r.check === 'AUTHENTIC')
+    ? await documentAuthenticity(tenant, presented.value.application, { documentType, documentRef })
+    : undefined;
   await readPresentedDocument(
     tenant,
     { kind: 'BUSINESS_APPLICATION', ref: applicationId },
     { documentRef, declaredType: documentType, sha256Hex, mediaType, bytes },
     {
       ...(rules === undefined ? {} : { rules }),
+      ...(authenticity === undefined ? {} : { authenticity }),
       expect: {
         registrationNumber: applicant.registrationRef,
         names: [

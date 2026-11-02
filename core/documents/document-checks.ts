@@ -28,7 +28,26 @@ export type DocumentCheckRule =
   /** The registration (CR, licence) number on the document is the application's. */
   | { readonly check: 'REGISTRATION_MATCHES' }
   /** The business's name appears on the document, in either script. */
-  | { readonly check: 'NAME_FOUND' };
+  | { readonly check: 'NAME_FOUND' }
+  /** The issuer's authenticity service confirms the document (D3): a rail's answer, not a reading. */
+  | { readonly check: 'AUTHENTIC' };
+
+/**
+ * What the issuer's authenticity service said about a document (D3), passed
+ * in by the caller who asked it. Not asked — no consent, the rail down, a
+ * type it does not cover — is NOT_CHECKED, with why: never a pass.
+ */
+export type Authenticity =
+  | {
+      readonly status: 'AUTHENTIC' | 'NOT_AUTHENTIC';
+      /** The service's own reference for the answer, so it can be reproduced. */
+      readonly reference: string;
+      readonly source: 'LIVE' | 'FIXTURE';
+    }
+  | {
+      readonly status: 'NOT_CHECKED';
+      readonly reason: 'NO_CONSENT' | 'RAIL_UNAVAILABLE' | 'TYPE_NOT_COVERED' | 'REFUSED';
+    };
 
 const CHECKS = new Set<DocumentCheckRule['check']>([
   'NOT_EXPIRED',
@@ -37,6 +56,7 @@ const CHECKS = new Set<DocumentCheckRule['check']>([
   'PERIOD_COVERS',
   'REGISTRATION_MATCHES',
   'NAME_FOUND',
+  'AUTHENTIC',
 ]);
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const count = (v: unknown, max: number): v is number =>
@@ -71,7 +91,7 @@ export function parseCheckRules(raw: unknown, where: string): Result<readonly Do
         rules.push({ check: 'PERIOD_COVERS', months: r['months'] });
         break;
       default:
-        rules.push({ check: r['check'] as 'REGISTRATION_MATCHES' | 'NAME_FOUND' });
+        rules.push({ check: r['check'] as 'REGISTRATION_MATCHES' | 'NAME_FOUND' | 'AUTHENTIC' });
     }
   }
   if (new Set(rules.map((r) => r.check)).size !== rules.length) return bad('a check is declared twice');
@@ -108,11 +128,25 @@ function plusMonths(iso: string, months: number): string | undefined {
 
 // -- Evaluation -------------------------------------------------------------------------
 
+/** AUTHENTIC from the issuer's answer: confirmed passes, refuted fails, not asked is unreadable with why. */
+function authenticityCheck(a: Authenticity | undefined): CheckResult {
+  if (a === undefined) return { check: 'AUTHENTIC', outcome: 'UNREADABLE', reason: 'RAIL_UNAVAILABLE' };
+  if (a.status === 'NOT_CHECKED') return { check: 'AUTHENTIC', outcome: 'UNREADABLE', reason: a.reason };
+  return {
+    check: 'AUTHENTIC',
+    outcome: a.status === 'AUTHENTIC' ? 'PASS' : 'FAIL',
+    reference: a.reference,
+    source: a.source,
+  };
+}
+
 export interface CheckContext {
   /** The reading date: the civil date (Gregorian, yyyy-mm-dd) in the institution's time zone. */
   readonly asOf: string;
   /** A Hijri (Umm al-Qura) date as its Gregorian date; undefined where it cannot be converted. */
   readonly toGregorian: (date: CivilDate) => string | undefined;
+  /** The issuer's answer on this document, where an AUTHENTIC check is declared (D3). */
+  readonly authenticity?: Authenticity;
 }
 
 /**
@@ -134,6 +168,8 @@ export function evaluateChecks(
   const unreadable = (check: DocumentCheckRule['check']): CheckResult => ({ check, outcome: 'UNREADABLE' });
 
   return rules.map((rule): CheckResult => {
+    // Authenticity is the issuer's answer on the document presented, not a reading of its text: it stands whatever the reading.
+    if (rule.check === 'AUTHENTIC') return authenticityCheck(ctx.authenticity);
     if (!typeMatches || today === undefined) return unreadable(rule.check);
     switch (rule.check) {
       case 'NOT_EXPIRED': {

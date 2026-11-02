@@ -237,7 +237,8 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
           kind: 'BLOCKED',
           on: 'adapter built on fixtures; live sandbox call not yet made — see adapters/ksa/tahaqoq/README.md',
         },
-        reference: 'document-verification port — scope to confirm with provider',
+        reference:
+          'document-verification port — scope to confirm with provider. Asked about Saudi business uploads whose checklist item declares AUTHENTIC, under the intake’s DOCUMENT_VERIFICATION consent (document intelligence D3); FIXTURE until KSA-RAIL-TAHAQOQ-01',
       },
       {
         id: 'simah',
@@ -712,7 +713,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         titleAr: 'قراءة المستندات',
         readiness: live(),
         reference:
-          'Document intelligence D1 (docs/DOCUMENT-INTELLIGENCE-PLAN.md): each uploaded business document is read — the kind recognised from its text against the tenant’s catalogue (config/tenants/<t>/documents/document-types.json, ILLUSTRATIVE), its issue, expiry and statement dates, and whether it matches the type presented — and shown to the checker beside it. Findings in evidence.document_finding, append-only; dates and outcomes only, never a number from the page. An aid, never a decision: four eyes always (product owner, 2026-10-19). Engine: rules over the institution’s document engine (LIVE once configured; V-05/V-06 for Saudi samples), else the demonstration reader labelled Fixture; an AI engine plugs in behind the same port later. Images are not read yet. D2: the checks each checklist item declares (expiry, issue recency, statement period and coverage, registration number and business name compared and only the outcome kept; ILLUSTRATIVE limits), shown PASS / FAIL with what was seen / UNREADABLE — never counted by the checklist. Corroboration with Wathq and GOSI waits on their live verification',
+          'Document intelligence D1 (docs/DOCUMENT-INTELLIGENCE-PLAN.md): each uploaded business document is read — the kind recognised from its text against the tenant’s catalogue (config/tenants/<t>/documents/document-types.json, ILLUSTRATIVE), its issue, expiry and statement dates, and whether it matches the type presented — and shown to the checker beside it. Findings in evidence.document_finding, append-only; dates and outcomes only, never a number from the page. An aid, never a decision: four eyes always (product owner, 2026-10-19). Engine: rules over the institution’s document engine (LIVE once configured; V-05/V-06 for Saudi samples), else the demonstration reader labelled Fixture; an AI engine plugs in behind the same port later. Images are not read yet. D2: the checks each checklist item declares (expiry, issue recency, statement period and coverage, registration number and business name compared and only the outcome kept; ILLUSTRATIVE limits), shown PASS / FAIL with what was seen / UNREADABLE — never counted by the checklist. Corroboration with Wathq and GOSI waits on their live verification. D3: authenticity with the issuer (Tahaqoq, Saudi) under the intake’s document-verification consent; a document the issuer does not confirm is accepted only with the checker’s written resolution, kept on the event',
       },
       {
         id: 'templates',

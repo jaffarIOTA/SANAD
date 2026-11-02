@@ -9,7 +9,12 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { TENANT_CODES, loadDocumentChecklist, loadDocumentTypeCatalogue } from '@sanad/config/loader.ts';
+import {
+  TENANT_CODES,
+  loadDocumentChecklist,
+  loadDocumentTypeCatalogue,
+  loadTenantOnboarding,
+} from '@sanad/config/loader.ts';
 import { type CheckContext, evaluateChecks, parseCheckRules } from '@sanad/core/documents/document-checks.ts';
 import {
   type Understanding,
@@ -20,6 +25,7 @@ import {
 } from '@sanad/core/documents/understanding.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
 
+import { TahaqoqAdapter } from '../../adapters/ksa/tahaqoq/adapter.ts';
 import { gregorianOfUmmAlQura, ummAlQuraIso } from '../../services/origination/src/hijri.ts';
 
 const saudi = expectOk(loadDocumentTypeCatalogue('bank-a'));
@@ -231,7 +237,56 @@ describe('Umm al-Qura to Gregorian', () => {
   });
 });
 
+describe('authenticity (D3): the issuer’s answer, passed in', () => {
+  const u = read('Expiry Date: 2027-03-14', 'COMMERCIAL_REGISTRATION');
+  const with_ = (authenticity: CheckContext['authenticity']) =>
+    evaluateChecks([{ check: 'AUTHENTIC' }], u, true, {
+      ...ctx,
+      ...(authenticity === undefined ? {} : { authenticity }),
+    });
+
+  it('confirmed passes and refuted fails, each with the issuer’s reference and source', () => {
+    expect(with_({ status: 'AUTHENTIC', reference: 'THQ-1', source: 'LIVE' })).toEqual([
+      { check: 'AUTHENTIC', outcome: 'PASS', reference: 'THQ-1', source: 'LIVE' },
+    ]);
+    expect(with_({ status: 'NOT_AUTHENTIC', reference: 'THQ-2', source: 'FIXTURE' })[0]).toMatchObject({
+      outcome: 'FAIL',
+      reference: 'THQ-2',
+    });
+  });
+
+  it('not asked is unreadable with why — and not asked at all is never a pass', () => {
+    for (const reason of ['NO_CONSENT', 'RAIL_UNAVAILABLE', 'TYPE_NOT_COVERED', 'REFUSED'] as const)
+      expect(with_({ status: 'NOT_CHECKED', reason })).toEqual([{ check: 'AUTHENTIC', outcome: 'UNREADABLE', reason }]);
+    expect(with_(undefined)).toEqual([{ check: 'AUTHENTIC', outcome: 'UNREADABLE', reason: 'RAIL_UNAVAILABLE' }]);
+  });
+
+  it('stands whatever the reading: the issuer answers on the document presented, not on its text', () => {
+    const refuted = { status: 'NOT_AUTHENTIC', reference: 'THQ-3', source: 'FIXTURE' } as const;
+    expect(evaluateChecks([{ check: 'AUTHENTIC' }], u, false, { ...ctx, authenticity: refuted })[0]?.outcome).toBe(
+      'FAIL',
+    );
+  });
+});
+
 describe('configuration', () => {
+  it('declares AUTHENTIC only where the jurisdiction has an issuer service that covers the type', () => {
+    for (const tenant of TENANT_CODES) {
+      const jurisdiction = loadTenantOnboarding(tenant);
+      for (const programme of PROGRAMMES) {
+        const checklist = loadDocumentChecklist(tenant, programme);
+        if (!checklist.ok) continue;
+        for (const item of checklist.value.items)
+          if (item.checks?.some((c) => c.check === 'AUTHENTIC') === true) {
+            expect(jurisdiction.ok && jurisdiction.value.jurisdiction, `${tenant} ${item.documentType}`).toBe('SA');
+            expect(Object.keys(TahaqoqAdapter.DOCUMENT_TYPES), `${tenant} ${item.documentType}`).toContain(
+              item.documentType,
+            );
+          }
+      }
+    }
+  });
+
   const PROGRAMMES = [
     'prg-0001',
     'sme-sa-term',
@@ -259,7 +314,8 @@ describe('configuration', () => {
         if (!checklist.ok) continue;
         for (const item of checklist.value.items)
           for (const rule of item.checks ?? []) {
-            if (rule.check === 'NAME_FOUND') continue;
+            // The name is matched on the text; authenticity is the issuer's answer — neither needs a fact read.
+            if (rule.check === 'NAME_FOUND' || rule.check === 'AUTHENTIC') continue;
             const kinds = catalogue.value.types.filter((t) => t.satisfies.includes(item.documentType));
             expect(kinds.length, `${tenant} ${item.documentType}`).toBeGreaterThan(0);
             for (const k of kinds)

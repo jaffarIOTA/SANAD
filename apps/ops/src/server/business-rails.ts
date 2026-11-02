@@ -11,7 +11,9 @@
  * A rail that is down or refuses never records anything (CLAUDE.md §5).
  */
 import type { TenantCode } from '@sanad/config/loader.ts';
+import type { Authenticity } from '@sanad/core/documents/document-checks.ts';
 import { type Result, reject } from '@sanad/core/kernel/result.ts';
+import type { BusinessApplication } from '@sanad/core/origination/business-application.ts';
 
 import {
   type BusinessApplicationView,
@@ -37,6 +39,44 @@ const STATEMENT_MONTHS = 12;
 
 async function railsFor(tenant: TenantCode) {
   return kybRails(tenant, await intakeConsentLedger(tenant), attest, nowSeconds);
+}
+
+/**
+ * Ask the issuer's authenticity service about a presented document (document
+ * intelligence D3), under the document-verification consent the business gave
+ * at Sanad's intake. Every way of not asking — no consent (a partner
+ * hand-over, or none given), no service here, a type it does not cover, the
+ * service down or refusing — is NOT_CHECKED with why, never a pass. The
+ * answer is a finding for the checker; it accepts and refuses nothing.
+ */
+export async function documentAuthenticity(
+  tenant: TenantCode,
+  application: BusinessApplication,
+  document: { readonly documentType: string; readonly documentRef: string },
+): Promise<Authenticity> {
+  const consentId = intakeConsentFor(application, 'document_verification');
+  if (consentId === undefined) return { status: 'NOT_CHECKED', reason: 'NO_CONSENT' };
+  const rails = await railsFor(tenant);
+  if (rails?.documents === undefined) return { status: 'NOT_CHECKED', reason: 'RAIL_UNAVAILABLE' };
+  const r = await rails.documents.verifyDocument({
+    tenantId: tenant,
+    applicantRef: application.applicationId,
+    documentType: document.documentType,
+    documentRef: document.documentRef,
+    consentId,
+    correlationId: application.applicationId,
+  });
+  // The adapter refuses before calling where the consent is not live (withdrawn, expired): not asked, not a pass.
+  if (!r.ok) return { status: 'NOT_CHECKED', reason: 'NO_CONSENT' };
+  const o = r.value;
+  if (o.kind === 'UNAVAILABLE') return { status: 'NOT_CHECKED', reason: 'RAIL_UNAVAILABLE' };
+  if (o.kind === 'REFUSED')
+    return { status: 'NOT_CHECKED', reason: o.code === 'DOCUMENT_TYPE_UNSUPPORTED' ? 'TYPE_NOT_COVERED' : 'REFUSED' };
+  return {
+    status: o.value.authentic ? 'AUTHENTIC' : 'NOT_AUTHENTIC',
+    reference: o.value.verificationRef,
+    source: rails.source,
+  };
 }
 
 /**

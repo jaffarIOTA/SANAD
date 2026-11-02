@@ -122,6 +122,24 @@ upload ─▶ store (object store, unchanged)
 - A "not authentic" answer is a finding the checker must resolve; it never silently passes.
 - Live use waits on KSA-RAIL-TAHAQOQ-01.
 
+**As built (D3, 19 October 2026):**
+
+- **Consent:** Saudi intake captures a `DOCUMENT_VERIFICATION` consent for the business, in the same ledger the
+  other rails check. Without it, the issuer is not asked.
+- **Configuration:** a checklist item declares `AUTHENTIC` among its checks. The Saudi checklists declare it on the
+  commercial registration, the zakat certificate and the national address: the types in the adapter's provisional
+  table. A test holds every declaration to a jurisdiction with a service that covers that type. The UAE declares
+  none.
+- **On upload:** Tahaqoq is asked under that consent. The answer is kept on the finding as PASS or FAIL with
+  Tahaqoq's own reference. Not asking is UNREADABLE with the reason: `NO_CONSENT`, `RAIL_UNAVAILABLE`,
+  `TYPE_NOT_COVERED` or `REFUSED`. Where no document engine read the file, the finding still records the issuer's
+  answer.
+- **"Not authentic":** the document stays PENDING. Accepting it takes the checker's written resolution (at least
+  10 characters, no identity number), kept on the `DOCUMENT_VALIDATED` event. Refusing it takes none. Four eyes
+  stand throughout.
+- **Open question for KSA-RAIL-TAHAQOQ-01:** what identifies a document to Tahaqoq. Today the adapter sends Sanad's
+  own document reference, which only the demonstration transport understands.
+
 ### D4: gaps and resume
 
 - `gapsOf(checklist report, findings)`: what is missing, expired, unreadable or failing a check, in words the

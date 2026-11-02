@@ -82,6 +82,8 @@ describe('checks the checklist declares', () => {
       NOT_EXPIRED: 'PASS',
       REGISTRATION_MATCHES: 'PASS',
       NAME_FOUND: 'PASS',
+      // A seeded application came through no Sanad intake, so there is no consent to ask the issuer under (D3).
+      AUTHENTIC: 'UNREADABLE',
     });
   });
 
@@ -125,6 +127,7 @@ describe('checks the checklist declares', () => {
       NOT_EXPIRED: 'UNREADABLE',
       REGISTRATION_MATCHES: 'UNREADABLE',
       NAME_FOUND: 'UNREADABLE',
+      AUTHENTIC: 'UNREADABLE',
     });
   });
 

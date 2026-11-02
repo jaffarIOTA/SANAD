@@ -186,8 +186,11 @@ export type Classification =
     }
   | { readonly status: 'AMBIGUOUS'; readonly candidates: readonly string[] }
   | { readonly status: 'UNRECOGNISED' }
-  /** Nothing could be read: an image the engine does not read, or a document with no text. */
-  | { readonly status: 'UNREADABLE'; readonly reason: 'NO_TEXT' | 'MEDIA_NOT_READ' };
+  /**
+   * Nothing could be read: an image the engine does not read, a document with no text — or no engine read it at
+   * all (`NOT_READ`), where the finding carries only a rail's answer on the document (D3).
+   */
+  | { readonly status: 'UNREADABLE'; readonly reason: 'NO_TEXT' | 'MEDIA_NOT_READ' | 'NOT_READ' };
 
 function score(text: string, t: DocumentTypeDefinition): { readonly score: number; readonly matched: number } {
   let s = 0;
@@ -375,6 +378,11 @@ export interface CheckResult {
   readonly calendar?: 'HIJRI';
   /** The limit it was held to: `45d`, `12m`. */
   readonly limit?: string;
+  /** A rail's check (AUTHENTIC, D3): the service's reference for its answer, and whether it was live or a fixture. */
+  readonly reference?: string;
+  readonly source?: 'LIVE' | 'FIXTURE';
+  /** Why a check could not be made, where that is known: `NO_CONSENT`, `RAIL_UNAVAILABLE`, `TYPE_NOT_COVERED`, `REFUSED`. */
+  readonly reason?: string;
 }
 
 export interface Understanding {

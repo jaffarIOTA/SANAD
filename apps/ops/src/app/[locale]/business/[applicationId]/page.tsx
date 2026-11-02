@@ -754,6 +754,29 @@ export default async function LoanApplicationPage({
                                 <span className="text-[11px] text-ink-quiet">
                                   {t('As the checker', 'بصفة المراجِع')} <Id>{staff.principalId}</Id>
                                 </span>
+                                {held.content !== undefined &&
+                                findings
+                                  .get(held.content.sha256Hex)
+                                  ?.checks.some((c) => c.check === 'AUTHENTIC' && c.outcome === 'FAIL') === true ? (
+                                  // D3: the issuer did not confirm it. Accepting it anyway takes a written resolution.
+                                  <label
+                                    className="flex w-full flex-col gap-1 text-[12px]"
+                                    data-authenticity-resolution
+                                  >
+                                    <span className="text-blocked">
+                                      {t(
+                                        'The issuer did not confirm this document. To accept it, say how you resolved that.',
+                                        'لم تؤكد الجهة المصدرة هذا المستند. لقبوله، اذكر كيف عالجت ذلك.',
+                                      )}
+                                    </span>
+                                    <textarea
+                                      name="resolution"
+                                      rows={2}
+                                      maxLength={500}
+                                      className="w-full rounded-tile border border-line bg-surface px-2 py-1"
+                                    />
+                                  </label>
+                                ) : null}
                                 <button type="submit" name="decision" value="VALID" className={BTN_SMALL}>
                                   {t('Valid', 'صالح')}
                                 </button>

@@ -22,7 +22,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 
 import { type TenantCode, loadDocumentTypeCatalogue } from '@sanad/config/loader.ts';
-import type { CheckContext, DocumentCheckRule } from '@sanad/core/documents/document-checks.ts';
+import type { Authenticity, CheckContext, DocumentCheckRule } from '@sanad/core/documents/document-checks.ts';
 import {
   type DocumentFindings,
   type DocumentUnderstandingPort,
@@ -153,39 +153,51 @@ export async function readPresentedDocument(
    * expects the document to carry. The expectations are compared during the
    * reading and dropped: only the outcome is kept.
    */
-  content: { readonly rules?: readonly DocumentCheckRule[]; readonly expect?: Expectations } = {},
+  content: {
+    readonly rules?: readonly DocumentCheckRule[];
+    readonly expect?: Expectations;
+    /** D3: the issuer's answer on this document, asked by the journey under its consent. */
+    readonly authenticity?: Authenticity;
+  } = {},
   env: Env = process.env,
 ): Promise<Result<StoredFindings>> {
   const catalogue = loadDocumentTypeCatalogue(tenant);
   if (!catalogue.ok) return catalogue;
   const engine = await documentUnderstandingFor(tenant, credentialProviderFromEnvironment(env), env);
-  if (engine === undefined)
-    return reject('OP-DETERMINACY', 'DOCUMENT_READING_UNAVAILABLE', 'No document engine is available here');
-  const read = await engine.understand({
-    tenantId: tenant,
-    bytes: document.bytes,
-    mediaType: document.mediaType,
-    catalogue: catalogue.value,
-    ...(content.expect === undefined ? {} : { expect: content.expect }),
-    correlationId: randomUUID(),
-  });
-  if (!read.ok) return read;
-  if (read.value.kind !== 'ANSWERED')
-    return reject('OP-DETERMINACY', 'DOCUMENT_READING_UNAVAILABLE', 'The document engine did not read the document', {
-      outcome: read.value.kind,
-    });
+  const read =
+    engine === undefined
+      ? undefined
+      : await engine.understand({
+          tenantId: tenant,
+          bytes: document.bytes,
+          mediaType: document.mediaType,
+          catalogue: catalogue.value,
+          ...(content.expect === undefined ? {} : { expect: content.expect }),
+          correlationId: randomUUID(),
+        });
+  const understood = read?.ok === true && read.value.kind === 'ANSWERED' ? read.value.value : undefined;
+  let meta: { readonly engine: string; readonly source: 'LIVE' | 'FIXTURE' };
+  if (engine !== undefined && understood !== undefined) meta = { engine: engine.engine, source: engine.source };
+  else {
+    // Unread, the document may still carry the issuer's answer (D3): that is kept, with the reading as not read.
+    const a = content.authenticity;
+    if (a === undefined || a.status === 'NOT_CHECKED')
+      return reject('OP-DETERMINACY', 'DOCUMENT_READING_UNAVAILABLE', 'The document was not read here');
+    meta = { engine: 'none', source: a.source };
+  }
   const at = hostClockInstant();
   // The reading date is the institution's civil date at the instant of reading; a Hijri date converts on Umm al-Qura.
   const context: CheckContext = {
     asOf: civilDateOf(tenant, at),
     toGregorian: (d) => (d.calendar === 'GREGORIAN' ? d.date : gregorianOfUmmAlQura(d.date)),
+    ...(content.authenticity === undefined ? {} : { authenticity: content.authenticity }),
   };
   const findings: StoredFindings = {
     ...findingsOf(
-      read.value.value,
+      understood ?? { classification: { status: 'UNREADABLE', reason: 'NOT_READ' }, facts: [], pagesRead: 0 },
       document.declaredType,
       catalogue.value,
-      { engine: engine.engine, source: engine.source },
+      meta,
       content.rules === undefined || content.rules.length === 0 ? undefined : { rules: content.rules, context },
     ),
     subjectKind: subject.kind,
