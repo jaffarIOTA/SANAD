@@ -90,6 +90,39 @@ export function verifyNoBuyBack(legs: readonly ContractLeg[]): Result<true> {
   return ok(true);
 }
 
+/**
+ * The same pairs, checked before any leg exists, from the parties the trade
+ * already names: who the institution will buy from (the anchor that issued
+ * the invoice) and who it will sell to (the distributor). Trade validation
+ * runs this, so a transaction whose goods would go back where they came from
+ * is refused before the institution buys anything — not at acceptance, with
+ * the goods already on its books.
+ *
+ * `parties` maps each role to the registration number that will stand on that
+ * role's legs. A pair with a role not named is skipped, as above.
+ */
+export function verifyProspectiveParties(
+  definition: StructureDefinition,
+  parties: Readonly<Partial<Record<CounterpartyRole, string>>>,
+): Result<true> {
+  for (const [leftRef, rightRef] of definition.constraints.distinctParties) {
+    const left = parsePartySlot(leftRef);
+    if (!left.ok) return left;
+    const right = parsePartySlot(rightRef);
+    if (!right.ok) return right;
+    const l = parties[left.value.role];
+    const r = parties[right.value.role];
+    if (l === undefined || r === undefined) continue;
+    if (normaliseCr(l) === normaliseCr(r)) {
+      return reject('SH-08', 'PARTIES_NOT_DISTINCT', 'The same legal entity appears on both sides of the transaction', {
+        left: leftRef,
+        right: rightRef,
+      });
+    }
+  }
+  return ok(true);
+}
+
 /** Registration numbers are compared on digits and case-folded characters only. */
 function normaliseCr(cr: string): string {
   return cr.trim().toUpperCase().replace(/[\s-]/g, '');

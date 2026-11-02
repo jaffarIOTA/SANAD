@@ -653,10 +653,19 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
         id: 'sequencing',
         titleEn: 'Sequencing & gates',
         titleAr: 'التسلسل والبوابات',
-        readiness: soon(),
-        reference: 'SH-05 · SH-06 — engine built',
+        href: '/transactions',
+        readiness: live(),
+        reference:
+          'Wasl W2, on each transaction: trade validation (distinctness before purchase, SH-08) and the cost held against the programme’s limit (facility holds come with W5); the wa’d and the purchase as separate, hashed, attested, chained legs from the board-approved templates (SH-07, SH-17; the PDF rendition is not yet produced); gate 1 on the anchor’s invoice to the institution through the e-invoicing port (FIXTURE: the demonstration transport, KSA-RAIL-ZATCA-01); gate 2 on uploaded possession evidence a different person validates; gate 3, the risk-holding interval between attested instants (host-clock stand-in, SR-006); the sale offer, its lapse and an unwind with the goods’ disposition. Every step through the same activities as the Temporal workflow; legs, evidence and instants in core.contract_leg, evidence.evidence and core.transaction. The distributor’s acceptance is W3',
       },
-      { id: 'evidence', titleEn: 'Evidence', titleAr: 'الأدلة', readiness: soon(), reference: 'SDD §5.4.3' },
+      {
+        id: 'evidence',
+        titleEn: 'Evidence',
+        titleAr: 'الأدلة',
+        readiness: soon(),
+        reference:
+          'SDD §5.4.3 — recorded and validated per transaction since W2 (see Sequencing & gates); a cross-transaction evidence workspace for the board is W6',
+      },
       {
         id: 'registry',
         titleEn: 'Financed invoice registry',
