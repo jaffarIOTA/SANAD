@@ -47,9 +47,9 @@ function inline(text) {
 }
 
 function slug(text) {
+  // Anything but a letter or a digit becomes a hyphen, angle brackets included, so no markup survives into an anchor.
   return text
     .toLowerCase()
-    .replace(/<[^>]+>/g, '')
     .replace(/[^\p{L}\p{N}]+/gu, '-')
     .replace(/^-|-$/g, '');
 }
