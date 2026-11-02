@@ -23,6 +23,8 @@ export interface WorkerConfig {
   readonly address: string;
   readonly namespace: string;
   readonly taskQueue?: string;
+  /** mTLS material where the cluster requires it, as mounted from the vault. Never logged. */
+  readonly tls?: { readonly clientCertPem: Buffer; readonly clientKeyPem: Buffer; readonly serverRootCaPem?: Buffer };
 }
 
 /** The tenant's retry policy as the workflow input expects it. Declared once, in configuration. */
@@ -33,21 +35,33 @@ export function retryFor(policy: OriginationPolicy): RetryInput {
 export async function startSequencingWorker(
   config: WorkerConfig,
   ports: {
-    readonly murabaha: SequencingPorts;
-    readonly tawarruq: TawarruqPorts;
+    /** Absent until the sequences run on a server; a workflow that needs them then fails its activity, loudly. */
+    readonly murabaha?: SequencingPorts;
+    readonly tawarruq?: TawarruqPorts;
     /** The origination service's servicing operations, for the daily cycle (activities-servicing.ts). */
     readonly servicing: ServicingHost;
   },
 ): Promise<Worker> {
-  const connection = await NativeConnection.connect({ address: config.address });
+  const { tls } = config;
+  const connection = await NativeConnection.connect({
+    address: config.address,
+    ...(tls === undefined
+      ? {}
+      : {
+          tls: {
+            clientCertPair: { crt: tls.clientCertPem, key: tls.clientKeyPem },
+            ...(tls.serverRootCaPem === undefined ? {} : { serverRootCACertificate: tls.serverRootCaPem }),
+          },
+        }),
+  });
   const worker = await Worker.create({
     connection,
     namespace: config.namespace,
     taskQueue: config.taskQueue ?? SEQUENCING_TASK_QUEUE,
     workflowsPath: fileURLToPath(new URL('./workflows/index.ts', import.meta.url)),
     activities: {
-      ...createMurabahaActivities(ports.murabaha),
-      ...createTawarruqActivities(ports.tawarruq),
+      ...(ports.murabaha === undefined ? {} : createMurabahaActivities(ports.murabaha)),
+      ...(ports.tawarruq === undefined ? {} : createTawarruqActivities(ports.tawarruq)),
       ...createServicingActivities(ports.servicing),
     },
   });

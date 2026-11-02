@@ -87,6 +87,29 @@ jobs:
             --recursive
             ./
 
+  worker-image:                                   # SEC-D09: the workflow worker ships as its own image (A4)
+    name: Image scan (worker)
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: sanad-worker:ci
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build the image the release would ship
+        run: docker build -f services/worker/Containerfile -t "$IMAGE" .
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+      # Every module resolves under plain Node, as an arbitrary UID in group 0 (OpenShift restricted-v2).
+      - name: It starts
+        run: |
+          docker run --rm --user 12345:0 -e NODE_ENV=development "$IMAGE" \
+            node --experimental-transform-types --no-warnings --import ./services/worker/aliases.mjs \
+            services/worker/main.ts --check
+
   images:                                         # SEC-D09, SEC-D11 (SR-032)
     name: Image scan and DAST (${{ matrix.app }})
     runs-on: ubuntu-latest
