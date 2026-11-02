@@ -1,0 +1,9 @@
+{
+  "configId": "sme-fund-ae-loan-booking",
+  "version": "0.1.0",
+  "adapter": "TUUM",
+  "policyRef": "ILLUSTRATIVE — Tuum's sandbox holds no AED or UAE loan product yet (adapters/tuum/README.md, 2026-10-08 run: only another partner's riyal test products). The code below is a placeholder until Tuum sets up the fund's own product; booking runs on the demonstration transport, labelled Fixture, until then. Rate-priced products only: a Murabaha product is never listed here",
+  "products": {
+    "sme-term-conventional": { "loanTypeCode": "SME FINANCE AED" }
+  }
+}

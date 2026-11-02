@@ -21,6 +21,7 @@ import { Rate } from '@sanad/design/Rate.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 
 import {
+  bookLoanAction,
   generateOfferAction,
   recordDisbursedAction,
   recordPortfolioStatusAction,
@@ -36,6 +37,7 @@ import {
   syncBusiness,
 } from '../../../../../server/business.ts';
 import { ClosingCard } from './ClosingCard.tsx';
+import { SourceBadge } from '../../intake/IntakeUi.tsx';
 import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
 import { persistencePool } from '../../../../../server/persistence.ts';
 import { formatPercent, scheduleExcerpt } from '../../../../../server/business-dashboard.ts';
@@ -965,6 +967,37 @@ function NextStep({
               <Id className="ms-2 text-[12px] text-ink-quiet">{a.disbursement.paymentRef}</Id>
             )}
           </p>
+          {/* The loan as booked in the loan system (UAE M6). */}
+          {view.booking !== undefined ? (
+            <p className="flex flex-wrap items-center gap-2 text-[13px] text-ink" data-loan-booked>
+              <Chip tone="good">{t('Booked in the loan system', 'مُسجَّل في نظام القروض')}</Chip>
+              <SourceBadge source={view.booking.source} f={f} />
+              <span>
+                {t('Loan account', 'حساب التمويل')}{' '}
+                <bdi dir="ltr" className="identifier font-semibold">
+                  {view.booking.loanAccountNumber}
+                </bdi>
+              </span>
+              <span className="text-[11px] text-ink-quiet">
+                {t('Product', 'المنتج')} <Id>{view.booking.productCode}</Id> · <Id>{view.booking.bookedBy}</Id>
+              </span>
+            </p>
+          ) : (
+            <Gate staff={staff} act="BUSINESS_DISBURSE" arabic={f.arabic}>
+              <form action={bookLoanAction} className="flex flex-wrap items-center justify-between gap-3" data-book-loan>
+                {ctx}
+                <p className="text-[13px] text-ink-quiet">
+                  {t(
+                    'Book the loan in the loan system on the signed terms — Sanad’s rate and APR, the number of payments and the first payment date. The loan account number it returns is recorded here.',
+                    'سجّل التمويل في نظام القروض بالشروط الموقّعة — معدل سند ومعدل النسبة السنوية وعدد الأقساط وتاريخ أول قسط. ويُحفظ هنا رقم حساب التمويل الذي يُرجعه.',
+                  )}
+                </p>
+                <button type="submit" className={BTN_PRIMARY}>
+                  {t('Book in the loan system', 'التسجيل في نظام القروض')}
+                </button>
+              </form>
+            </Gate>
+          )}
           {view.portfolio === undefined ? null : (
             <p className="text-[13px] text-ink">
               {view.portfolio.daysPastDue > 0 ? (

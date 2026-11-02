@@ -509,6 +509,8 @@ export interface BusinessApplicationView {
   readonly pack: DecisionPackRecord;
   /** Closing (UAE M5): the signing in progress, each condition precedent's evidence, and the payee account. */
   readonly closing: ClosingRecord;
+  /** The loan as booked in the institution's loan system (UAE M6), once it is. */
+  readonly booking?: LoanBookingRecord;
   readonly assessments: readonly AssessmentRun[];
   readonly latestAssessment?: AssessmentRun;
   readonly offers: readonly OfferRun[];
@@ -620,6 +622,18 @@ export interface Payee {
   readonly confirmedBy?: string;
 }
 
+export interface LoanBookingRecord {
+  /** The loan system's account number for the loan, as staff and statements show it. */
+  readonly loanAccountNumber: string;
+  readonly contractRef: string;
+  readonly customerRef: string;
+  /** The loan system's product code it was booked under. */
+  readonly productCode: string;
+  readonly source: 'LIVE' | 'FIXTURE';
+  readonly bookedBy: string;
+  readonly bookedAtEpochSeconds: bigint;
+}
+
 export type TrancheStatus = 'PLANNED' | 'RELEASED' | 'SETTLED' | 'FAILED';
 
 /** One drawdown of the facility, paid by one instruction (re-instructed under a new key after a failure). */
@@ -662,6 +676,7 @@ interface BusinessRecord {
   security: { collateral: CollateralItem[]; guarantees: Guarantee[] };
   pack: { conditions: Condition[]; covenants: Covenant[]; justifications: Record<string, Justification>; frozen?: FrozenPack };
   closing: { signing?: SigningInProgress; signer?: SignerRecord; cps: Record<string, CpEvidence>; payee?: Payee; tranches?: Tranche[] };
+  booking?: LoanBookingRecord;
   assessments: AssessmentRun[];
   offers: OfferRun[];
   events: ApplicationEvent[];
@@ -1068,6 +1083,7 @@ function view(record: BusinessRecord, currency: CurrencyCode): BusinessApplicati
       ...(record.closing.payee === undefined ? {} : { payee: record.closing.payee }),
       ...(record.closing.tranches === undefined ? {} : { tranches: [...record.closing.tranches] }),
     },
+    ...(record.booking === undefined ? {} : { booking: record.booking }),
     assessments: [...record.assessments],
     ...(latestAssessment === undefined ? {} : { latestAssessment }),
     offers: [...record.offers],
@@ -1493,6 +1509,17 @@ function replayEvent(r: BusinessRecord, e: ApplicationEvent): void {
       return;
     case 'PAYEE_CONFIRMED':
       if (r.closing.payee !== undefined) r.closing.payee = { ...r.closing.payee, confirmedBy: e.actor };
+      return;
+    case 'LOAN_BOOKED':
+      r.booking = {
+        loanAccountNumber: d['loanAccountNumber'] ?? '',
+        contractRef: d['contractRef'] ?? '',
+        customerRef: d['customerRef'] ?? '',
+        productCode: d['productCode'] ?? '',
+        source: d['source'] === 'LIVE' ? 'LIVE' : 'FIXTURE',
+        bookedBy: e.actor,
+        bookedAtEpochSeconds: e.atEpochSeconds,
+      };
       return;
     case 'TRANCHES_PLANNED': {
       const amounts = (d['amounts'] ?? '').split(',');
@@ -4468,6 +4495,64 @@ export async function recordPaymentResult(
       return ok(true);
     }),
   );
+}
+
+// -- booking in the loan system (UAE M6) ---------------------------------------
+
+/**
+ * The loan as the loan system booked it: its account number, contract and
+ * customer references. Once only: a booked loan is not booked again. Recorded
+ * against the disbursed application (the row is closed; this is an event).
+ */
+export async function recordLoanBooked(
+  tenant: TenantCode,
+  applicationId: string,
+  booking: {
+    readonly loanAccountNumber: string;
+    readonly contractRef: string;
+    readonly customerRef: string;
+    readonly productCode: string;
+    readonly source: 'LIVE' | 'FIXTURE';
+  },
+  actor: string,
+): Promise<Result<BusinessApplicationView>> {
+  return closingChange(tenant, applicationId, (r, book, _ctx, at) => {
+    if (r.application.status !== 'DISBURSED')
+      return fail('TRANSITION_NOT_ALLOWED', 'A loan is booked once it has been disbursed', { status: r.application.status });
+    if (r.booking !== undefined) return fail('LOAN_ALREADY_BOOKED', 'This loan is already booked in the loan system');
+    for (const v of [booking.loanAccountNumber, booking.contractRef, booking.customerRef])
+      if (!REF_SHAPE.test(v)) return fail('LOAN_BOOKING_REF_INVALID', 'The loan system returned no usable reference; nothing was recorded');
+    r.booking = { ...booking, bookedBy: actor, bookedAtEpochSeconds: at };
+    recordEvent(book, r, {
+      eventType: 'LOAN_BOOKED',
+      fromStage: null,
+      toStage: null,
+      actor,
+      atEpochSeconds: at,
+      detail: { ...booking },
+    });
+    return ok(true);
+  });
+}
+
+/** What the loan system is told: the signed offer's terms and the borrower, for one disbursed application. */
+export async function bookingTermsOf(
+  tenant: TenantCode,
+  applicationId: string,
+): Promise<
+  Result<{
+    readonly view: BusinessApplicationView;
+    readonly terms: OfferTerms;
+  }>
+> {
+  const book = await hydrate(tenant);
+  const ctx = tenantContext(tenant);
+  if (!ctx.ok) return ctx;
+  const r = book.records.get(applicationId);
+  if (r === undefined) return notFound(applicationId);
+  const signed = r.offers.find((o) => o.letter.version === r.application.offer?.letterVersion);
+  if (signed === undefined) return fail('OFFER_NOT_GENERATED', 'The signed letter version is not on record');
+  return ok({ view: view(r, ctx.value.currency), terms: signed.terms });
 }
 
 async function signAt(

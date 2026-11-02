@@ -131,7 +131,7 @@ export const TUUM_DEVIATIONS: readonly KnownDeviation[] = [
     summary:
       'The platform has a lending module that derives and persists a periodic proportion, and a top-up path that increases a booked principal.',
     containment:
-      'Not used, and not usable: this adapter exposes no lending operation, the constructor refuses a configuration pointing at the lending module, and an architecture test asserts the source carries no lending path. Residual risk is the vendor back office, which is outside this boundary — mitigated by entitlement configuration and by the reconciliation check described in README.md, Finding 2.',
+      'Not used for a Murabaha obligation, and not usable from here: this adapter exposes no lending operation, the constructor refuses a configuration pointing at the lending module, and an architecture test asserts no file but lending-adapter.ts carries a lending path. Rate-priced products (the product owner’s decision of 2026-10-08) are booked as loan contracts by lending-adapter.ts alone. Residual risk is the vendor back office, which is outside this boundary — mitigated by entitlement configuration and by the reconciliation check described in README.md, Finding 2.',
     verificationRef: 'OI-02',
   },
 ];

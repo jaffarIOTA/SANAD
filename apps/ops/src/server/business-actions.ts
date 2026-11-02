@@ -42,6 +42,7 @@ import { fetchBankStatements, fetchBureauReport } from './business-rails.ts';
 import { uploadBusinessDocument } from './business-storage.ts';
 import { confirmSigning, startSigning } from './business-signing.ts';
 import { recordFixturePaymentResult } from './business-payments.ts';
+import { bookInLoanSystem } from './business-booking.ts';
 import {
   approveStraightThrough,
   confirmBankStatementFacts,
@@ -697,4 +698,12 @@ export async function recordFixturePaymentResultAction(form: FormData): Promise<
     () => recordFixturePaymentResult(ctx.tenant, ctx.applicationId, status, ctx.actor),
     'PAYMENT_RESULT_RECORDED',
   );
+}
+
+// -- Booking in the loan system (UAE M6) --------------------------------------------------
+
+/** Finance books the disbursed loan in the loan system; the loan account number it returns is recorded. */
+export async function bookLoanAction(form: FormData): Promise<void> {
+  const ctx = await contextOf(form, 'BUSINESS_DISBURSE');
+  return finish(ctx, () => bookInLoanSystem(ctx.tenant, ctx.applicationId, ctx.actor), 'LOAN_BOOKED');
 }
