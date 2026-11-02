@@ -69,6 +69,11 @@ export const ACT_REQUIREMENTS = {
   SHARIAH_APPROVAL_PROPOSE: ['SHARIAH_REVIEWER'],
   /** Confirm or reject it: a Shariah reviewer, never the one who proposed it (the service refuses the same person). */
   SHARIAH_APPROVAL_CONFIRM: ['SHARIAH_REVIEWER'],
+  /**
+   * Run the Shariah review now, raise an observation, and triage, plan, remediate or close an incident (W6b-1).
+   * Closing is a different reviewer from the one who remediated (the service and the table refuse the same person).
+   */
+  SHARIAH_INCIDENT_ACT: ['SHARIAH_REVIEWER'],
 } as const satisfies Readonly<Record<string, readonly StaffAuthority[]>>;
 
 export type WorkbenchAct = keyof typeof ACT_REQUIREMENTS;

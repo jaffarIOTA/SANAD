@@ -15,9 +15,13 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import type { TenantCode } from '@sanad/config/loader.ts';
-import type { Result } from '@sanad/core/kernel/result.ts';
+import { type Result, reject } from '@sanad/core/kernel/result.ts';
 import type { ApprovalChange } from '@sanad/core/shariah/approvals.ts';
+import { INCIDENT_SEVERITIES, type IncidentAction, type IncidentSeverity } from '@sanad/core/shariah/incidents.ts';
 import { decideApprovalChange, proposeApprovalChange } from '@sanad/origination/shariah/approvals.ts';
+import { actOnIncident, raiseObservation } from '@sanad/origination/shariah/incidents.ts';
+import { WASL_PRODUCT, getTransaction } from '@sanad/origination/wasl/book.ts';
+import { runShariahReview } from '@sanad/origination/wasl/compliance.ts';
 
 import { authorise, localeSegmentOf } from './session.ts';
 
@@ -114,5 +118,84 @@ export async function decideApprovalChangeAction(form: FormData): Promise<void> 
         note: field(form, 'note').slice(0, 1000),
       }),
     confirm ? 'APPROVAL_CHANGE_CONFIRMED' : 'APPROVAL_CHANGE_REJECTED',
+  );
+}
+
+// -- Incidents (W6b-1) ------------------------------------------------------------------
+
+const INCIDENTS = (locale: string) => `/${locale}/shariah/incidents`;
+
+async function incidentFinish(
+  locale: string,
+  change: () => Promise<Result<unknown>>,
+  notice: (value: unknown) => string,
+): Promise<never> {
+  const result = await change();
+  revalidatePath(INCIDENTS(locale));
+  const query = result.ok
+    ? new URLSearchParams({ notice: notice(result.value) })
+    : new URLSearchParams({ control: result.error.control, reason: result.error.reason });
+  redirect(`${INCIDENTS(locale)}?${query.toString()}`);
+}
+
+const severityOf = (form: FormData): IncidentSeverity => {
+  const s = field(form, 'severity');
+  return (INCIDENT_SEVERITIES as readonly string[]).includes(s) ? (s as IncidentSeverity) : 'LOW';
+};
+
+/** Run the Shariah review of the live book now, as the daily cycle does each morning. */
+export async function runShariahReviewAction(form: FormData): Promise<void> {
+  const locale = localeSegmentOf(field(form, 'locale') || 'en');
+  const staff = await authorise(locale, 'SHARIAH_INCIDENT_ACT', INCIDENTS(locale));
+  return incidentFinish(
+    locale,
+    () => runShariahReview(staff.tenantId as TenantCode, staff.principalId),
+    () => 'SHARIAH_REVIEW_RUN',
+  );
+}
+
+/** A Shariah reviewer raises what they observed on a transaction. */
+export async function raiseObservationAction(form: FormData): Promise<void> {
+  const locale = localeSegmentOf(field(form, 'locale') || 'en');
+  const staff = await authorise(locale, 'SHARIAH_INCIDENT_ACT', INCIDENTS(locale));
+  const tenant = staff.tenantId as TenantCode;
+  const subjectRef = field(form, 'transactionRef').slice(0, 40);
+  return incidentFinish(
+    locale,
+    async () =>
+      (await getTransaction(tenant, subjectRef)) === undefined
+        ? reject('OP-DETERMINACY', 'TRANSACTION_NOT_FOUND', 'No such transaction')
+        : raiseObservation(tenant, staff.principalId, {
+            subjectRef,
+            productCode: WASL_PRODUCT,
+            severity: severityOf(form),
+            observation: field(form, 'observation').slice(0, 2000),
+          }),
+    (raised) => (raised === undefined ? 'INCIDENT_ALREADY_RAISED' : 'INCIDENT_RAISED'),
+  );
+}
+
+/** The incident's next step: triage, plan, remediate or close. */
+export async function actOnIncidentAction(form: FormData): Promise<void> {
+  const locale = localeSegmentOf(field(form, 'locale') || 'en');
+  const staff = await authorise(locale, 'SHARIAH_INCIDENT_ACT', INCIDENTS(locale));
+  const kind = field(form, 'kind');
+  const text = (name: string) => field(form, name).slice(0, 2000);
+  const action: IncidentAction | undefined =
+    kind === 'TRIAGE'
+      ? { kind, severity: severityOf(form), owner: text('owner') || staff.principalId, note: text('note') }
+      : kind === 'PLAN'
+        ? { kind, plan: text('plan') }
+        : kind === 'REMEDIATE'
+          ? { kind, note: text('note'), purificationRequired: form.get('purificationRequired') === 'on' }
+          : kind === 'CLOSE'
+            ? { kind, closureEvidence: text('closureEvidence') }
+            : undefined;
+  if (action === undefined) redirect(INCIDENTS(locale));
+  return incidentFinish(
+    locale,
+    () =>
+      actOnIncident(staff.tenantId as TenantCode, staff.principalId, field(form, 'incidentRef').slice(0, 20), action),
+    () => 'INCIDENT_STEP_RECORDED',
   );
 }

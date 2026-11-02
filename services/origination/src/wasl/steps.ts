@@ -49,6 +49,7 @@ import { SequenceRefusal } from '../../../../adapters/workflow-temporal/programs
 import { ummAlQuraIso } from '../hijri.ts';
 import { hostClockInstant } from '../host-clock.ts';
 import { originationApproval } from '../shariah/approvals.ts';
+import { incidentsStoppingTheSale } from '../shariah/incidents.ts';
 import { resolveConcentration } from './concentration.ts';
 import { resolveBoard, resolveWaslParties } from './configuration.ts';
 import { HOLDING, PURCHASED, exposureOf } from './exposure.ts';
@@ -83,6 +84,9 @@ export const notNow = (state: string): Result<never> =>
 
 /** The states a step reaches by committing the institution to a new sale: each needs the approval in force (SH-17). */
 const NEW_COMMITMENTS: ReadonlySet<string> = new Set(['LIMIT_RESERVED', 'WAAD_EXECUTED', 'PURCHASE_EXECUTED']);
+
+/** The states a step reaches by committing to the sale: an open MATERIAL incident stops each (W6b-1). */
+const SALE_COMMITMENTS: ReadonlySet<string> = new Set(['WAAD_EXECUTED', 'PURCHASE_EXECUTED', 'SALE_OFFERED']);
 
 // -- What a step works with -----------------------------------------------------------
 
@@ -142,7 +146,7 @@ function attestationAfter(record: TransactionRecord): StepAttestation {
 const legsOf = (t: Transaction): readonly ContractLeg[] => ('legs' in t ? t.legs : []);
 
 /** The catalogue's terms for the transaction's programme, as they stood when it opened: effective-dated, so reproducible. */
-function termsAtOpening(tenant: TenantCode, record: TransactionRecord): Result<MurabahaTerms> {
+export function termsAtOpening(tenant: TenantCode, record: TransactionRecord): Result<MurabahaTerms> {
   const opened = record.events.find((e) => e.eventType === 'TRANSACTION_OPENED');
   const catalogue = loadProductCatalogue(tenant);
   if (!catalogue.ok) return catalogue;
@@ -223,6 +227,16 @@ export async function step(
         await attestation.occurred(),
       );
       if (!approval.ok) return approval;
+    }
+    // W6b-1: an open MATERIAL Shariah incident on the transaction stops its commitment to the sale until it is
+    // closed (decided 26 October 2026). Unwinding is not stopped; a transaction already sold is not touched.
+    if (moved && SALE_COMMITMENTS.has(after.state)) {
+      const stopping = await incidentsStoppingTheSale(tenant, transactionRef);
+      const first = stopping[0];
+      if (first !== undefined)
+        return reject('SH-17', 'SHARIAH_INCIDENT_OPEN', 'A material Shariah incident is open on this transaction', {
+          incidentRef: first.incidentRef,
+        });
     }
     const leg = legsOf(after).length > legsOf(before).length ? legsOf(after).at(-1) : undefined;
     const { evidence, supersedes, obligation, paidDelta, outbox, charity } = out.value;
@@ -503,7 +517,7 @@ export function unwindTransaction(
 // -- The legs' instruments ------------------------------------------------------------
 
 /** What each leg's instrument states, in minor units. A profit amount, never a rate. */
-function legFigures(legType: LegType, c: StepContext, core: TransactionCore): Readonly<Record<string, unknown>> {
+function legFigures(legType: LegType, terms: MurabahaTerms, core: TransactionCore): Readonly<Record<string, unknown>> {
   const p = core.pricing;
   switch (legType) {
     case 'PURCHASE':
@@ -516,7 +530,7 @@ function legFigures(legType: LegType, c: StepContext, core: TransactionCore): Re
         salePrice: p.salePriceAmount.minorUnits.toString(),
         maturityGregorian: core.maturityDateGregorian,
         maturityHijri: core.maturityDateHijri,
-        instalments: scheduleOf(c.terms, core).map((i) => ({
+        instalments: scheduleOf(terms, core).map((i) => ({
           due: i.dueDateGregorian,
           dueHijri: i.dueDateHijri,
           amount: i.amount.minorUnits.toString(),
@@ -525,6 +539,54 @@ function legFigures(legType: LegType, c: StepContext, core: TransactionCore): Re
     default:
       return { salePrice: p.salePriceAmount.minorUnits.toString() };
   }
+}
+
+/**
+ * A leg's instrument — what its template makes of the transaction's figures:
+ * parties, goods, figures, its predecessor's hash, its attested instant — as
+ * the SHA-256 of that content. One definition, so the hash a leg is executed
+ * with and the hash the drift check rebuilds it to (W6b, BR-F07) are the
+ * same function of the same facts.
+ */
+export function instrumentHash(
+  leg: Pick<
+    ContractLeg,
+    | 'legType'
+    | 'sequenceNo'
+    | 'templateVersionId'
+    | 'counterpartyRole'
+    | 'counterpartyCr'
+    | 'prevLegHash'
+    | 'executedAt'
+  >,
+  facts: {
+    readonly document: string;
+    readonly institutionCr: string;
+    readonly terms: MurabahaTerms;
+    readonly core: TransactionCore;
+  },
+): string {
+  const { core } = facts;
+  const instrument = {
+    document: facts.document,
+    templateVersionId: leg.templateVersionId,
+    transaction: core.transactionId,
+    leg: leg.legType,
+    sequenceNo: leg.sequenceNo,
+    institutionCr: facts.institutionCr,
+    counterpartyRole: leg.counterpartyRole,
+    counterpartyCr: leg.counterpartyCr,
+    goods: {
+      invoiceUuid: core.tradeReference.invoiceUuid ?? null,
+      invoiceHash: core.tradeReference.invoiceHash ?? null,
+    },
+    currency: core.pricing.costAmount.currency,
+    figures: legFigures(leg.legType, facts.terms, core),
+    prevLegHash: leg.prevLegHash ?? null,
+    executedAt: leg.executedAt.epochSeconds.toString(),
+    authority: leg.executedAt.authorityId,
+  };
+  return createHash('sha256').update(JSON.stringify(instrument)).digest('hex');
 }
 
 /**
@@ -547,39 +609,28 @@ function legPreparer(c: StepContext): LegPreparer {
       const role: ContractLeg['counterpartyRole'] = p.legType === 'PURCHASE' ? 'SELLER' : 'BUYER';
       const counterpartyCr = role === 'SELLER' ? core.tradeReference.issuerCr : c.distributorCr;
       const executedAt = await c.attestation.attest();
-      const instrument = {
-        document: p.document,
-        templateVersionId: approved.templateVersionId,
-        transaction: core.transactionId,
-        leg: p.legType,
+      const leg = {
+        legType: p.legType,
         sequenceNo: p.sequenceNo,
-        institutionCr: c.parties.institution.registrationNo,
+        templateVersionId: approved.templateVersionId,
         counterpartyRole: role,
         counterpartyCr,
-        goods: {
-          invoiceUuid: core.tradeReference.invoiceUuid ?? null,
-          invoiceHash: core.tradeReference.invoiceHash ?? null,
-        },
-        currency: core.pricing.costAmount.currency,
-        figures: legFigures(p.legType, c, core),
-        prevLegHash: p.previousContentHash ?? null,
-        executedAt: executedAt.epochSeconds.toString(),
-        authority: executedAt.authorityId,
+        ...(p.previousContentHash === undefined ? {} : { prevLegHash: p.previousContentHash }),
+        executedAt,
       };
       return ok({
+        ...leg,
         legId: randomUUID(),
         tenantId: core.tenantId,
         transactionId: core.transactionId,
-        legType: p.legType,
-        sequenceNo: p.sequenceNo,
         documentId: randomUUID(),
-        contentHash: createHash('sha256').update(JSON.stringify(instrument)).digest('hex'),
-        ...(p.previousContentHash === undefined ? {} : { prevLegHash: p.previousContentHash }),
-        executedAt,
+        contentHash: instrumentHash(leg, {
+          document: p.document,
+          institutionCr: c.parties.institution.registrationNo,
+          terms: c.terms,
+          core,
+        }),
         tsaTokenDigest: executedAt.tokenDigest,
-        templateVersionId: approved.templateVersionId,
-        counterpartyRole: role,
-        counterpartyCr,
         immutable: true,
       });
     },

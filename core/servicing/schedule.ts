@@ -21,15 +21,17 @@ import { civilDay } from './instalment-position.ts';
 export type ServicingTask = 'LATE_CHARGES' | 'COLLECTIONS' | 'BUREAU_REPORT';
 
 /**
- * A task run once for the whole tenant, before any facility (Wasl W4b):
- * reading the collection rail's paid-bills file. First, so the day's receipts
- * are applied before anything is charged late or presented again.
+ * A task run once for the whole tenant, before any facility: reading the
+ * collection rail's paid-bills file (Wasl W4b), first, so the day's receipts
+ * are applied before anything is charged late or presented again; then the
+ * Shariah review of the live book (Wasl W6b-1), which reads and raises
+ * incidents but moves nothing.
  */
-export type TenantTask = 'RECONCILE_COLLECTIONS';
+export type TenantTask = 'RECONCILE_COLLECTIONS' | 'SHARIAH_REVIEW';
 
 /** The tenant-wide tasks the cycle runs on a servicing date, in order. A malformed date runs nothing. */
 export function tenantTasksForDay(date: string): readonly TenantTask[] {
-  return civilDay(date) === undefined ? [] : ['RECONCILE_COLLECTIONS'];
+  return civilDay(date) === undefined ? [] : ['RECONCILE_COLLECTIONS', 'SHARIAH_REVIEW'];
 }
 
 export interface ServicingSchedule {
@@ -81,6 +83,8 @@ const NOTHING_DUE: ReadonlySet<string> = new Set([
   'LATE_AMOUNTS_NOT_RULED',
   'BUREAU_ALREADY_REPORTED',
   'NOTHING_TO_RECONCILE',
+  // No Wasl transaction past its draft (W6b-1): nothing to review.
+  'NOTHING_TO_REVIEW',
   // A task the facility's product does not have (a Wasl transaction is not reported by this task): nothing to do.
   'NOT_FOR_THIS_FACILITY',
 ]);

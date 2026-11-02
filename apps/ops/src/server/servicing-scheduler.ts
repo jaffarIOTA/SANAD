@@ -26,7 +26,9 @@ import {
   reportToBureau,
   servicingCalendarOf,
 } from './business.ts';
-import { getTransaction, listTransactions } from '@sanad/origination/wasl/book.ts';
+import { SHARIAH_REVIEW_PRINCIPAL } from '@sanad/core/shariah/incidents.ts';
+import { getTransaction, hydrate, listTransactions } from '@sanad/origination/wasl/book.ts';
+import { runShariahReview } from '@sanad/origination/wasl/compliance.ts';
 import { proposeLateAmounts } from '@sanad/origination/wasl/late-amounts.ts';
 import { reconcilePaidBills } from '@sanad/origination/wasl/reconciliation.ts';
 import { presentDueInstalments } from '@sanad/origination/wasl/settlement.ts';
@@ -99,6 +101,13 @@ async function reconcile(tenant: TenantCode): Promise<Result<unknown>> {
   return r;
 }
 
+/** The Shariah review of the live Wasl book (W6b-1): incidents raised, nothing moved. */
+async function shariahReview(tenant: TenantCode): Promise<Result<unknown>> {
+  if ([...(await hydrate(tenant)).records.values()].every((r) => r.transaction.state === 'DRAFT'))
+    return reject('OP-DETERMINACY', 'NOTHING_TO_REVIEW', 'No Wasl transaction is past its draft');
+  return runShariahReview(tenant, SHARIAH_REVIEW_PRINCIPAL);
+}
+
 export function servicingHost(): ServicingHost {
   return {
     attestation: { attest: () => Promise.resolve(developmentAttestation()) },
@@ -126,7 +135,9 @@ export function servicingHost(): ServicingHost {
     runTenant: (tenantId, task) =>
       task === 'RECONCILE_COLLECTIONS'
         ? reconcile(tenantId as TenantCode)
-        : Promise.resolve(reject('OP-DETERMINACY', 'NOT_FOR_THIS_FACILITY', 'Unknown tenant task')),
+        : task === 'SHARIAH_REVIEW'
+          ? shariahReview(tenantId as TenantCode)
+          : Promise.resolve(reject('OP-DETERMINACY', 'NOT_FOR_THIS_FACILITY', 'Unknown tenant task')),
   };
 }
 

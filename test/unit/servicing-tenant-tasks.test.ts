@@ -58,6 +58,7 @@ describe('tenant-wide tasks', () => {
     );
     expect(report.done + report.nothingDue + report.failed.length).toBe(0);
     expect(tenantTasksForDay('2026-13-40')).toEqual([]);
-    expect(tenantTasksForDay('2026-10-21')).toEqual(['RECONCILE_COLLECTIONS']);
+    // Reconciliation first, so the day's receipts are in before the Shariah review reads the book (W6b-1).
+    expect(tenantTasksForDay('2026-10-21')).toEqual(['RECONCILE_COLLECTIONS', 'SHARIAH_REVIEW']);
   });
 });
