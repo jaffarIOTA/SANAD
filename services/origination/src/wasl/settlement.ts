@@ -24,7 +24,7 @@
  * Reads no clock: "today" is the civil date, in the institution's time zone,
  * of the step's attested instant.
  */
-import { type TenantCode, loadJurisdictionProfile, loadTenantOnboarding } from '@sanad/config/loader.ts';
+import type { TenantCode } from '@sanad/config/loader.ts';
 import { type Money, money } from '@sanad/core/kernel/money.ts';
 import { type Result, ok, reject } from '@sanad/core/kernel/result.ts';
 import {
@@ -34,10 +34,10 @@ import {
   civilDay,
   facilityPosition,
 } from '@sanad/core/servicing/instalment-position.ts';
-import type { TsaInstant } from '@sanad/core/time/tsa.ts';
 import { type Obligation, applyPayment, reversePayment } from '@sanad/products/murabaha-scf/obligation/obligation.ts';
 import { settle } from '@sanad/products/murabaha-scf/sequencing/transitions.ts';
 
+import { civilDateOf } from '../civil-date.ts';
 import type { TransactionRecord, TransactionView } from './book.ts';
 import { instalmentBill, sellerSettlement } from './instructions.ts';
 import type { TransactionEventRow } from './persistence.ts';
@@ -273,15 +273,7 @@ export function obligationPosition(record: TransactionRecord, asOf: string): Fac
   return facilityPosition(scheduled, standingReceipts(record), asOf, currency);
 }
 
-/** The civil date of an attested instant in the institution's time zone. */
-export function civilDateOf(tenant: TenantCode, at: TsaInstant): string {
-  const onboarding = loadTenantOnboarding(tenant);
-  const profile = onboarding.ok ? loadJurisdictionProfile(onboarding.value.jurisdiction) : undefined;
-  const timeZone = profile?.ok === true ? profile.value.timeZone : 'UTC';
-  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(
-    new Date(Number(at.epochSeconds) * 1000),
-  );
-}
+export { civilDateOf };
 
 // -- Collecting -----------------------------------------------------------------------
 

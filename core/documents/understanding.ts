@@ -23,11 +23,17 @@
  */
 import { type Result, ok, reject } from '../kernel/result.ts';
 import type { DocumentExtractionPort, ExtractedContent } from '../ports/document-extraction.ts';
+import { type CheckContext, type DocumentCheckRule, evaluateChecks } from './document-checks.ts';
 import type { RailOutcome } from '../ports/rail.ts';
 
 // -- The catalogue (tenant configuration) ----------------------------------------------
 
-export type FactName = 'ISSUE_DATE' | 'EXPIRY_DATE' | 'STATEMENT_PERIOD';
+/**
+ * What may be read after a label. REGISTRATION_NUMBER is compared with the
+ * application's at reading time and only the outcome is kept (D2): the number
+ * itself never leaves the reading.
+ */
+export type FactName = 'ISSUE_DATE' | 'EXPIRY_DATE' | 'STATEMENT_PERIOD' | 'REGISTRATION_NUMBER';
 
 export interface FactDefinition {
   readonly fact: FactName;
@@ -63,7 +69,7 @@ export interface DocumentTypeCatalogue {
   readonly types: readonly DocumentTypeDefinition[];
 }
 
-const FACTS: readonly FactName[] = ['ISSUE_DATE', 'EXPIRY_DATE', 'STATEMENT_PERIOD'];
+const FACTS: readonly FactName[] = ['ISSUE_DATE', 'EXPIRY_DATE', 'STATEMENT_PERIOD', 'REGISTRATION_NUMBER'];
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const positiveInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v > 0;
 
@@ -256,25 +262,104 @@ function datesIn(text: string): CivilDate[] {
 /** The dates a document type declares, read after their labels. */
 export function readFacts(text: string, definition: DocumentTypeDefinition): readonly Fact[] {
   const normalised = normaliseText(text);
-  return definition.facts.map((f): Fact => {
-    for (const label of f.labels) {
-      const at = normalised.indexOf(normaliseText(label));
-      if (at < 0) continue;
-      const after = normalised.slice(
-        at + normaliseText(label).length,
-        at + normaliseText(label).length + DATE_WINDOW * 2,
-      );
-      const dates = datesIn(after.slice(0, f.fact === 'STATEMENT_PERIOD' ? DATE_WINDOW * 2 : DATE_WINDOW));
-      if (f.fact === 'STATEMENT_PERIOD') {
-        const [from, to] = dates;
-        if (from !== undefined && to !== undefined) return { fact: f.fact, status: 'READ', from, to };
-        continue;
+  // The registration number is compared, never kept: it is not a fact on the record (see matchRegistration).
+  return definition.facts
+    .filter((f) => f.fact !== 'REGISTRATION_NUMBER')
+    .map((f): Fact => {
+      for (const label of f.labels) {
+        const at = normalised.indexOf(normaliseText(label));
+        if (at < 0) continue;
+        const after = normalised.slice(
+          at + normaliseText(label).length,
+          at + normaliseText(label).length + DATE_WINDOW * 2,
+        );
+        const dates = datesIn(after.slice(0, f.fact === 'STATEMENT_PERIOD' ? DATE_WINDOW * 2 : DATE_WINDOW));
+        if (f.fact === 'STATEMENT_PERIOD') {
+          const [from, to] = dates;
+          if (from !== undefined && to !== undefined) return { fact: f.fact, status: 'READ', from, to };
+          continue;
+        }
+        const first = dates[0];
+        if (first !== undefined && f.fact !== 'REGISTRATION_NUMBER')
+          return { fact: f.fact, status: 'READ', value: first };
       }
-      const first = dates[0];
-      if (first !== undefined) return { fact: f.fact, status: 'READ', value: first };
-    }
-    return { fact: f.fact, status: 'NOT_READ' };
-  });
+      return { fact: f.fact, status: 'NOT_READ' };
+    });
+}
+
+// -- Matching against the application (D2): outcomes only -------------------------------
+
+/** What the reading found when it compared the document with the application. The values compared are not kept. */
+export interface Matches {
+  /** The registration number after its label is the application's, another one, or none could be read. */
+  readonly registration?: 'MATCHES' | 'DIFFERS' | 'NOT_READ';
+  /** The business's name appears on the document, in either script — or was not found. */
+  readonly name?: 'FOUND' | 'NOT_FOUND';
+}
+
+/** What the application expects a document to carry, passed in for the comparison and discarded after it. */
+export interface Expectations {
+  readonly registrationNumber?: string;
+  /** The business's names (English, Arabic). */
+  readonly names?: readonly string[];
+}
+
+const digitsOnly = (s: string): string => normaliseText(s).replace(/\D/g, '');
+/** A run of at least five digits, which may be grouped by spaces or dashes as printed. */
+const NUMBER_RUN = /\d[\d -]{3,}\d/g;
+
+/** Compare the registration number printed after one of the kind's labels with the application's. */
+export function matchRegistration(
+  text: string,
+  definition: DocumentTypeDefinition,
+  expected: string,
+): Matches['registration'] {
+  const want = digitsOnly(expected);
+  const labels = definition.facts.find((f) => f.fact === 'REGISTRATION_NUMBER')?.labels ?? [];
+  if (want.length < 5 || labels.length === 0) return 'NOT_READ';
+  const normalised = normaliseText(text);
+  for (const label of labels) {
+    const l = normaliseText(label);
+    const at = normalised.indexOf(l);
+    if (at < 0) continue;
+    const run = normalised.slice(at + l.length, at + l.length + DATE_WINDOW).match(NUMBER_RUN)?.[0];
+    if (run === undefined) continue;
+    return digitsOnly(run) === want ? 'MATCHES' : 'DIFFERS';
+  }
+  return 'NOT_READ';
+}
+
+/** Words a legal name carries that say nothing about which business it is. */
+const LEGAL_FORMS = new Set([
+  'llc',
+  'l.l.c',
+  'co',
+  'co.',
+  'company',
+  'establishment',
+  'est',
+  'est.',
+  'ltd',
+  'limited',
+  'trading',
+  'fze',
+  'fzco',
+  'شركه',
+  'مؤسسه',
+  'ذ.م.م',
+  'المحدوده',
+]);
+
+/** Every distinctive word of one of the business's names appears in the text. */
+export function matchName(text: string, names: readonly string[]): Matches['name'] {
+  const normalised = normaliseText(text);
+  for (const name of names) {
+    const words = normaliseText(name)
+      .split(' ')
+      .filter((w) => w.length > 1 && !LEGAL_FORMS.has(w));
+    if (words.length > 0 && words.every((w) => normalised.includes(w))) return 'FOUND';
+  }
+  return 'NOT_FOUND';
 }
 
 // -- Findings --------------------------------------------------------------------------
@@ -282,15 +367,22 @@ export function readFacts(text: string, definition: DocumentTypeDefinition): rea
 export type CheckOutcome = 'PASS' | 'FAIL' | 'UNREADABLE';
 
 export interface CheckResult {
-  /** e.g. TYPE_MATCHES_DECLARED (D1); recency, expiry, coverage and match checks come with D2. */
+  /** TYPE_MATCHES_DECLARED (D1); the content checks a checklist item declares (D2, document-checks.ts). */
   readonly check: string;
   readonly outcome: CheckOutcome;
+  /** What the check saw: a date as written, a period. Never a name or a number from the page. */
+  readonly observed?: string;
+  readonly calendar?: 'HIJRI';
+  /** The limit it was held to: `45d`, `12m`. */
+  readonly limit?: string;
 }
 
 export interface Understanding {
   readonly classification: Classification;
   readonly facts: readonly Fact[];
   readonly pagesRead: number;
+  /** Present where the reading was given expectations to compare (D2). */
+  readonly matches?: Matches;
 }
 
 export interface DocumentFindings extends Understanding {
@@ -313,6 +405,8 @@ export function findingsOf(
   declaredType: string,
   catalogue: DocumentTypeCatalogue,
   meta: { readonly engine: string; readonly source: 'LIVE' | 'FIXTURE' },
+  /** D2: the checklist item's declared checks and the reading date; absent, only the type is checked (D1). */
+  content?: { readonly rules: readonly DocumentCheckRule[]; readonly context: CheckContext },
 ): DocumentFindings {
   const c = understanding.classification;
   const recognised = c.status === 'RECOGNISED' ? catalogue.types.find((t) => t.kind === c.kind) : undefined;
@@ -320,7 +414,17 @@ export function findingsOf(
     check: 'TYPE_MATCHES_DECLARED',
     outcome: recognised === undefined ? 'UNREADABLE' : recognised.satisfies.includes(declaredType) ? 'PASS' : 'FAIL',
   };
-  return { ...understanding, declaredType, checks: [typeCheck], catalogueVersion: catalogue.catalogueVersion, ...meta };
+  const contentChecks =
+    content === undefined
+      ? []
+      : evaluateChecks(content.rules, understanding, typeCheck.outcome === 'PASS', content.context);
+  return {
+    ...understanding,
+    declaredType,
+    checks: [typeCheck, ...contentChecks],
+    catalogueVersion: catalogue.catalogueVersion,
+    ...meta,
+  };
 }
 
 /** The kind a checklist document type stands for, if the catalogue knows it. */
@@ -345,6 +449,8 @@ export interface DocumentUnderstandingPort {
     readonly bytes: Uint8Array;
     readonly mediaType: string;
     readonly catalogue: DocumentTypeCatalogue;
+    /** What the application expects the document to carry (D2), compared during the reading and not kept. */
+    readonly expect?: Expectations;
     readonly correlationId: string;
   }): Promise<Result<RailOutcome<Understanding>>>;
 }
@@ -377,12 +483,23 @@ export function rulesEngine(extraction: DocumentExtractionPort): DocumentUnderst
         classification.status === 'RECOGNISED'
           ? p.catalogue.types.find((t) => t.kind === classification.kind)
           : undefined;
+      // Compared here, while the text is in hand, and only the outcomes leave: the number and name read are dropped.
+      const registration =
+        definition === undefined || p.expect?.registrationNumber === undefined
+          ? undefined
+          : matchRegistration(text, definition, p.expect.registrationNumber);
+      const name = p.expect?.names === undefined ? undefined : matchName(text, p.expect.names);
+      const matches: Matches = {
+        ...(registration === undefined ? {} : { registration }),
+        ...(name === undefined ? {} : { name }),
+      };
       return ok({
         kind: 'ANSWERED',
         value: {
           classification,
           facts: definition === undefined ? [] : readFacts(text, definition),
           pagesRead: extracted.value.value.pages.length,
+          ...(Object.keys(matches).length === 0 ? {} : { matches }),
         },
       });
     },

@@ -45,6 +45,7 @@ describe.skipIf(url === undefined)('document findings on PostgreSQL (D1)', () =>
         mediaType: 'application/pdf',
         bytes: LICENCE,
       },
+      {},
       { ...process.env, SANAD_DATABASE_URL: url },
     );
 

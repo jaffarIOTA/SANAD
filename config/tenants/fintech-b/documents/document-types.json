@@ -1,5 +1,5 @@
 {
-  "catalogueVersion": "2026-10-19.1",
+  "catalogueVersion": "2026-10-19.2",
   "note": "ILLUSTRATIVE — how Saudi SME documents are recognised from their text (document intelligence D1, docs/DOCUMENT-INTELLIGENCE-PLAN.md). English labels carry most weight because the document engine reads English labels and digits reliably and rendered Arabic text not yet (adapters/nutrient/verification V-06); Arabic markers add weight where they are read. To be tuned against real samples (V-05/V-06) before relying on the classifications.",
   "engine": "RULES",
   "ambiguityMargin": 2,
@@ -18,7 +18,11 @@
       "confidentScore": 7,
       "facts": [
         { "fact": "ISSUE_DATE", "labels": ["Issue Date", "تاريخ الإصدار"] },
-        { "fact": "EXPIRY_DATE", "labels": ["Expiry Date", "تاريخ الانتهاء"] }
+        { "fact": "EXPIRY_DATE", "labels": ["Expiry Date", "تاريخ الانتهاء"] },
+        {
+          "fact": "REGISTRATION_NUMBER",
+          "labels": ["CR Number", "Commercial Registration No", "CR No", "رقم السجل"]
+        }
       ]
     },
     {

@@ -62,7 +62,7 @@ describe('reading what was uploaded', () => {
     expect(await latest()).toMatchObject({
       declaredType: 'TRADE_LICENCE',
       classification: { status: 'RECOGNISED', kind: 'TRADE_LICENCE' },
-      checks: [{ check: 'TYPE_MATCHES_DECLARED', outcome: 'PASS' }],
+      checks: expect.arrayContaining([{ check: 'TYPE_MATCHES_DECLARED', outcome: 'PASS' }]),
       facts: [
         { fact: 'ISSUE_DATE', status: 'READ', value: { date: '2025-01-10', calendar: 'GREGORIAN' } },
         { fact: 'EXPIRY_DATE', status: 'READ', value: { date: '2027-01-09', calendar: 'GREGORIAN' } },
@@ -76,7 +76,7 @@ describe('reading what was uploaded', () => {
     expectOk(await uploadBusinessDocument(T, open, 'TRADE_LICENCE', STATEMENT, 'officer-1', 'c'));
     expect(await latest()).toMatchObject({
       classification: { kind: 'BANK_STATEMENT' },
-      checks: [{ check: 'TYPE_MATCHES_DECLARED', outcome: 'FAIL' }],
+      checks: expect.arrayContaining([{ check: 'TYPE_MATCHES_DECLARED', outcome: 'FAIL' }]),
     });
     const doc = (await getApplication(T, open))?.documents.at(-1);
     expect(doc?.validationStatus).toBe('PENDING');
@@ -96,7 +96,7 @@ describe('reading what was uploaded', () => {
     expectOk(await uploadBusinessDocument(T, open, 'TRADE_LICENCE', PNG, 'officer-1', 'c'));
     expect(await latest()).toMatchObject({
       classification: { status: 'UNREADABLE', reason: 'MEDIA_NOT_READ' },
-      checks: [{ outcome: 'UNREADABLE' }],
+      checks: expect.arrayContaining([{ check: 'TYPE_MATCHES_DECLARED', outcome: 'UNREADABLE' }]),
     });
     expectOk(
       await uploadBusinessDocument(T, open, 'RENTAL_CONTRACT', sample('Minutes of a meeting'), 'officer-1', 'c'),

@@ -25,7 +25,7 @@ import { syntheticDemonstrationPermitted } from '@sanad/origination/profile.ts';
 
 import { InMemoryObjectStorage } from '../../../../adapters/storage/memory.ts';
 import { S3ObjectStorage } from '../../../../adapters/storage/s3/adapter.ts';
-import { type BusinessApplicationView, getApplication, presentDocument } from './business.ts';
+import { type BusinessApplicationView, checklistStatus, getApplication, presentDocument } from './business.ts';
 import { persistencePool } from './persistence.ts';
 
 const fail = (reason: string, detail: string, context?: Readonly<Record<string, string>>): Result<never> =>
@@ -107,12 +107,28 @@ export async function uploadBusinessDocument(
     actor,
   );
   if (!presented.ok) return presented;
-  // Document intelligence (D1): read what was presented, for the checker. Never a gate: an engine that is absent,
-  // down or cannot read the file leaves the document unread and checked by a person, exactly as before.
+  // Document intelligence (D1, D2): read what was presented, and hold it to the checklist item's declared checks, for
+  // the checker. Never a gate: an engine that is absent, down or cannot read the file leaves the document unread and
+  // checked by a person, exactly as before; a failed check is shown to the checker, who decides.
+  const checklist = await checklistStatus(tenant, applicationId);
+  const rules = checklist.ok
+    ? checklist.value.checklist.items.find((i) => i.documentType === documentType)?.checks
+    : undefined;
+  const applicant = presented.value.application.applicant;
   await readPresentedDocument(
     tenant,
     { kind: 'BUSINESS_APPLICATION', ref: applicationId },
     { documentRef, declaredType: documentType, sha256Hex, mediaType, bytes },
+    {
+      ...(rules === undefined ? {} : { rules }),
+      expect: {
+        registrationNumber: applicant.registrationRef,
+        names: [
+          applicant.businessNameEn,
+          ...(applicant.businessNameAr === undefined ? [] : [applicant.businessNameAr]),
+        ],
+      },
+    },
   );
   return presented;
 }

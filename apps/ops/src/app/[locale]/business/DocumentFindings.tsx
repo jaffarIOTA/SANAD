@@ -7,7 +7,7 @@
  */
 import type { ReactElement } from 'react';
 
-import type { CivilDate, Fact } from '@sanad/core/documents/understanding.ts';
+import type { CheckResult, CivilDate, Fact } from '@sanad/core/documents/understanding.ts';
 import type { StoredFindings } from '@sanad/origination/documents/findings.ts';
 
 import { SourceBadge } from './intake/IntakeUi.tsx';
@@ -40,10 +40,74 @@ const kindLabel = (kind: string, f: Formatters): string => {
 const dateLabel = (d: CivilDate, f: Formatters): string =>
   d.calendar === 'HIJRI' ? `${f.digits(d.date)} ${f.t('AH', 'هـ')}` : f.isoDate(d.date);
 
-const FACT: Readonly<Record<Fact['fact'], readonly [string, string]>> = {
+/** The dates shown; the registration number is compared, never kept or shown. */
+const FACT: Readonly<Record<Exclude<Fact['fact'], 'REGISTRATION_NUMBER'>, readonly [string, string]>> = {
   ISSUE_DATE: ['Issued', 'صدر'],
   EXPIRY_DATE: ['Expires', 'ينتهي'],
   STATEMENT_PERIOD: ['Period', 'الفترة'],
+};
+
+/**
+ * One declared check (D2) in words, both languages: what passed, or what was
+ * seen and the limit it was held to. A check that could not be made says so
+ * and asks for the eye — it is never shown as a failure.
+ */
+function observedLabel(c: CheckResult, f: Formatters): string {
+  if (c.observed === undefined) return '';
+  const [from, to] = c.observed.split('..');
+  const one = (d: string) => dateLabel({ calendar: c.calendar ?? 'GREGORIAN', date: d }, f);
+  return to === undefined ? one(c.observed) : `${one(from ?? '')} – ${one(to)}`;
+}
+
+const CHECK_TONE = { PASS: 'good', FAIL: 'bad', UNREADABLE: 'neutral' } as const;
+
+function checkLabel(c: CheckResult, f: Formatters): string {
+  const n = f.n(Number.parseInt(c.limit ?? '0', 10));
+  const seen = observedLabel(c, f);
+  const pass = c.outcome === 'PASS';
+  switch (c.check) {
+    case 'NOT_EXPIRED':
+      return pass
+        ? f.t('Not expired', 'غير منتهي')
+        : c.limit === undefined
+          ? f.t(`Expired: ${seen}`, `منتهي: ${seen}`)
+          : f.t(`Expires ${seen}, less than ${n} days left`, `ينتهي ${seen}، وبقي أقل من ${n} يومًا`);
+    case 'ISSUED_WITHIN':
+      return pass
+        ? f.t(`Issued within ${n} days`, `صدر خلال ${n} يومًا`)
+        : f.t(`Issued ${seen}: older than ${n} days`, `صدر ${seen}: أقدم من ${n} يومًا`);
+    case 'PERIOD_ENDS_WITHIN':
+      return pass
+        ? f.t(`Statement ends within ${n} days`, `ينتهي الكشف خلال ${n} يومًا`)
+        : f.t(`Statement ends ${seen}: more than ${n} days ago`, `ينتهي الكشف ${seen}: قبل أكثر من ${n} يومًا`);
+    case 'PERIOD_COVERS':
+      return pass
+        ? f.t(`Covers ${n} months`, `يغطي ${n} شهرًا`)
+        : f.t(`Covers less than ${n} months (${seen})`, `يغطي أقل من ${n} شهرًا (${seen})`);
+    case 'REGISTRATION_MATCHES':
+      return pass
+        ? f.t('Registration number matches the application', 'رقم السجل يطابق الطلب')
+        : f.t("Registration number differs from the application's", 'رقم السجل يختلف عن الطلب');
+    case 'NAME_FOUND':
+      return f.t('Business name found', 'اسم المنشأة موجود');
+    default:
+      return c.check.toLowerCase().replaceAll('_', ' ');
+  }
+}
+
+const CHECK_NAME: Readonly<Record<string, readonly [string, string]>> = {
+  NOT_EXPIRED: ['Expiry', 'الانتهاء'],
+  ISSUED_WITHIN: ['Issue date', 'تاريخ الإصدار'],
+  PERIOD_ENDS_WITHIN: ['Statement end', 'نهاية الكشف'],
+  PERIOD_COVERS: ['Statement period', 'فترة الكشف'],
+  REGISTRATION_MATCHES: ['Registration number', 'رقم السجل'],
+  NAME_FOUND: ['Business name', 'اسم المنشأة'],
+};
+
+const unreadableLabel = (c: CheckResult, f: Formatters): string => {
+  const k = CHECK_NAME[c.check];
+  const name = k === undefined ? c.check : f.t(k[0], k[1]);
+  return f.t(`${name}: not read, check by eye`, `${name}: لم يُقرأ، تحقّق بالنظر`);
 };
 
 export function DocumentFindings({
@@ -78,6 +142,7 @@ export function DocumentFindings({
         ? f.t('does not match the type presented', 'لا يطابق النوع المقدَّم')
         : undefined;
   const facts = findings.facts.filter((x) => x.status === 'READ');
+  const content = findings.checks.filter((k) => k.check !== 'TYPE_MATCHES_DECLARED');
 
   return (
     <span className="flex flex-wrap items-center gap-2 text-[12px]" data-document-findings>
@@ -98,6 +163,17 @@ export function DocumentFindings({
         </span>
       ))}
       {findings.source === 'FIXTURE' ? <SourceBadge source="FIXTURE" f={f} /> : null}
+      {content.length === 0 ? null : (
+        <span className="flex w-full flex-wrap gap-2" data-document-checks>
+          {content.map((k) => (
+            <span key={k.check} data-check={k.check} data-outcome={k.outcome}>
+              <Chip tone={CHECK_TONE[k.outcome]}>
+                {k.outcome === 'UNREADABLE' ? unreadableLabel(k, f) : checkLabel(k, f)}
+              </Chip>
+            </span>
+          ))}
+        </span>
+      )}
     </span>
   );
 }

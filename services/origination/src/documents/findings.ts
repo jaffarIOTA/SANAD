@@ -22,9 +22,11 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 
 import { type TenantCode, loadDocumentTypeCatalogue } from '@sanad/config/loader.ts';
+import type { CheckContext, DocumentCheckRule } from '@sanad/core/documents/document-checks.ts';
 import {
   type DocumentFindings,
   type DocumentUnderstandingPort,
+  type Expectations,
   findingsOf,
   rulesEngine,
 } from '@sanad/core/documents/understanding.ts';
@@ -34,7 +36,9 @@ import type { CredentialProvider } from '@sanad/core/ports/credentials.ts';
 import { DemonstrationDocumentExtraction } from '../../../../adapters/documents/demonstration-extraction.ts';
 import { NutrientDocumentExtraction } from '../../../../adapters/nutrient/document-extraction.ts';
 import { engineEndpoint } from '../../../../adapters/nutrient/engine-endpoint.ts';
+import { civilDateOf } from '../civil-date.ts';
 import { credentialProviderFromEnvironment, sharedPool, tenantUuidByCode } from '../credentials.ts';
+import { gregorianOfUmmAlQura } from '../hijri.ts';
 import { hostClockInstant } from '../host-clock.ts';
 import { syntheticDemonstrationPermitted } from '../profile.ts';
 import { inTenant } from '../tenant-scope.ts';
@@ -144,6 +148,12 @@ export async function readPresentedDocument(
     readonly mediaType: string;
     readonly bytes: Uint8Array;
   },
+  /**
+   * D2: the checklist item's declared checks, and what the application
+   * expects the document to carry. The expectations are compared during the
+   * reading and dropped: only the outcome is kept.
+   */
+  content: { readonly rules?: readonly DocumentCheckRule[]; readonly expect?: Expectations } = {},
   env: Env = process.env,
 ): Promise<Result<StoredFindings>> {
   const catalogue = loadDocumentTypeCatalogue(tenant);
@@ -156,6 +166,7 @@ export async function readPresentedDocument(
     bytes: document.bytes,
     mediaType: document.mediaType,
     catalogue: catalogue.value,
+    ...(content.expect === undefined ? {} : { expect: content.expect }),
     correlationId: randomUUID(),
   });
   if (!read.ok) return read;
@@ -163,16 +174,25 @@ export async function readPresentedDocument(
     return reject('OP-DETERMINACY', 'DOCUMENT_READING_UNAVAILABLE', 'The document engine did not read the document', {
       outcome: read.value.kind,
     });
+  const at = hostClockInstant();
+  // The reading date is the institution's civil date at the instant of reading; a Hijri date converts on Umm al-Qura.
+  const context: CheckContext = {
+    asOf: civilDateOf(tenant, at),
+    toGregorian: (d) => (d.calendar === 'GREGORIAN' ? d.date : gregorianOfUmmAlQura(d.date)),
+  };
   const findings: StoredFindings = {
-    ...findingsOf(read.value.value, document.declaredType, catalogue.value, {
-      engine: engine.engine,
-      source: engine.source,
-    }),
+    ...findingsOf(
+      read.value.value,
+      document.declaredType,
+      catalogue.value,
+      { engine: engine.engine, source: engine.source },
+      content.rules === undefined || content.rules.length === 0 ? undefined : { rules: content.rules, context },
+    ),
     subjectKind: subject.kind,
     subjectRef: subject.ref,
     documentRef: document.documentRef,
     contentSha256: document.sha256Hex,
-    recordedAtEpochSeconds: hostClockInstant().epochSeconds,
+    recordedAtEpochSeconds: at.epochSeconds,
   };
   const kept = await keep(findings, tenant, env);
   return kept.ok ? ok(findings) : kept;
