@@ -32,7 +32,13 @@ const COLLECTION_METHODS: ReadonlySet<string> = new Set<string>(COLLECTION_CHANN
 export interface BnplTerms {
   /** Configured as `instalments` in the term sheet. A count: at most twelve (Art. 22(2)). */
   readonly numberOfInstalments: number;
-  readonly intervalDays: number;
+  /**
+   * The time between instalments: a number of days (`intervalDays`) or of months (`intervalMonths`, the same
+   * day each month). Exactly one, chosen by the tenant in its term sheet, so the plan can match what the
+   * institution's loan system books.
+   */
+  readonly intervalDays?: number;
+  readonly intervalMonths?: number;
   readonly consumerLimit: Money;
   /** Per ten thousand of the basket, charged to the merchant. Never to the consumer (Art. 20(1), 19(7)). */
   readonly merchantDiscountPerTenThousand: number;
@@ -47,6 +53,7 @@ export interface BnplTerms {
 const KEYS = new Set([
   'instalments',
   'intervalDays',
+  'intervalMonths',
   'consumerLimitMinorUnits',
   'merchantDiscountPerTenThousand',
   'citation',
@@ -68,7 +75,13 @@ export function parseBnplTerms(raw: unknown): Result<BnplTerms> {
       citation: `${BNPL_RULES}, Art. 22(2)`,
     });
   }
-  if (!isPosInt(raw['intervalDays'])) return bad('TERMS_INTERVAL', 'intervalDays is a positive integer');
+  const days = raw['intervalDays'];
+  const months = raw['intervalMonths'];
+  if ((days === undefined) === (months === undefined))
+    return bad('TERMS_INTERVAL', 'The term sheet sets exactly one of intervalDays and intervalMonths');
+  if (days !== undefined && !isPosInt(days)) return bad('TERMS_INTERVAL', 'intervalDays is a positive integer');
+  if (months !== undefined && (!isPosInt(months) || months > 12))
+    return bad('TERMS_INTERVAL', 'intervalMonths is a positive integer, at most 12');
   if (typeof raw['consumerLimitMinorUnits'] !== 'string' || !/^\d+$/.test(raw['consumerLimitMinorUnits']))
     return bad('TERMS_LIMIT', 'consumerLimitMinorUnits is an integer string');
   const limit = BigInt(raw['consumerLimitMinorUnits']);
@@ -108,7 +121,8 @@ export function parseBnplTerms(raw: unknown): Result<BnplTerms> {
   }
   return ok({
     numberOfInstalments: raw['instalments'],
-    intervalDays: raw['intervalDays'],
+    ...(isPosInt(days) ? { intervalDays: days } : {}),
+    ...(isPosInt(months) ? { intervalMonths: months } : {}),
     consumerLimit: money(limit),
     merchantDiscountPerTenThousand: mdr,
     citation: raw['citation'],
@@ -116,3 +130,9 @@ export function parseBnplTerms(raw: unknown): Result<BnplTerms> {
     collectionMethods: methodsRaw as CollectionMethod[],
   });
 }
+
+/** The interval as the schedule takes it: days, or `{ months }`. */
+export const bnplInterval = (
+  t: Pick<BnplTerms, 'intervalDays' | 'intervalMonths'>,
+): number | { readonly months: number } =>
+  t.intervalMonths !== undefined ? { months: t.intervalMonths } : (t.intervalDays ?? 0);

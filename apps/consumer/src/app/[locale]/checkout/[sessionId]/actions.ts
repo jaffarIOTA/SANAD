@@ -6,6 +6,7 @@ import { accept as acceptSession, book as bookSession } from '@sanad/core/checko
 import { book as bookBnpl } from '@sanad/products/bnpl/execution.ts';
 import { bnpl } from '@sanad/products/bnpl/index.ts';
 import type { BnplQuote } from '@sanad/products/bnpl/pricing.ts';
+import type { BnplTerms } from '@sanad/products/bnpl/terms.ts';
 import { resolveProductCatalogue } from '@sanad/origination/catalogue.ts';
 import { newBusinessRefusal } from '@sanad/origination/licensing.ts';
 import { entryFor } from '@sanad/core/products/catalogue.ts';
@@ -24,6 +25,22 @@ const field = (form: FormData, name: string): string => {
   const v = form.get(name);
   return typeof v === 'string' ? v.trim() : '';
 };
+
+/** The plan's interval as the terms set it, and the first due date: the schedule's first offset from acceptance. */
+function cadenceOf(
+  terms: Pick<BnplTerms, 'intervalDays' | 'intervalMonths'>,
+  quote: BnplQuote,
+  at: Parameters<typeof maturityDates>[0],
+): { intervalDays: number; firstDueDate: string } | { intervalMonths: number; firstDueDate: string } {
+  const first = quote.schedule_.instalments[0]?.at ?? {
+    months: terms.intervalMonths ?? 0,
+    days: terms.intervalDays ?? 0,
+  };
+  const firstDueDate = maturityDates(at, first).gregorian;
+  return terms.intervalMonths !== undefined
+    ? { intervalMonths: terms.intervalMonths, firstDueDate }
+    : { intervalDays: terms.intervalDays ?? 0, firstDueDate };
+}
 
 /** Accept the disclosure shown, record it, book the BNPL facility, and send the shopper back to the shop. */
 export async function checkoutAcceptAction(form: FormData): Promise<void> {
@@ -109,8 +126,7 @@ export async function checkoutAcceptAction(form: FormData): Promise<void> {
       rateBp: 0n,
       aprBp: stored.offer.apr.bp,
       numberOfInstalments: terms.value.numberOfInstalments,
-      intervalDays: terms.value.intervalDays,
-      firstDueDate: maturityDates(at, terms.value.intervalDays).gregorian,
+      ...cadenceOf(terms.value, quote, at),
       collectionChannel: channel.channel,
       collectionMandateRef: demonstrationMandateRef(channel.channel, identity.applicantRef),
       correlationId: session.core.correlationId,

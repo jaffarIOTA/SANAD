@@ -33,13 +33,16 @@ import {
   loadOriginationPolicy,
   loadTenantJurisdiction,
 } from '../../../config/loader.ts';
+import { type Money, money } from '../../../core/kernel/money.ts';
 import { type Result, ok, reject } from '../../../core/kernel/result.ts';
+import { flatInstalments } from '../../../core/pricing/schedule.ts';
 import type { OutboxEvent } from '../../../core/outbox/outbox.ts';
 import type { LoanPosition } from '../../../core/ports/loan-servicing.ts';
 import { type CoreHeldLoanEvent, collectionEventKind, planServicing } from '../../../core/servicing/core-held-loan.ts';
 import { postgresOutboxStore } from '../../outbox/src/postgres-store.ts';
 import { civilDateOf } from './civil-date.ts';
-import { type ConsumerLoanView, listConsumerLoans, recordLoanEvents } from './consumer-loans.ts';
+import { resolveProductCatalogue } from './catalogue.ts';
+import { type ConsumerLoanView, dueDatesOf, listConsumerLoans, recordLoanEvents } from './consumer-loans.ts';
 import { tenantUuidByCode } from './credentials.ts';
 import { deploymentJurisdiction } from './jurisdiction.ts';
 import { type LoanSystem, loanSystemFor } from './loan-system.ts';
@@ -67,7 +70,7 @@ async function context(
   pool: Pool,
   tenant: TenantCode,
   loanRef: string,
-): Promise<Result<{ view: ConsumerLoanView; system: LoanSystem; loanTypeCode: string }>> {
+): Promise<Result<{ view: ConsumerLoanView; system: LoanSystem; loanTypeCode: string; country: string }>> {
   const deployment = await deploymentJurisdiction();
   if (!deployment.activeTenants.includes(tenant))
     return fail('TENANT_NOT_ACTIVE', 'This institution is not active under the deployment’s jurisdiction', { tenant });
@@ -90,8 +93,8 @@ async function context(
     });
   const config = loadLoanBookingConfig(tenant);
   if (!config.ok) return config;
-  const mapped = config.value.products[view.loan.productCode];
-  if (mapped === undefined)
+  const loanTypeCode = await loanTypeCodeOf(tenant, view.loan.productCode, config.value.products);
+  if (loanTypeCode === undefined)
     return fail('LOAN_PRODUCT_NOT_MAPPED', 'This product has no loan-system product code configured', {
       productCode: view.loan.productCode,
     });
@@ -100,7 +103,36 @@ async function context(
     return fail('RAIL_UNAVAILABLE', 'The loan system is not connected here; nothing was done', {
       rail: 'CORE_BANKING',
     });
-  return ok({ view, system, loanTypeCode: mapped.loanTypeCode });
+  return ok({ view, system, loanTypeCode, country: jurisdiction.value.code });
+}
+
+/**
+ * The loan system's product a Sanad product books under: the one Admin maps in the product catalogue in force
+ * (Products & modules, under four eyes), else the tenant's loan-booking file.
+ */
+async function loanTypeCodeOf(
+  tenant: TenantCode,
+  productCode: string,
+  products: Readonly<Record<string, { readonly loanTypeCode: string }>>,
+): Promise<string | undefined> {
+  const { catalogue } = await resolveProductCatalogue(tenant, BigInt(Math.floor(Date.now() / 1000)));
+  const entry = catalogue.ok ? catalogue.value.entries.find((e) => e.productCode === productCode) : undefined;
+  return entry?.coreBankingProductCode ?? products[productCode]?.loanTypeCode;
+}
+
+/** The plan as the customer was shown it: its dates, and the basket split equally with the remainder on the last. */
+function disclosedPlan(l: ConsumerLoanView['loan']): { dueDate: string; amount: Money }[] | undefined {
+  // Only a plan with no charge for credit is a flat split of the principal; any other is the loan system's to show.
+  if (l.rateBp !== 0n) return undefined;
+  const split = flatInstalments(
+    money(l.principalMinorUnits, l.currency),
+    money(0n, l.currency),
+    l.numberOfInstalments,
+    1,
+  );
+  if (!split.ok) return undefined;
+  const dates = dueDatesOf(l);
+  return split.value.instalments.map((i, n) => ({ dueDate: dates[n] ?? '', amount: i.amount }));
 }
 
 const bookingOf = (view: ConsumerLoanView) => view.events.find((e) => e.kind === 'BOOKED_IN_LOAN_SYSTEM');
@@ -114,11 +146,12 @@ export async function bookConsumerLoan(
 ): Promise<Result<CoreHeldLoanEvent>> {
   const c = await context(pool, tenant, loanRef);
   if (!c.ok) return c;
-  const { view, system, loanTypeCode } = c.value;
+  const { view, system, loanTypeCode, country } = c.value;
   const existing = bookingOf(view);
   if (existing !== undefined) return ok(existing);
   const l = view.loan;
   const own = l.collectionChannel === 'OWN_ACCOUNT';
+  const plan = disclosedPlan(l);
   const booked = await system.bookLoan({
     tenantId: tenant,
     applicationId: l.loanRef,
@@ -129,7 +162,12 @@ export async function bookConsumerLoan(
     aprBp: l.aprBp,
     numberOfPayments: l.numberOfInstalments,
     firstPaymentDate: l.firstDueDate,
-    intervalDays: l.intervalDays,
+    // Monthly on the first due date's day of the month, or a fixed number of days: as the plan was disclosed.
+    ...(l.intervalMonths === undefined
+      ? { intervalDays: l.intervalDays ?? 0 }
+      : { paymentDay: Number(l.firstDueDate.slice(8, 10)), intervalMonths: l.intervalMonths }),
+    countryCode: country,
+    ...(plan === undefined ? {} : { expectedInstalments: plan }),
     ...(own ? { ownAccountRef: l.collectionMandateRef } : { openServicingAccount: true }),
     idempotencyKey: `loan:${l.loanRef}:book`,
     correlationId: l.correlationId,
@@ -144,12 +182,17 @@ export async function bookConsumerLoan(
         reason: booked.value.reason,
       },
     );
-  if (booked.value.kind === 'REFUSED')
+  if (booked.value.kind === 'REFUSED') {
+    const code = booked.value.code;
+    const reason = { RATE_MISMATCH: 'LOAN_RATE_MISMATCH', SCHEDULE_MISMATCH: 'LOAN_SCHEDULE_MISMATCH' }[code];
     return fail(
-      booked.value.code === 'RATE_MISMATCH' ? 'LOAN_RATE_MISMATCH' : 'LOAN_BOOKING_REFUSED',
-      'The loan system did not book the loan',
-      { code: booked.value.code },
+      reason ?? 'LOAN_BOOKING_REFUSED',
+      code === 'SCHEDULE_MISMATCH'
+        ? 'The loan system would schedule the instalments differently from the plan the customer accepted; nothing was booked'
+        : 'The loan system did not book the loan',
+      { code, ...(booked.value.referenceId === undefined ? {} : { reference: booked.value.referenceId }) },
     );
+  }
   const b = booked.value.value;
   const event: CoreHeldLoanEvent = {
     kind: 'BOOKED_IN_LOAN_SYSTEM',
@@ -161,6 +204,7 @@ export async function bookConsumerLoan(
       servicingAccountRef: b.servicingAccountRef ?? '',
       loanTypeCode,
       source: system.source,
+      loanState: b.awaitingActivation === true ? 'AWAITING_ACTIVATION' : 'ACTIVE',
     },
   };
   await recordLoanEvents(pool, tenant, l.loanRef, [event], actor, l.correlationId);

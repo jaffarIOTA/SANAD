@@ -70,15 +70,47 @@ export interface TuumServicingAccountSetup {
  * Resolves a consumer's restricted attributes (national identifier and name) from the institution's
  * identity store, inside the trust boundary. Returns undefined when the pointer does not resolve.
  */
-export type RestrictedAttributesResolver = (ref: string) => Promise<
-  | {
-      readonly idNumber: string;
-      readonly idTypeCode: string;
-      readonly givenName: string;
-      readonly surname: string;
-    }
-  | undefined
->;
+export interface RestrictedAttributes {
+  readonly idNumber: string;
+  /** The loan system's identification type, where the institution's set-up names one. */
+  readonly idTypeCode?: string;
+  /** The country that issued the identifier, ISO 3166-1 alpha-2. */
+  readonly idCountryCode?: string;
+  readonly givenName: string;
+  readonly surname: string;
+  /** Further party-master fields the institution's loan system requires, where it does (2026-11-03 run). */
+  readonly birthDate?: string;
+  readonly sex?: 'M' | 'F';
+  readonly nationality?: string;
+  readonly residencyCountryCode?: string;
+  readonly address?: {
+    readonly street1: string;
+    readonly cityCounty: string;
+    readonly zip: string;
+    readonly countryCode: string;
+  };
+}
+export type RestrictedAttributesResolver = (ref: string) => Promise<RestrictedAttributes | undefined>;
+
+/** How long the adapter waits for the loan system's own workflow between steps of an offer. */
+export interface TuumOfferPacing {
+  /** Waits this many milliseconds. */
+  readonly pause: (ms: number) => Promise<void>;
+  readonly intervalMs: number;
+  /** Reads of the offer's or the contract's state before the step is reported unavailable. */
+  readonly attempts: number;
+}
+const DEFAULT_PACING: TuumOfferPacing = {
+  pause: (ms) =>
+    new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    }),
+  intervalMs: 1_500,
+  attempts: 40,
+};
+
+/** An offer's states that end it without a loan. */
+const OFFER_ENDED: ReadonlySet<string> = new Set(['REJECTED', 'DECLINED', 'CANCELLED', 'EXPIRED', 'WITHDRAWN']);
 
 export const TUUM_LENDING_DEVIATIONS = [
   {
@@ -98,6 +130,13 @@ export const TUUM_LENDING_DEVIATIONS = [
       'The receivables read, the fixed-interval frequency field and the automatic repayment from a customer account are taken from the public documentation and are unverified in the sandbox.',
     containment:
       'Fixture only until TUUM-SERV-01 is answered; a position whose figures do not parse is UNAVAILABLE, never guessed.',
+  },
+  {
+    id: 'TUUM-LEND-003',
+    summary:
+      'A consumer loan is booked as an offer that the loan system’s own workflow moves on between steps (README, KBNPL run 2026-11-03); a booking interrupted part-way leaves the offer it created, and a retry creates another.',
+    containment:
+      'Each step waits for the workflow’s state and stops as UNAVAILABLE when it does not arrive; the offer’s schedule is checked against the plan disclosed before anything is accepted; an unaccepted offer lapses after the product’s validity days.',
   },
 ] as const;
 
@@ -134,6 +173,61 @@ const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const STANDINGS: ReadonlySet<string> = new Set<InstalmentStanding>(['NOT_DUE', 'DUE', 'PAID', 'OVERDUE']);
 
+/** Why the booking terms cannot be sent, or undefined when they can. */
+function invalidBooking(r: LoanBookingRequest): string | undefined {
+  const monthly = r.paymentDay !== undefined;
+  const interval = r.intervalDays !== undefined;
+  const whole = (n: number | undefined, max: number) => n !== undefined && Number.isInteger(n) && n >= 1 && n <= max;
+  if (r.principal.minorUnits <= 0n || r.rateBp < 0n || r.numberOfPayments < 1 || monthly === interval)
+    return 'The booking terms are incomplete';
+  if (monthly && (!whole(r.paymentDay, 31) || (r.intervalMonths !== undefined && !whole(r.intervalMonths, 12))))
+    return 'The booking terms are incomplete';
+  if (interval && (!whole(r.intervalDays, 366) || r.intervalMonths !== undefined))
+    return 'The booking terms are incomplete';
+  if (!DATE.test(r.firstPaymentDate)) return 'The first payment date is yyyy-mm-dd';
+  if (r.borrower.kind === 'PERSON' && !/^[A-Z]{2}$/.test(r.countryCode ?? ''))
+    return 'A consumer loan carries the institution’s country';
+  return undefined;
+}
+
+/** A civil date moved by whole months (on the same day, or the month's last when shorter) and days. */
+function shiftDate(iso: string, months: number, days: number): string {
+  const [y = 2000, m = 1, d = 1] = iso.split('-').map(Number);
+  const month = m - 1 + months;
+  const lastDay = new Date(Date.UTC(y, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, month, Math.min(d, lastDay)) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** The day the customer drew the financing: one interval before the first payment, as the plan was disclosed. */
+const usageDateOf = (r: LoanBookingRequest): string =>
+  r.paymentDay === undefined
+    ? shiftDate(r.firstPaymentDate, 0, -(r.intervalDays ?? 0))
+    : shiftDate(r.firstPaymentDate, -(r.intervalMonths ?? 1), 0);
+
+/** An offer's schedule as Tuum returns it: every component line, summed per payment date. */
+function scheduleOf(data: unknown): Map<string, bigint> | undefined {
+  if (!Array.isArray(data)) return undefined;
+  const byDate = new Map<string, bigint>();
+  for (const line of data) {
+    if (!isRecord(line)) return undefined;
+    const date = str(line['paymentDate']);
+    const money = line['paymentMoney'];
+    const amount = isRecord(money) ? minorOf(money['amount']) : undefined;
+    if (date === undefined || !DATE.test(date) || amount === undefined) return undefined;
+    if (line['downpayment'] === true) continue;
+    byDate.set(date, (byDate.get(date) ?? 0n) + amount);
+  }
+  return byDate;
+}
+
+/** The loan system's schedule is the plan disclosed: the same dates, the same amount on each. */
+function sameSchedule(
+  lines: ReadonlyMap<string, bigint>,
+  expected: readonly { readonly dueDate: string; readonly amount: Money }[],
+): boolean {
+  return lines.size === expected.length && expected.every((e) => lines.get(e.dueDate) === e.amount.minorUnits);
+}
+
 export class TuumLendingAdapter implements LoanBookingPort, LoanServicingPort {
   readonly deviations = TUUM_LENDING_DEVIATIONS;
 
@@ -148,22 +242,13 @@ export class TuumLendingAdapter implements LoanBookingPort, LoanServicingPort {
       readonly accountSetup: TuumServicingAccountSetup;
       readonly restricted: RestrictedAttributesResolver;
     },
+    private readonly pacing: TuumOfferPacing = DEFAULT_PACING,
   ) {}
 
   async bookLoan(r: LoanBookingRequest): Promise<Result<RailOutcome<LoanBooking>>> {
+    const invalid = invalidBooking(r);
+    if (invalid !== undefined) return reject('OP-DETERMINACY', 'LOAN_BOOKING_INVALID', invalid);
     const monthly = r.paymentDay !== undefined;
-    const interval = r.intervalDays !== undefined;
-    if (
-      r.principal.minorUnits <= 0n ||
-      r.rateBp < 0n ||
-      r.numberOfPayments < 1 ||
-      monthly === interval ||
-      (monthly && (r.paymentDay! < 1 || r.paymentDay! > 31)) ||
-      (interval && (!Number.isInteger(r.intervalDays) || r.intervalDays! < 1))
-    )
-      return reject('OP-DETERMINACY', 'LOAN_BOOKING_INVALID', 'The booking terms are incomplete');
-    if (!DATE.test(r.firstPaymentDate))
-      return reject('OP-DETERMINACY', 'LOAN_BOOKING_INVALID', 'The first payment date is yyyy-mm-dd');
 
     const person = await this.#person(r);
     if (!person.ok) return person;
@@ -186,6 +271,9 @@ export class TuumLendingAdapter implements LoanBookingPort, LoanServicingPort {
           customerGroupCode: setup.customerGroupCode,
           priceListTypeCode: setup.priceListTypeCode,
           currencyCode: r.principal.currency,
+          ...(r.borrower.kind === 'PERSON' ? { personTypeCode: 'P' } : {}),
+          ...(r.countryCode === undefined ? {} : { residencyCountryCode: r.countryCode }),
+          accountName: `Loan ${r.applicationId}`,
         },
       );
       if (account.kind !== 'ANSWERED') return ok(account);
@@ -194,6 +282,14 @@ export class TuumLendingAdapter implements LoanBookingPort, LoanServicingPort {
         ? str(data['accountId'])
         : str((account.value as Record<string, unknown>)['accountId']);
       if (servicingAccountId === undefined) return ok({ kind: 'UNAVAILABLE', reason: 'MALFORMED_ACCOUNT' });
+    }
+
+    // A consumer's loan goes through the loan system's offer workflow, the path the sandbox books (README,
+    // KBNPL run 2026-11-03); a business's keeps the direct contract call.
+    if (r.borrower.kind === 'PERSON') {
+      if (servicingAccountId === undefined)
+        return ok({ kind: 'UNAVAILABLE', reason: 'SERVICING_ACCOUNT_SETUP_MISSING' });
+      return ok(await this.#bookByOffer(r, personId, servicingAccountId));
     }
 
     const contract = await this.#call(
@@ -354,11 +450,24 @@ export class TuumLendingAdapter implements LoanBookingPort, LoanServicingPort {
       // Resolved here, used once, never kept, returned, logged or traced (TUUM-DEV-002).
       const attributes = await this.consumer.restricted(r.borrower.restrictedAttributesRef);
       if (attributes === undefined) return ok({ kind: 'UNAVAILABLE', reason: 'RESTRICTED_ATTRIBUTES_UNAVAILABLE' });
+      const a = attributes;
       body = {
         personTypeCode: 'P',
-        givenName: attributes.givenName,
-        surname: attributes.surname,
-        identificationNumbers: [{ idNumber: attributes.idNumber, idTypeCode: attributes.idTypeCode }],
+        givenName: a.givenName,
+        surname: a.surname,
+        identificationNumbers: [
+          {
+            idNumber: a.idNumber,
+            ...(a.idTypeCode === undefined ? {} : { idTypeCode: a.idTypeCode }),
+            ...(a.idCountryCode === undefined ? {} : { idCountryCode: a.idCountryCode }),
+            primary: true,
+          },
+        ],
+        ...(a.residencyCountryCode === undefined ? {} : { residencyCountryCode: a.residencyCountryCode }),
+        ...(a.nationality === undefined ? {} : { nationality: a.nationality }),
+        ...(a.birthDate === undefined ? {} : { birthDate: a.birthDate }),
+        ...(a.sex === undefined ? {} : { sex: a.sex }),
+        ...(a.address === undefined ? {} : { addresses: [{ addressTypeCode: 'R', ...a.address }] }),
         externalReference: r.borrower.partyRef,
       };
     } else
@@ -378,6 +487,191 @@ export class TuumLendingAdapter implements LoanBookingPort, LoanServicingPort {
     const personId = isRecord(person.value.data) ? str(person.value.data['personId']) : undefined;
     if (personId === undefined) return ok({ kind: 'UNAVAILABLE', reason: 'MALFORMED_PERSON' });
     return ok({ kind: 'ANSWERED', value: personId });
+  }
+
+  /**
+   * The offer workflow, as the sandbox books it: the offer on Sanad's terms; its schedule checked against the
+   * plan disclosed; the payment instruction; review, approval and acceptance, each when the workflow has
+   * reached the state that permits it; then the contract the workflow creates, confirmed.
+   */
+  async #bookByOffer(
+    r: LoanBookingRequest,
+    personId: string,
+    servicingAccountId: string,
+  ): Promise<RailOutcome<LoanBooking>> {
+    const key = r.idempotencyKey;
+    const monthly = r.paymentDay !== undefined;
+    const months = r.intervalMonths ?? 1;
+    const amount = { amount: decimalToken(r.principal.minorUnits), currencyCode: r.principal.currency };
+    const created = await this.#call(
+      'loan.offer.create',
+      'POST',
+      `${this.hosts.loan}/api/v3/persons/${encodeURIComponent(personId)}/offers`,
+      `${key}:offer`,
+      {
+        tenantCode: this.tenantCode,
+        countryCode: r.countryCode,
+        loanTypeCode: r.productCode,
+        servicingAccountId,
+        requestedMoney: amount,
+        offeredMoney: amount,
+        numberOfPayments: r.numberOfPayments,
+        // The term in months (the product's PERIOD_IN_MONTHS rule); a plan in days is rounded up to whole months.
+        loanPeriod: monthly
+          ? r.numberOfPayments * months
+          : Math.ceil((r.numberOfPayments * (r.intervalDays ?? 0)) / 30),
+        ...(monthly
+          ? { paymentDay: r.paymentDay, paymentFrequency: months, paymentFrequencyUnit: 'MONTH' }
+          : { paymentFrequency: r.intervalDays, paymentFrequencyUnit: 'DAY' }),
+        // The day the customer drew the financing: one interval before the first payment, as disclosed.
+        limitUsageDate: usageDateOf(r),
+        ...(r.rateBp > 0n ? { interestRate: percentToken(r.rateBp) } : {}),
+      },
+    );
+    if (created.kind !== 'ANSWERED') return created;
+    const offer = created.value.data;
+    const offerId = isRecord(offer) ? str(offer['offerId']) : undefined;
+    if (!isRecord(offer) || offerId === undefined) return { kind: 'UNAVAILABLE', reason: 'MALFORMED_OFFER' };
+    const echoed = offer['interestRate'];
+    if (echoed === undefined || echoed === null ? r.rateBp !== 0n : !samePercent(percentText(r.rateBp), echoed))
+      return { kind: 'REFUSED', code: 'RATE_MISMATCH', referenceId: offerId };
+    const offers = `${this.hosts.loan}/api/v2/offers/${encodeURIComponent(offerId)}`;
+
+    if (r.expectedInstalments !== undefined) {
+      const schedule = await this.#call(
+        'loan.offer.schedule',
+        'GET',
+        `${this.hosts.loan}/api/v1/offers/${encodeURIComponent(offerId)}/schedule`,
+        `${key}:offer:schedule`,
+      );
+      if (schedule.kind !== 'ANSWERED') return schedule;
+      const lines = scheduleOf(schedule.value.data);
+      if (lines === undefined) return { kind: 'UNAVAILABLE', reason: 'MALFORMED_SCHEDULE' };
+      if (!sameSchedule(lines, r.expectedInstalments))
+        return { kind: 'REFUSED', code: 'SCHEDULE_MISMATCH', referenceId: offerId };
+    }
+
+    const instruction = await this.#call(
+      'loan.offer.paymentInstruction',
+      'POST',
+      `${offers}/payment-instructions`,
+      `${key}:offer:pi`,
+      {
+        accountId: servicingAccountId,
+        money: amount,
+        paymentChannelCode: 'ACCOUNT-API',
+        beneficiaryName: `Loan ${r.applicationId}`,
+        details: `Sanad ${r.applicationId}`,
+      },
+    );
+    if (instruction.kind !== 'ANSWERED') return instruction;
+
+    const moved = await this.#walkOffer(offerId, key);
+    if (moved.kind !== 'ANSWERED') return moved;
+
+    const contract = await this.#awaitContract(offerId, key);
+    if (contract.kind !== 'ANSWERED') return contract;
+    const { headerId, contractNumber, versionId, state: drafted } = contract.value;
+    const version = `${this.hosts.loan}/api/v1/versions/${encodeURIComponent(versionId)}`;
+    // A draft is confirmed here; one the workflow has already moved on is left as it is.
+    if (drafted === 'DRAFT') {
+      const confirmed = await this.#call(
+        'loan.version.confirm',
+        'POST',
+        `${this.hosts.loan}/api/v1/contracts/${encodeURIComponent(headerId)}/versions/${encodeURIComponent(versionId)}/confirm`,
+        `${key}:confirm`,
+      );
+      if (confirmed.kind !== 'ANSWERED') return confirmed;
+    }
+    const status = await this.#call('loan.version.read', 'GET', version, `${key}:version`);
+    const state =
+      status.kind === 'ANSWERED' && isRecord(status.value.data) ? str(status.value.data['statusCode']) : undefined;
+    return {
+      kind: 'ANSWERED',
+      value: {
+        loanAccountNumber: contractNumber,
+        contractRef: headerId,
+        customerRef: personId,
+        servicingAccountRef: servicingAccountId,
+        awaitingActivation: state !== 'ACTIVE',
+      },
+    };
+  }
+
+  /** Moves the offer through review, approval and acceptance, each when the workflow permits it. */
+  async #walkOffer(offerId: string, key: string): Promise<RailOutcome<true>> {
+    const v1 = `${this.hosts.loan}/api/v1/offers/${encodeURIComponent(offerId)}`;
+    const v2 = `${this.hosts.loan}/api/v2/offers/${encodeURIComponent(offerId)}`;
+    const steps: Readonly<
+      Record<string, { readonly operation: string; readonly url: string; readonly suffix: string }>
+    > = {
+      WAITING_FOR_REVIEW: { operation: 'loan.offer.review', url: `${v1}/review`, suffix: 'review' },
+      IN_REVIEW: { operation: 'loan.offer.approve', url: `${v2}/approve`, suffix: 'approve' },
+      PRESENTED: { operation: 'loan.offer.accept', url: `${v2}/accept`, suffix: 'accept' },
+    };
+    const taken = new Set<string>();
+    // The budget is the waits between reads; a read that leads straight to a step does not spend it.
+    let waits = 0;
+    while (waits < this.pacing.attempts) {
+      const read = await this.#call('loan.offer.read', 'GET', v2, `${key}:offer:read`);
+      if (read.kind !== 'ANSWERED') return read;
+      const status = isRecord(read.value.data) ? str(read.value.data['statusCode']) : undefined;
+      if (status === undefined) return { kind: 'UNAVAILABLE', reason: 'MALFORMED_OFFER' };
+      if (status === 'ACCEPTED') return { kind: 'ANSWERED', value: true };
+      if (OFFER_ENDED.has(status)) return { kind: 'REFUSED', code: `OFFER_${status}`, referenceId: offerId };
+      const step = steps[status];
+      if (step !== undefined && !taken.has(status)) {
+        taken.add(status);
+        const done = await this.#call(step.operation, 'POST', step.url, `${key}:offer:${step.suffix}`);
+        if (done.kind !== 'ANSWERED') return done;
+        continue;
+      }
+      await this.pacing.pause(this.pacing.intervalMs);
+      waits += 1;
+    }
+    return { kind: 'UNAVAILABLE', reason: 'LOAN_SYSTEM_WORKFLOW_PENDING' };
+  }
+
+  /** The contract the workflow creates from the accepted offer, once it exists. */
+  async #awaitContract(
+    offerId: string,
+    key: string,
+  ): Promise<
+    RailOutcome<{
+      readonly headerId: string;
+      readonly contractNumber: string;
+      readonly versionId: string;
+      readonly state: string;
+    }>
+  > {
+    const url = `${this.hosts.loan}/api/v2/offers/${encodeURIComponent(offerId)}/contracts`;
+    for (let attempt = 0; attempt < this.pacing.attempts; attempt += 1) {
+      const read = await this.#call('loan.offer.contracts', 'GET', url, `${key}:offer:contracts`);
+      if (read.kind === 'UNAVAILABLE') return read;
+      const raw = read.kind === 'ANSWERED' ? read.value.data : undefined;
+      const data = Array.isArray(raw) ? raw[0] : raw;
+      if (isRecord(data)) {
+        const headerId = str(data['headerId']);
+        const contractNumber = str(data['contractNumber']);
+        const versionId = str(data['firstVersionId']);
+        if (headerId !== undefined && contractNumber !== undefined && versionId !== undefined) {
+          const version = await this.#call(
+            'loan.version.read',
+            'GET',
+            `${this.hosts.loan}/api/v1/versions/${encodeURIComponent(versionId)}`,
+            `${key}:version`,
+          );
+          const state =
+            version.kind === 'ANSWERED' && isRecord(version.value.data)
+              ? str(version.value.data['statusCode'])
+              : undefined;
+          if (state !== undefined && state !== 'PREPARING')
+            return { kind: 'ANSWERED', value: { headerId, contractNumber, versionId, state } };
+        }
+      }
+      await this.pacing.pause(this.pacing.intervalMs);
+    }
+    return { kind: 'UNAVAILABLE', reason: 'LOAN_SYSTEM_WORKFLOW_PENDING' };
   }
 
   async #call(

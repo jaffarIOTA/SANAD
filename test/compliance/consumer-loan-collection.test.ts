@@ -91,6 +91,7 @@ describe('a BNPL loan in the loan system', () => {
         numberOfPayments: 4,
         firstPaymentDate: '2026-12-02',
         intervalDays: 30,
+        countryCode: 'SA',
         openServicingAccount: true,
         idempotencyKey: 'loan:txn_c1:book',
         correlationId: 'c',

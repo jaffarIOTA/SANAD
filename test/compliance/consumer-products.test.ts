@@ -263,6 +263,34 @@ describe('BNPL', () => {
       }).ok,
     ).toBe(true);
   });
+  it('a plan is set in days or in months, never both and never neither, and a monthly one is still at most twelve months apart', () => {
+    const { intervalDays, ...noInterval } = rawTerms;
+    void intervalDays;
+    const both = bnpl.validateTerms({ ...rawTerms, intervalMonths: 1 });
+    const neither = bnpl.validateTerms(noInterval);
+    for (const r of [both, neither]) {
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error.reason).toBe('TERMS_INTERVAL');
+    }
+    expect(bnpl.validateTerms({ ...noInterval, intervalMonths: 13 }).ok).toBe(false);
+    const monthly = expectOk(bnpl.validateTerms({ ...noInterval, intervalMonths: 1 }));
+    expect(monthly.intervalMonths).toBe(1);
+    expect(monthly.intervalDays).toBeUndefined();
+  });
+  it('a monthly plan is quoted in whole months at the same zero cost, and still within twelve instalments', () => {
+    const { intervalDays, ...noInterval } = rawTerms;
+    void intervalDays;
+    const terms = expectOk(bnpl.validateTerms({ ...noInterval, intervalMonths: 1 }));
+    const q = expectOk(bnpl.quote(terms, request(400_000n)));
+    expect(q.schedule.filter((f) => f.direction === 'REPAYMENT').map((f) => f.at)).toEqual([
+      { months: 1, days: 0 },
+      { months: 2, days: 0 },
+      { months: 3, days: 0 },
+      { months: 4, days: 0 },
+    ]);
+    expect(q.totalCostOfCredit.minorUnits).toBe(0n);
+    expect(q.totalPayable.minorUnits).toBe(400_000n);
+  });
   it('Art. 22(3): cash is not a collection method', () => {
     const r = bnpl.validateTerms({ ...rawTerms, collectionMethods: ['BILL_PRESENTMENT', 'CASH'] });
     expect(r.ok).toBe(false);

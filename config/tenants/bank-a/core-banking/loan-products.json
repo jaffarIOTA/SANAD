@@ -2,7 +2,7 @@
   "configId": "bank-a-loan-booking",
   "version": "0.1.0",
   "adapter": "TUUM",
-  "policyRef": "ILLUSTRATIVE — 'SME FINANCE SAR RAG' and 'TAWRROUQ' are riyal products in Tuum's partners sandbox (adapters/tuum/README.md, 2026-10-08) that belong to another partner's test set; the institution's own products replace them. A Murabaha product is never listed here. The Tawarruq product is booked as a loan contract under ADR 0007 (the deferred price stays the contract's figure). BNPL: 'BNPL SAR 4X' is ILLUSTRATIVE — no Sanad BNPL product exists in Tuum yet; Tuum sets one up on the tenant (four payments thirty days apart, no interest), and the servicing account's customer group and price list are the ones the 2026-10-08 sandbox run accepted (P_RESIDENT, RETAIL_CURR_PRICE_LIST); confirm under TUUM-SERV-01",
+  "policyRef": "ILLUSTRATIVE — 'SME FINANCE SAR RAG' and 'TAWRROUQ' are riyal products in Tuum's partners sandbox (adapters/tuum/README.md, 2026-10-08) that belong to another partner's test set; the institution's own products replace them. A Murabaha product is never listed here. The Tawarruq product is booked as a loan contract under ADR 0007 (the deferred price stays the contract's figure). BNPL: 'KBNPL' is the riyal BNPL product set up in Tuum's partners sandbox (amortisation, monthly, no interest, SAR 1,000–50,000; adapters/tuum/README.md, run 2026-11-03); it schedules monthly only, so a plan booked under it is set in months in the product catalogue (Admin → Products & modules: intervalMonths). The Admin catalogue's core product code, when set, takes precedence over this file. The servicing account's type, customer group and price list are the ones the 2026-11-03 run accepted (CURRENCY, P_RESIDENT, RETAIL_CURR_PRICE_LIST); confirm under TUUM-SERV-01",
   "products": {
     "sme-term-conventional": {
       "loanTypeCode": "SME FINANCE SAR RAG"
@@ -11,11 +11,11 @@
       "loanTypeCode": "TAWRROUQ"
     },
     "bnpl": {
-      "loanTypeCode": "BNPL SAR 4X"
+      "loanTypeCode": "KBNPL"
     }
   },
   "servicingAccount": {
-    "accountTypeCode": "CURRENT",
+    "accountTypeCode": "CURRENCY",
     "customerGroupCode": "P_RESIDENT",
     "priceListTypeCode": "RETAIL_CURR_PRICE_LIST",
     "repaymentTransactionTypeCode": "LOAN_REPAYMENT"

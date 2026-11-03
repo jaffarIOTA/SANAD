@@ -4,7 +4,7 @@ import type { Disclosure, Fee, Quote, QuoteRequest } from '@sanad/core/products/
 import { roundDiv } from '@sanad/core/pricing/rate.ts';
 import { cashFlows, flatInstalments, type Schedule } from '@sanad/core/pricing/schedule.ts';
 
-import { BNPL_RULES, type BnplTerms } from './terms.ts';
+import { BNPL_RULES, type BnplTerms, bnplInterval } from './terms.ts';
 
 export interface BnplQuote extends Quote {
   readonly productCode: 'bnpl';
@@ -47,7 +47,7 @@ export function quoteBnpl(terms: BnplTerms, request: QuoteRequest): Result<BnplQ
       },
     );
   }
-  const schedule = flatInstalments(request.requestedAmount, money(0n), terms.numberOfInstalments, terms.intervalDays);
+  const schedule = flatInstalments(request.requestedAmount, money(0n), terms.numberOfInstalments, bnplInterval(terms));
   if (!schedule.ok) return schedule;
   const s = schedule.value;
   const merchantFee: Fee = {
@@ -60,7 +60,11 @@ export function quoteBnpl(terms: BnplTerms, request: QuoteRequest): Result<BnplQ
   return ok({
     productCode: 'bnpl',
     financingAmount: request.requestedAmount,
-    tenorDays: terms.numberOfInstalments * terms.intervalDays,
+    // A monthly plan's term in days counts a month as thirty, as the other monthly products do; the dates
+    // the customer is shown come from the schedule itself.
+    tenorDays:
+      terms.numberOfInstalments *
+      (terms.intervalMonths !== undefined ? terms.intervalMonths * 30 : (terms.intervalDays ?? 0)),
     schedule: cashFlows(request.requestedAmount, s),
     fees: [],
     totalPayable: request.requestedAmount,

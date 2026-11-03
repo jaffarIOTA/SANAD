@@ -96,6 +96,57 @@ describe.skipIf(url === undefined)('consumer loans on PostgreSQL (0038)', () => 
     ).rejects.toThrow(/base currency/);
   });
 
+  it('keeps a monthly plan as monthly (0039), and books it in the loan system on its payment day', async () => {
+    const monthly = `${LOAN}-m`;
+    await recordConsumerLoan(pool, TENANT, {
+      loanRef: monthly,
+      productCode: 'bnpl',
+      applicantRef: 'db-shopper-3',
+      originRef: 'session-db-3',
+      principalMinorUnits: 400_000n,
+      currency: 'SAR',
+      rateBp: 0n,
+      aprBp: 0n,
+      numberOfInstalments: 4,
+      intervalMonths: 1,
+      firstDueDate: '2026-12-03',
+      collectionChannel: 'BILL_PRESENTMENT',
+      collectionMandateRef: 'demo-bill-acct-db-shopper-3',
+      correlationId: '00000000-0000-4000-8000-000000000040',
+      createdBy: 'db-shopper-3',
+    });
+    const [read] = await listConsumerLoans(pool, TENANT, monthly);
+    expect(read?.loan.intervalMonths).toBe(1);
+    expect(read?.loan.intervalDays).toBeUndefined();
+    const run = expectOk(
+      await runConsumerLoanServicing(pool, TENANT, monthly, '2027-01-03', 'stf-checker-01', {
+        simulateRailResults: true,
+      }),
+    );
+    expect(run.position.instalments.map((i) => i.dueDate)).toEqual([
+      '2026-12-03',
+      '2027-01-03',
+      '2027-02-03',
+      '2027-03-03',
+    ]);
+  });
+
+  it('refuses a loan whose plan is set both in days and in months', async () => {
+    await expect(
+      inTenant(pool, tenant, (db) =>
+        db.query(
+          `insert into core.consumer_loan
+             (tenant_id, loan_ref, product_code, applicant_ref, origin_ref, principal_minor_units, currency, rate_bp,
+              apr_bp, number_of_instalments, interval_days, interval_months, first_due_date, collection_channel,
+              collection_mandate_ref, correlation_id, created_by)
+           values ($1, $2, 'bnpl', 'db-shopper-4', 'session-db-4', 100000, 'SAR', 0, 0, 4, 30, 1, '2026-12-03',
+                   'CARD', 'demo-card-token-db-shopper-4', 'c', 'db-shopper-4')`,
+          [tenant, `${LOAN}-both`],
+        ),
+      ),
+    ).rejects.toThrow(/consumer_loan_one_interval/);
+  });
+
   it('services a day once: books, collects the due instalment, posts what settled; a rerun adds nothing', async () => {
     const first = expectOk(
       await runConsumerLoanServicing(pool, TENANT, LOAN, '2026-12-02', 'stf-checker-01', { simulateRailResults: true }),

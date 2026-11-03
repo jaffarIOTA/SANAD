@@ -80,7 +80,9 @@ export default async function CheckoutPage({
       saveSession(session);
     } else {
       const offerId = nextId('ofr');
-      const dates = maturityDates(at, quoted.value.offer.quote.tenorDays);
+      // The last cash flow's own offset: a monthly plan ends on a calendar date, not after thirty-day months.
+      const last = quoted.value.offer.quote.schedule.at(-1);
+      const dates = maturityDates(at, last?.at ?? quoted.value.offer.quote.tenorDays);
       saveOffer({
         offerId,
         tenantId: TENANT,

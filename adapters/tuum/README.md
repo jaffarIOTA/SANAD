@@ -341,6 +341,84 @@ the bureau (`ARREARS`, with its currency) and the customer reminded, once each.
   paid the basket less the discount by Sanad's payments instruction, and the discount is the
   institution's income — a question for its finance function.
 
+### Sandbox run — `KBNPL`, 2026-11-03
+
+Run from `adapters/tuum/verification/bnpl-run.sh`, then step by step, against `KBNPL`, the
+riyal BNPL product set up on tenant `MB` for this purpose. One synthetic person, one current
+account and one loan were written into the shared sandbox; raw responses are under
+`verification/findings/bnpl-*.json`, not committed.
+
+**The product as read** (`GET /api/v2/loan-products/KBNPL`): SAR, SA; `AMORTISATION`;
+`PERIOD_IN_MONTHS` 3–6, `paymentFrequency 1 MONTH` (no day-interval option exists in the
+product); amount 1,000–50,000; **no `INT` component**; `serviceAccountRuleCode
+CURRENT_ACCOUNT_REQUIRED`; `limitUsageRule SPECIFIC_DATE`. Still set and to be changed before a
+live booking: `minInvoiceAmount 1000`, a principal penalty (`PRI_P` 10, FIX, 30/360),
+`disbursementRuleCode ON_DEMAND`, `loanClassCode WCL-STD`, and every origination review flag on.
+
+**What happened:**
+
+| Step | Call | Answer |
+|---|---|---|
+| Person, account | `POST person-api /api/v2/persons`; `POST account-api /api/v4/persons/{id}/accounts` (`CURRENCY`, `P_RESIDENT`, `RETAIL_CURR_PRICE_LIST`) | created; account `ACTIVE` |
+| Offer without `limitUsageDate` | `POST /api/v3/persons/{id}/offers` | `err.limitUsageDateMissing` — the product's `SPECIFIC_DATE` rule makes it required |
+| Offer: 4,000 SAR, `loanPeriod 4`, `paymentDay 3`, `paymentFrequency 1 MONTH`, `limitUsageDate`, **no rate** | same | `PREPARING`, `AMORTISATION`, `interestRate null`, **`apr 0.0`** |
+| Offer schedule | `GET /api/v1/offers/{id}/schedule` | **4 × `PRI` 1,000.00 on 2026-12-03, 2027-01-03, 2027-02-03, 2027-03-03; no `INT` line** |
+| Accept straight away | `POST /api/v2/offers/{id}/accept` | `err.offerAcceptNotAllowed` (the offer must be reviewed first) |
+| Payment instruction to the servicing account | `POST /api/v2/offers/{id}/payment-instructions` (`accountId`, `money`, `ACCOUNT-API`) | 200; the workflow moves the offer `VALIDATING` → `WAITING_FOR_REVIEW` by itself, in seconds |
+| Review, approve, accept | `POST /api/v1/offers/{id}/review`, `/api/v2/offers/{id}/approve`, `/api/v2/offers/{id}/accept` | `IN_REVIEW` → `APPROVED` → `PRESENTED` → **`ACCEPTED`**; each refused if called before the workflow reaches its state |
+| Contract | `GET /api/v2/offers/{id}/contracts` | created by the workflow: contract number `726751000`, version `DRAFT`, 4,000 SAR, `apr 0.0`, ends 2027-03-03 |
+| Draft confirmation | `POST /api/v1/contracts/{h}/versions/{v}/confirm` | **`DRAFT_CONFIRMED`** |
+| Contract accept; activate | `POST /api/v2/contracts/{h}/accept`; `POST /api/v2/contracts/{h}/versions/{v}/activate` | `err.contractNotAcceptable`; `err.contractActivateNotAllowed` |
+| Asset transaction | `POST /api/v1/contracts/{h}/prepare-for-asset-transaction` | `err.forbidden` (`isModularSystem`): a workflow-only step |
+
+**What this settles for TUUM-SERV-01:** a zero-interest BNPL loan with equal monthly
+instalments can be held in Tuum, and with no `INT` component nothing derives a rate (Finding 1
+does not arise for this product). The booking is **offer-shaped, not one call**: offer →
+payment instruction → review → approve → accept → the workflow creates the contract → draft
+confirmation. Each step is accepted only once the workflow has reached the state before it, so
+the adapter must poll the status between steps. The interval is monthly, from the product; a
+term sheet of "every 30 days" cannot be booked under `KBNPL`.
+
+**Still open:** the contract stops at `DRAFT_CONFIRMED`, waiting on the workflow for the
+origination steps still switched on (contract review, file generation, asset transaction,
+account sweep). Whether switching them off lets the contract activate and disburse, and the
+receivables read and repayment posting on an active contract, are next. The sandbox business
+date was 2026-11-01 while the calendar date was 2026-11-03 (`statusDate`, `startDate`).
+
+### What the adapter does with this (TUUM-LEND-003)
+
+`lending-adapter.ts` books a **consumer** loan this way; a business loan keeps the direct
+contract call until TUUM-LEND-01 is answered. In order:
+
+1. The person and the servicing account, as in the run (`CURRENCY` from bank-a's
+   `loan-products.json`). Where no identity store is connected and a synthetic demonstration is
+   permitted, the person is a labelled synthetic one (`SANAD-TEST-…`), never a real identifier
+   (`services/origination/src/loan-system.ts`).
+2. The offer, on the plan disclosed: `paymentDay` and `paymentFrequency n MONTH` for a monthly
+   plan, `paymentFrequency n DAY` for one in days (unverified: `KBNPL` schedules monthly only);
+   `limitUsageDate` one interval before the first payment, the day the customer drew the
+   financing; no `interestRate` at 0%, and an offer echoing a rate other than Sanad's is refused
+   (`RATE_MISMATCH`).
+3. **The offer's schedule against the plan the customer accepted**, date by date and amount by
+   amount. Any difference is refused (`SCHEDULE_MISMATCH`) before the payment instruction, so
+   nothing is accepted on terms the customer was not shown.
+4. The payment instruction to the servicing account, then review, approval and acceptance, each
+   only once the offer's status permits it; the adapter reads the status between steps (every
+   1.5 s, up to 40 waits) and stops as `UNAVAILABLE` (`LOAN_SYSTEM_WORKFLOW_PENDING`) when the
+   workflow does not move, or `REFUSED` (`OFFER_REJECTED` and the like) when it ends the offer.
+5. The contract the workflow creates; a `DRAFT` version is confirmed. A version that is not then
+   `ACTIVE` is booked in Sanad as **awaiting activation**: the contract exists, and Tuum's own
+   steps are still to run.
+
+Which Tuum product a Sanad product books under is Admin's mapping in the product catalogue
+(Products & modules, core product code), else `loan-products.json`. The plan's interval is the
+term sheet's `intervalDays` or `intervalMonths`, also set in Admin, so a tenant whose loan system
+schedules monthly sets `intervalMonths: 1`.
+
+**Known gap:** a booking interrupted part-way leaves the offer it created in Tuum, and a retry
+creates another person, account and offer; an unaccepted offer lapses after the product's
+`offerValidDays`. Whether Tuum honours `x-request-id` as an idempotency key is unverified.
+
 ## Murabaha booking — account-shaped (Wasl W3, 2026-10-18)
 
 An executed Murabaha is held through `core-banking-adapter.ts` — the party, its

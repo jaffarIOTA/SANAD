@@ -27,7 +27,9 @@ export interface ConsumerLoanRecord {
   /** From core/pricing/apr.ts, as disclosed. */
   readonly aprBp: bigint;
   readonly numberOfInstalments: number;
-  readonly intervalDays: number;
+  /** The time between instalments as disclosed: exactly one of a number of days and of months (0039). */
+  readonly intervalDays?: number;
+  readonly intervalMonths?: number;
   /** yyyy-mm-dd. */
   readonly firstDueDate: string;
   readonly collectionChannel: CollectionChannel;
@@ -48,6 +50,23 @@ export interface ConsumerLoanView {
   readonly events: readonly StoredLoanEvent[];
 }
 
+/**
+ * The due dates of the plan as disclosed: the first due date, then one interval after another. Months fall on
+ * the first due date's day of the month, or on the month's last day when it is shorter.
+ */
+export function dueDatesOf(
+  loan: Pick<ConsumerLoanRecord, 'firstDueDate' | 'numberOfInstalments' | 'intervalDays' | 'intervalMonths'>,
+): string[] {
+  const [y = 2000, m = 1, d = 1] = loan.firstDueDate.split('-').map(Number);
+  return Array.from({ length: loan.numberOfInstalments }, (_, i) => {
+    if (loan.intervalMonths === undefined)
+      return new Date(Date.UTC(y, m - 1, d + i * (loan.intervalDays ?? 0))).toISOString().slice(0, 10);
+    const month = m - 1 + i * loan.intervalMonths;
+    const lastDay = new Date(Date.UTC(y, month + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(y, month, Math.min(d, lastDay))).toISOString().slice(0, 10);
+  });
+}
+
 export async function recordConsumerLoan(pool: Pool, tenantCode: string, loan: ConsumerLoanRecord): Promise<void> {
   const tenant = await tenantUuidByCode(pool, tenantCode);
   await inTenant(pool, tenant, async (db) => {
@@ -55,8 +74,8 @@ export async function recordConsumerLoan(pool: Pool, tenantCode: string, loan: C
       `insert into core.consumer_loan
          (tenant_id, loan_ref, product_code, applicant_ref, origin_ref, merchant_ref, principal_minor_units, currency,
           rate_bp, apr_bp, number_of_instalments, interval_days, first_due_date, collection_channel, collection_mandate_ref,
-          correlation_id, created_by)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          correlation_id, created_by, interval_months)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        on conflict (tenant_id, loan_ref) do nothing`,
       [
         tenant,
@@ -70,12 +89,13 @@ export async function recordConsumerLoan(pool: Pool, tenantCode: string, loan: C
         loan.rateBp.toString(),
         loan.aprBp.toString(),
         loan.numberOfInstalments,
-        loan.intervalDays,
+        loan.intervalDays ?? null,
         loan.firstDueDate,
         loan.collectionChannel,
         loan.collectionMandateRef,
         loan.correlationId,
         loan.createdBy,
+        loan.intervalMonths ?? null,
       ],
     );
   });
@@ -124,7 +144,8 @@ interface LoanRow {
   rate_bp: string;
   apr_bp: string;
   number_of_instalments: number;
-  interval_days: number;
+  interval_days: number | null;
+  interval_months: number | null;
   first_due_date: string;
   collection_channel: string;
   collection_mandate_ref: string;
@@ -150,7 +171,7 @@ export async function listConsumerLoans(pool: Pool, tenantCode: string, loanRef?
     const loans = await db.query<LoanRow>(
       `select loan_ref, product_code, applicant_ref, origin_ref, merchant_ref,
               principal_minor_units::text as principal_minor_units, currency, rate_bp::text as rate_bp,
-              apr_bp::text as apr_bp, number_of_instalments, interval_days,
+              apr_bp::text as apr_bp, number_of_instalments, interval_days, interval_months,
               to_char(first_due_date, 'YYYY-MM-DD') as first_due_date, collection_channel, collection_mandate_ref,
               correlation_id, created_by, created_at
          from core.consumer_loan
@@ -179,7 +200,9 @@ export async function listConsumerLoans(pool: Pool, tenantCode: string, loanRef?
         rateBp: BigInt(r.rate_bp),
         aprBp: BigInt(r.apr_bp),
         numberOfInstalments: r.number_of_instalments,
-        intervalDays: r.interval_days,
+        ...(r.interval_months === null
+          ? { intervalDays: r.interval_days ?? 0 }
+          : { intervalMonths: r.interval_months }),
         firstDueDate: r.first_due_date,
         collectionChannel: r.collection_channel as CollectionChannel,
         collectionMandateRef: r.collection_mandate_ref,

@@ -13,12 +13,14 @@
  * Sanad never holds (CLAUDE.md §2). The loan system's party master needs one;
  * it is resolved from the institution's identity store inside the adapter
  * (TUUM-DEV-002). No identity store is connected yet, so a live booking of a
- * consumer loan is refused as unavailable; the demonstration resolves a
- * labelled stand-in that is not a real identifier.
+ * consumer loan is refused as unavailable, except where a synthetic
+ * demonstration is permitted: there a live sandbox gets a labelled synthetic
+ * person, and the demonstration transport a labelled stand-in. Neither is a
+ * real identifier.
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
-import type { LoanBookingConfig, TenantCode } from '../../../config/loader.ts';
+import { type LoanBookingConfig, type TenantCode, loadTenantJurisdiction } from '../../../config/loader.ts';
 import type { LoanBookingPort } from '../../../core/ports/loan-booking.ts';
 import type { LoanServicingPort } from '../../../core/ports/loan-servicing.ts';
 import { HttpTransport } from '../../../adapters/kernel/http-transport.ts';
@@ -51,6 +53,42 @@ const noIdentityStore: RestrictedAttributesResolver = () => Promise.resolve(unde
 const demonstrationIdentity: RestrictedAttributesResolver = (ref) =>
   Promise.resolve({ idNumber: `DEMO-${ref}`, idTypeCode: 'DEMO', givenName: 'Demonstration', surname: 'Customer' });
 
+/**
+ * A live loan system's sandbox, where no identity store is connected: a synthetic person, labelled as one,
+ * with the party-master fields the sandbox requires (adapters/tuum/README.md, KBNPL run 2026-11-03). Only
+ * where a synthetic demonstration is permitted, so never against a database that may hold customer data.
+ */
+const sandboxIdentity =
+  (country: string): RestrictedAttributesResolver =>
+  (ref) =>
+    Promise.resolve({
+      idNumber: `SANAD-TEST-${createHash('sha256').update(ref).digest('hex').slice(0, 12).toUpperCase()}`,
+      idCountryCode: country,
+      givenName: 'Sanad',
+      surname: 'Synthetic Customer',
+      birthDate: '1990-01-01',
+      sex: 'M',
+      nationality: country,
+      residencyCountryCode: country,
+      address: {
+        street1: 'Synthetic Street 1',
+        cityCounty: country === 'AE' ? 'Dubai' : 'Riyadh',
+        zip: '00000',
+        countryCode: country,
+      },
+    });
+
+/** Who a live consumer booking is for: the identity store when one is connected; a synthetic person in a sandbox. */
+async function liveIdentity(
+  tenant: TenantCode,
+  pool: Pool | undefined,
+  env: Readonly<Record<string, string | undefined>>,
+): Promise<RestrictedAttributesResolver> {
+  if (!(await syntheticDemonstrationPermitted(pool, env))) return noIdentityStore;
+  const jurisdiction = loadTenantJurisdiction(tenant);
+  return jurisdiction.ok ? sandboxIdentity(jurisdiction.value.code) : noIdentityStore;
+}
+
 export async function loanSystemFor(
   tenant: TenantCode,
   config: LoanBookingConfig,
@@ -64,7 +102,10 @@ export async function loanSystemFor(
     readKey(tenant, 'loan_api_base_url'),
     readKey(tenant, 'account_api_base_url'),
     readKey(tenant, 'username'),
-    readKey(tenant, 'tenant_code'),
+    // The same spellings the Admin product catalogue accepts: the vault keeps the name as it was saved.
+    readKey(tenant, 'tenant_code').then(
+      async (v) => v ?? (await readKey(tenant, 'tenantcode')) ?? (await readKey(tenant, 'tenantCode')),
+    ),
   ]);
   if (
     auth !== undefined &&
@@ -97,7 +138,7 @@ export async function loanSystemFor(
       'LIVE',
       config.servicingAccount === undefined
         ? undefined
-        : { accountSetup: config.servicingAccount, restricted: noIdentityStore },
+        : { accountSetup: config.servicingAccount, restricted: await liveIdentity(tenant, pool, env) },
     );
   }
   if (await syntheticDemonstrationPermitted(pool, env))

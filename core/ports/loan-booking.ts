@@ -52,8 +52,18 @@ export interface LoanBookingRequest {
   readonly firstPaymentDate: string;
   /** Monthly schedules: the day of the month each payment falls due. Exactly one of this and `intervalDays`. */
   readonly paymentDay?: number;
+  /** With `paymentDay`: the months between payments. One when absent. */
+  readonly intervalMonths?: number;
   /** Fixed-interval schedules (a BNPL plan's thirty days): the days between payments. */
   readonly intervalDays?: number;
+  /** The institution's country, ISO 3166-1 alpha-2, from its jurisdiction profile. */
+  readonly countryCode?: string;
+  /**
+   * The plan the customer was shown and accepted, instalment by instalment. When given, a loan system whose
+   * own schedule differs in any date or amount is refused (SCHEDULE_MISMATCH) before the loan is accepted:
+   * the customer is never held to a plan they were not shown.
+   */
+  readonly expectedInstalments?: readonly { readonly dueDate: string; readonly amount: Money }[];
   /**
    * Open a servicing account for the contract in the loan system: the account its instalments are paid
    * from and its repayments posted to. The consumer products need one; the SME products are paid by the
@@ -79,6 +89,11 @@ export interface LoanBooking {
   readonly customerRef: string;
   /** The servicing account the loan system opened, when asked to. */
   readonly servicingAccountRef?: string;
+  /**
+   * True when the loan system holds the contract but has not yet activated it (its own review or
+   * disbursement steps are still to run). Nothing is collected until it is active.
+   */
+  readonly awaitingActivation?: boolean;
 }
 
 export interface LoanBookingPort {

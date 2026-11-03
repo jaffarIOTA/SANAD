@@ -85,15 +85,26 @@ export function reducingBalanceMonthly(principal: Money, annual: Rate, months: n
   });
 }
 
-/** A fixed total split into equal instalments at a fixed interval; the remainder on the last. */
+/**
+ * A fixed total split into equal instalments at a fixed interval; the remainder on the last. The interval
+ * is a number of days, or `{ months }` for instalments on the same day of each month.
+ */
 export function flatInstalments(
   principal: Money,
   totalProfit: Money,
   count: number,
-  intervalDays: number,
+  interval: number | { readonly months: number },
 ): Result<Schedule> {
-  if (!Number.isInteger(count) || count <= 0 || !Number.isInteger(intervalDays) || intervalDays <= 0)
-    return reject('PLAT-02', 'SCHEDULE_SHAPE', 'count and intervalDays are positive integers');
+  const step = typeof interval === 'number' ? { months: 0, days: interval } : { months: interval.months, days: 0 };
+  const length = step.months + step.days;
+  if (
+    !Number.isInteger(count) ||
+    count <= 0 ||
+    !Number.isInteger(length) ||
+    step.months * step.days !== 0 ||
+    length <= 0
+  )
+    return reject('PLAT-02', 'SCHEDULE_SHAPE', 'count and the interval are positive integers');
   if (totalProfit.minorUnits < 0n || principal.minorUnits <= 0n)
     return reject('PLAT-02', 'SCHEDULE_AMOUNTS', 'principal positive, profit non-negative');
   const n = BigInt(count);
@@ -108,7 +119,7 @@ export function flatInstalments(
     const profit = last ? totalProfit.minorUnits - baseF * (n - 1n) : baseF;
     return {
       number: idx + 1,
-      at: { months: 0, days: intervalDays * (idx + 1) },
+      at: { months: step.months * (idx + 1), days: step.days * (idx + 1) },
       amount: money(amount, principal.currency),
       principal: money(principalPart, principal.currency),
       profit: money(profit, principal.currency),

@@ -27,7 +27,7 @@ import {
 } from '@sanad/design/primitives.tsx';
 import { localeFromSegment } from '@sanad/i18n/strings.ts';
 import { civilDateOf } from '@sanad/origination/civil-date.ts';
-import type { StoredLoanEvent } from '@sanad/origination/consumer-loans.ts';
+import { type StoredLoanEvent, dueDatesOf } from '@sanad/origination/consumer-loans.ts';
 
 import { bookConsumerLoanAction, serviceConsumerLoanAction } from '../../../server/consumer-loan-actions.ts';
 import { consumerLoanPositionFor, consumerLoans, consumerLoansAvailable } from '../../../server/consumer-loans.ts';
@@ -86,8 +86,15 @@ function FixtureBadge({ arabic }: { readonly arabic: boolean }) {
   );
 }
 
-const addDays = (iso: string, days: number): string =>
-  new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+/** How far apart the instalments are, as the plan was disclosed. */
+function cadenceLabel(
+  loan: { readonly intervalDays?: number; readonly intervalMonths?: number },
+  t: (en: string, ar: string) => string,
+): string {
+  if (loan.intervalMonths === undefined) return `${String(loan.intervalDays)} ${t('days', 'يوماً')}`;
+  if (loan.intervalMonths === 1) return t('monthly', 'شهرياً');
+  return `${String(loan.intervalMonths)} ${t('months', 'أشهر')}`;
+}
 
 export default async function BnplLoansPage({
   params,
@@ -228,8 +235,7 @@ export default async function BnplLoansPage({
                           { minorUnits: l.loan.principalMinorUnits, currency: l.loan.currency },
                           numerals,
                         )}{' '}
-                        {l.loan.currency} · {String(l.loan.numberOfInstalments)} × {String(l.loan.intervalDays)}{' '}
-                        {t('days', 'يوماً')}
+                        {l.loan.currency} · {String(l.loan.numberOfInstalments)} × {cadenceLabel(l.loan, t)}
                       </td>
                       <td className="py-2">{channelLabel(l.loan.collectionChannel)}</td>
                       <td className="py-2">
@@ -286,6 +292,17 @@ export default async function BnplLoansPage({
                     <dd>{booking.detail['loanTypeCode']}</dd>
                     <dt className="text-ink-quiet">{t('Servicing account', 'حساب الخدمة')}</dt>
                     <dd>{booking.detail['servicingAccountRef']}</dd>
+                    {booking.detail['loanState'] === 'AWAITING_ACTIVATION' ? (
+                      <>
+                        <dt className="text-ink-quiet">{t('State in the loan system', 'الحالة في نظام القروض')}</dt>
+                        <dd>
+                          {t(
+                            'Awaiting activation: the loan system’s own review and disbursement steps are still to run',
+                            'بانتظار التفعيل: لم تكتمل بعد خطوات المراجعة والصرف في نظام القروض',
+                          )}
+                        </dd>
+                      </>
+                    ) : null}
                   </dl>
                 )}
               </div>
@@ -311,20 +328,15 @@ export default async function BnplLoansPage({
                   {t('Run servicing for this date', 'شغّل الخدمة لهذا التاريخ')}
                 </button>
                 <span className="flex gap-2 text-[13px] text-ink-quiet">
-                  {[0, selected.loan.intervalDays, 2 * selected.loan.intervalDays, 3 * selected.loan.intervalDays].map(
-                    (d) => {
-                      const date = addDays(selected.loan.firstDueDate, d);
-                      return (
-                        <a
-                          key={date}
-                          className="text-brand"
-                          href={`/${segment}/bnpl?loan=${selected.loan.loanRef}&asOf=${date}`}
-                        >
-                          {date}
-                        </a>
-                      );
-                    },
-                  )}
+                  {dueDatesOf(selected.loan).map((date) => (
+                    <a
+                      key={date}
+                      className="text-brand"
+                      href={`/${segment}/bnpl?loan=${selected.loan.loanRef}&asOf=${date}`}
+                    >
+                      {date}
+                    </a>
+                  ))}
                 </span>
               </form>
 

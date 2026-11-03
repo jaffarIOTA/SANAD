@@ -308,12 +308,28 @@ The findings go in the adapter README.
     instalments reported to the bureau (with the currency) and the shopper reminded, once each.
   - Migration **0038**: `core.consumer_loan` and its events (RLS forced, append-only, audited, the tenant's
     currency enforced), the outbox's `PAYMENT_INITIATE` kind, and the `OPEN_FINANCE` credential code.
-- **Waiting on Tuum (TUUM-SERV-01, `adapters/tuum/README.md`):** a BNPL product set up on each tenant (no riyal
-  product in the sandbox accepts the schedule); whether a supplied 0% rate overrides the price list (until it does,
-  every live booking is refused `RATE_MISMATCH`, the safe failure); the receivables read; the servicing account's
-  set-up; automatic repayment from a customer's own account; how the merchant discount is accounted.
+- **Live booking path built (3 November), not yet run end to end against the sandbox.** The `KBNPL` run of
+  3 November (README "Sandbox run — KBNPL") showed a 0% monthly loan books in Tuum through the offer workflow; the
+  adapter now books that way (TUUM-LEND-003): offer, schedule checked against the plan disclosed
+  (`SCHEDULE_MISMATCH`), payment instruction, review, approval, acceptance, contract confirmed. A BNPL plan is set
+  in days or in months in the term sheet (Admin → Products & modules: `intervalDays` or `intervalMonths`; migration
+  **0039**), and the Tuum product is Admin's core product code, else `loan-products.json` (bank-a: `KBNPL`,
+  account type `CURRENCY`). Where no identity store is connected, a live sandbox booking uses a labelled synthetic
+  person, only where a synthetic demonstration is permitted.
+- **To run it live (bank-a, the development database):**
+  - the vault holds `person_api_base_url` and `account_api_base_url` for TUUM / sandbox;
+  - migration 0039 is applied to that database;
+  - bank-a's BNPL term sheet says `intervalMonths: 1` (Admin, four eyes);
+  - `KBNPL`'s remaining origination steps are switched off in Tuum (contract review, file generation, asset
+    transaction, account sweep), or the contract is reviewed in Tuum's console; until then a booking is recorded
+    **awaiting activation**.
+- **Waiting on Tuum (TUUM-SERV-01, `adapters/tuum/README.md`):** activation and disbursement of a confirmed contract;
+  the receivables read and a repayment posting on an active one; automatic repayment from a customer's own account;
+  how the merchant discount is accounted; whether `x-request-id` is honoured as an idempotency key (a booking
+  interrupted part-way leaves its offer, and a retry creates another).
 - **Waiting on the institution:** an identity store the adapter can resolve a shopper's national identifier from,
-  inside the trust boundary. Without it a live consumer booking is refused as unavailable.
+  inside the trust boundary. Without it a live consumer booking outside a synthetic demonstration is refused as
+  unavailable.
 - **Not built:** the rails' callbacks into `recordCollectionResult` (a SADAD bill paid, a debit settled or returned,
   an initiated payment settled). In the demonstration the run stands in for them, labelled Fixture, and only an
   approver may do so. The servicing worker does not yet run consumer loans on its schedule; a person runs them.
