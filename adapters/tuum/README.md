@@ -415,9 +415,28 @@ Which Tuum product a Sanad product books under is Admin's mapping in the product
 term sheet's `intervalDays` or `intervalMonths`, also set in Admin, so a tenant whose loan system
 schedules monthly sets `intervalMonths: 1`.
 
-**Known gap:** a booking interrupted part-way leaves the offer it created in Tuum, and a retry
-creates another person, account and offer; an unaccepted offer lapses after the product's
-`offerValidDays`. Whether Tuum honours `x-request-id` as an idempotency key is unverified.
+### First booking through Sanad itself — `txn_00039`, 2026-11-03
+
+The officer's **Book** in ops, on bank-a with `intervalMonths: 1`: 4,000 SAR, four monthly
+instalments from 3 December 2026. Four attempts; each refusal was fixed in the adapter before
+the next.
+
+| Attempt | Tuum's answer | What changed |
+|---|---|---|
+| 1 | `POST /api/v2/persons` → 400 `err.invalidUuidFormat` | `x-request-id` must be a UUID. The step's idempotency key is sent as a name-based UUID (SHA-256, RFC 9562 version 8; Tuum accepts version 8, a non-UUID control is refused) |
+| 2 | `POST /api/v4/persons/{id}/accounts` → 400 `personName` `err.notBlank` | The account carries the party's name, resolved in the adapter and sent to Tuum only |
+| 3 | `POST /api/v3/persons/{id}/offers` → 400 `err.loanPeriodAndNumberOfPaymentsNotAllowedTogether` | One or the other: `loanPeriod` for a monthly plan, `numberOfPayments` for one in days |
+| 3 | `POST …/payment-instructions` → 400 `err.offerNotSuitableForValidation` (offer `PREPARING`) | Given again after a pause under the same request id, up to 10 times |
+| 4 | every step 200 | Contract **726751001** (`ID-1669975981`), version `DRAFT_CONFIRMED`; Sanad records it as awaiting activation |
+
+**`x-request-id` is honoured as an idempotency key.** Attempts 2 to 4 sent the same ids and Tuum
+answered with the same person (`ID-3422`), account (`ID-3221`) and offer (`ID-1669975482`), so a
+retried booking does not create another person, account or offer. An offer from an interrupted
+booking that is never retried still lapses after the product's `offerValidDays`.
+
+**Open:** the contract stays `DRAFT_CONFIRMED` with KBNPL's review, file, asset-transaction and
+sweep flags reported off. What activates it (disbursement, a step in Tuum's back office) is to be
+confirmed with Tuum.
 
 ## Murabaha booking — account-shaped (Wasl W3, 2026-10-18)
 

@@ -87,6 +87,13 @@ function monthDay(year: number, month: number, day: number): string {
   return new Date(Date.UTC(year, month, Math.min(day, lastDay))).toISOString().slice(0, 10);
 }
 
+/** As the loan system takes it: the number of payments, or a monthly term in months divided by the frequency. */
+function paymentsOf(body: Record<string, unknown>, monthly: boolean, every: number): number {
+  if (typeof body['numberOfPayments'] === 'number') return body['numberOfPayments'];
+  if (monthly && typeof body['loanPeriod'] === 'number') return Math.max(1, Math.floor(body['loanPeriod'] / every));
+  return 1;
+}
+
 /**
  * An offer's terms as the loan system reads them: monthly on the payment day from the month after the usage
  * date, or every so many days from it — the first payment is derived, never sent.
@@ -101,7 +108,7 @@ function offerTerms(body: Record<string, unknown>, servicingAccountId: string | 
   return {
     principalMinor: minorOf(money['amount']),
     currency: typeof money['currencyCode'] === 'string' ? money['currencyCode'] : 'SAR',
-    payments: typeof body['numberOfPayments'] === 'number' ? body['numberOfPayments'] : 1,
+    payments: paymentsOf(body, monthly, every),
     firstPaymentDate: monthly ? monthDay(y, m - 1 + every, paymentDay) : isoOf(dayOf(usage) + every),
     ...(monthly ? { paymentDay, intervalMonths: every } : { intervalDays: every }),
     ...(servicingAccountId === undefined ? {} : { servicingAccountId }),

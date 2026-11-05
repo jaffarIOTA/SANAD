@@ -11,7 +11,7 @@ import { money } from '@sanad/core/kernel/money.ts';
 import { expectOk } from '@sanad/core/kernel/result.ts';
 import type { LoanBookingRequest } from '@sanad/core/ports/loan-booking.ts';
 
-import type { RailEnvelope, RailTransport } from '../../adapters/kernel/http-transport.ts';
+import { type RailEnvelope, type RailTransport, TransportError } from '../../adapters/kernel/http-transport.ts';
 import { TuumDemonstrationTransport, demonstrationSession } from '../../adapters/tuum/demonstration.ts';
 import { TuumLendingAdapter, type TuumOfferPacing } from '../../adapters/tuum/lending-adapter.ts';
 
@@ -130,12 +130,16 @@ describe('Tuum lending adapter: a consumer loan, through the offer workflow', ()
       'loan.version.confirm',
     ]);
     expect(t.body('person.create')['personTypeCode']).toBe('P');
+    // The account API refuses a blank personName (sandbox 2026-11-03): the party's name, resolved in the adapter.
+    expect(t.body('account.create')['personName']).toBe('Given Family');
     const offer = t.body('loan.offer.create');
     expect(offer['loanTypeCode']).toBe('KBNPL');
     expect(offer['countryCode']).toBe('SA');
     expect(offer['paymentFrequency']).toBe(30);
     expect(offer['paymentFrequencyUnit']).toBe('DAY');
     expect(offer['paymentDay']).toBeUndefined();
+    expect(offer['numberOfPayments']).toBe(4);
+    expect(offer['loanPeriod']).toBeUndefined();
     // One interval before the first payment: the day the shopper drew the financing.
     expect(offer['limitUsageDate']).toBe('2026-11-02');
     expect(offer['servicingAccountId']).toBe(booked.value.servicingAccountRef);
@@ -153,6 +157,8 @@ describe('Tuum lending adapter: a consumer loan, through the offer workflow', ()
     expect(offer['paymentFrequency']).toBe(1);
     expect(offer['paymentFrequencyUnit']).toBe('MONTH');
     expect(offer['loanPeriod']).toBe(4);
+    // Never both (err.loanPeriodAndNumberOfPaymentsNotAllowedTogether, sandbox 2026-11-03).
+    expect(offer['numberOfPayments']).toBeUndefined();
     expect(offer['limitUsageDate']).toBe('2026-11-03');
     const p = expectOk(
       await a.position({
@@ -223,6 +229,32 @@ describe('Tuum lending adapter: a consumer loan, through the offer workflow', ()
     const r = expectOk(await adapter(t).bookLoan(request('txn_a9')));
     expect(r).toEqual({ kind: 'UNAVAILABLE', reason: 'LOAN_SYSTEM_WORKFLOW_PENDING' });
     expect(t.operations()).not.toContain('loan.offer.accept');
+  });
+
+  it('gives the payment instruction again, under the same request id, while the new offer is still being prepared', async () => {
+    let refused = 0;
+    const t = new Recording((operation) => {
+      if (operation !== 'loan.offer.paymentInstruction' || refused >= 2) return undefined;
+      refused += 1;
+      // As the sandbox answered on 2026-11-03: HTTP 400, err.offerNotSuitableForValidation.
+      throw new TransportError(operation, 400, `${operation}: HTTP 400`);
+    });
+    const booked = expectOk(await adapter(t).bookLoan(request('txn_a13')));
+    expect(booked.kind).toBe('ANSWERED');
+    const given = t.calls.filter((c) => c.operation === 'loan.offer.paymentInstruction');
+    expect(given).toHaveLength(3);
+    expect(new Set(given.map((c) => c.envelope.headers['x-request-id'])).size).toBe(1);
+  });
+
+  it('stops after a bounded number of refused instructions, and nothing is booked', async () => {
+    const t = new Recording((operation) => {
+      if (operation === 'loan.offer.paymentInstruction') throw new TransportError(operation, 400, 'HTTP 400');
+      return undefined;
+    });
+    const r = expectOk(await adapter(t).bookLoan(request('txn_a14')));
+    expect(r).toEqual({ kind: 'UNAVAILABLE', reason: 'HTTP_400' });
+    expect(t.operations().filter((o) => o === 'loan.offer.paymentInstruction')).toHaveLength(11);
+    expect(t.operations()).not.toContain('loan.offer.review');
   });
 
   it('is refused when the loan system ends the offer', async () => {

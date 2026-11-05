@@ -33,8 +33,12 @@
  *   carries a pointer, resolved here immediately before the call and never
  *   returned, logged or traced (TUUM-DEV-002).
  * - Each call carries the booking's idempotency key in x-request-id, suffixed
- *   per step, so a retried booking is the same booking.
+ *   per step, so a retried booking is the same booking. Tuum accepts only a
+ *   UUID there (err.invalidUuidFormat, sandbox 2026-11-03), so the key is sent
+ *   as its name-based UUID: the same key always gives the same id.
  */
+import { createHash } from 'node:crypto';
+
 import { type Money, money } from '../../core/kernel/money.ts';
 import type { CurrencyCode } from '../../core/kernel/money.ts';
 import type { LoanBooking, LoanBookingPort, LoanBookingRequest } from '../../core/ports/loan-booking.ts';
@@ -49,6 +53,21 @@ import { type Result, ok, reject } from '../../core/kernel/result.ts';
 import { type RailTransport, TransportError } from '../kernel/http-transport.ts';
 
 import { type Envelope, type TuumSession, errorCodes } from './authentication.ts';
+
+/** Sanad's namespace for request ids sent to Tuum (a fixed, random UUID). */
+const REQUEST_ID_NAMESPACE = Buffer.from('6f1c2a8e4b7d4e0f9a3c5d2e8b1f7a64', 'hex');
+
+/**
+ * An idempotency key as a name-based UUID: SHA-256 in the version-8 layout (RFC 9562 §5.8, Appendix B.2),
+ * deterministic, so a retry repeats the id. Tuum accepted a version-8 id on 2026-11-03.
+ */
+export function requestIdOf(key: string): string {
+  const h = createHash('sha256').update(REQUEST_ID_NAMESPACE).update(key, 'utf8').digest().subarray(0, 16);
+  h[6] = ((h[6] ?? 0) & 0x0f) | 0x80;
+  h[8] = ((h[8] ?? 0) & 0x3f) | 0x80;
+  const x = h.toString('hex');
+  return `${x.slice(0, 8)}-${x.slice(8, 12)}-${x.slice(12, 16)}-${x.slice(16, 20)}-${x.slice(20)}`;
+}
 
 export interface TuumLendingHosts {
   readonly person: string;
@@ -108,6 +127,9 @@ const DEFAULT_PACING: TuumOfferPacing = {
   intervalMs: 1_500,
   attempts: 40,
 };
+
+/** How often a payment instruction refused while the new offer is still being prepared is given again. */
+const INSTRUCTION_RETRIES = 10;
 
 /** An offer's states that end it without a loan. */
 const OFFER_ENDED: ReadonlySet<string> = new Set(['REJECTED', 'DECLINED', 'CANCELLED', 'EXPIRED', 'WITHDRAWN']);
@@ -253,7 +275,7 @@ export class TuumLendingAdapter implements LoanBookingPort, LoanServicingPort {
     const person = await this.#person(r);
     if (!person.ok) return person;
     if (person.value.kind !== 'ANSWERED') return ok(person.value);
-    const personId = person.value.value;
+    const { personId, personName } = person.value.value;
 
     let servicingAccountId: string | undefined;
     if (r.ownAccountRef !== undefined) servicingAccountId = r.ownAccountRef;
@@ -273,6 +295,7 @@ export class TuumLendingAdapter implements LoanBookingPort, LoanServicingPort {
           currencyCode: r.principal.currency,
           ...(r.borrower.kind === 'PERSON' ? { personTypeCode: 'P' } : {}),
           ...(r.countryCode === undefined ? {} : { residencyCountryCode: r.countryCode }),
+          personName,
           accountName: `Loan ${r.applicationId}`,
         },
       );
@@ -443,14 +466,20 @@ export class TuumLendingAdapter implements LoanBookingPort, LoanServicingPort {
   }
 
   /** The borrower in Tuum's party master: a legal person for a business, a natural person for a consumer. */
-  async #person(r: LoanBookingRequest): Promise<Result<RailOutcome<string>>> {
+  /**
+   * The party in Tuum, and the name its account must carry (the account API refuses a blank personName,
+   * sandbox 2026-11-03). The name stays inside the adapter: it goes to Tuum and nowhere else.
+   */
+  async #person(r: LoanBookingRequest): Promise<Result<RailOutcome<{ personId: string; personName: string }>>> {
     let body: Record<string, unknown>;
+    let personName: string;
     if (r.borrower.kind === 'PERSON') {
       if (this.consumer === undefined) return ok({ kind: 'UNAVAILABLE', reason: 'RESTRICTED_ATTRIBUTES_UNAVAILABLE' });
       // Resolved here, used once, never kept, returned, logged or traced (TUUM-DEV-002).
       const attributes = await this.consumer.restricted(r.borrower.restrictedAttributesRef);
       if (attributes === undefined) return ok({ kind: 'UNAVAILABLE', reason: 'RESTRICTED_ATTRIBUTES_UNAVAILABLE' });
       const a = attributes;
+      personName = `${a.givenName} ${a.surname}`;
       body = {
         personTypeCode: 'P',
         givenName: a.givenName,
@@ -470,12 +499,14 @@ export class TuumLendingAdapter implements LoanBookingPort, LoanServicingPort {
         ...(a.address === undefined ? {} : { addresses: [{ addressTypeCode: 'R', ...a.address }] }),
         externalReference: r.borrower.partyRef,
       };
-    } else
+    } else {
+      personName = r.borrower.legalNameEn;
       body = {
         personTypeCode: 'L',
         name: r.borrower.legalNameEn,
         identificationNumbers: [{ idNumber: r.borrower.registrationRef, idTypeCode: 'REG' }],
       };
+    }
     const person = await this.#call(
       'person.create',
       'POST',
@@ -486,7 +517,7 @@ export class TuumLendingAdapter implements LoanBookingPort, LoanServicingPort {
     if (person.kind !== 'ANSWERED') return ok(person);
     const personId = isRecord(person.value.data) ? str(person.value.data['personId']) : undefined;
     if (personId === undefined) return ok({ kind: 'UNAVAILABLE', reason: 'MALFORMED_PERSON' });
-    return ok({ kind: 'ANSWERED', value: personId });
+    return ok({ kind: 'ANSWERED', value: { personId, personName } });
   }
 
   /**
@@ -515,11 +546,10 @@ export class TuumLendingAdapter implements LoanBookingPort, LoanServicingPort {
         servicingAccountId,
         requestedMoney: amount,
         offeredMoney: amount,
-        numberOfPayments: r.numberOfPayments,
-        // The term in months (the product's PERIOD_IN_MONTHS rule); a plan in days is rounded up to whole months.
-        loanPeriod: monthly
-          ? r.numberOfPayments * months
-          : Math.ceil((r.numberOfPayments * (r.intervalDays ?? 0)) / 30),
+        // One or the other, never both (err.loanPeriodAndNumberOfPaymentsNotAllowedTogether): a monthly plan
+        // as its term in months (the product's PERIOD_IN_MONTHS rule, verified 2026-11-03); a plan in days as
+        // its number of payments, which whole months cannot express.
+        ...(monthly ? { loanPeriod: r.numberOfPayments * months } : { numberOfPayments: r.numberOfPayments }),
         ...(monthly
           ? { paymentDay: r.paymentDay, paymentFrequency: months, paymentFrequencyUnit: 'MONTH' }
           : { paymentFrequency: r.intervalDays, paymentFrequencyUnit: 'DAY' }),
@@ -551,19 +581,26 @@ export class TuumLendingAdapter implements LoanBookingPort, LoanServicingPort {
         return { kind: 'REFUSED', code: 'SCHEDULE_MISMATCH', referenceId: offerId };
     }
 
-    const instruction = await this.#call(
-      'loan.offer.paymentInstruction',
-      'POST',
-      `${offers}/payment-instructions`,
-      `${key}:offer:pi`,
-      {
+    const give = () =>
+      this.#call('loan.offer.paymentInstruction', 'POST', `${offers}/payment-instructions`, `${key}:offer:pi`, {
         accountId: servicingAccountId,
         money: amount,
         paymentChannelCode: 'ACCOUNT-API',
         beneficiaryName: `Loan ${r.applicationId}`,
         details: `Sanad ${r.applicationId}`,
-      },
-    );
+      });
+    // Tuum refuses the instruction while it is still preparing a new offer (HTTP 400,
+    // err.offerNotSuitableForValidation, sandbox 2026-11-03) and takes the same one moments later: the same
+    // instruction, under the same request id, is given again after a pause, a bounded number of times.
+    let instruction = await give();
+    for (
+      let i = 0;
+      i < INSTRUCTION_RETRIES && instruction.kind === 'UNAVAILABLE' && instruction.reason === 'HTTP_400';
+      i++
+    ) {
+      await this.pacing.pause(this.pacing.intervalMs);
+      instruction = await give();
+    }
     if (instruction.kind !== 'ANSWERED') return instruction;
 
     const moved = await this.#walkOffer(offerId, key);
@@ -688,7 +725,7 @@ export class TuumLendingAdapter implements LoanBookingPort, LoanServicingPort {
         method,
         url,
         ...(body === undefined ? {} : { body }),
-        headers: { ...headers.value, 'x-request-id': requestId },
+        headers: { ...headers.value, 'x-request-id': requestIdOf(requestId) },
       })) as Envelope<unknown>;
       const codes = errorCodes(envelope);
       if (codes.length > 0) return { kind: 'REFUSED', code: codes[0] ?? 'err.unknown' };

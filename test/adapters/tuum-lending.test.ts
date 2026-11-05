@@ -10,7 +10,7 @@ import { money } from '../../core/kernel/money.ts';
 import { expectOk } from '../../core/kernel/result.ts';
 import { type RailEnvelope, type RailTransport, TransportError } from '../../adapters/kernel/http-transport.ts';
 import type { TuumSession } from '../../adapters/tuum/authentication.ts';
-import { TuumLendingAdapter } from '../../adapters/tuum/lending-adapter.ts';
+import { TuumLendingAdapter, requestIdOf } from '../../adapters/tuum/lending-adapter.ts';
 
 interface Seen {
   readonly operation: string;
@@ -39,10 +39,12 @@ const transport = (answer: (operation: string) => unknown, seen: Seen[] = []): R
   },
 });
 
-const ok200 = (contract: Record<string, unknown> = {}) => (operation: string) =>
-  operation === 'person.create'
-    ? { errors: null, data: { personId: 'ID-P-1' } }
-    : { errors: null, data: { headerId: 'ID-C-1', contractNumber: '2026001', ...contract } };
+const ok200 =
+  (contract: Record<string, unknown> = {}) =>
+  (operation: string) =>
+    operation === 'person.create'
+      ? { errors: null, data: { personId: 'ID-P-1' } }
+      : { errors: null, data: { headerId: 'ID-C-1', contractNumber: '2026001', ...contract } };
 
 const request = {
   tenantId: 'sme-fund-ae',
@@ -61,14 +63,30 @@ const request = {
 const adapter = (t: RailTransport, s: TuumSession = session()) =>
   new TuumLendingAdapter({ person: 'https://person.example', loan: 'https://lending.example' }, s, t, 'FUND', 'LIVE');
 
+describe('the request id Tuum receives', () => {
+  it('is a UUID made from the step’s idempotency key, the same on every retry and different per step', () => {
+    const id = requestIdOf('loan:txn_00039:book:person');
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(requestIdOf('loan:txn_00039:book:person')).toBe(id);
+    expect(requestIdOf('loan:txn_00039:book:account')).not.toBe(id);
+  });
+});
+
 describe('booking a loan contract', () => {
   it('creates the legal person, then the contract on Sanad’s terms, and returns the contract number as the loan account', async () => {
     const seen: Seen[] = [];
     const r = expectOk(await adapter(transport(ok200(), seen)).bookLoan(request));
-    expect(r).toEqual({ kind: 'ANSWERED', value: { loanAccountNumber: '2026001', contractRef: 'ID-C-1', customerRef: 'ID-P-1' } });
+    expect(r).toEqual({
+      kind: 'ANSWERED',
+      value: { loanAccountNumber: '2026001', contractRef: 'ID-C-1', customerRef: 'ID-P-1' },
+    });
     expect(seen.map((s) => [s.operation, s.url, s.requestId])).toEqual([
-      ['person.create', 'https://person.example/api/v2/persons', 'business:FR-00009001:book:person'],
-      ['loan.contract.create', 'https://lending.example/api/v1/persons/ID-P-1/contracts', 'business:FR-00009001:book:contract'],
+      ['person.create', 'https://person.example/api/v2/persons', requestIdOf('business:FR-00009001:book:person')],
+      [
+        'loan.contract.create',
+        'https://lending.example/api/v1/persons/ID-P-1/contracts',
+        requestIdOf('business:FR-00009001:book:contract'),
+      ],
     ]);
     // Exact decimal tokens on the wire, made from integers: 2,000,000.00 AED at 1.50%, APR 1.62%.
     expect(seen[1]?.wire).toContain('"contractMoney":{"amount":2000000.00,"currencyCode":"AED"}');
@@ -88,13 +106,22 @@ describe('booking a loan contract', () => {
 
   it('a 200 carrying errors is a refusal; a transport failure is unavailable, and a 401 discards the token', async () => {
     const refused = expectOk(
-      await adapter(transport((op) => (op === 'person.create' ? { errors: null, data: { personId: 'P' } } : { errors: [{ code: 'err.loanTypeNotFound' }] }))).bookLoan(
-        request,
-      ),
+      await adapter(
+        transport((op) =>
+          op === 'person.create'
+            ? { errors: null, data: { personId: 'P' } }
+            : { errors: [{ code: 'err.loanTypeNotFound' }] },
+        ),
+      ).bookLoan(request),
     );
     expect(refused).toEqual({ kind: 'REFUSED', code: 'err.loanTypeNotFound' });
     const invalidated: string[] = [];
-    const down = expectOk(await adapter(transport(() => new TransportError('person.create', 401, 'no')), session(invalidated)).bookLoan(request));
+    const down = expectOk(
+      await adapter(
+        transport(() => new TransportError('person.create', 401, 'no')),
+        session(invalidated),
+      ).bookLoan(request),
+    );
     expect(down).toEqual({ kind: 'UNAVAILABLE', reason: 'HTTP_401' });
     expect(invalidated).toEqual(['yes']);
   });
