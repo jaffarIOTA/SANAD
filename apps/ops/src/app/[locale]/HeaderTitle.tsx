@@ -18,6 +18,9 @@ const TITLES: Readonly<Record<string, { readonly en: string; readonly ar: string
   merchants: { en: 'Merchants', ar: 'التجار' },
   originate: { en: 'Key a request', ar: 'إدخال طلب' },
   business: { en: 'Business applications', ar: 'طلبات المنشآت' },
+  bnpl: { en: 'BNPL loans', ar: 'قروض اشترِ الآن وادفع لاحقاً' },
+  transactions: { en: 'Transactions', ar: 'العمليات' },
+  menu: { en: 'All modules', ar: 'كل الوحدات' },
 };
 
 export function HeaderTitle({ arabic }: { readonly arabic: boolean }) {

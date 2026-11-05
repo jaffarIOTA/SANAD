@@ -44,6 +44,12 @@ export interface ModuleItem {
   readonly reference: string;
   /** The jurisdictions this item exists in. Absent: every jurisdiction its group is listed in. */
   readonly jurisdictions?: readonly ModuleJurisdiction[];
+  /**
+   * Kept in the sidebar as a shortcut. Everything else is reached from the
+   * menu page (/menu), which lists every module; the sidebar stays short as
+   * the map grows. Only an item with a screen can be pinned.
+   */
+  readonly pinned?: true;
 }
 
 export interface ModuleGroup {
@@ -74,6 +80,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
     items: [
       {
         id: 'dashboard',
+        pinned: true,
         titleEn: 'Dashboard',
         titleAr: 'لوحة العمليات',
         href: '',
@@ -82,6 +89,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
       },
       {
         id: 'key-request',
+        pinned: true,
         titleEn: 'Key a request',
         titleAr: 'إدخال طلب',
         href: '/originate',
@@ -90,6 +98,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
       },
       {
         id: 'review-queue',
+        pinned: true,
         titleEn: 'Review queue',
         titleAr: 'قائمة المراجعة',
         href: '/queue',
@@ -150,6 +159,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
       },
       {
         id: 'bnpl',
+        pinned: true,
         jurisdictions: SA,
         titleEn: 'BNPL',
         titleAr: 'اشترِ الآن وادفع لاحقاً',
@@ -442,6 +452,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
       },
       {
         id: 'ksa-business-pipeline',
+        pinned: true,
         titleEn: 'Business applications',
         titleAr: 'طلبات المنشآت',
         href: '/business',
@@ -520,6 +531,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
       },
       {
         id: 'business-pipeline',
+        pinned: true,
         titleEn: 'Business applications',
         titleAr: 'طلبات المنشآت',
         href: '/business',
@@ -663,6 +675,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
     items: [
       {
         id: 'transaction-book',
+        pinned: true,
         titleEn: 'Transaction book',
         titleAr: 'سجل المعاملات',
         href: '/transactions',
