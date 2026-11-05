@@ -295,6 +295,47 @@ The findings go in the adapter README.
 - **Semgrep** has not been run locally on W2/W3 (not installed here). CI's gate is the
   first run.
 
+## BNPL booked in Tuum and serviced there (branch `bnpl-tuum-servicing`, 2 November)
+
+- **Built, on fixtures.** Each BNPL purchase is booked in Tuum as an interest-free loan of four payments thirty days
+  apart, with its own servicing account (or the shopper's own account). Tuum holds the schedule; Sanad reads it.
+  - The shopper chooses how instalments are collected, from the channels the tenant's jurisdiction carries
+    (`collectionChannels` in `config/jurisdictions/*.json`): in the Kingdom a SADAD bill, a card through the payments
+    hub, Open Banking payment initiation or their own account; in the UAE UAEDDS direct debit or a card through the
+    partner bank, Open Finance or their own account. No scheme is offered outside its country.
+  - The workbench's **BNPL loans** screen books the loan, shows Tuum's position for a date, and runs servicing:
+    collections queued on the outbox through the shopper's channel, settled ones posted into the loan, overdue
+    instalments reported to the bureau (with the currency) and the shopper reminded, once each.
+  - Migration **0038**: `core.consumer_loan` and its events (RLS forced, append-only, audited, the tenant's
+    currency enforced), the outbox's `PAYMENT_INITIATE` kind, and the `OPEN_FINANCE` credential code.
+- **Live booking path built (3 November), not yet run end to end against the sandbox.** The `KBNPL` run of
+  3 November (README "Sandbox run — KBNPL") showed a 0% monthly loan books in Tuum through the offer workflow; the
+  adapter now books that way (TUUM-LEND-003): offer, schedule checked against the plan disclosed
+  (`SCHEDULE_MISMATCH`), payment instruction, review, approval, acceptance, contract confirmed. A BNPL plan is set
+  in days or in months in the term sheet (Admin → Products & modules: `intervalDays` or `intervalMonths`; migration
+  **0039**), and the Tuum product is Admin's core product code, else `loan-products.json` (bank-a: `KBNPL`,
+  account type `CURRENCY`). Where no identity store is connected, a live sandbox booking uses a labelled synthetic
+  person, only where a synthetic demonstration is permitted.
+- **To run it live (bank-a, the development database):**
+  - the vault holds `person_api_base_url` and `account_api_base_url` for TUUM / sandbox;
+  - migration 0039 is applied to that database;
+  - bank-a's BNPL term sheet says `intervalMonths: 1` (Admin, four eyes);
+  - `KBNPL`'s remaining origination steps are switched off in Tuum (contract review, file generation, asset
+    transaction, account sweep), or the contract is reviewed in Tuum's console; until then a booking is recorded
+    **awaiting activation**.
+- **Waiting on Tuum (TUUM-SERV-01, `adapters/tuum/README.md`):** activation and disbursement of a confirmed contract;
+  the receivables read and a repayment posting on an active one; automatic repayment from a customer's own account;
+  how the merchant discount is accounted; whether `x-request-id` is honoured as an idempotency key (a booking
+  interrupted part-way leaves its offer, and a retry creates another).
+- **Waiting on the institution:** an identity store the adapter can resolve a shopper's national identifier from,
+  inside the trust boundary. Without it a live consumer booking outside a synthetic demonstration is refused as
+  unavailable.
+- **Not built:** the rails' callbacks into `recordCollectionResult` (a SADAD bill paid, a debit settled or returned,
+  an initiated payment settled). In the demonstration the run stands in for them, labelled Fixture, and only an
+  approver may do so. The servicing worker does not yet run consumer loans on its schedule; a person runs them.
+- **UAE BNPL itself is still not built** (ADR 0005): the UAE channels are configured, but there is no UAE BNPL
+  product to offer them on.
+
 ## Journey gaps (hardening plan B)
 
 - **B1 built**, PR #81 (stacked on #80): contact channels at intake.
@@ -361,8 +402,9 @@ The findings go in the adapter README.
 - **SR-040:** the repository is public. Decided 1 November: make it private, but only after moving it to an IOTA
   GitHub organisation on a plan with Code Security. On a personal account a private repository loses branch
   protection (without Pro), and the CodeQL and dependency-review gates stop working. Waiting on the organisation.
-- **SEC-Q01 … SEC-Q08:** open questions for the client (CSCC classification, CSF level,
-  VAPT provider, SOC, notification contacts, disclosure programme, sign-off).
+- **SEC-Q01 … SEC-Q09:** open questions for the client (CSCC classification, CSF level,
+  VAPT provider, SOC, notification contacts, disclosure programme, sign-off; Q09 is the UAE's
+  information-assurance and incident-notification obligations).
 
 ## Housekeeping
 

@@ -44,6 +44,12 @@ export interface ModuleItem {
   readonly reference: string;
   /** The jurisdictions this item exists in. Absent: every jurisdiction its group is listed in. */
   readonly jurisdictions?: readonly ModuleJurisdiction[];
+  /**
+   * Kept in the sidebar as a shortcut. Everything else is reached from the
+   * menu page (/menu), which lists every module; the sidebar stays short as
+   * the map grows. Only an item with a screen can be pinned.
+   */
+  readonly pinned?: true;
 }
 
 export interface ModuleGroup {
@@ -74,6 +80,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
     items: [
       {
         id: 'dashboard',
+        pinned: true,
         titleEn: 'Dashboard',
         titleAr: 'لوحة العمليات',
         href: '',
@@ -82,6 +89,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
       },
       {
         id: 'key-request',
+        pinned: true,
         titleEn: 'Key a request',
         titleAr: 'إدخال طلب',
         href: '/originate',
@@ -90,6 +98,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
       },
       {
         id: 'review-queue',
+        pinned: true,
         titleEn: 'Review queue',
         titleAr: 'قائمة المراجعة',
         href: '/queue',
@@ -150,12 +159,14 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
       },
       {
         id: 'bnpl',
+        pinned: true,
         jurisdictions: SA,
         titleEn: 'BNPL',
         titleAr: 'اشترِ الآن وادفع لاحقاً',
+        href: '/bnpl',
         readiness: live(),
         reference:
-          'products/bnpl — module, merchant onboarding (core/merchants) and checkout API (api/openapi/checkout.v1.yaml, apps/consumer) built; ceilings cite the SAMA BNPL Rules (Nov 2023) Art. 20 and 22',
+          'products/bnpl — module, merchant onboarding (core/merchants) and checkout API (api/openapi/checkout.v1.yaml, apps/consumer) built; ceilings cite the SAMA BNPL Rules (Nov 2023) Art. 20 and 22. Each purchase is booked as a loan in the loan system and serviced there (core/servicing/core-held-loan.ts): collected through the channel the shopper chose (SADAD, card, Open Banking, own account), posted into the loan, overdue reported. Loan system and rails on fixtures (TUUM-SERV-01).',
       },
       {
         id: 'merchants',
@@ -441,6 +452,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
       },
       {
         id: 'ksa-business-pipeline',
+        pinned: true,
         titleEn: 'Business applications',
         titleAr: 'طلبات المنشآت',
         href: '/business',
@@ -519,6 +531,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
       },
       {
         id: 'business-pipeline',
+        pinned: true,
         titleEn: 'Business applications',
         titleAr: 'طلبات المنشآت',
         href: '/business',
@@ -662,6 +675,7 @@ export const MODULE_GROUPS: readonly ModuleGroup[] = [
     items: [
       {
         id: 'transaction-book',
+        pinned: true,
         titleEn: 'Transaction book',
         titleAr: 'سجل المعاملات',
         href: '/transactions',

@@ -19,6 +19,7 @@ import { money } from '../kernel/money.ts';
 import type { BillCollectionPort } from '../ports/bill-collection.ts';
 import type { CreditBureauPort } from '../ports/credit-bureau.ts';
 import type { NotificationsPort } from '../ports/notifications.ts';
+import type { PaymentInitiationPort } from '../ports/payment-initiation.ts';
 import type { PaymentsPort } from '../ports/payments.ts';
 import type { RailOutcome } from '../ports/rail.ts';
 import type { WebhooksPort } from '../ports/webhooks.ts';
@@ -30,6 +31,8 @@ export interface DispatchPorts {
   readonly webhooks: WebhooksPort;
   readonly notifications: NotificationsPort;
   readonly bills: BillCollectionPort;
+  /** Payment initiation under a customer's consent (open banking / open finance). Absent, those events are dead-lettered. */
+  readonly paymentInitiation?: PaymentInitiationPort;
 }
 
 export interface RetryPolicy {
@@ -215,6 +218,27 @@ export async function dispatchOnce(
         correlationId: event.correlationId,
       });
       return r.ok ? fromRail(r.value, (v) => v.billRef, attempt, policy) : dead(r.error.reason);
+    }
+    case 'PAYMENT_INITIATE': {
+      const amount = asMoney(event);
+      const applicantRef = field(event, 'payerRef');
+      const consentId = field(event, 'consentId');
+      if (amount === undefined || applicantRef === undefined || consentId === undefined)
+        return dead('payload lacks payerRef, consentId or minorUnits');
+      if (ports.paymentInitiation === undefined) return dead('no payment-initiation port is configured');
+      const r = await ports.paymentInitiation.initiate({
+        tenantId: event.tenantId,
+        applicantRef,
+        consentId,
+        amount,
+        direction: 'COLLECT',
+        reference: event.subjectRef,
+        idempotencyKey: event.idempotencyKey,
+        correlationId: event.correlationId,
+      });
+      if (!r.ok) return dead(r.error.reason);
+      if (r.value.kind === 'ANSWERED' && r.value.value.status === 'REJECTED') return dead('payment initiation rejected');
+      return fromRail(r.value, (v) => v.instructionRef, attempt, policy);
     }
   }
 }

@@ -97,12 +97,28 @@ export function quoteFor(
   return ok({ offer: offer.value, programmeId: 'prg-0001' });
 }
 
-/** Both calendars from an attested instant plus a tenor — computed once, at quotation, and stored. */
+/**
+ * Both calendars from an attested instant plus a tenor — computed once, at quotation, and stored. The tenor
+ * is days, or a schedule offset of months and days: a month later is the same day of the month, or the
+ * month's last day when it is shorter.
+ */
 export function maturityDates(
   at: TsaInstant,
-  tenorDays: number,
+  tenor: number | { readonly months: number; readonly days: number },
 ): { readonly gregorian: string; readonly hijri: string } {
-  const date = new Date((Number(at.epochSeconds) + tenorDays * 86_400) * 1000);
+  const offset = typeof tenor === 'number' ? { months: 0, days: tenor } : tenor;
+  const start = new Date(Number(at.epochSeconds) * 1000);
+  const month = start.getUTCMonth() + offset.months;
+  const lastDay = new Date(Date.UTC(start.getUTCFullYear(), month + 1, 0)).getUTCDate();
+  const shifted = Date.UTC(
+    start.getUTCFullYear(),
+    month,
+    Math.min(start.getUTCDate(), lastDay),
+    start.getUTCHours(),
+    start.getUTCMinutes(),
+    start.getUTCSeconds(),
+  );
+  const date = new Date(shifted + offset.days * 86_400_000);
   const gregorian = date.toISOString().slice(0, 10);
   const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura-nu-latn', {
     year: 'numeric',

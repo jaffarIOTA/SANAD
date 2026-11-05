@@ -27,6 +27,7 @@ import { currentSession } from '../../../../server/session.ts';
 import { findSession, saveSession } from '../../../../server/checkout-store.ts';
 import { flushConsumerStore } from '../../../../server/durable.ts';
 import { developmentAttestation, findOffer, nextId, saveOffer } from '../../../../server/store.ts';
+import { offeredChannels } from '../../../../server/collection.ts';
 import { checkoutAcceptAction } from './actions.ts';
 
 export default async function CheckoutPage({
@@ -79,7 +80,9 @@ export default async function CheckoutPage({
       saveSession(session);
     } else {
       const offerId = nextId('ofr');
-      const dates = maturityDates(at, quoted.value.offer.quote.tenorDays);
+      // The last cash flow's own offset: a monthly plan ends on a calendar date, not after thirty-day months.
+      const last = quoted.value.offer.quote.schedule.at(-1);
+      const dates = maturityDates(at, last?.at ?? quoted.value.offer.quote.tenorDays);
       saveOffer({
         offerId,
         tenantId: TENANT,
@@ -109,6 +112,8 @@ export default async function CheckoutPage({
     redirect(
       `${session.core.returnUrl}${session.core.returnUrl.includes('?') ? '&' : '?'}sessionId=${sessionId}&state=BOOKED`,
     );
+  // How the instalments are paid: the term sheet's channels that this jurisdiction carries.
+  const channels = session.state === 'OFFERED' ? await offeredChannels(developmentAttestation().epochSeconds) : [];
 
   return (
     <div className="flex flex-col gap-5">
@@ -156,6 +161,29 @@ export default async function CheckoutPage({
               <input type="hidden" name="locale" value={segment} />
               <input type="hidden" name="sessionId" value={sessionId} />
               <input type="hidden" name="disclosureVersion" value={stored.offer.disclosureVersion} />
+              <fieldset className="flex flex-col gap-2">
+                <legend className="mb-1 text-sm font-semibold text-ink">
+                  {arabic ? 'كيف تدفع أقساطك؟' : 'How would you like to pay your instalments?'}
+                </legend>
+                {channels.map((c, index) => (
+                  <label
+                    key={c.channel}
+                    className="flex items-start gap-3 rounded-card border border-line px-4 py-3 text-sm text-ink has-checked:border-brand has-checked:bg-brand-wash"
+                  >
+                    <input
+                      type="radio"
+                      name="collectionChannel"
+                      value={c.channel}
+                      defaultChecked={index === 0}
+                      className="mt-1 size-5 accent-brand"
+                    />
+                    <span className="flex flex-col gap-0.5">
+                      <span className="font-semibold">{arabic ? c.labelAr : c.labelEn}</span>
+                      <span className="text-ink-quiet">{arabic ? c.noteAr : c.noteEn}</span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
               <label className="flex items-start gap-3 text-sm text-ink">
                 <input type="checkbox" name="confirm" value="yes" className="mt-1 size-5 accent-brand" />
                 <span>

@@ -62,6 +62,72 @@ export function activeItemId(groups: readonly ModuleGroup[], segment: string, pa
   return best?.id;
 }
 
+/** An item with a screen, carrying its group's icon, for the sidebar's shortcuts. */
+export interface NavShortcut {
+  readonly id: string;
+  readonly titleEn: string;
+  readonly titleAr: string;
+  readonly href: string;
+  readonly icon: ModuleGroup['icon'];
+  readonly reference: string;
+}
+
+const shortcutOf = (group: ModuleGroup, item: ModuleGroup['items'][number]): NavShortcut | undefined =>
+  item.readiness.kind === 'LIVE' && item.href !== undefined
+    ? {
+        id: item.id,
+        titleEn: item.titleEn,
+        titleAr: item.titleAr,
+        href: item.href,
+        icon: group.icon,
+        reference: item.reference,
+      }
+    : undefined;
+
+/**
+ * The sidebar's shortcuts: the pinned items with a screen, in map order, and
+ * the item for the page you are on when it is not one of them, so where you
+ * are is always shown. Everything else is on the menu page.
+ */
+export function sidebarOf(
+  groups: readonly ModuleGroup[],
+  activeId: string | undefined,
+): { readonly pinned: readonly NavShortcut[]; readonly current?: NavShortcut } {
+  const pinned: NavShortcut[] = [];
+  let current: NavShortcut | undefined;
+  for (const group of groups) {
+    for (const item of group.items) {
+      const shortcut = shortcutOf(group, item);
+      if (shortcut === undefined) continue;
+      if (item.pinned === true) pinned.push(shortcut);
+      else if (item.id === activeId) current = shortcut;
+    }
+  }
+  return current === undefined ? { pinned } : { pinned, current };
+}
+
+/**
+ * The menu page's search: an item matches when every word typed appears in
+ * its English or Arabic title, its group's title or its reference. Groups
+ * left empty are dropped.
+ */
+export function searchModules(groups: readonly ModuleGroup[], query: string): readonly ModuleGroup[] {
+  const words = query
+    .toLocaleLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 0);
+  if (words.length === 0) return groups;
+  return groups
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((i) => {
+        const text = [i.titleEn, i.titleAr, g.titleEn, g.titleAr, i.reference].join(' ').toLocaleLowerCase();
+        return words.every((w) => text.includes(w));
+      }),
+    }))
+    .filter((g) => g.items.length > 0);
+}
+
 /**
  * An Arabic label ending in a parenthesised Latin name — 'الهوية الرقمية
  * (UAE Pass)' — split so the name and its parentheses can be isolated and

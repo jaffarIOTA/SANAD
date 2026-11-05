@@ -28,9 +28,16 @@
     "TIMESTAMP_AUTHORITY": ["TSA"],
     "WORKFLOW_ENGINE": ["WORKFLOW_ENGINE"]
   },
+  "collectionChannels": {
+    "BILL_PRESENTMENT": "BILL_COLLECTION",
+    "CARD": "PAYMENTS_HUB",
+    "PAYMENT_INITIATION": "OPEN_BANKING",
+    "OWN_ACCOUNT": "CORE_BANKING"
+  },
   "regulatoryDirectory": "sa",
   "citations": [
     "Contractual dates in both calendars: CLAUDE.md §9, platform rule for the Kingdom.",
-    "Residency of customer data in the Kingdom: SAMA Cloud Computing Regulatory Framework; PDPL; NDMO (CLAUDE.md §7)."
+    "Residency of customer data in the Kingdom: SAMA Cloud Computing Regulatory Framework; PDPL; NDMO (CLAUDE.md §7).",
+    "Collection channels in the Kingdom: SADAD bill presentment under the institution's own biller (SAMA's payment system); mada and card through the institution's payments hub; payment initiation under SAMA's Open Banking Framework; a debit of the customer's own account at the institution. Each scheme's onboarding is confirmed with the institution."
   ]
 }

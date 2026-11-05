@@ -15,15 +15,31 @@ import type { Money } from '../kernel/money.ts';
 import type { Result } from '../kernel/result.ts';
 import type { RailOutcome } from './rail.ts';
 
+/** A business borrower: the SME products. */
+export interface BusinessBorrower {
+  readonly kind?: 'BUSINESS';
+  readonly legalNameEn: string;
+  /** The business's registration (trade licence) reference. Sent to the loan system, never logged. */
+  readonly registrationRef: string;
+}
+
+/**
+ * A natural person: the consumer products. Sanad holds no national identifier (CLAUDE.md §2); the loan
+ * system's party master needs one, so the request carries only a pointer that the adapter resolves inside
+ * the trust boundary immediately before the call and never returns, logs or traces (the adapter's README records the deviation).
+ */
+export interface PersonBorrower {
+  readonly kind: 'PERSON';
+  /** Sanad's reference for the applicant: the loan system's external reference for the person. */
+  readonly partyRef: string;
+  readonly restrictedAttributesRef: string;
+}
+
 export interface LoanBookingRequest {
   readonly tenantId: string;
   /** Sanad's application id: the loan system's external reference. */
   readonly applicationId: string;
-  readonly borrower: {
-    readonly legalNameEn: string;
-    /** The business's registration (trade licence) reference. Sent to the loan system, never logged. */
-    readonly registrationRef: string;
-  };
+  readonly borrower: BusinessBorrower | PersonBorrower;
   /** The institution's product code in the loan system, from the tenant's configuration. */
   readonly productCode: string;
   readonly principal: Money;
@@ -34,7 +50,32 @@ export interface LoanBookingRequest {
   readonly numberOfPayments: number;
   /** yyyy-mm-dd. */
   readonly firstPaymentDate: string;
-  readonly paymentDay: number;
+  /** Monthly schedules: the day of the month each payment falls due. Exactly one of this and `intervalDays`. */
+  readonly paymentDay?: number;
+  /** With `paymentDay`: the months between payments. One when absent. */
+  readonly intervalMonths?: number;
+  /** Fixed-interval schedules (a BNPL plan's thirty days): the days between payments. */
+  readonly intervalDays?: number;
+  /** The institution's country, ISO 3166-1 alpha-2, from its jurisdiction profile. */
+  readonly countryCode?: string;
+  /**
+   * The plan the customer was shown and accepted, instalment by instalment. When given, a loan system whose
+   * own schedule differs in any date or amount is refused (SCHEDULE_MISMATCH) before the loan is accepted:
+   * the customer is never held to a plan they were not shown.
+   */
+  readonly expectedInstalments?: readonly { readonly dueDate: string; readonly amount: Money }[];
+  /**
+   * Open a servicing account for the contract in the loan system: the account its instalments are paid
+   * from and its repayments posted to. The consumer products need one; the SME products are paid by the
+   * partner bank and do not ask.
+   */
+  readonly openServicingAccount?: boolean;
+  /**
+   * The customer's own account at the institution, when the customer chose to be debited from it (the
+   * OWN_ACCOUNT collection channel): it becomes the servicing account, and the loan system debits it on each
+   * due date. Instead of `openServicingAccount`.
+   */
+  readonly ownAccountRef?: string;
   readonly idempotencyKey: string;
   readonly correlationId: string;
 }
@@ -46,6 +87,13 @@ export interface LoanBooking {
   readonly contractRef: string;
   /** The loan system's reference for the customer. */
   readonly customerRef: string;
+  /** The servicing account the loan system opened, when asked to. */
+  readonly servicingAccountRef?: string;
+  /**
+   * True when the loan system holds the contract but has not yet activated it (its own review or
+   * disbursement steps are still to run). Nothing is collected until it is active.
+   */
+  readonly awaitingActivation?: boolean;
 }
 
 export interface LoanBookingPort {

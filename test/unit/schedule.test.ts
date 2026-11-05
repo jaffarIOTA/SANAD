@@ -32,6 +32,21 @@ describe('flat instalments', () => {
     expect(s.instalments[3]?.at.days).toBe(120);
     expect(expectOk(computeApr(cashFlows(money(100_001n), s))).bp).toBe(0n);
   });
+  it('a monthly plan falls in whole months, and a zero-cost one still has an APR of zero', () => {
+    const s = expectOk(flatInstalments(money(400_000n), money(0n), 4, { months: 1 }));
+    expect(s.instalments.map((x) => x.at)).toEqual([
+      { months: 1, days: 0 },
+      { months: 2, days: 0 },
+      { months: 3, days: 0 },
+      { months: 4, days: 0 },
+    ]);
+    expect(expectOk(computeApr(cashFlows(money(400_000n), s))).bp).toBe(0n);
+  });
+  it('refuses an interval that is not a positive whole number of days or months', () => {
+    expect(flatInstalments(money(100_000n), money(0n), 4, 0).ok).toBe(false);
+    expect(flatInstalments(money(100_000n), money(0n), 4, { months: 0 }).ok).toBe(false);
+    expect(flatInstalments(money(100_000n), money(0n), 4, { months: 1.5 }).ok).toBe(false);
+  });
   it('an upfront fee appears in the cash flows and lifts the APR', () => {
     const s = expectOk(flatInstalments(money(100_000n), money(0n), 4, 30));
     expect(expectOk(computeApr(cashFlows(money(100_000n), s, [money(1_000n)]))).bp).toBeGreaterThan(0n);

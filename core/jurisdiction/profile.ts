@@ -41,9 +41,29 @@ export interface JurisdictionProfile {
   readonly railAdapters: Readonly<Record<string, readonly string[]>>;
   /** Where this jurisdiction's regulatory definitions live, relative to `config/regulatory/`. */
   readonly regulatoryDirectory: string;
+  /**
+   * How a consumer instalment may be collected in this jurisdiction, and which capability carries each
+   * channel. A channel the jurisdiction does not list cannot be offered to a customer here: a Saudi bill
+   * scheme is not a UAE collection method, and the reverse.
+   */
+  readonly collectionChannels: Readonly<Partial<Record<CollectionChannel, string>>>;
   /** Each regulatory figure the profile itself states carries its source here. */
   readonly citations: readonly string[];
 }
+
+/**
+ * The ways an instalment can be collected, named by mechanism, never by scheme: which scheme carries a
+ * channel (a national bill scheme, a direct-debit system, an open-banking framework) is the jurisdiction's
+ * configuration. `OWN_ACCOUNT` is the institution debiting the customer's own account in its core.
+ */
+export type CollectionChannel = 'BILL_PRESENTMENT' | 'DIRECT_DEBIT' | 'CARD' | 'PAYMENT_INITIATION' | 'OWN_ACCOUNT';
+export const COLLECTION_CHANNELS: readonly CollectionChannel[] = [
+  'BILL_PRESENTMENT',
+  'DIRECT_DEBIT',
+  'CARD',
+  'PAYMENT_INITIATION',
+  'OWN_ACCOUNT',
+];
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const nonEmpty = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0;
@@ -79,6 +99,20 @@ export function parseJurisdictionProfile(raw: unknown): Result<JurisdictionProfi
     return bad('JURISDICTION_RAILS', 'railAdapters maps each capability to a list of adapter codes');
   if (!nonEmpty(raw['regulatoryDirectory']) || !/^[a-z]{2}$/.test(raw['regulatoryDirectory']))
     return bad('JURISDICTION_REGULATORY_DIR', 'regulatoryDirectory is the two-letter folder under config/regulatory');
+  const channels = raw['collectionChannels'] ?? {};
+  if (
+    !isRecord(channels) ||
+    !Object.entries(channels).every(
+      ([channel, capability]) =>
+        COLLECTION_CHANNELS.includes(channel as CollectionChannel) &&
+        nonEmpty(capability) &&
+        Object.hasOwn(rails, capability),
+    )
+  )
+    return bad(
+      'JURISDICTION_COLLECTION_CHANNELS',
+      'collectionChannels maps each collection channel to a capability this jurisdiction lists in railAdapters',
+    );
   const citations = raw['citations'];
   if (!Array.isArray(citations) || !citations.every((c) => nonEmpty(c) && c.length >= 10))
     return bad('JURISDICTION_CITATIONS', 'citations lists the sources of the profile’s regulatory statements');
@@ -92,6 +126,7 @@ export function parseJurisdictionProfile(raw: unknown): Result<JurisdictionProfi
     regulator: { code: regulator['code'], nameEn: regulator['nameEn'], nameAr: regulator['nameAr'] },
     railAdapters: rails as Record<string, string[]>,
     regulatoryDirectory: raw['regulatoryDirectory'],
+    collectionChannels: channels as Partial<Record<CollectionChannel, string>>,
     citations: citations as string[],
   });
 }
